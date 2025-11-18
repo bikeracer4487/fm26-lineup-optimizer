@@ -122,9 +122,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-players.csv
 starting_xi.csv
 first_xi.csv
 .gitignore
 rotation_xi.csv
-players-current.csv
