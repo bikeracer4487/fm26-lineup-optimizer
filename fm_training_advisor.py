@@ -444,6 +444,12 @@ class TrainingAdvisor:
             for category in candidates.values():
                 category.sort(key=lambda x: x['training_score'], reverse=True)
 
+            # Calculate gap severity for this position
+            gap_severity = (
+                gap_info.get('quality_shortage', 0) * 3 +
+                gap_info.get('total_shortage', 0) * 2
+            )
+
             # Generate recommendations prioritized by category
             priority_order = ['become_natural', 'improve_natural', 'learn_position']
 
@@ -455,14 +461,17 @@ class TrainingAdvisor:
                     # These address quality gap most directly
                     needed = gap_info['quality_shortage']
                     priority = 'High'
+                    priority_score = 3
                 elif category_name == 'improve_natural':
                     # These improve existing players
                     needed = min(2, gap_info['quality_shortage'])
                     priority = 'Medium'
+                    priority_score = 2
                 else:  # learn_position
                     # These are longer-term investments
                     needed = min(1, gap_info['total_shortage'])
                     priority = 'Low'
+                    priority_score = 1
 
                 for candidate in category[:needed + 1]:  # +1 for alternatives
                     rec = {
@@ -476,11 +485,30 @@ class TrainingAdvisor:
                         'age': candidate['age'],
                         'training_score': candidate['training_score'],
                         'priority': priority,
+                        'priority_score': priority_score,
+                        'gap_severity': gap_severity,
                         'reason': self._generate_detailed_reason(candidate, pos_name)
                     }
                     recommendations.append(rec)
 
-        return recommendations
+        # CRITICAL: Deduplicate by player - each player can only train ONE position
+        # Keep the best recommendation per player based on gap severity and priority
+        player_best_rec = {}
+        for rec in recommendations:
+            player_name = rec['player']
+
+            if player_name not in player_best_rec:
+                player_best_rec[player_name] = rec
+            else:
+                # Compare: higher priority score wins, then higher gap severity, then higher training score
+                current = player_best_rec[player_name]
+                if (rec['priority_score'] > current['priority_score'] or
+                    (rec['priority_score'] == current['priority_score'] and rec['gap_severity'] > current['gap_severity']) or
+                    (rec['priority_score'] == current['priority_score'] and rec['gap_severity'] == current['gap_severity'] and rec['training_score'] > current['training_score'])):
+                    player_best_rec[player_name] = rec
+
+        # Return deduplicated recommendations
+        return list(player_best_rec.values())
 
     def _get_player_current_positions(self, row: pd.Series) -> List[Tuple[str, float]]:
         """
@@ -715,6 +743,7 @@ class TrainingAdvisor:
         print("INTELLIGENT TRAINING RECOMMENDATIONS")
         print("=" * 110)
         print("\nRecommendations based on positional skill ratings, role abilities, and training attributes:")
+        print("NOTE: Each player appears only once - assigned to the position where training provides greatest squad benefit.")
         print()
 
         # Group by priority
