@@ -1,11 +1,35 @@
 # FM26 Player Data Extractor - Documentation
 
-This directory contains comprehensive documentation for extracting player data directly from Football Manager 2026's memory.
+This directory contains comprehensive documentation for extracting player data from Football Manager 2026.
 
-## 📚 Documentation Files
+## ⭐ Recommended: HTML Export Method (NEW!)
+
+The **easiest and most reliable** way to extract player data from FM26.
+
+### [HTML_EXPORT_GUIDE.md](HTML_EXPORT_GUIDE.md) ⬅️ **START HERE**
+
+**Why use HTML export:**
+- ✅ **5 minute setup** (vs 1-3 hours for memory scanning)
+- ✅ **Uses official FM26 features** (Ctrl+P export)
+- ✅ **No configuration needed**
+- ✅ **Works across FM26 updates**
+- ✅ **Cross-platform** (Windows/Mac/Linux)
+- ✅ **100% legal and safe**
+
+**Quick start:**
+1. Import custom view in FM26
+2. Press Ctrl+P to export HTML
+3. Run: `python fm26_html_parser.py your_export.html`
+4. Done!
+
+---
+
+## 📚 Alternative: Memory Scanning Method (Advanced)
+
+For advanced users who want real-time extraction. **Note:** May be difficult to configure with FM26.
 
 ### 1. [EXTRACTOR_QUICKSTART.md](EXTRACTOR_QUICKSTART.md)
-**Start here!** Quick start guide for using the FM26 player data extractor.
+Quick start guide for using memory-based extraction.
 
 - Overview and benefits
 - Setup process summary
@@ -34,16 +58,43 @@ This directory contains comprehensive documentation for extracting player data d
 - Alternative extraction methods
 - Community resources
 
+---
+
 ## 🎯 Quick Navigation
 
 **I want to...**
 
-- **Get started quickly** → Read [EXTRACTOR_QUICKSTART.md](EXTRACTOR_QUICKSTART.md)
+- **Get started the easy way** → Read [HTML_EXPORT_GUIDE.md](HTML_EXPORT_GUIDE.md) ⭐ **RECOMMENDED**
+- **Use memory scanning (advanced)** → Read [EXTRACTOR_QUICKSTART.md](EXTRACTOR_QUICKSTART.md)
 - **Learn how to use Cheat Engine** → Read [cheat-engine-finding-addresses.md](cheat-engine-finding-addresses.md)
 - **Understand the technical background** → Read [player-data-extraction-research.md](player-data-extraction-research.md)
-- **Just run the extractor** → See [Usage](#usage) below
 
-## 🚀 Usage
+---
+
+## 🚀 Quick Start (HTML Method - Recommended)
+
+### Prerequisites
+
+```bash
+pip install beautifulsoup4
+```
+
+### Usage
+
+```bash
+# 1. In FM26: Go to Squad screen, press Ctrl+P, save as HTML
+# 2. Run the parser:
+python fm26_html_parser.py my_squad.html
+
+# 3. Use with lineup optimizer:
+python fm_team_selector_optimal.py players-extracted.csv
+```
+
+See [HTML_EXPORT_GUIDE.md](HTML_EXPORT_GUIDE.md) for detailed instructions.
+
+---
+
+## 🚀 Alternative: Memory Extraction (Advanced)
 
 ### Prerequisites
 

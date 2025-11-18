@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+FM26 Lineup Optimizer Custom Squad View
+Import this view in FM26 to export all required player data
+
+To import:
+1. Go to Squad screen in FM26
+2. Right-click on any column header
+3. Select "Import View"
+4. Navigate to this file and select it
+5. Click "Load"
+
+After importing, you can export the data:
+1. Press Ctrl+P (or use Print Screen from menu)
+2. Save as "Web Page" (.html)
+3. Use fm26_html_parser.py to convert to CSV
+-->
+<view>
+  <column id="person_name" width="150"/>
+  <column id="person_age" width="40"/>
+  <column id="person_preferred_position" width="80"/>
+  <column id="person_current_ability" width="40"/>
+  <column id="person_potential_ability" width="40"/>
+  <column id="person_position_rating_st" width="40"/>
+  <column id="person_position_rating_aml" width="40"/>
+  <column id="person_position_rating_amc" width="40"/>
+  <column id="person_position_rating_amr" width="40"/>
+  <column id="person_position_rating_dml" width="40"/>
+  <column id="person_position_rating_dmr" width="40"/>
+  <column id="person_position_rating_dc" width="40"/>
+  <column id="person_position_rating_drl" width="40"/>
+  <column id="person_position_rating_wbl" width="40"/>
+  <column id="person_position_rating_wbr" width="40"/>
+  <column id="person_position_rating_gk" width="40"/>
+  <column id="person_match_sharpness" width="60"/>
+  <column id="person_condition_percentage" width="60"/>
+</view>
