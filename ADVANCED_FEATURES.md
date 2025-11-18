@@ -97,7 +97,13 @@ The training advisor works best with **TWO separate CSV files**:
 
 **Important:** Role ability ratings are DIFFERENT from positional skill ratings!
 - **Positional skill rating** (1-20): How familiar/comfortable a player is with a position (Natural, Accomplished, etc.)
-- **Role ability rating** (0-20): How good a player actually is at that role based on their attributes
+- **Role ability rating** (0-200): How good a player actually is at that role based on their attributes
+
+**Quality Assessment Method:**
+The advisor uses **squad-relative percentiles** to evaluate player quality, not absolute thresholds. This means:
+- A rating of 140/200 might be "Excellent" in League Two but only "Adequate" in the Premier League
+- Quality tiers (Excellent, Good, etc.) are determined by comparing each player to the rest of your squad
+- This ensures recommendations are relevant regardless of what level you're playing at
 
 ### Usage
 
@@ -120,9 +126,9 @@ Shows all players capable of playing each position, with both familiarity and ab
 **With both files (recommended):**
 ```
 D(C)     (Need 2 in XI, want 2+ competent & 1+ good quality):
-  ✓ ⭐ Jada Mawongo                Natural         (20.0/20) | Excellent  ability (18.5/20)
-  ✓ ✓✓ Joe Cassidy                 Natural         (20.0/20) | Good       ability (15.2/20)
-  ✓ → Sam Joce                     Natural         (20.0/20) | Adequate   ability (13.1/20)
+  ✓ ⭐ Jada Mawongo                Natural         (20.0/20) | Excellent  ability (165.0/200)
+  ✓ ✓✓ Joe Cassidy                 Natural         (20.0/20) | Good       ability (142.0/200)
+  ✓ → Sam Joce                     Natural         (20.0/20) | Adequate   ability (128.0/200)
   >>> QUALITY GAP: Need 1 more good-quality player(s)
 ```
 
@@ -150,12 +156,12 @@ Lists players who should train positions, categorized by type and prioritized by
 ```
 HIGH PRIORITY (Address quality gaps):
   Player: Marc Mitchell            → Train as: DM       [Become Natural]
-         Familiarity: Competent      (12.0/20) | Ability: Good       (16.5/20)
+         Familiarity: Competent      (12.0/20) | Ability: Good       (148.0/200)
          Age: 16 | Training Score: 0.75 | Good ability, train to become natural | very young (16)
 
 MEDIUM PRIORITY (Improve existing players):
   Player: Asa Hall                 → Train as: DM       [Improve Natural]
-         Familiarity: Natural        (18.0/20) | Ability: Adequate   (14.2/20)
+         Familiarity: Natural        (18.0/20) | Ability: Adequate   (132.0/200)
          Age: 39 | Training Score: 0.45 | Already natural, train to improve ability
 ```
 
@@ -184,12 +190,14 @@ To get intelligent training recommendations:
 - **Awkward (5-8)**: ~35% performance reduction
 - **Ineffectual (1-4)**: ~40% performance reduction
 
-**Role Ability Quality Tiers:**
-- **Excellent (17+)**: Top quality, first-team starter level
-- **Good (15-17)**: First-team quality, reliable starter
-- **Adequate (13-15)**: Backup quality, rotation option
-- **Poor (11-13)**: Below standard, emergency use only
-- **Inadequate (<11)**: Not suitable for this position
+**Role Ability Quality Tiers (Squad-Relative Percentiles):**
+- **Excellent**: Top 10% of your squad at this position (90th percentile+)
+- **Good**: Top 25% of your squad at this position (75th percentile+)
+- **Adequate**: Above squad median at this position (50th percentile+)
+- **Poor**: Below squad median (25th-50th percentile)
+- **Inadequate**: Bottom 25% of your squad (below 25th percentile)
+
+**Note:** These tiers adapt to your squad's level. A "Good" player in League Two has different absolute ratings than a "Good" player in the Premier League, but both are in the top 25% of their respective squads.
 
 **Training Timelines:**
 - Competent level: 6-9 months of training + match experience
