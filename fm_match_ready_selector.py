@@ -21,21 +21,54 @@ class MatchReadySelector:
     match sharpness, and fixture scheduling for optimal rotation.
     """
 
-    def __init__(self, filepath: str):
+    def __init__(self, status_filepath: str, abilities_filepath: Optional[str] = None):
         """
         Initialize the selector with player data.
 
         Args:
-            filepath: Path to CSV file containing comprehensive player data
+            status_filepath: Path to CSV with positional skill ratings & status (players-current.csv)
+            abilities_filepath: Optional path to CSV with role ability ratings (players.csv)
         """
-        # Load data
-        if filepath.endswith('.csv'):
-            self.df = pd.read_csv(filepath, encoding='utf-8-sig')
+        # Load status/attributes file (players-current.csv)
+        if status_filepath.endswith('.csv'):
+            self.status_df = pd.read_csv(status_filepath, encoding='utf-8-sig')
         else:
-            self.df = pd.read_excel(filepath)
+            self.status_df = pd.read_excel(status_filepath)
 
-        # Clean up column names
-        self.df.columns = self.df.columns.str.strip()
+        self.status_df.columns = self.status_df.columns.str.strip()
+
+        # Load abilities file (players.csv)
+        self.has_abilities = False
+        if abilities_filepath:
+            if abilities_filepath.endswith('.csv'):
+                self.abilities_df = pd.read_csv(abilities_filepath, encoding='utf-8-sig')
+            else:
+                self.abilities_df = pd.read_excel(abilities_filepath)
+
+            self.abilities_df.columns = self.abilities_df.columns.str.strip()
+
+            # Check if abilities file has the required role ability columns
+            required_cols = ['Name', 'Striker', 'AM(L)', 'AM(C)', 'AM(R)',
+                           'DM(L)', 'DM(R)', 'D(C)', 'D(R/L)', 'GK']
+            if all(col in self.abilities_df.columns for col in required_cols):
+                # Merge on player name
+                self.df = pd.merge(
+                    self.status_df,
+                    self.abilities_df[required_cols],
+                    on='Name',
+                    how='left',
+                    suffixes=('_skill', '_ability')
+                )
+                self.has_abilities = True
+                print(f"Loaded {len(self.df)} players with role abilities")
+            else:
+                print("\nWARNING: Abilities file missing required columns. Using status file only.")
+                self.df = self.status_df.copy()
+        else:
+            self.df = self.status_df.copy()
+            print("\nWARNING: No role abilities file provided. Selection based only on familiarity.")
+            print("For best results, provide both files:")
+            print("  python fm_match_ready_selector.py players-current.csv players.csv\n")
 
         # Convert numeric columns
         numeric_columns = [
@@ -46,52 +79,65 @@ class MatchReadySelector:
             'Attacking Mid. Left', 'Striker'
         ]
 
+        # Add role ability columns if they exist
+        ability_columns = ['Striker', 'AM(L)', 'AM(C)', 'AM(R)', 'DM(L)', 'DM(R)',
+                          'D(C)', 'D(R/L)', 'GK']
+        for col in ability_columns:
+            if col in self.df.columns:
+                numeric_columns.append(col)
+
         for col in numeric_columns:
             if col in self.df.columns:
                 self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
 
-        # Position mapping for 4-2-3-1
-        self.position_mapping = {
-            'GK': 'GoalKeeper',
-            'DL': 'Defender Left',
-            'DC1': 'Defender Center',
-            'DC2': 'Defender Center',
-            'DR': 'Defender Right',
-            'DM(L)': 'Defensive Midfielder',
-            'DM(R)': 'Defensive Midfielder',
-            'AML': 'Attacking Mid. Left',
-            'AMC': 'Attacking Mid. Center',
-            'AMR': 'Attacking Mid. Right',
-            'STC': 'Striker'
-        }
+        # Create DM_avg for abilities if we have them
+        if 'DM(L)' in self.df.columns and 'DM(R)' in self.df.columns:
+            self.df['DM_avg'] = (self.df['DM(L)'] + self.df['DM(R)']) / 2
 
-        # Default formation
-        self.formation = [
-            ('GK', 'GoalKeeper'),
-            ('DL', 'Defender Left'),
-            ('DC1', 'Defender Center'),
-            ('DC2', 'Defender Center'),
-            ('DR', 'Defender Right'),
-            ('DM(L)', 'Defensive Midfielder'),
-            ('DM(R)', 'Defensive Midfielder'),
-            ('AML', 'Attacking Mid. Left'),
-            ('AMC', 'Attacking Mid. Center'),
-            ('AMR', 'Attacking Mid. Right'),
-            ('STC', 'Striker')
-        ]
+        # Formation for 4-2-3-1
+        # Format: (pos_name, skill_rating_column, ability_rating_column or None)
+        if self.has_abilities:
+            self.formation = [
+                ('GK', 'GoalKeeper', 'GK'),
+                ('DL', 'Defender Left', 'D(R/L)'),
+                ('DC1', 'Defender Center', 'D(C)'),
+                ('DC2', 'Defender Center', 'D(C)'),
+                ('DR', 'Defender Right', 'D(R/L)'),
+                ('DM(L)', 'Defensive Midfielder', 'DM_avg'),
+                ('DM(R)', 'Defensive Midfielder', 'DM_avg'),
+                ('AML', 'Attacking Mid. Left', 'AM(L)'),
+                ('AMC', 'Attacking Mid. Center', 'AM(C)'),
+                ('AMR', 'Attacking Mid. Right', 'AM(R)'),
+                ('STC', 'Striker_skill', 'Striker_ability')  # Name collision handled
+            ]
+        else:
+            self.formation = [
+                ('GK', 'GoalKeeper', None),
+                ('DL', 'Defender Left', None),
+                ('DC1', 'Defender Center', None),
+                ('DC2', 'Defender Center', None),
+                ('DR', 'Defender Right', None),
+                ('DM(L)', 'Defensive Midfielder', None),
+                ('DM(R)', 'Defensive Midfielder', None),
+                ('AML', 'Attacking Mid. Left', None),
+                ('AMC', 'Attacking Mid. Center', None),
+                ('AMR', 'Attacking Mid. Right', None),
+                ('STC', 'Striker', None)
+            ]
 
         # Store selections for multiple matches
         self.match_selections = []
 
-    def calculate_effective_rating(self, row: pd.Series, position_col: str,
+    def calculate_effective_rating(self, row: pd.Series, skill_col: str, ability_col: Optional[str] = None,
                                    match_importance: str = 'Medium',
                                    prioritize_sharpness: bool = False) -> float:
         """
-        Calculate effective rating considering all factors.
+        Calculate effective rating considering familiarity, ability, and status factors.
 
         Args:
             row: Player data row
-            position_col: Position column name
+            skill_col: Positional skill rating column (1-20 familiarity)
+            ability_col: Role ability rating column (0-200 quality) - optional
             match_importance: 'Low', 'Medium', or 'High'
             prioritize_sharpness: Give minutes to low-sharpness players
 
@@ -102,16 +148,29 @@ class MatchReadySelector:
         if row.get('Is Injured', False) or row.get('Banned', False):
             return -999.0
 
-        # Get base positional rating
-        base_rating = row.get(position_col, 0)
-        if pd.isna(base_rating) or base_rating < 1:
+        # Get positional skill rating (familiarity 1-20)
+        skill_rating = row.get(skill_col, 0)
+        if pd.isna(skill_rating) or skill_rating < 1:
             return -999.0
 
-        # Start with base rating
-        effective_rating = float(base_rating)
+        # Get role ability rating (quality 0-200) if available
+        if ability_col and ability_col in row.index:
+            ability_rating = row.get(ability_col, 0)
+            if pd.isna(ability_rating) or ability_rating < 1:
+                # No valid ability rating, fall back to skill only
+                base_rating = float(skill_rating)
+            else:
+                # Use ability rating as base (0-200 scale)
+                # Normalize to ~20 scale to match skill ratings for consistency
+                base_rating = float(ability_rating) / 10.0
+        else:
+            # No ability data, use skill rating as base
+            base_rating = float(skill_rating)
 
-        # 1. Apply positional familiarity penalty
-        familiarity_penalty = self._get_familiarity_penalty(base_rating)
+        effective_rating = base_rating
+
+        # 1. Apply positional familiarity penalty based on skill rating
+        familiarity_penalty = self._get_familiarity_penalty(skill_rating)
         effective_rating *= (1 - familiarity_penalty)
 
         # 2. Match sharpness factor (5000-10000 scale)
@@ -121,16 +180,15 @@ class MatchReadySelector:
 
             if prioritize_sharpness and sharpness_pct < 0.85:
                 # BOOST rating for low-sharpness players in unimportant matches
-                # This encourages giving them minutes to build sharpness
                 effective_rating *= 1.1
             else:
                 # Standard penalty for low sharpness
                 if sharpness_pct < 0.60:
-                    effective_rating *= 0.70  # Severe penalty
+                    effective_rating *= 0.70
                 elif sharpness_pct < 0.75:
-                    effective_rating *= 0.85  # Moderate penalty
+                    effective_rating *= 0.85
                 elif sharpness_pct < 0.85:
-                    effective_rating *= 0.95  # Minor penalty
+                    effective_rating *= 0.95
 
         # 3. Physical condition factor (percentage)
         condition = row.get('Condition (%)', 100)
@@ -153,19 +211,13 @@ class MatchReadySelector:
                 effective_rating *= 0.65  # Severe penalty
             elif fatigue >= 400:
                 effective_rating *= 0.85  # Moderate penalty
-            # Negative fatigue (under-conditioned) also gets small penalty
             elif fatigue < -200:
                 effective_rating *= 0.90
 
         # 5. Match importance modifier
-        # For high-importance matches, further penalize unfit players
         if match_importance == 'High':
             if fatigue >= 400 or condition < 80:
                 effective_rating *= 0.85  # Extra penalty in important matches
-        elif match_importance == 'Low' and prioritize_sharpness:
-            # In low-importance matches, we can afford to rest key players
-            # This is handled by the sharpness boost above
-            pass
 
         return effective_rating
 
@@ -217,9 +269,16 @@ class MatchReadySelector:
         for i in range(n_players):
             player = available_df.iloc[i]
 
-            for j, (pos_name, col_name) in enumerate(self.formation):
+            for j, pos_info in enumerate(self.formation):
+                if len(pos_info) == 3:
+                    pos_name, skill_col, ability_col = pos_info
+                else:
+                    # Backwards compatibility if someone still uses old format
+                    pos_name, skill_col = pos_info
+                    ability_col = None
+
                 effective_rating = self.calculate_effective_rating(
-                    player, col_name, match_importance, prioritize_sharpness
+                    player, skill_col, ability_col, match_importance, prioritize_sharpness
                 )
 
                 if effective_rating > -999.0:
@@ -233,7 +292,8 @@ class MatchReadySelector:
         for i, j in zip(row_ind, col_ind):
             if cost_matrix[i, j] > -998:  # Valid assignment
                 player = available_df.iloc[i]
-                pos_name, col_name = self.formation[j]
+                pos_info = self.formation[j]
+                pos_name = pos_info[0]
                 effective_rating = -cost_matrix[i, j]
 
                 selection[pos_name] = (player['Name'], effective_rating, player)
@@ -494,26 +554,42 @@ class MatchReadySelector:
 
 def main():
     """Main execution function."""
-    # Get file path from command line or use default
-    if len(sys.argv) > 1:
-        filepath = sys.argv[1]
-    else:
-        import os
-        if os.path.exists('players-current.csv'):
-            filepath = 'players-current.csv'
-        elif os.path.exists('players.csv'):
-            filepath = 'players.csv'
-        elif os.path.exists('players.xlsx'):
-            filepath = 'players.xlsx'
-        else:
-            print("Error: No player data file found!")
-            print("Usage: python fm_match_ready_selector.py <path_to_player_data.csv>")
-            sys.exit(1)
+    import os
 
-    print(f"\nLoading player data from: {filepath}")
+    # Get file paths from command line or use defaults
+    status_file = None
+    abilities_file = None
+
+    if len(sys.argv) > 1:
+        status_file = sys.argv[1]
+        if len(sys.argv) > 2:
+            abilities_file = sys.argv[2]
+    else:
+        # Try common filenames
+        if os.path.exists('players-current.csv'):
+            status_file = 'players-current.csv'
+        elif os.path.exists('players.csv'):
+            status_file = 'players.csv'
+        elif os.path.exists('players.xlsx'):
+            status_file = 'players.xlsx'
+
+        # Look for abilities file
+        if os.path.exists('players.csv') and status_file != 'players.csv':
+            abilities_file = 'players.csv'
+
+    if not status_file:
+        print("Error: No player data file found!")
+        print("\nUsage:")
+        print("  python fm_match_ready_selector.py players-current.csv players.csv")
+        print("  python fm_match_ready_selector.py <status_file> [abilities_file]")
+        sys.exit(1)
+
+    print(f"\nLoading player status/attributes from: {status_file}")
+    if abilities_file:
+        print(f"Loading role abilities from: {abilities_file}")
 
     try:
-        selector = MatchReadySelector(filepath)
+        selector = MatchReadySelector(status_file, abilities_file)
 
         # Interactive input for match planning
         print("\n" + "=" * 100)
