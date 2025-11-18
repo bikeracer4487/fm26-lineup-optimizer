@@ -2,7 +2,7 @@
 """
 FM26 Training Distribution Advisor
 Recommends optimal training distribution based on squad depth analysis,
-player attributes, and positional skill ratings.
+player role abilities, positional skill ratings, and training attributes.
 
 Author: Doug Mason (2025)
 """
@@ -10,54 +10,116 @@ Author: Doug Mason (2025)
 import sys
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 
 class TrainingAdvisor:
     """Analyzes squad and recommends position training for players."""
 
-    def __init__(self, filepath: str):
+    def __init__(self, status_filepath: str, abilities_filepath: Optional[str] = None):
         """
         Initialize the training advisor with player data.
 
         Args:
-            filepath: Path to CSV file containing player data
+            status_filepath: Path to CSV with positional skill ratings & attributes (players-current.csv)
+            abilities_filepath: Optional path to CSV with role ability ratings (players.csv)
         """
-        # Load data
-        if filepath.endswith('.csv'):
-            self.df = pd.read_csv(filepath, encoding='utf-8-sig')
+        # Load status/attributes file (players-current.csv)
+        if status_filepath.endswith('.csv'):
+            self.status_df = pd.read_csv(status_filepath, encoding='utf-8-sig')
         else:
-            self.df = pd.read_excel(filepath)
+            self.status_df = pd.read_excel(status_filepath)
 
-        # Clean up column names (remove BOM and extra spaces)
-        self.df.columns = self.df.columns.str.strip()
+        self.status_df.columns = self.status_df.columns.str.strip()
+
+        # Load abilities file if provided (players.csv)
+        self.has_abilities = False
+        if abilities_filepath:
+            if abilities_filepath.endswith('.csv'):
+                self.abilities_df = pd.read_csv(abilities_filepath, encoding='utf-8-sig')
+            else:
+                self.abilities_df = pd.read_excel(abilities_filepath)
+
+            self.abilities_df.columns = self.abilities_df.columns.str.strip()
+
+            # Check if abilities file has the required role ability columns
+            required_cols = ['Name', 'Striker', 'AM(L)', 'AM(C)', 'AM(R)',
+                           'DM(L)', 'DM(R)', 'D(C)', 'D(R/L)', 'GK']
+            if all(col in self.abilities_df.columns for col in required_cols):
+                # Merge on player name with suffixes to distinguish
+                self.df = pd.merge(
+                    self.status_df,
+                    self.abilities_df[required_cols],
+                    on='Name',
+                    how='left',
+                    suffixes=('_skill', '_ability')
+                )
+                self.has_abilities = True
+            else:
+                print("\nWARNING: Abilities file missing required columns. Using status file only.")
+                self.df = self.status_df.copy()
+        else:
+            # Use status file only - no quality analysis possible
+            self.df = self.status_df.copy()
+            print("\nWARNING: No role abilities file provided. Quality analysis will be limited.")
+            print("For best results, export role ability ratings to players.csv and provide both files.")
+            print("The role ability file should have columns: Striker, AM(L), AM(C), AM(R), DM(L), DM(R), D(C), D(R/L), GK")
+            print("These show how GOOD players are at each role (based on attributes), different from positional skill ratings!\n")
 
         # Convert numeric columns
         numeric_columns = [
-            'Age', 'CA', 'PA', 'Versatility', 'Professionalism',
+            'Age', 'CA', 'PA', 'Versatility', 'Professionalism', 'Determination',
+            'Natural Fitness', 'Stamina', 'Work Rate', 'Adaptability',
+            # Positional skill ratings (1-20 familiarity scale)
             'GoalKeeper', 'Defender Right', 'Defender Center', 'Defender Left',
             'Defensive Midfielder', 'Attacking Mid. Right', 'Attacking Mid. Center',
             'Attacking Mid. Left', 'Striker'
         ]
 
+        # Add role ability columns if they exist
+        ability_columns = ['Striker', 'AM(L)', 'AM(C)', 'AM(R)', 'DM(L)', 'DM(R)',
+                          'D(C)', 'D(R/L)', 'GK']
+        for col in ability_columns:
+            if col in self.df.columns:
+                numeric_columns.append(col)
+
         for col in numeric_columns:
             if col in self.df.columns:
                 self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
 
-        # Define position mappings for 4-2-3-1 formation
-        self.position_mapping = {
-            'GK': 'GoalKeeper',
-            'D(R)': 'Defender Right',
-            'D(C)': 'Defender Center',
-            'D(L)': 'Defender Left',
-            'DM': 'Defensive Midfielder',
-            'AM(R)': 'Attacking Mid. Right',
-            'AM(C)': 'Attacking Mid. Center',
-            'AM(L)': 'Attacking Mid. Left',
-            'ST': 'Striker'
-        }
+        # Create DM_avg for abilities if we have them
+        if 'DM(L)' in self.df.columns and 'DM(R)' in self.df.columns:
+            self.df['DM_avg'] = (self.df['DM(L)'] + self.df['DM(R)']) / 2
 
-        # Positions needed for 4-2-3-1 formation
+        # Position mappings
+        # Format: Position display name -> (skill rating column, ability rating column or None)
+        if self.has_abilities:
+            self.position_mapping = {
+                'GK': ('GoalKeeper', 'GK'),
+                'D(R)': ('Defender Right', 'D(R/L)'),
+                'D(C)': ('Defender Center', 'D(C)'),
+                'D(L)': ('Defender Left', 'D(R/L)'),
+                'DM': ('Defensive Midfielder', 'DM_avg'),
+                'AM(R)': ('Attacking Mid. Right', 'AM(R)'),
+                'AM(C)': ('Attacking Mid. Center', 'AM(C)'),
+                'AM(L)': ('Attacking Mid. Left', 'AM(L)'),
+                'ST': ('Striker', 'Striker')
+            }
+        else:
+            # No abilities data - only skill ratings
+            self.position_mapping = {
+                'GK': ('GoalKeeper', None),
+                'D(R)': ('Defender Right', None),
+                'D(C)': ('Defender Center', None),
+                'D(L)': ('Defender Left', None),
+                'DM': ('Defensive Midfielder', None),
+                'AM(R)': ('Attacking Mid. Right', None),
+                'AM(C)': ('Attacking Mid. Center', None),
+                'AM(L)': ('Attacking Mid. Left', None),
+                'ST': ('Striker', None)
+            }
+
+        # Formation needs for 4-2-3-1
         self.formation_needs = {
             'GK': 1,
             'D(R)': 1,
@@ -70,8 +132,16 @@ class TrainingAdvisor:
             'ST': 1
         }
 
+        # Quality thresholds for role ability ratings
+        self.quality_thresholds = {
+            'excellent': 17.0,  # Top quality
+            'good': 15.0,       # First team quality
+            'adequate': 13.0,   # Backup quality
+            'poor': 11.0        # Below standard
+        }
+
     def get_positional_familiarity_tier(self, rating: float) -> str:
-        """Convert positional rating to familiarity tier."""
+        """Convert positional skill rating to familiarity tier."""
         if pd.isna(rating) or rating < 1:
             return 'Ineffectual'
         elif rating <= 4:
@@ -87,291 +157,492 @@ class TrainingAdvisor:
         else:  # 18-20
             return 'Natural'
 
-    def analyze_squad_depth(self) -> Dict[str, List[Tuple[str, float, str]]]:
+    def get_quality_tier(self, ability: float) -> str:
+        """Get quality tier for role ability rating."""
+        if pd.isna(ability):
+            return 'Unknown'
+        elif ability >= self.quality_thresholds['excellent']:
+            return 'Excellent'
+        elif ability >= self.quality_thresholds['good']:
+            return 'Good'
+        elif ability >= self.quality_thresholds['adequate']:
+            return 'Adequate'
+        elif ability >= self.quality_thresholds['poor']:
+            return 'Poor'
+        else:
+            return 'Inadequate'
+
+    def analyze_squad_depth_quality(self) -> Dict[str, List[Tuple]]:
         """
-        Analyze squad depth for each position.
+        Analyze squad depth considering both familiarity AND ability.
 
         Returns:
-            Dictionary mapping positions to list of (player_name, rating, tier) tuples
+            Dictionary mapping positions to list of (name, skill_rating, ability_rating, tiers) tuples
         """
         depth_analysis = {}
 
-        for pos_name, col_name in self.position_mapping.items():
-            if col_name not in self.df.columns:
-                continue
-
-            # Get all players with ratings for this position
+        for pos_name, (skill_col, ability_col) in self.position_mapping.items():
             players_data = []
-            for idx, row in self.df.iterrows():
-                rating = row[col_name]
-                if pd.notna(rating) and rating >= 1:
-                    tier = self.get_positional_familiarity_tier(rating)
-                    players_data.append((row['Name'], rating, tier))
 
-            # Sort by rating (descending)
-            players_data.sort(key=lambda x: x[1], reverse=True)
+            for idx, row in self.df.iterrows():
+                skill_rating = row.get(skill_col, 0)
+                ability_rating = row.get(ability_col, np.nan) if (ability_col and ability_col in self.df.columns) else np.nan
+
+                # Only include if they have some familiarity OR good ability
+                if pd.notna(skill_rating) and skill_rating >= 1:
+                    skill_tier = self.get_positional_familiarity_tier(skill_rating)
+                    ability_tier = self.get_quality_tier(ability_rating)
+
+                    players_data.append((
+                        row['Name'],
+                        skill_rating,
+                        ability_rating,
+                        skill_tier,
+                        ability_tier
+                    ))
+
+            # Sort by ability first (if available), then skill rating
+            def sort_key(x):
+                ability = x[2] if pd.notna(x[2]) else 0
+                skill = x[1]
+                return (-ability, -skill)
+
+            players_data.sort(key=sort_key)
             depth_analysis[pos_name] = players_data
 
         return depth_analysis
 
-    def identify_depth_gaps(self, depth_analysis: Dict) -> Dict[str, int]:
+    def identify_quality_gaps(self, depth_analysis: Dict) -> Dict[str, Dict]:
         """
-        Identify positions with insufficient depth.
-
-        Args:
-            depth_analysis: Output from analyze_squad_depth()
+        Identify positions with insufficient quality depth.
 
         Returns:
-            Dictionary mapping positions to shortage count
+            Dictionary mapping positions to gap analysis including shortage counts and quality levels
         """
         gaps = {}
 
         for pos_name, needed_count in self.formation_needs.items():
             if pos_name not in depth_analysis:
-                gaps[pos_name] = needed_count
+                gaps[pos_name] = {
+                    'total_shortage': needed_count,
+                    'quality_shortage': needed_count,
+                    'current_quality': []
+                }
                 continue
 
-            # Count players who are at least Competent (rating >= 10)
-            competent_players = [p for p in depth_analysis[pos_name] if p[1] >= 10]
+            players_data = depth_analysis[pos_name]
 
-            # We want at least 2 competent players per position (starter + backup)
-            target = max(2, needed_count)
-            shortage = target - len(competent_players)
+            # Count competent players (skill >= 10)
+            competent_players = [p for p in players_data if p[1] >= 10]
 
-            if shortage > 0:
-                gaps[pos_name] = shortage
+            # Count good quality players (ability >= 15)
+            good_players = [p for p in players_data if pd.notna(p[2]) and p[2] >= self.quality_thresholds['good']]
+
+            # We want:
+            # - At least 2 competent players per position
+            # - At least 1 good quality player per position (2 for positions needing multiple players)
+            target_competent = max(2, needed_count)
+            target_good = needed_count
+
+            competent_shortage = max(0, target_competent - len(competent_players))
+            quality_shortage = max(0, target_good - len(good_players))
+
+            if competent_shortage > 0 or quality_shortage > 0:
+                gaps[pos_name] = {
+                    'total_shortage': competent_shortage,
+                    'quality_shortage': quality_shortage,
+                    'current_quality': [p for p in players_data[:5]]  # Top 5 for context
+                }
 
         return gaps
 
     def recommend_training(self) -> List[Dict]:
         """
-        Generate training recommendations for players.
+        Generate intelligent training recommendations.
 
         Returns:
             List of dictionaries with training recommendations
         """
-        depth_analysis = self.analyze_squad_depth()
-        gaps = self.identify_depth_gaps(depth_analysis)
+        depth_analysis = self.analyze_squad_depth_quality()
+        gaps = self.identify_quality_gaps(depth_analysis)
 
         recommendations = []
 
-        # For each position gap, find best candidates to retrain
-        for pos_name, shortage in gaps.items():
-            col_name = self.position_mapping[pos_name]
+        for pos_name, gap_info in gaps.items():
+            skill_col, ability_col = self.position_mapping[pos_name]
 
-            # Find candidates for retraining to this position
-            candidates = []
+            # Analyze three categories of candidates
+            candidates = {
+                'improve_natural': [],      # Already natural, train to improve ability
+                'become_natural': [],       # Good ability, not yet natural
+                'learn_position': []        # Potential, needs to learn position
+            }
 
             for idx, row in self.df.iterrows():
                 name = row['Name']
                 age = row.get('Age', 99)
-                current_rating = row.get(col_name, 0)
-                tier = self.get_positional_familiarity_tier(current_rating)
+                skill_rating = row.get(skill_col, 0)
+                ability_rating = row.get(ability_col, np.nan) if (ability_col and ability_col in self.df.columns) else np.nan
 
-                # Skip if already competent or better
-                if current_rating >= 10:
-                    continue
+                skill_tier = self.get_positional_familiarity_tier(skill_rating)
+                ability_tier = self.get_quality_tier(ability_rating)
 
-                # Prefer younger players (under 24 is ideal)
-                age_factor = max(0, 24 - age) / 24 if pd.notna(age) else 0.5
-
-                # Check versatility (if available)
+                # Get training attributes
                 versatility = row.get('Versatility', 10)
+                professionalism = row.get('Professionalism', 10)
+                determination = row.get('Determination', 10)
+                ca = row.get('CA', 0)
+                pa = row.get('PA', 0)
+
+                # Calculate training potential
+                age_factor = max(0, (28 - age) / 24) if pd.notna(age) else 0.5  # Younger is better
                 versatility_factor = versatility / 20 if pd.notna(versatility) else 0.5
+                professionalism_factor = professionalism / 20 if pd.notna(professionalism) else 0.5
+                growth_potential = (pa - ca) if pd.notna(pa) and pd.notna(ca) else 10
 
-                # Check if player has some existing familiarity
-                familiarity_bonus = current_rating / 20 if pd.notna(current_rating) else 0
+                training_score = (
+                    age_factor * 0.3 +
+                    versatility_factor * 0.3 +
+                    professionalism_factor * 0.3 +
+                    min(growth_potential / 30, 1.0) * 0.1
+                )
 
-                # Calculate suitability score
-                suitability = (age_factor * 0.4) + (versatility_factor * 0.4) + (familiarity_bonus * 0.2)
+                # Categorize the candidate
+                if skill_rating >= 18:  # Already Natural
+                    if pd.notna(ability_rating):
+                        if ability_rating < self.quality_thresholds['good']:
+                            # Natural but not good enough - train to improve
+                            candidates['improve_natural'].append({
+                                'name': name,
+                                'age': age,
+                                'skill_rating': skill_rating,
+                                'skill_tier': skill_tier,
+                                'ability_rating': ability_rating,
+                                'ability_tier': ability_tier,
+                                'training_score': training_score,
+                                'reason': 'Already natural, train to improve ability'
+                            })
 
-                # Check if player is natural in similar positions
-                similar_positions = self._get_similar_positions(pos_name)
-                has_similar_natural = False
-                for sim_pos in similar_positions:
-                    if sim_pos in self.position_mapping:
-                        sim_col = self.position_mapping[sim_pos]
-                        if sim_col in row and pd.notna(row[sim_col]) and row[sim_col] >= 18:
-                            has_similar_natural = True
-                            suitability += 0.2  # Bonus for similar position mastery
-                            break
+                elif skill_rating >= 10:  # Competent/Accomplished but not Natural
+                    if pd.notna(ability_rating) and ability_rating >= self.quality_thresholds['adequate']:
+                        # Good ability, should become natural
+                        candidates['become_natural'].append({
+                            'name': name,
+                            'age': age,
+                            'skill_rating': skill_rating,
+                            'skill_tier': skill_tier,
+                            'ability_rating': ability_rating,
+                            'ability_tier': ability_tier,
+                            'training_score': training_score,
+                            'reason': 'Good ability, train to become natural'
+                        })
 
-                candidates.append({
-                    'name': name,
-                    'age': age,
-                    'current_rating': current_rating,
-                    'tier': tier,
-                    'suitability': suitability,
-                    'versatility': versatility,
-                    'has_similar_natural': has_similar_natural
-                })
+                else:  # Below Competent
+                    if pd.notna(ability_rating) and ability_rating >= self.quality_thresholds['adequate']:
+                        # Has potential but needs to learn position
+                        # Check if player is natural in similar position
+                        has_similar = self._check_similar_positions(row, pos_name)
 
-            # Sort candidates by suitability
-            candidates.sort(key=lambda x: x['suitability'], reverse=True)
+                        if age < 24 or has_similar or training_score > 0.6:
+                            candidates['learn_position'].append({
+                                'name': name,
+                                'age': age,
+                                'skill_rating': skill_rating,
+                                'skill_tier': skill_tier,
+                                'ability_rating': ability_rating,
+                                'ability_tier': ability_tier,
+                                'training_score': training_score,
+                                'has_similar': has_similar,
+                                'reason': 'Has potential, train new position'
+                            })
 
-            # Recommend top candidates
-            for i, candidate in enumerate(candidates[:shortage + 2]):  # +2 for alternatives
-                recommendation = {
-                    'player': candidate['name'],
-                    'position': pos_name,
-                    'current_tier': candidate['tier'],
-                    'current_rating': candidate['current_rating'],
-                    'age': candidate['age'],
-                    'priority': 'High' if i < shortage else 'Medium',
-                    'reason': self._generate_recommendation_reason(candidate, pos_name, shortage)
-                }
-                recommendations.append(recommendation)
+            # Sort each category by training score
+            for category in candidates.values():
+                category.sort(key=lambda x: x['training_score'], reverse=True)
+
+            # Generate recommendations prioritized by category
+            priority_order = ['become_natural', 'improve_natural', 'learn_position']
+
+            for category_name in priority_order:
+                category = candidates[category_name]
+
+                # Determine how many from this category we need
+                if category_name == 'become_natural':
+                    # These address quality gap most directly
+                    needed = gap_info['quality_shortage']
+                    priority = 'High'
+                elif category_name == 'improve_natural':
+                    # These improve existing players
+                    needed = min(2, gap_info['quality_shortage'])
+                    priority = 'Medium'
+                else:  # learn_position
+                    # These are longer-term investments
+                    needed = min(1, gap_info['total_shortage'])
+                    priority = 'Low'
+
+                for candidate in category[:needed + 1]:  # +1 for alternatives
+                    rec = {
+                        'player': candidate['name'],
+                        'position': pos_name,
+                        'category': category_name.replace('_', ' ').title(),
+                        'current_skill': candidate['skill_tier'],
+                        'current_skill_rating': candidate['skill_rating'],
+                        'ability_tier': candidate['ability_tier'],
+                        'ability_rating': candidate.get('ability_rating', np.nan),
+                        'age': candidate['age'],
+                        'training_score': candidate['training_score'],
+                        'priority': priority,
+                        'reason': self._generate_detailed_reason(candidate, pos_name)
+                    }
+                    recommendations.append(rec)
 
         return recommendations
 
-    def _get_similar_positions(self, position: str) -> List[str]:
-        """Get positions that are similar (easier to retrain between)."""
+    def _check_similar_positions(self, row: pd.Series, target_pos: str) -> bool:
+        """Check if player is natural in similar positions."""
         similarity_groups = {
-            'D(R)': ['D(L)', 'DM'],
-            'D(L)': ['D(R)', 'DM'],
-            'D(C)': ['DM'],
-            'DM': ['D(C)', 'D(R)', 'D(L)', 'AM(C)'],
-            'AM(R)': ['AM(L)', 'AM(C)', 'ST'],
-            'AM(L)': ['AM(R)', 'AM(C)', 'ST'],
-            'AM(C)': ['AM(R)', 'AM(L)', 'DM', 'ST'],
-            'ST': ['AM(C)', 'AM(R)', 'AM(L)'],
+            'D(R)': ['Defender Right', 'Defender Left'],
+            'D(L)': ['Defender Left', 'Defender Right'],
+            'D(C)': ['Defender Center'],
+            'DM': ['Defensive Midfielder', 'Defender Center'],
+            'AM(R)': ['Attacking Mid. Right', 'Attacking Mid. Left', 'Attacking Mid. Center'],
+            'AM(L)': ['Attacking Mid. Left', 'Attacking Mid. Right', 'Attacking Mid. Center'],
+            'AM(C)': ['Attacking Mid. Center', 'Attacking Mid. Left', 'Attacking Mid. Right'],
+            'ST': ['Striker', 'Attacking Mid. Center'],
             'GK': []
         }
-        return similarity_groups.get(position, [])
 
-    def _generate_recommendation_reason(self, candidate: Dict, position: str, shortage: int) -> str:
-        """Generate human-readable reason for recommendation."""
+        similar_cols = similarity_groups.get(target_pos, [])
+
+        for col in similar_cols:
+            if col in row and pd.notna(row[col]) and row[col] >= 18:
+                return True
+
+        return False
+
+    def _generate_detailed_reason(self, candidate: Dict, position: str) -> str:
+        """Generate comprehensive reason for recommendation."""
         reasons = []
 
-        if candidate['age'] < 24:
-            reasons.append(f"young age ({candidate['age']})")
+        # Category-specific reason
+        if candidate['reason']:
+            reasons.append(candidate['reason'])
 
-        if candidate['versatility'] >= 15:
-            reasons.append("high versatility")
+        # Age
+        age = candidate['age']
+        if age < 21:
+            reasons.append(f"very young ({age})")
+        elif age < 24:
+            reasons.append(f"young ({age})")
 
-        if candidate['has_similar_natural']:
+        # Training characteristics
+        if candidate['training_score'] >= 0.7:
+            reasons.append("excellent training attributes")
+        elif candidate['training_score'] >= 0.5:
+            reasons.append("good training attributes")
+
+        # Ability level
+        ability_tier = candidate.get('ability_tier', 'Unknown')
+        if ability_tier in ['Excellent', 'Good']:
+            reasons.append(f"{ability_tier.lower()} ability at position")
+
+        # Similar position
+        if candidate.get('has_similar'):
             reasons.append("natural in similar position")
 
-        if candidate['current_rating'] >= 6:
-            reasons.append(f"some existing familiarity ({candidate['tier']})")
-
-        if not reasons:
-            reasons.append("squad depth need")
-
-        return f"Good candidate due to: {', '.join(reasons)}"
+        return " | ".join(reasons)
 
     def print_depth_analysis(self):
-        """Print formatted depth analysis report."""
-        depth_analysis = self.analyze_squad_depth()
-        gaps = self.identify_depth_gaps(depth_analysis)
+        """Print comprehensive depth analysis with quality assessment."""
+        depth_analysis = self.analyze_squad_depth_quality()
+        gaps = self.identify_quality_gaps(depth_analysis)
 
-        print("=" * 90)
-        print("SQUAD DEPTH ANALYSIS FOR 4-2-3-1 FORMATION")
-        print("=" * 90)
+        print("=" * 110)
+        print("SQUAD DEPTH & QUALITY ANALYSIS FOR 4-2-3-1 FORMATION")
+        print("=" * 110)
         print()
+
+        has_abilities = any(pd.notna(players[0][2]) for players in depth_analysis.values() if players)
 
         for pos_name in ['GK', 'D(L)', 'D(C)', 'D(R)', 'DM', 'AM(L)', 'AM(C)', 'AM(R)', 'ST']:
             players_data = depth_analysis.get(pos_name, [])
             needed = self.formation_needs.get(pos_name, 1)
 
-            print(f"{pos_name:8} (Need {needed} in XI, want 2+ competent):")
+            print(f"{pos_name:8} (Need {needed} in XI, want 2+ competent & 1+ good quality):")
 
             if not players_data:
-                print(f"  {'NO PLAYERS AVAILABLE':40} - CRITICAL GAP!")
+                print(f"  {'NO PLAYERS AVAILABLE':50} - CRITICAL GAP!")
             else:
-                for i, (name, rating, tier) in enumerate(players_data[:5], 1):  # Top 5
-                    status = "✓" if rating >= 10 else "⚠"
-                    print(f"  {status} {name:30} {tier:15} ({rating:.1f}/20)")
+                for i, (name, skill_rating, ability_rating, skill_tier, ability_tier) in enumerate(players_data[:6], 1):
+                    # Status indicator
+                    status = "✓" if skill_rating >= 10 else "⚠"
 
-            # Show gap if exists
+                    # Quality indicator
+                    if pd.notna(ability_rating):
+                        if ability_rating >= self.quality_thresholds['excellent']:
+                            quality_icon = "⭐"
+                        elif ability_rating >= self.quality_thresholds['good']:
+                            quality_icon = "✓✓"
+                        elif ability_rating >= self.quality_thresholds['adequate']:
+                            quality_icon = "→"
+                        else:
+                            quality_icon = "⚠"
+                    else:
+                        quality_icon = "?"
+
+                    # Format output
+                    if has_abilities and pd.notna(ability_rating):
+                        print(f"  {status} {quality_icon} {name:28} {skill_tier:15} ({skill_rating:4.1f}/20) | "
+                              f"{ability_tier:10} ability ({ability_rating:4.1f}/20)")
+                    else:
+                        print(f"  {status} {name:30} {skill_tier:15} ({skill_rating:4.1f}/20)")
+
+            # Show gaps
             if pos_name in gaps:
-                print(f"  >>> DEPTH GAP: Need {gaps[pos_name]} more competent player(s)")
+                gap_info = gaps[pos_name]
+                if gap_info['total_shortage'] > 0:
+                    print(f"  >>> DEPTH GAP: Need {gap_info['total_shortage']} more competent player(s)")
+                if gap_info['quality_shortage'] > 0:
+                    print(f"  >>> QUALITY GAP: Need {gap_info['quality_shortage']} more good-quality player(s)")
 
             print()
 
-        print("=" * 90)
+        if has_abilities:
+            print("\nQUALITY INDICATORS:")
+            print("  ⭐ = Excellent ability (17+)")
+            print("  ✓✓ = Good ability (15+)")
+            print("  → = Adequate ability (13+)")
+            print("  ⚠ = Below standard")
+
+        print("=" * 110)
 
     def print_training_recommendations(self):
         """Print formatted training recommendations."""
         recommendations = self.recommend_training()
 
         if not recommendations:
-            print("\n" + "=" * 90)
+            print("\n" + "=" * 110)
             print("TRAINING RECOMMENDATIONS")
-            print("=" * 90)
-            print("\nNo training recommendations needed - squad depth is adequate at all positions!")
-            print("=" * 90)
+            print("=" * 110)
+
+            if not self.has_abilities:
+                print("\n⚠️  Cannot provide training recommendations without role ability data.")
+                print("\nTo get intelligent training recommendations:")
+                print("  1. Export player role ability ratings from FM26 (Squad view with Striker, AM(L), etc. columns)")
+                print("  2. Save as players.csv")
+                print("  3. Run: python fm_training_advisor.py players-current.csv players.csv")
+                print("\nRole ability ratings show how GOOD each player is at each position based on their attributes.")
+                print("This is different from positional skill ratings (1-20 familiarity scale) already in players-current.csv.")
+            else:
+                print("\n✅ No training recommendations needed - squad depth and quality are adequate at all positions!")
+
+            print("=" * 110)
             return
 
-        print("\n" + "=" * 90)
-        print("TRAINING RECOMMENDATIONS")
-        print("=" * 90)
-        print("\nThe following players should be trained in new positions to improve squad depth:")
+        print("\n" + "=" * 110)
+        print("INTELLIGENT TRAINING RECOMMENDATIONS")
+        print("=" * 110)
+        print("\nRecommendations based on positional skill ratings, role abilities, and training attributes:")
         print()
 
         # Group by priority
         high_priority = [r for r in recommendations if r['priority'] == 'High']
         medium_priority = [r for r in recommendations if r['priority'] == 'Medium']
+        low_priority = [r for r in recommendations if r['priority'] == 'Low']
 
-        if high_priority:
-            print("HIGH PRIORITY (Critical depth gaps):")
-            print("-" * 90)
-            for rec in high_priority:
-                print(f"  Player: {rec['player']:25} → Train as: {rec['position']:8}")
-                print(f"         Current: {rec['current_tier']:15} ({rec['current_rating']:.1f}/20)")
-                print(f"         Age: {rec['age']:2}  |  {rec['reason']}")
+        has_abilities = any(pd.notna(r['ability_rating']) for r in recommendations)
+
+        def print_recommendations(recs, title):
+            if not recs:
+                return
+
+            print(f"{title}:")
+            print("-" * 110)
+
+            for rec in recs:
+                print(f"  Player: {rec['player']:28} → Train as: {rec['position']:8} [{rec['category']}]")
+
+                if has_abilities and pd.notna(rec['ability_rating']):
+                    print(f"         Familiarity: {rec['current_skill']:15} ({rec['current_skill_rating']:4.1f}/20) | "
+                          f"Ability: {rec['ability_tier']:10} ({rec['ability_rating']:4.1f}/20)")
+                else:
+                    print(f"         Familiarity: {rec['current_skill']:15} ({rec['current_skill_rating']:4.1f}/20)")
+
+                print(f"         Age: {rec['age']:2} | Training Score: {rec['training_score']:.2f} | {rec['reason']}")
                 print()
 
-        if medium_priority:
-            print("MEDIUM PRIORITY (Additional depth options):")
-            print("-" * 90)
-            for rec in medium_priority:
-                print(f"  Player: {rec['player']:25} → Train as: {rec['position']:8}")
-                print(f"         Current: {rec['current_tier']:15} ({rec['current_rating']:.1f}/20)")
-                print(f"         Age: {rec['age']:2}  |  {rec['reason']}")
-                print()
+        print_recommendations(high_priority, "HIGH PRIORITY (Address quality gaps)")
+        print_recommendations(medium_priority, "MEDIUM PRIORITY (Improve existing players)")
+        print_recommendations(low_priority, "LOW PRIORITY (Long-term investments)")
 
-        print("=" * 90)
-        print("\nTRAINING TIMELINE EXPECTATIONS:")
+        print("=" * 110)
+        print("\nTRAINING CATEGORIES EXPLAINED:")
+        print("  • Become Natural: Players with good ability who should train to reach Natural (18+) familiarity")
+        print("  • Improve Natural: Players already Natural but need to improve their ability through training")
+        print("  • Learn Position: Players with potential who should train into a new position")
+        print()
+        print("TRAINING TIMELINE EXPECTATIONS:")
         print("  • Competent level (10/20):  6-9 months of training + match experience")
         print("  • Accomplished level (13+): 12 months of training + regular playing time")
         print("  • Natural level (18+):      12-24 months (requires consistent matches)")
-        print("\nKEY FACTORS:")
-        print("  • Younger players (under 24) learn faster")
-        print("  • High Versatility attribute accelerates retraining significantly")
-        print("  • Players need both individual training AND match experience")
-        print("  • Similar positions retrain faster (e.g., DL → DR, AM(C) → ST)")
-        print("=" * 90)
+        print()
+        print("KEY FACTORS FOR FASTER TRAINING:")
+        print("  • Age under 24 (younger players learn faster)")
+        print("  • High Versatility attribute (accelerates position learning)")
+        print("  • High Professionalism (trains harder and more effectively)")
+        print("  • Natural in similar positions (easier to adapt)")
+        print("  • Both individual training AND match experience needed")
+        print("=" * 110)
 
 
 def main():
     """Main execution function."""
-    # Get file path from command line or use default
+    import os
+
+    # Get file paths
+    status_file = None
+    abilities_file = None
+
     if len(sys.argv) > 1:
-        filepath = sys.argv[1]
+        status_file = sys.argv[1]
+        if len(sys.argv) > 2:
+            abilities_file = sys.argv[2]
     else:
         # Try common filenames
-        import os
         if os.path.exists('players-current.csv'):
-            filepath = 'players-current.csv'
+            status_file = 'players-current.csv'
         elif os.path.exists('players.csv'):
-            filepath = 'players.csv'
-        elif os.path.exists('players.xlsx'):
-            filepath = 'players.xlsx'
-        else:
-            print("Error: No player data file found!")
-            print("Usage: python fm_training_advisor.py <path_to_player_data.csv>")
-            sys.exit(1)
+            status_file = 'players.csv'
 
-    print(f"\nLoading player data from: {filepath}")
+        # Look for abilities file
+        if os.path.exists('players.csv') and status_file == 'players-current.csv':
+            abilities_file = 'players.csv'
+        elif os.path.exists('players-abilities.csv'):
+            abilities_file = 'players-abilities.csv'
+
+    if not status_file:
+        print("Error: No player data file found!")
+        print("\nUsage:")
+        print("  python fm_training_advisor.py <status_file.csv> [abilities_file.csv]")
+        print("\nFiles needed:")
+        print("  1. Status file (players-current.csv): Positional skill ratings, attributes, condition, etc.")
+        print("  2. Abilities file (players.csv): Role ability ratings [OPTIONAL but RECOMMENDED]")
+        print("\nFor best results, provide both files!")
+        sys.exit(1)
+
+    print(f"\nLoading player status/attributes from: {status_file}")
+    if abilities_file:
+        print(f"Loading role abilities from: {abilities_file}")
+    else:
+        print("No role abilities file provided - analysis will be limited")
 
     try:
-        advisor = TrainingAdvisor(filepath)
+        advisor = TrainingAdvisor(status_file, abilities_file)
         advisor.print_depth_analysis()
         advisor.print_training_recommendations()
 
-    except FileNotFoundError:
-        print(f"\nError: File '{filepath}' not found!")
+    except FileNotFoundError as e:
+        print(f"\nError: {str(e)}")
         sys.exit(1)
     except Exception as e:
         print(f"\nError: {str(e)}")

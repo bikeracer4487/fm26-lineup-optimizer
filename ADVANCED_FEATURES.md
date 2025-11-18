@@ -62,60 +62,119 @@ To get this data from Football Manager 2026:
 
 ### Purpose
 
-Analyzes your squad's positional depth and recommends which players should be retrained to improve coverage across all positions in your 4-2-3-1 formation.
+Analyzes your squad's positional depth and quality, then recommends which players should train which positions to improve coverage across all positions in your 4-2-3-1 formation.
 
 ### How It Works
 
-The advisor:
-1. Analyzes squad depth at each position
-2. Identifies positions with insufficient coverage (fewer than 2 competent players)
-3. Recommends players to retrain based on:
+The advisor analyzes BOTH familiarity AND ability:
+1. **Positional Skill Ratings** (1-20 familiarity scale) - How familiar players are with each position
+2. **Role Ability Ratings** (calculated from attributes) - How GOOD players are at each position
+3. Identifies positions with quality gaps (not just coverage, but actual ability)
+4. Recommends players to train based on:
+   - **Current ability at the position** - Players with good attributes but low familiarity
    - **Age** - Younger players (under 24) retrain faster
    - **Versatility** - Higher versatility = faster position learning
-   - **Current familiarity** - Players with some existing familiarity progress quicker
-   - **Similar positions** - Players natural in similar positions adapt faster
+   - **Professionalism** - Higher professionalism = more effective training
+   - **Training category**:
+     - *Become Natural*: Players with good ability who should reach Natural (18+) familiarity
+     - *Improve Natural*: Players already Natural but need to improve their ability
+     - *Learn Position*: Players with potential who should train into a new position
+
+### Required Data Files
+
+The training advisor works best with **TWO separate CSV files**:
+
+1. **players-current.csv** - Positional skill ratings + attributes + status
+   - Export from: Squad → Development → Include ALL columns
+   - Must have: Positional skill ratings (GoalKeeper, Defender Right, Defender Center, etc. on 1-20 scale)
+   - Must have: Attributes (Age, Versatility, Professionalism, CA, PA, etc.)
+   - Must have: Status (Condition, Fatigue, Match Sharpness)
+
+2. **players.csv** - Role ability ratings
+   - Export from: Squad view with role rating columns visible
+   - Must have: Name, Striker, AM(L), AM(C), AM(R), DM(L), DM(R), D(C), D(R/L), GK
+   - These are the calculated ratings showing how good each player is at each role based on their attributes
+
+**Important:** Role ability ratings are DIFFERENT from positional skill ratings!
+- **Positional skill rating** (1-20): How familiar/comfortable a player is with a position (Natural, Accomplished, etc.)
+- **Role ability rating** (0-20): How good a player actually is at that role based on their attributes
 
 ### Usage
 
 ```bash
-# Use default file (players-current.csv)
-python fm_training_advisor.py
+# Recommended: Provide both files for intelligent recommendations
+python fm_training_advisor.py players-current.csv players.csv
 
-# Specify custom file
-python fm_training_advisor.py path/to/your/players.csv
+# Limited mode: Only positional skill ratings (no quality analysis)
+python fm_training_advisor.py players-current.csv
 ```
 
 ### Output
 
 The script provides two main sections:
 
-#### 1. Squad Depth Analysis
+#### 1. Squad Depth & Quality Analysis
 
-Shows all players capable of playing each position, sorted by rating:
+Shows all players capable of playing each position, with both familiarity and ability ratings:
 
+**With both files (recommended):**
+```
+D(C)     (Need 2 in XI, want 2+ competent & 1+ good quality):
+  ✓ ⭐ Jada Mawongo                Natural         (20.0/20) | Excellent  ability (18.5/20)
+  ✓ ✓✓ Joe Cassidy                 Natural         (20.0/20) | Good       ability (15.2/20)
+  ✓ → Sam Joce                     Natural         (20.0/20) | Adequate   ability (13.1/20)
+  >>> QUALITY GAP: Need 1 more good-quality player(s)
+```
+
+**With status file only:**
 ```
 D(C)     (Need 2 in XI, want 2+ competent):
   ✓ Jada Mawongo                   Natural         (20.0/20)
   ✓ Joe Cassidy                    Natural         (20.0/20)
   ✓ Sam Joce                       Natural         (20.0/20)
-  >>> DEPTH GAP: Need 1 more competent player(s)
 ```
 
-- ✓ = Competent or better (rating ≥ 10)
-- ⚠ = Below competent (rating < 10)
+**Indicators:**
+- ✓ = Competent or better (familiarity rating ≥ 10)
+- ⚠ = Below competent (familiarity rating < 10)
+- ⭐ = Excellent ability (17+)
+- ✓✓ = Good ability (15+)
+- → = Adequate ability (13+)
+- ⚠ = Below standard ability
 
 #### 2. Training Recommendations
 
-Lists players who should be retrained, prioritized by urgency:
+Lists players who should train positions, categorized by type and prioritized by urgency:
 
+**With both files (intelligent recommendations):**
 ```
-HIGH PRIORITY (Critical depth gaps):
-  Player: Jordan Tait               → Train as: D(C)
-         Current: Awkward            (5.0/20)
-         Age: 20  |  Good candidate due to: young age (20), some existing familiarity
+HIGH PRIORITY (Address quality gaps):
+  Player: Marc Mitchell            → Train as: DM       [Become Natural]
+         Familiarity: Competent      (12.0/20) | Ability: Good       (16.5/20)
+         Age: 16 | Training Score: 0.75 | Good ability, train to become natural | very young (16)
+
+MEDIUM PRIORITY (Improve existing players):
+  Player: Asa Hall                 → Train as: DM       [Improve Natural]
+         Familiarity: Natural        (18.0/20) | Ability: Adequate   (14.2/20)
+         Age: 39 | Training Score: 0.45 | Already natural, train to improve ability
+```
+
+**Without abilities file:**
+```
+⚠️  Cannot provide training recommendations without role ability data.
+
+To get intelligent training recommendations:
+  1. Export player role ability ratings from FM26
+  2. Save as players.csv
+  3. Run: python fm_training_advisor.py players-current.csv players.csv
 ```
 
 ### Interpretation
+
+**Training Categories:**
+- **Become Natural**: Player has good ability at the position (15+ rating) but isn't Natural yet (< 18 familiarity). Should train to reach Natural status for optimal performance.
+- **Improve Natural**: Player is already Natural (18+ familiarity) but their ability at the position needs improvement (< 15 rating). Training the position will improve their attribute-based effectiveness.
+- **Learn Position**: Player has potential at the position (13+ ability) but low familiarity (< 10). Longer-term investment for young players or those natural in similar positions.
 
 **Positional Familiarity Tiers:**
 - **Natural (18-20)**: Full ability, no performance penalty
@@ -125,16 +184,25 @@ HIGH PRIORITY (Critical depth gaps):
 - **Awkward (5-8)**: ~35% performance reduction
 - **Ineffectual (1-4)**: ~40% performance reduction
 
+**Role Ability Quality Tiers:**
+- **Excellent (17+)**: Top quality, first-team starter level
+- **Good (15-17)**: First-team quality, reliable starter
+- **Adequate (13-15)**: Backup quality, rotation option
+- **Poor (11-13)**: Below standard, emergency use only
+- **Inadequate (<11)**: Not suitable for this position
+
 **Training Timelines:**
 - Competent level: 6-9 months of training + match experience
 - Accomplished level: 12 months total
 - Natural level: 12-24 months (requires regular matches)
 
 **Key Factors:**
-- Younger players learn faster
+- Younger players (under 24) learn faster
 - High Versatility attribute accelerates retraining significantly
+- High Professionalism improves training effectiveness
 - Players need BOTH individual training AND match experience
 - Similar positions retrain faster (e.g., DL → DR, AM(C) → ST)
+- Training Score (0-1) combines age, versatility, professionalism, and growth potential
 
 ---
 
