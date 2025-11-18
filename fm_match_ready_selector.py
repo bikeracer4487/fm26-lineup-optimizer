@@ -37,6 +37,10 @@ class MatchReadySelector:
 
         self.status_df.columns = self.status_df.columns.str.strip()
 
+        # Normalize column names - FM exports use "Condition (%)" but we use "Condition"
+        if 'Condition (%)' in self.status_df.columns:
+            self.status_df.rename(columns={'Condition (%)': 'Condition'}, inplace=True)
+
         # Load abilities file (players.csv)
         self.has_abilities = False
         if abilities_filepath:
