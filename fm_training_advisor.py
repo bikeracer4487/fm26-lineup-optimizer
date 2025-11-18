@@ -525,16 +525,15 @@ class TrainingAdvisor:
                     # Status indicator
                     status = "✓" if skill_rating >= 10 else "⚠"
 
-                    # Quality indicator
-                    if pd.notna(ability_rating):
-                        if ability_rating >= self.quality_thresholds['excellent']:
-                            quality_icon = "⭐"
-                        elif ability_rating >= self.quality_thresholds['good']:
-                            quality_icon = "✓✓"
-                        elif ability_rating >= self.quality_thresholds['adequate']:
-                            quality_icon = "→"
-                        else:
-                            quality_icon = "⚠"
+                    # Quality indicator based on ability tier
+                    if ability_tier == 'Excellent':
+                        quality_icon = "⭐"
+                    elif ability_tier == 'Good':
+                        quality_icon = "✓✓"
+                    elif ability_tier == 'Adequate':
+                        quality_icon = "→"
+                    elif ability_tier in ['Poor', 'Inadequate']:
+                        quality_icon = "⚠"
                     else:
                         quality_icon = "?"
 
