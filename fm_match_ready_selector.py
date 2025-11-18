@@ -72,7 +72,7 @@ class MatchReadySelector:
 
         # Convert numeric columns
         numeric_columns = [
-            'Age', 'CA', 'PA', 'Condition (%)', 'Fatigue', 'Match Sharpness',
+            'Age', 'CA', 'PA', 'Condition', 'Fatigue', 'Match Sharpness',
             'Natural Fitness', 'Stamina', 'Work Rate',
             'GoalKeeper', 'Defender Right', 'Defender Center', 'Defender Left',
             'Defensive Midfielder', 'Attacking Mid. Right', 'Attacking Mid. Center',
@@ -191,7 +191,7 @@ class MatchReadySelector:
                     effective_rating *= 0.95
 
         # 3. Physical condition factor (percentage)
-        condition = row.get('Condition (%)', 100)
+        condition = row.get('Condition', 100)
         if pd.notna(condition):
             # Normalize to 0-100 scale if stored as 0-10000
             if condition > 100:
@@ -240,7 +240,8 @@ class MatchReadySelector:
 
     def select_match_xi(self, match_importance: str = 'Medium',
                        prioritize_sharpness: bool = False,
-                       rested_players: List[str] = None) -> Dict:
+                       rested_players: List[str] = None,
+                       debug: bool = False) -> Dict:
         """
         Select optimal XI for a specific match.
 
@@ -248,6 +249,7 @@ class MatchReadySelector:
             match_importance: 'Low', 'Medium', or 'High'
             prioritize_sharpness: Give playing time to low-sharpness players
             rested_players: List of player names to rest (avoid selecting)
+            debug: Enable detailed debug output
 
         Returns:
             Dictionary mapping position to (player_name, effective_rating, player_data)
@@ -255,15 +257,34 @@ class MatchReadySelector:
         if rested_players is None:
             rested_players = []
 
-        # Filter out rested players BEFORE creating cost matrix
-        available_df = self.df[~self.df['Name'].isin(rested_players)].copy()
+        # Filter out unavailable players BEFORE creating cost matrix
+        # Remove: injured, banned, and rested players
+        unavailable_mask = (
+            (self.df['Is Injured'] == True) |
+            (self.df['Banned'] == True) |
+            (self.df['Name'].isin(rested_players))
+        )
+        available_df = self.df[~unavailable_mask].copy()
         available_df = available_df.reset_index(drop=False)  # Keep original index in 'index' column
 
         n_players = len(available_df)
         n_positions = len(self.formation)
 
+        if debug:
+            injured = self.df[self.df['Is Injured'] == True]['Name'].tolist()
+            banned = self.df[self.df['Banned'] == True]['Name'].tolist()
+            print(f"\n[DEBUG] Injured players: {injured}")
+            print(f"[DEBUG] Banned players: {banned}")
+            print(f"[DEBUG] Rested players: {rested_players}")
+            print(f"[DEBUG] Total available players (after filtering): {n_players}")
+            print(f"[DEBUG] Total positions to fill: {n_positions}")
+
         # Create cost matrix (negative effective ratings for minimization)
         cost_matrix = np.full((n_players, n_positions), -999.0)
+
+        # Track debug info for problematic positions
+        debug_positions = {'DC2': 3, 'DM(R)': 6}  # Position indices
+        position_ratings = {pos: [] for pos in debug_positions.keys()}
 
         # Fill cost matrix with only available players
         for i in range(n_players):
@@ -284,8 +305,53 @@ class MatchReadySelector:
                 if effective_rating > -999.0:
                     cost_matrix[i, j] = -effective_rating  # Negative for minimization
 
+                # Debug logging for problematic positions
+                if debug and pos_name in debug_positions:
+                    skill_val = player.get(skill_col, 'N/A')
+                    ability_val = player.get(ability_col, 'N/A') if ability_col else 'N/A'
+                    position_ratings[pos_name].append({
+                        'player': player['Name'],
+                        'skill_col': skill_col,
+                        'skill_val': skill_val,
+                        'ability_col': ability_col,
+                        'ability_val': ability_val,
+                        'effective_rating': effective_rating,
+                        'cost': -effective_rating if effective_rating > -999.0 else -999.0
+                    })
+
+        # Print debug info BEFORE assignment
+        if debug:
+            for pos_name, pos_idx in debug_positions.items():
+                print(f"\n[DEBUG] Position {pos_name} (index {pos_idx}):")
+                print(f"  Formation: {self.formation[pos_idx]}")
+
+                # Show top candidates
+                ratings = position_ratings[pos_name]
+                valid_ratings = [r for r in ratings if r['effective_rating'] > -999.0]
+                valid_ratings.sort(key=lambda x: x['effective_rating'], reverse=True)
+
+                print(f"  Valid candidates: {len(valid_ratings)} / {n_players}")
+                print(f"  Top 5 candidates:")
+                for i, r in enumerate(valid_ratings[:5], 1):
+                    print(f"    {i}. {r['player']:20} | Skill: {r['skill_val']:5} | "
+                          f"Ability: {r['ability_val']:6.1f} | Effective: {r['effective_rating']:6.2f}")
+
+                if len(valid_ratings) < 5:
+                    print(f"  (Only {len(valid_ratings)} valid candidates found)")
+
         # Solve assignment problem
         row_ind, col_ind = linear_sum_assignment(cost_matrix)
+
+        if debug:
+            print(f"\n[DEBUG] Hungarian algorithm assignments:")
+            for i, j in zip(row_ind, col_ind):
+                player = available_df.iloc[i]
+                pos_info = self.formation[j]
+                pos_name = pos_info[0]
+                cost = cost_matrix[i, j]
+                eff_rating = -cost if cost > -998 else None
+                print(f"  Player {i} ({player['Name']:20}) -> Position {j} ({pos_name:6}) | "
+                      f"Cost: {cost:7.2f} | Eff Rating: {eff_rating}")
 
         # Build selection dictionary
         selection = {}
@@ -300,13 +366,14 @@ class MatchReadySelector:
 
         return selection
 
-    def plan_rotation(self, current_date_str: str, matches: List[Tuple[str, str]]):
+    def plan_rotation(self, current_date_str: str, matches: List[Tuple[str, str]], debug: bool = False):
         """
         Plan rotation across multiple matches.
 
         Args:
             current_date_str: Current date in format 'YYYY-MM-DD'
             matches: List of (date_str, importance) tuples for upcoming matches
+            debug: Enable debug output for troubleshooting
         """
         print("\n" + "=" * 100)
         print("MATCH SCHEDULE AND ROTATION PLANNING")
@@ -358,7 +425,7 @@ class MatchReadySelector:
                         print()
 
             # Select XI
-            selection = self.select_match_xi(importance, prioritize_sharpness, players_to_rest)
+            selection = self.select_match_xi(importance, prioritize_sharpness, players_to_rest, debug)
             self.match_selections.append((match_date, importance, selection))
 
             # Display selection
@@ -376,7 +443,7 @@ class MatchReadySelector:
 
         for idx, row in self.df.iterrows():
             fatigue = row.get('Fatigue', 0)
-            condition = row.get('Condition (%)', 100)
+            condition = row.get('Condition', 100)
 
             # Normalize condition if needed
             if pd.notna(condition) and condition > 100:
@@ -425,7 +492,7 @@ class MatchReadySelector:
                     player_name, eff_rating, player_data = selection[pos]
 
                     # Get status indicators
-                    condition = player_data.get('Condition (%)', 100)
+                    condition = player_data.get('Condition', 100)
                     if condition > 100:
                         condition = condition / 100
                     fatigue = player_data.get('Fatigue', 0)
@@ -517,7 +584,7 @@ class MatchReadySelector:
 
         for idx, row in self.df.iterrows():
             fatigue = row.get('Fatigue', 0)
-            condition = row.get('Condition (%)', 100)
+            condition = row.get('Condition', 100)
             sharpness = row.get('Match Sharpness', 10000) / 10000
 
             if condition > 100:
