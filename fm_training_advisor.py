@@ -232,11 +232,16 @@ class TrainingAdvisor:
                 skill_rating = row.get(skill_col, 0)
                 ability_rating = row.get(ability_col, np.nan) if (ability_col and ability_col in self.df.columns) else np.nan
 
-                # Only include if they have some familiarity OR good ability
-                if pd.notna(skill_rating) and skill_rating >= 1:
-                    skill_tier = self.get_positional_familiarity_tier(skill_rating)
-                    ability_tier = self.get_quality_tier(ability_rating, percentiles) if percentiles else 'Unknown'
+                skill_tier = self.get_positional_familiarity_tier(skill_rating)
+                ability_tier = self.get_quality_tier(ability_rating, percentiles) if percentiles else 'Unknown'
 
+                # Only include players who are:
+                # 1. At least Awkward (8/20) - minimally playable
+                # 2. OR have Good/Excellent ability (training candidates worth showing)
+                is_somewhat_familiar = pd.notna(skill_rating) and skill_rating >= 8
+                is_training_candidate = ability_tier in ['Good', 'Excellent']
+
+                if is_somewhat_familiar or is_training_candidate:
                     players_data.append((
                         row['Name'],
                         skill_rating,
@@ -245,11 +250,24 @@ class TrainingAdvisor:
                         ability_tier
                     ))
 
-            # Sort by ability first (if available), then skill rating
+            # Sort with familiarity weighted heavily - players who can actually play the position rank higher
             def sort_key(x):
+                skill = x[1] if pd.notna(x[1]) else 0
                 ability = x[2] if pd.notna(x[2]) else 0
-                skill = x[1]
-                return (-ability, -skill)
+
+                # Create composite score that values familiarity heavily
+                if skill >= 18:  # Natural - ready to play, high familiarity bonus
+                    composite = ability + 60
+                elif skill >= 13:  # Accomplished - ready to play, good bonus
+                    composite = ability + 35
+                elif skill >= 10:  # Competent - playable, moderate bonus
+                    composite = ability + 15
+                elif skill >= 8:  # Awkward - emergency option, small bonus
+                    composite = ability + 5
+                else:  # Below Awkward - training candidates only, heavily penalized
+                    composite = ability * 0.4
+
+                return (-composite, -skill, -ability)
 
             players_data.sort(key=sort_key)
             depth_analysis[pos_name] = players_data
