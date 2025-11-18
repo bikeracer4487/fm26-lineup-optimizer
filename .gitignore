@@ -126,3 +126,6 @@ starting_xi.csv
 first_xi.csv
 .gitignore
 rotation_xi.csv
+
+# FM26 Excel data file (personal player data)
+FM26 Players.xlsx
