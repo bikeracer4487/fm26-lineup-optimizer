@@ -132,13 +132,8 @@ class TrainingAdvisor:
             'ST': 1
         }
 
-        # Quality thresholds for role ability ratings
-        self.quality_thresholds = {
-            'excellent': 17.0,  # Top quality
-            'good': 15.0,       # First team quality
-            'adequate': 13.0,   # Backup quality
-            'poor': 11.0        # Below standard
-        }
+        # Note: Role ability ratings are on 0-200 scale
+        # Quality will be determined relative to squad distribution (percentiles)
 
     def get_positional_familiarity_tier(self, rating: float) -> str:
         """Convert positional skill rating to familiarity tier."""
@@ -157,20 +152,65 @@ class TrainingAdvisor:
         else:  # 18-20
             return 'Natural'
 
-    def get_quality_tier(self, ability: float) -> str:
-        """Get quality tier for role ability rating."""
+    def calculate_position_percentiles(self, position_col: str) -> Dict[str, float]:
+        """
+        Calculate percentile thresholds for a position based on squad distribution.
+
+        Args:
+            position_col: Column name for the position's ability ratings
+
+        Returns:
+            Dictionary with percentile thresholds
+        """
+        if position_col not in self.df.columns:
+            return {
+                'p90': 160,  # Fallback values
+                'p75': 140,
+                'p50': 120,
+                'p25': 100
+            }
+
+        # Get all valid ability ratings for this position
+        abilities = self.df[position_col].dropna()
+
+        if len(abilities) == 0:
+            return {
+                'p90': 160,
+                'p75': 140,
+                'p50': 120,
+                'p25': 100
+            }
+
+        return {
+            'p90': abilities.quantile(0.90),  # Top 10%
+            'p75': abilities.quantile(0.75),  # Top 25%
+            'p50': abilities.quantile(0.50),  # Median
+            'p25': abilities.quantile(0.25)   # Bottom 25%
+        }
+
+    def get_quality_tier(self, ability: float, percentiles: Dict[str, float]) -> str:
+        """
+        Get quality tier for role ability rating using squad-relative percentiles.
+
+        Args:
+            ability: Player's ability rating at the position (0-200 scale)
+            percentiles: Percentile thresholds for this position
+
+        Returns:
+            Quality tier string
+        """
         if pd.isna(ability):
             return 'Unknown'
-        elif ability >= self.quality_thresholds['excellent']:
-            return 'Excellent'
-        elif ability >= self.quality_thresholds['good']:
-            return 'Good'
-        elif ability >= self.quality_thresholds['adequate']:
-            return 'Adequate'
-        elif ability >= self.quality_thresholds['poor']:
-            return 'Poor'
+        elif ability >= percentiles['p90']:
+            return 'Excellent'  # Top 10% of squad
+        elif ability >= percentiles['p75']:
+            return 'Good'       # Top 25% of squad
+        elif ability >= percentiles['p50']:
+            return 'Adequate'   # Above median
+        elif ability >= percentiles['p25']:
+            return 'Poor'       # Below median
         else:
-            return 'Inadequate'
+            return 'Inadequate' # Bottom 25%
 
     def analyze_squad_depth_quality(self) -> Dict[str, List[Tuple]]:
         """
@@ -184,6 +224,9 @@ class TrainingAdvisor:
         for pos_name, (skill_col, ability_col) in self.position_mapping.items():
             players_data = []
 
+            # Calculate percentiles for this position
+            percentiles = self.calculate_position_percentiles(ability_col) if ability_col else None
+
             for idx, row in self.df.iterrows():
                 skill_rating = row.get(skill_col, 0)
                 ability_rating = row.get(ability_col, np.nan) if (ability_col and ability_col in self.df.columns) else np.nan
@@ -191,7 +234,7 @@ class TrainingAdvisor:
                 # Only include if they have some familiarity OR good ability
                 if pd.notna(skill_rating) and skill_rating >= 1:
                     skill_tier = self.get_positional_familiarity_tier(skill_rating)
-                    ability_tier = self.get_quality_tier(ability_rating)
+                    ability_tier = self.get_quality_tier(ability_rating, percentiles) if percentiles else 'Unknown'
 
                     players_data.append((
                         row['Name'],
@@ -214,7 +257,7 @@ class TrainingAdvisor:
 
     def identify_quality_gaps(self, depth_analysis: Dict) -> Dict[str, Dict]:
         """
-        Identify positions with insufficient quality depth.
+        Identify positions with insufficient quality depth using squad-relative criteria.
 
         Returns:
             Dictionary mapping positions to gap analysis including shortage counts and quality levels
@@ -231,16 +274,18 @@ class TrainingAdvisor:
                 continue
 
             players_data = depth_analysis[pos_name]
+            skill_col, ability_col = self.position_mapping[pos_name]
 
             # Count competent players (skill >= 10)
             competent_players = [p for p in players_data if p[1] >= 10]
 
-            # Count good quality players (ability >= 15)
-            good_players = [p for p in players_data if pd.notna(p[2]) and p[2] >= self.quality_thresholds['good']]
+            # Count good quality players (top 25% of squad at this position)
+            # Players with 'Good' or 'Excellent' tier
+            good_players = [p for p in players_data if p[4] in ['Good', 'Excellent']]
 
             # We want:
             # - At least 2 competent players per position
-            # - At least 1 good quality player per position (2 for positions needing multiple players)
+            # - At least as many good quality players as needed in formation
             target_competent = max(2, needed_count)
             target_good = needed_count
 
@@ -258,7 +303,7 @@ class TrainingAdvisor:
 
     def recommend_training(self) -> List[Dict]:
         """
-        Generate intelligent training recommendations.
+        Generate intelligent training recommendations using squad-relative quality assessment.
 
         Returns:
             List of dictionaries with training recommendations
@@ -270,6 +315,9 @@ class TrainingAdvisor:
 
         for pos_name, gap_info in gaps.items():
             skill_col, ability_col = self.position_mapping[pos_name]
+
+            # Calculate percentiles for this position
+            percentiles = self.calculate_position_percentiles(ability_col) if ability_col else None
 
             # Analyze three categories of candidates
             candidates = {
@@ -285,7 +333,7 @@ class TrainingAdvisor:
                 ability_rating = row.get(ability_col, np.nan) if (ability_col and ability_col in self.df.columns) else np.nan
 
                 skill_tier = self.get_positional_familiarity_tier(skill_rating)
-                ability_tier = self.get_quality_tier(ability_rating)
+                ability_tier = self.get_quality_tier(ability_rating, percentiles) if percentiles else 'Unknown'
 
                 # Get training attributes
                 versatility = row.get('Versatility', 10)
@@ -307,11 +355,11 @@ class TrainingAdvisor:
                     min(growth_potential / 30, 1.0) * 0.1
                 )
 
-                # Categorize the candidate
+                # Categorize the candidate using squad-relative quality tiers
                 if skill_rating >= 18:  # Already Natural
                     if pd.notna(ability_rating):
-                        if ability_rating < self.quality_thresholds['good']:
-                            # Natural but not good enough - train to improve
+                        if ability_tier not in ['Good', 'Excellent']:
+                            # Natural but not top 25% quality - train to improve
                             candidates['improve_natural'].append({
                                 'name': name,
                                 'age': age,
@@ -324,8 +372,8 @@ class TrainingAdvisor:
                             })
 
                 elif skill_rating >= 10:  # Competent/Accomplished but not Natural
-                    if pd.notna(ability_rating) and ability_rating >= self.quality_thresholds['adequate']:
-                        # Good ability, should become natural
+                    if pd.notna(ability_rating) and ability_tier in ['Adequate', 'Good', 'Excellent']:
+                        # Above median ability, should become natural
                         candidates['become_natural'].append({
                             'name': name,
                             'age': age,
@@ -338,7 +386,7 @@ class TrainingAdvisor:
                         })
 
                 else:  # Below Competent
-                    if pd.notna(ability_rating) and ability_rating >= self.quality_thresholds['adequate']:
+                    if pd.notna(ability_rating) and ability_tier in ['Adequate', 'Good', 'Excellent']:
                         # Has potential but needs to learn position
                         # Check if player is natural in similar position
                         has_similar = self._check_similar_positions(row, pos_name)
@@ -493,7 +541,7 @@ class TrainingAdvisor:
                     # Format output
                     if has_abilities and pd.notna(ability_rating):
                         print(f"  {status} {quality_icon} {name:28} {skill_tier:15} ({skill_rating:4.1f}/20) | "
-                              f"{ability_tier:10} ability ({ability_rating:4.1f}/20)")
+                              f"{ability_tier:10} ability ({ability_rating:5.1f}/200)")
                     else:
                         print(f"  {status} {name:30} {skill_tier:15} ({skill_rating:4.1f}/20)")
 
@@ -564,7 +612,7 @@ class TrainingAdvisor:
 
                 if has_abilities and pd.notna(rec['ability_rating']):
                     print(f"         Familiarity: {rec['current_skill']:15} ({rec['current_skill_rating']:4.1f}/20) | "
-                          f"Ability: {rec['ability_tier']:10} ({rec['ability_rating']:4.1f}/20)")
+                          f"Ability: {rec['ability_tier']:10} ({rec['ability_rating']:5.1f}/200)")
                 else:
                     print(f"         Familiarity: {rec['current_skill']:15} ({rec['current_skill_rating']:4.1f}/20)")
 
