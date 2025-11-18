@@ -203,19 +203,19 @@ class MatchReadySelector:
         if rested_players is None:
             rested_players = []
 
-        n_players = len(self.df)
+        # Filter out rested players BEFORE creating cost matrix
+        available_df = self.df[~self.df['Name'].isin(rested_players)].copy()
+        available_df = available_df.reset_index(drop=False)  # Keep original index in 'index' column
+
+        n_players = len(available_df)
         n_positions = len(self.formation)
 
         # Create cost matrix (negative effective ratings for minimization)
         cost_matrix = np.full((n_players, n_positions), -999.0)
 
-        # Fill cost matrix
-        for i, player_idx in enumerate(self.df.index):
-            player = self.df.loc[player_idx]
-
-            # Skip rested players
-            if player['Name'] in rested_players:
-                continue
+        # Fill cost matrix with only available players
+        for i in range(n_players):
+            player = available_df.iloc[i]
 
             for j, (pos_name, col_name) in enumerate(self.formation):
                 effective_rating = self.calculate_effective_rating(
@@ -232,7 +232,7 @@ class MatchReadySelector:
         selection = {}
         for i, j in zip(row_ind, col_ind):
             if cost_matrix[i, j] > -998:  # Valid assignment
-                player = self.df.loc[self.df.index[i]]
+                player = available_df.iloc[i]
                 pos_name, col_name = self.formation[j]
                 effective_rating = -cost_matrix[i, j]
 
