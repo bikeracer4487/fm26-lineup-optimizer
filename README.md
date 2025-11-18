@@ -2,7 +2,18 @@
 
 Automatically selects the best Starting XI for your Football Manager team based on position-specific ratings.
 
-## Two Versions Available
+## 🆕 Advanced Features (NEW!)
+
+**Two new scripts** now available that factor in match sharpness, physical condition, fatigue, and intelligent rotation:
+
+- **fm_training_advisor.py** - Analyzes squad depth and recommends position training
+- **fm_match_ready_selector.py** - Selects lineups considering fitness, fatigue, and fixture scheduling
+
+**📚 [See the Advanced Features Guide](ADVANCED_FEATURES.md) for complete documentation**
+
+---
+
+## Core Selection Scripts
 
 ### 1. **fm_team_selector_optimal.py** (RECOMMENDED)
 Uses the **Hungarian algorithm** to find the truly optimal player-position assignment that maximizes total team rating.
@@ -221,6 +232,19 @@ available_players['weighted_rating'] = (
 **Players have NaN ratings**
 - The script automatically skips players with missing ratings for specific positions
 - Check your spreadsheet for empty cells
+
+## All Available Scripts
+
+| Script | Purpose | Use Case |
+|--------|---------|----------|
+| `fm_team_selector_optimal.py` | Optimal XI selection using ratings only | Finding the theoretical best lineup |
+| `fm_team_selector.py` | Greedy XI selection | Quick selections, prototyping |
+| `fm_rotation_selector.py` | Dual squad selection (First XI + Rotation XI) | Analyzing squad depth |
+| `compare_selections.py` | Compare greedy vs optimal approaches | Validation and benchmarking |
+| **`fm_training_advisor.py`** | **Training position recommendations** | **Improving squad depth** |
+| **`fm_match_ready_selector.py`** | **Match-day lineup with fitness factors** | **Weekly match planning** |
+
+**Bold** = Advanced features (see [ADVANCED_FEATURES.md](ADVANCED_FEATURES.md))
 
 ## License
 
