@@ -379,11 +379,19 @@ class MatchReadySelector:
             condition = row.get('Condition (%)', 100)
 
             # Normalize condition if needed
-            if condition > 100:
+            if pd.notna(condition) and condition > 100:
                 condition = condition / 100
 
+            # Data validation: condition should be reasonable (20-100%)
+            # If below 20%, likely data corruption - skip this player
+            if pd.notna(condition) and condition < 20:
+                continue
+
             # Rest if fatigue >= 400 or condition < 75%
-            if (pd.notna(fatigue) and fatigue >= 400) or (pd.notna(condition) and condition < 75):
+            should_rest_fatigue = pd.notna(fatigue) and fatigue >= 400
+            should_rest_condition = pd.notna(condition) and condition < 75
+
+            if should_rest_fatigue or should_rest_condition:
                 rest_candidates.append(row['Name'])
 
         return rest_candidates
