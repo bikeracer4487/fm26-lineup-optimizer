@@ -391,6 +391,7 @@ class TrainingAdvisor:
                             # Natural but not top 25% quality - train to improve
                             candidates['improve_natural'].append({
                                 'name': name,
+                                'row': row,
                                 'age': age,
                                 'skill_rating': skill_rating,
                                 'skill_tier': skill_tier,
@@ -403,16 +404,19 @@ class TrainingAdvisor:
                 elif skill_rating >= 10:  # Competent/Accomplished but not Natural
                     if pd.notna(ability_rating) and ability_tier in ['Adequate', 'Good', 'Excellent']:
                         # Above median ability, should become natural
-                        candidates['become_natural'].append({
-                            'name': name,
-                            'age': age,
-                            'skill_rating': skill_rating,
-                            'skill_tier': skill_tier,
-                            'ability_rating': ability_rating,
-                            'ability_tier': ability_tier,
-                            'training_score': training_score,
-                            'reason': 'Good ability, train to become natural'
-                        })
+                        # But check if retraining makes sense given opportunity cost
+                        if self._should_retrain(row, pos_name, skill_rating, gaps):
+                            candidates['become_natural'].append({
+                                'name': name,
+                                'row': row,
+                                'age': age,
+                                'skill_rating': skill_rating,
+                                'skill_tier': skill_tier,
+                                'ability_rating': ability_rating,
+                                'ability_tier': ability_tier,
+                                'training_score': training_score,
+                                'reason': 'Good ability, train to become natural'
+                            })
 
                 else:  # Below Competent
                     if pd.notna(ability_rating) and ability_tier in ['Adequate', 'Good', 'Excellent']:
@@ -421,17 +425,20 @@ class TrainingAdvisor:
                         has_similar = self._check_similar_positions(row, pos_name)
 
                         if age < 24 or has_similar or training_score > 0.6:
-                            candidates['learn_position'].append({
-                                'name': name,
-                                'age': age,
-                                'skill_rating': skill_rating,
-                                'skill_tier': skill_tier,
-                                'ability_rating': ability_rating,
-                                'ability_tier': ability_tier,
-                                'training_score': training_score,
-                                'has_similar': has_similar,
-                                'reason': 'Has potential, train new position'
-                            })
+                            # Check if retraining makes sense given opportunity cost
+                            if self._should_retrain(row, pos_name, skill_rating, gaps):
+                                candidates['learn_position'].append({
+                                    'name': name,
+                                    'row': row,
+                                    'age': age,
+                                    'skill_rating': skill_rating,
+                                    'skill_tier': skill_tier,
+                                    'ability_rating': ability_rating,
+                                    'ability_tier': ability_tier,
+                                    'training_score': training_score,
+                                    'has_similar': has_similar,
+                                    'reason': 'Has potential, train new position'
+                                })
 
             # Sort each category by training score
             for category in candidates.values():
@@ -475,6 +482,83 @@ class TrainingAdvisor:
 
         return recommendations
 
+    def _get_player_current_positions(self, row: pd.Series) -> List[Tuple[str, float]]:
+        """
+        Get positions where player is already Natural or Accomplished (13+).
+        Returns list of (position_name, skill_rating) tuples.
+        """
+        current_positions = []
+
+        for pos_name, (skill_col, ability_col) in self.position_mapping.items():
+            skill_rating = row.get(skill_col, 0)
+            if pd.notna(skill_rating) and skill_rating >= 13:  # Accomplished or better
+                current_positions.append((pos_name, skill_rating))
+
+        return current_positions
+
+    def _should_retrain(self, row: pd.Series, target_pos: str, target_skill: float, gaps: Dict) -> bool:
+        """
+        Determine if retraining a player makes sense given opportunity cost.
+
+        Args:
+            row: Player data
+            target_pos: Position we're considering training them for
+            target_skill: Current skill rating at target position
+            gaps: Gap analysis for all positions
+
+        Returns:
+            True if retraining makes sense, False if player should stay at current position
+        """
+        # If already Natural at target position, always allow (just improving)
+        if target_skill >= 18:
+            return True
+
+        # If already Accomplished at target, usually allow
+        if target_skill >= 13:
+            return True
+
+        # For retraining (below Accomplished at target), check opportunity cost
+        current_positions = self._get_player_current_positions(row)
+
+        # If player isn't Natural/Accomplished anywhere, retraining is fine
+        if not current_positions:
+            return True
+
+        # Calculate gap severity for target position
+        target_gap = gaps.get(target_pos, {})
+        target_severity = (
+            target_gap.get('quality_shortage', 0) * 3 +  # Quality shortage is most important
+            target_gap.get('total_shortage', 0) * 2      # Competent shortage is important too
+        )
+
+        # Calculate worst gap severity at player's current positions
+        current_max_severity = 0
+        player_is_critical = False
+
+        for curr_pos, curr_skill in current_positions:
+            curr_gap = gaps.get(curr_pos, {})
+            curr_severity = (
+                curr_gap.get('quality_shortage', 0) * 3 +
+                curr_gap.get('total_shortage', 0) * 2
+            )
+            current_max_severity = max(current_max_severity, curr_severity)
+
+            # Check if player is critical at current position
+            # (one of the only competent players there)
+            if curr_skill >= 18 and curr_gap.get('total_shortage', 0) >= 1:
+                player_is_critical = True
+
+        # Don't retrain if:
+        # 1. Player is critical at current position
+        # 2. Target position has equal or less severe gap than current position
+        if player_is_critical:
+            return False
+
+        if target_severity <= current_max_severity:
+            return False
+
+        return True
+
     def _check_similar_positions(self, row: pd.Series, target_pos: str) -> bool:
         """Check if player is natural in similar positions."""
         similarity_groups = {
@@ -501,9 +585,21 @@ class TrainingAdvisor:
         """Generate comprehensive reason for recommendation."""
         reasons = []
 
-        # Category-specific reason
+        # Check current positions for retraining context
+        row = candidate.get('row')
+        current_positions = []
+        if row is not None:
+            current_positions = self._get_player_current_positions(row)
+
+        # Category-specific reason with context
         if candidate['reason']:
-            reasons.append(candidate['reason'])
+            base_reason = candidate['reason']
+            # Add context about what position they're leaving if retraining
+            if current_positions and candidate['skill_rating'] < 13:
+                current_pos_names = [pos for pos, _ in current_positions]
+                if current_pos_names:
+                    base_reason += f" (currently Natural at {', '.join(current_pos_names)})"
+            reasons.append(base_reason)
 
         # Age
         age = candidate['age']
