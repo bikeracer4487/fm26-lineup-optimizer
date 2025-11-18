@@ -93,6 +93,7 @@ class TrainingAdvisor:
 
         # Position mappings
         # Format: Position display name -> (skill rating column, ability rating column or None)
+        # Note: "Striker" appears in both files, so after merge it becomes "Striker_skill" and "Striker_ability"
         if self.has_abilities:
             self.position_mapping = {
                 'GK': ('GoalKeeper', 'GK'),
@@ -103,7 +104,7 @@ class TrainingAdvisor:
                 'AM(R)': ('Attacking Mid. Right', 'AM(R)'),
                 'AM(C)': ('Attacking Mid. Center', 'AM(C)'),
                 'AM(L)': ('Attacking Mid. Left', 'AM(L)'),
-                'ST': ('Striker', 'Striker')
+                'ST': ('Striker_skill', 'Striker_ability')  # Different from others due to name collision
             }
         else:
             # No abilities data - only skill ratings
@@ -283,19 +284,29 @@ class TrainingAdvisor:
             # Players with 'Good' or 'Excellent' tier
             good_players = [p for p in players_data if p[4] in ['Good', 'Excellent']]
 
+            # Count USABLE good players (both competent familiarity AND good ability)
+            usable_good_players = [p for p in players_data if p[1] >= 10 and p[4] in ['Good', 'Excellent']]
+
+            # Count good ability players who AREN'T competent yet (training candidates)
+            good_but_not_competent = [p for p in players_data if p[1] < 10 and p[4] in ['Good', 'Excellent']]
+
             # We want:
             # - At least 2 competent players per position
-            # - At least as many good quality players as needed in formation
+            # - At least as many USABLE good quality players as needed in formation
             target_competent = max(2, needed_count)
-            target_good = needed_count
+            target_usable_good = needed_count
 
             competent_shortage = max(0, target_competent - len(competent_players))
-            quality_shortage = max(0, target_good - len(good_players))
+            quality_shortage = max(0, target_usable_good - len(usable_good_players))
 
-            if competent_shortage > 0 or quality_shortage > 0:
+            # If we have good ability players who aren't competent, that's also a gap worth addressing
+            has_training_potential = len(good_but_not_competent) > 0
+
+            if competent_shortage > 0 or quality_shortage > 0 or has_training_potential:
                 gaps[pos_name] = {
                     'total_shortage': competent_shortage,
                     'quality_shortage': quality_shortage,
+                    'training_potential': len(good_but_not_competent),
                     'current_quality': [p for p in players_data[:5]]  # Top 5 for context
                 }
 
