@@ -375,9 +375,14 @@ class MatchReadySelector:
         Plan rotation across multiple matches.
 
         Args:
-            current_date_str: Current date in format 'YYYY-MM-DD'
-            matches: List of (date_str, importance) tuples for upcoming matches
+            current_date_str: Current date in format 'YYYY-MM-DD' (converted from user's MM-DD-YYYY input)
+            matches: List of (date_str, importance) tuples where date_str is 'YYYY-MM-DD' format
+                     (converted from user's MM-DD input with automatic year inference)
             debug: Enable debug output for troubleshooting
+
+        Note:
+            Users input dates as MM-DD-YYYY (current) and MM-DD (matches).
+            The main() function automatically infers years and converts to YYYY-MM-DD before calling this method.
         """
         print("\n" + "=" * 100)
         print("MATCH SCHEDULE AND ROTATION PLANNING")
@@ -440,6 +445,37 @@ class MatchReadySelector:
 
         # Print rotation summary
         self._print_rotation_summary()
+
+    def _infer_year(self, month_day_str: str, current_date: datetime) -> str:
+        """
+        Infer the year for a match date based on the current date.
+        If the match month is earlier than the current month, assume next year.
+
+        Args:
+            month_day_str: Date string in MM-DD format (e.g., "12-25" or "01-05")
+            current_date: Current date as datetime object
+
+        Returns:
+            Full date string in YYYY-MM-DD format
+        """
+        try:
+            # Parse MM-DD format
+            month, day = map(int, month_day_str.split('-'))
+
+            # Get current year and month
+            current_year = current_date.year
+            current_month = current_date.month
+
+            # If match month is earlier than current month, it's next year
+            if month < current_month:
+                year = current_year + 1
+            else:
+                year = current_year
+
+            # Return in YYYY-MM-DD format
+            return f"{year:04d}-{month:02d}-{day:02d}"
+        except (ValueError, AttributeError) as e:
+            raise ValueError(f"Invalid date format '{month_day_str}'. Expected MM-DD format.")
 
     def _identify_players_to_rest(self) -> List[str]:
         """Identify players who should be rested (high fatigue or low condition)."""
@@ -675,14 +711,24 @@ def main():
         print("FM26 MATCH-READY LINEUP SELECTOR")
         print("=" * 100)
 
-        current_date = input("\nEnter current date (YYYY-MM-DD): ").strip()
+        # Get current date with year to establish reference
+        current_date_input = input("\nEnter current date (MM-DD-YYYY): ").strip()
+
+        # Parse current date to get year reference
+        try:
+            current_date_obj = datetime.strptime(current_date_input, '%m-%d-%Y')
+            # Convert to YYYY-MM-DD format for plan_rotation
+            current_date = current_date_obj.strftime('%Y-%m-%d')
+        except ValueError:
+            print(f"\nError: Current date must be in MM-DD-YYYY format (e.g., 11-19-2025)")
+            sys.exit(1)
 
         matches = []
         print("\nEnter details for next 3 matches:")
 
         for i in range(3):
             print(f"\nMatch {i+1}:")
-            match_date = input("  Date (YYYY-MM-DD): ").strip()
+            match_date_input = input("  Date (MM-DD): ").strip()
             imp_input = input("  Importance (Low/Medium/High): ").strip().lower()
 
             if imp_input in ['l', 'low']:
@@ -691,6 +737,13 @@ def main():
                 importance = 'High'
             else:
                 importance = 'Medium'
+
+            # Infer year and convert to YYYY-MM-DD format
+            try:
+                match_date = selector._infer_year(match_date_input, current_date_obj)
+            except ValueError as e:
+                print(f"\nError: {str(e)}")
+                sys.exit(1)
 
             matches.append((match_date, importance))
 
