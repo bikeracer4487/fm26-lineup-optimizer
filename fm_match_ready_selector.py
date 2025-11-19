@@ -483,9 +483,9 @@ class MatchReadySelector:
         # Group by formation sections
         formation_display = {
             'Goalkeeper': ['GK'],
-            'Defence': ['DL', 'DC1', 'DC2', 'DR'],
-            'Defensive Midfield': ['DM(L)', 'DM(R)'],
-            'Attacking Midfield': ['AML', 'AMC', 'AMR'],
+            'Defence': ['DR', 'DC1', 'DC2', 'DL'],
+            'Defensive Midfield': ['DM(R)', 'DM(L)'],
+            'Attacking Midfield': ['AMR', 'AMC', 'AML'],
             'Striker': ['STC']
         }
 
@@ -683,9 +683,13 @@ def main():
         for i in range(3):
             print(f"\nMatch {i+1}:")
             match_date = input("  Date (YYYY-MM-DD): ").strip()
-            importance = input("  Importance (Low/Medium/High): ").strip().capitalize()
+            imp_input = input("  Importance (Low/Medium/High): ").strip().lower()
 
-            if importance not in ['Low', 'Medium', 'High']:
+            if imp_input in ['l', 'low']:
+                importance = 'Low'
+            elif imp_input in ['h', 'high']:
+                importance = 'High'
+            else:
                 importance = 'Medium'
 
             matches.append((match_date, importance))
