@@ -8,6 +8,7 @@ Author: Doug Mason (2025)
 """
 
 import sys
+import json
 import pandas as pd
 import numpy as np
 from scipy.optimize import linear_sum_assignment
@@ -160,6 +161,16 @@ class MatchReadySelector:
         # Store selections for multiple matches
         self.match_selections = []
 
+        # Load persistent match tracking from JSON file
+        tracking_data = self._load_match_tracking()
+        self.player_match_count = tracking_data.get('match_counts', {})
+        self.last_match_counted = tracking_data.get('last_match_date', None)
+
+        # Print status if data was loaded
+        if self.last_match_counted:
+            player_count = len([c for c in self.player_match_count.values() if c > 0])
+            print(f"Loaded match tracking: Last match counted was {self.last_match_counted} ({player_count} players with active streaks)")
+
     def calculate_effective_rating(self, row: pd.Series, skill_col: str, ability_col: Optional[str] = None,
                                    match_importance: str = 'Medium',
                                    prioritize_sharpness: bool = False,
@@ -225,35 +236,78 @@ class MatchReadySelector:
                     effective_rating *= 0.95
 
         # 3. Physical condition factor (percentage)
+        # Research: "NEVER field players below 85% condition"
         condition = row.get('Condition', 100)
         if pd.notna(condition):
             # Normalize to 0-100 scale if stored as 0-10000
             if condition > 100:
                 condition = condition / 100
 
-            if condition < 60:
-                effective_rating *= 0.60  # Severe penalty, injury risk
+            # ENHANCEMENT 1: Enforce 85% condition rule
+            if condition < 85:
+                # Strict enforcement for Medium/High importance
+                if match_importance in ['Medium', 'High']:
+                    effective_rating *= 0.50  # Heavy penalty - absolute safety threshold
+                else:
+                    effective_rating *= 0.70  # Moderate penalty for Low importance
+            elif condition < 60:
+                effective_rating *= 0.40  # Catastrophic - should never play
             elif condition < 75:
-                effective_rating *= 0.80  # Moderate penalty
+                effective_rating *= 0.60  # Severe penalty
             elif condition < 90:
-                effective_rating *= 0.95  # Minor penalty
+                effective_rating *= 0.90  # Minor penalty
 
-        # 4. Fatigue penalty (critical threshold at 400)
+        # 4. Fatigue penalty with research-based adjustments
+        # ENHANCEMENTS 2, 3, 5, 6, 7: Age/fitness/stamina/position-adjusted thresholds
         fatigue = row.get('Fatigue', 0)
         if pd.notna(fatigue):
-            if fatigue >= 500:
-                effective_rating *= 0.65  # Severe penalty
-            elif fatigue >= 400:
-                effective_rating *= 0.85  # Moderate penalty
-            elif fatigue < -200:
-                effective_rating *= 0.90
+            # Get player attributes for threshold calculation
+            age = row.get('Age', 25)
+            natural_fitness = row.get('Natural Fitness', 10)
+            stamina = row.get('Stamina', 10)
 
-        # 5. Match importance modifier
+            # Calculate personalized fatigue threshold (200-550 range)
+            fatigue_threshold = self._get_adjusted_fatigue_threshold(age, natural_fitness, stamina)
+
+            # Apply position-specific fatigue multiplier
+            if position_name:
+                position_multiplier = self._get_position_fatigue_multiplier(position_name)
+                effective_fatigue = fatigue * position_multiplier
+            else:
+                effective_fatigue = fatigue
+
+            # Apply penalties based on adjusted threshold
+            if effective_fatigue >= fatigue_threshold + 100:
+                effective_rating *= 0.65  # Severe penalty - well above threshold
+            elif effective_fatigue >= fatigue_threshold:
+                effective_rating *= 0.85  # Moderate penalty - at threshold
+            elif effective_fatigue >= fatigue_threshold - 50:
+                effective_rating *= 0.95  # Minor penalty - approaching threshold
+
+            # ENHANCEMENT 6: Removed penalty for negative fatigue (under-conditioned, not rested)
+
+        # 5. Consecutive match tracking penalty
+        # ENHANCEMENT 4: Penalize players playing too many consecutive matches
+        player_name = row.get('Name', '')
+        if player_name in self.player_match_count:
+            consecutive_matches = self.player_match_count[player_name]
+            if consecutive_matches >= 5:
+                effective_rating *= 0.70  # Heavy penalty - overworked
+            elif consecutive_matches >= 4:
+                effective_rating *= 0.80  # Moderate penalty
+            elif consecutive_matches >= 3:
+                effective_rating *= 0.90  # Minor penalty - rotation recommended
+
+        # 6. Match importance modifier
         if match_importance == 'High':
-            if fatigue >= 400 or condition < 80:
-                effective_rating *= 0.85  # Extra penalty in important matches
+            # Use dynamic threshold if we have fatigue data
+            if pd.notna(fatigue) and 'fatigue_threshold' in locals():
+                if effective_fatigue >= fatigue_threshold or condition < 80:
+                    effective_rating *= 0.85  # Extra penalty in important matches
+            elif condition < 80:
+                effective_rating *= 0.85
 
-        # 6. Training bonus for low/medium importance matches
+        # 7. Training bonus for low/medium importance matches
         if (match_importance in ['Low', 'Medium'] and
             position_name and
             row['Name'] in self.training_recommendations):
@@ -312,6 +366,186 @@ class MatchReadySelector:
             return 0.35
         else:               # Ineffectual
             return 0.40
+
+    def _get_adjusted_fatigue_threshold(self, age: float, natural_fitness: float, stamina: float) -> float:
+        """
+        Calculate age/fitness/stamina-adjusted fatigue threshold.
+
+        Research-based thresholds:
+        - Standard: 400
+        - Ages 30-32: 350 (more sensitive)
+        - Ages 32+: 300 (highly sensitive)
+        - Under 19: 350 (burnout risk)
+        - Low Natural Fitness (<10): -50
+        - High Natural Fitness (≥15): +50
+        - Low Stamina (<10): -50
+        - High Stamina (≥15): +30
+
+        Args:
+            age: Player age
+            natural_fitness: Natural Fitness attribute (0-20)
+            stamina: Stamina attribute (0-20)
+
+        Returns:
+            Adjusted fatigue threshold
+        """
+        # Start with base threshold
+        threshold = 400.0
+
+        # Age adjustments (applied first)
+        if pd.notna(age):
+            if age >= 32:
+                threshold = 300.0  # Highly sensitive for veterans
+            elif age >= 30:
+                threshold = 350.0  # More sensitive for aging players
+            elif age < 19:
+                threshold = 350.0  # Burnout risk for youth
+
+        # Natural Fitness modifiers
+        if pd.notna(natural_fitness):
+            if natural_fitness < 10:
+                threshold -= 50  # Poor fitness = lower threshold
+            elif natural_fitness >= 15:
+                threshold += 50  # Excellent fitness = higher threshold
+
+        # Stamina modifiers
+        if pd.notna(stamina):
+            if stamina < 10:
+                threshold -= 50  # Poor stamina = tires faster
+            elif stamina >= 15:
+                threshold += 30  # Good stamina = sustains load better
+
+        # Ensure threshold doesn't go below 200 or above 550
+        return max(200.0, min(550.0, threshold))
+
+    def _get_position_fatigue_multiplier(self, position_name: str) -> float:
+        """
+        Get position-specific fatigue sensitivity multiplier.
+
+        Research shows different roles have vastly different physical demands:
+        - High-intensity (1.2x): Box-to-Box, Wing-Backs, Pressing roles
+        - Medium-intensity (1.0x): Standard midfield/attack roles
+        - Low-intensity (0.8x): Center-backs, Goalkeepers, deep playmakers
+
+        Args:
+            position_name: Position code (e.g., 'STC', 'DM(L)', 'DC1')
+
+        Returns:
+            Fatigue multiplier (0.8 - 1.2)
+        """
+        # High-intensity positions - require more frequent rotation
+        high_intensity = ['DM(L)', 'DM(R)']  # Defensive midfielders cover most ground
+
+        # Medium-intensity positions - standard rotation
+        medium_intensity = ['AML', 'AMC', 'AMR', 'STC', 'DL', 'DR']
+
+        # Low-intensity positions - can sustain longer runs
+        low_intensity = ['GK', 'DC1', 'DC2']
+
+        if position_name in high_intensity:
+            return 1.2
+        elif position_name in low_intensity:
+            return 0.8
+        else:  # medium_intensity or unknown
+            return 1.0
+
+    def _update_consecutive_match_counts(self, selection: Dict):
+        """
+        Update consecutive match tracking based on current selection.
+
+        Args:
+            selection: Dictionary mapping position to (player_name, rating, player_data)
+        """
+        # Get names of players selected this match
+        selected_players = set(player_name for player_name, _, _ in selection.values())
+
+        # Increment count for selected players
+        for player_name in selected_players:
+            if player_name in self.player_match_count:
+                self.player_match_count[player_name] += 1
+            else:
+                self.player_match_count[player_name] = 1
+
+        # Reset count for players not selected (they're getting rest)
+        all_players = set(self.df['Name'].values)
+        rested_players = all_players - selected_players
+        for player_name in rested_players:
+            if player_name in self.player_match_count:
+                self.player_match_count[player_name] = 0
+
+    def _load_match_tracking(self, filepath: str = 'player_match_tracking.json') -> dict:
+        """
+        Load match tracking data from JSON file.
+
+        Args:
+            filepath: Path to JSON tracking file
+
+        Returns:
+            Dictionary with 'match_counts', 'last_match_date', 'last_updated'
+        """
+        import os
+
+        if not os.path.exists(filepath):
+            # First run or file deleted - return empty structure
+            return {
+                'match_counts': {},
+                'last_match_date': None,
+                'last_updated': None
+            }
+
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            # Validate structure
+            if not isinstance(data.get('match_counts', {}), dict):
+                print(f"Warning: Invalid match_counts in {filepath}. Starting fresh.")
+                return {'match_counts': {}, 'last_match_date': None, 'last_updated': None}
+
+            # Validate date format if present
+            if data.get('last_match_date'):
+                try:
+                    datetime.strptime(data['last_match_date'], '%Y-%m-%d')
+                except ValueError:
+                    print(f"Warning: Invalid date format in {filepath}. Starting fresh.")
+                    data['last_match_date'] = None
+
+            return data
+
+        except json.JSONDecodeError:
+            print(f"Warning: Could not load {filepath} (corrupted JSON). Starting fresh.")
+            return {'match_counts': {}, 'last_match_date': None, 'last_updated': None}
+        except Exception as e:
+            print(f"Warning: Error loading {filepath}: {str(e)}. Starting fresh.")
+            return {'match_counts': {}, 'last_match_date': None, 'last_updated': None}
+
+    def _save_match_tracking(self, filepath: str = 'player_match_tracking.json'):
+        """
+        Save match tracking data to JSON file.
+
+        Args:
+            filepath: Path to JSON tracking file
+        """
+        data = {
+            'last_match_date': self.last_match_counted,
+            'last_updated': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+            'match_counts': self.player_match_count
+        }
+
+        try:
+            # Atomic write: write to temp file, then rename
+            temp_filepath = filepath + '.tmp'
+            with open(temp_filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+
+            # Rename temp file to actual file (atomic on most systems)
+            import os
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            os.rename(temp_filepath, filepath)
+
+        except Exception as e:
+            print(f"Warning: Could not save match tracking to {filepath}: {str(e)}")
 
     def select_match_xi(self, match_importance: str = 'Medium',
                        prioritize_sharpness: bool = False,
@@ -480,6 +714,24 @@ class MatchReadySelector:
 
         print("\n" + "=" * 100)
 
+        # Determine if Match 1 is a new match (not already counted)
+        first_match_date_str = match_dates[0][0].strftime('%Y-%m-%d')
+
+        should_update_counts = False
+        if self.last_match_counted is None:
+            should_update_counts = True
+            print(f"\n✓ Match on {first_match_date_str} is NEW. Match tracking will be updated.")
+        elif first_match_date_str > self.last_match_counted:
+            should_update_counts = True
+            print(f"\n✓ Match on {first_match_date_str} is NEW (last counted: {self.last_match_counted}).")
+            print("  Match tracking will be updated after Match 1 selection.")
+        else:
+            print(f"\n⚠️  Match on {first_match_date_str} already counted in tracking file.")
+            print("  Re-planning lineup without updating consecutive match tracking.")
+            print("  This prevents double-counting if you run the script multiple times.")
+
+        print("=" * 100)
+
         # Plan selection for each match
         self.match_selections = []
         players_to_rest = []
@@ -507,6 +759,13 @@ class MatchReadySelector:
             # Select XI
             selection = self.select_match_xi(importance, prioritize_sharpness, players_to_rest, debug)
             self.match_selections.append((match_date, importance, selection))
+
+            # CRITICAL: Only update match counts for Match 1, and only if it's a new match
+            if i == 0 and should_update_counts:
+                self._update_consecutive_match_counts(selection)
+                self.last_match_counted = match_date.strftime('%Y-%m-%d')
+                self._save_match_tracking()
+                print(f"\n✓ Match tracking updated and saved to player_match_tracking.json")
 
             # Display selection
             self._print_match_selection(selection, importance, prioritize_sharpness)
@@ -609,8 +868,10 @@ class MatchReadySelector:
                     fatigue = player_data.get('Fatigue', 0)
                     sharpness = player_data.get('Match Sharpness', 10000) / 10000
 
-                    # Status icons
+                    # Status icons (existing + research-based warnings)
                     status_icons = []
+
+                    # Existing indicators
                     if fatigue >= 400:
                         status_icons.append('💤')  # Fatigued
                     if condition < 80:
@@ -619,6 +880,24 @@ class MatchReadySelector:
                         status_icons.append('🔄')  # Needs sharpness
                     if sharpness >= 0.95 and condition >= 90 and fatigue < 200:
                         status_icons.append('⭐')  # Peak form
+
+                    # NEW: Research-based warning indicators
+                    age = player_data.get('Age', 25)
+                    if pd.notna(age) and age >= 32:
+                        status_icons.append('⚠️')  # Age 32+ High Risk
+
+                    if player_name in self.player_match_count:
+                        consecutive = self.player_match_count[player_name]
+                        if consecutive >= 3:
+                            status_icons.append('⚡')  # Consecutive matches warning
+
+                    stamina = player_data.get('Stamina', 15)
+                    if pd.notna(stamina) and stamina < 10:
+                        status_icons.append('🏃')  # Low Stamina
+
+                    natural_fitness = player_data.get('Natural Fitness', 15)
+                    if pd.notna(natural_fitness) and natural_fitness < 10:
+                        status_icons.append('💪')  # Low Natural Fitness
 
                     status_str = ' '.join(status_icons) if status_icons else ''
 
@@ -655,7 +934,95 @@ class MatchReadySelector:
         print("  💤 High fatigue (≥400, needs rest)")
         print("  ❤️  Low condition (<80%, injury risk)")
         print("  🔄 Needs match sharpness (<80%)")
+        print("  ⚠️  Age 32+ (higher injury/fatigue risk)")
+        print("  ⚡ 3+ consecutive matches (rotation needed)")
+        print("  🏃 Low Stamina (<10, tires faster)")
+        print("  💪 Low Natural Fitness (<10, recovers slower)")
         print("  🎓 In position training (priority shown)")
+
+        # Add rest recommendations section
+        self._print_rest_recommendations(selection)
+
+    def _print_rest_recommendations(self, selection: Dict):
+        """
+        Print recommendations for players requiring rest based on research criteria.
+
+        Args:
+            selection: Current match selection
+        """
+        print("\n" + "=" * 100)
+        print("REST RECOMMENDATIONS (Research-Based)")
+        print("=" * 100)
+
+        rest_needed = []
+
+        for idx, row in self.df.iterrows():
+            player_name = row['Name']
+            age = row.get('Age', 25)
+            fatigue = row.get('Fatigue', 0)
+            condition = row.get('Condition', 100)
+            natural_fitness = row.get('Natural Fitness', 15)
+            stamina = row.get('Stamina', 15)
+
+            # Normalize condition
+            if pd.notna(condition) and condition > 100:
+                condition = condition / 100
+
+            # Skip if data is invalid
+            if pd.notna(condition) and condition < 20:
+                continue
+
+            # Calculate personalized fatigue threshold
+            if pd.notna(fatigue):
+                threshold = self._get_adjusted_fatigue_threshold(age, natural_fitness, stamina)
+            else:
+                threshold = 400
+
+            # Determine if rest is needed
+            reasons = []
+
+            # Critical condition
+            if pd.notna(condition) and condition < 85:
+                reasons.append(f"Condition {condition:.0f}% (below 85% threshold)")
+
+            # Fatigue above personalized threshold
+            if pd.notna(fatigue) and fatigue >= threshold:
+                reasons.append(f"Fatigue {fatigue:.0f} (threshold: {threshold:.0f})")
+
+            # Age 32+ with any elevated fatigue
+            if pd.notna(age) and age >= 32 and pd.notna(fatigue) and fatigue >= 250:
+                reasons.append(f"Age {age} + fatigue {fatigue:.0f}")
+
+            # 3+ consecutive matches
+            if player_name in self.player_match_count and self.player_match_count[player_name] >= 3:
+                consecutive = self.player_match_count[player_name]
+                reasons.append(f"{consecutive} consecutive matches")
+
+            # Add to list if any reasons exist
+            if reasons:
+                priority = "URGENT" if (condition < 80 or fatigue >= threshold + 100) else "Recommended"
+                rest_needed.append({
+                    'player': player_name,
+                    'priority': priority,
+                    'reasons': reasons,
+                    'in_xi': player_name in [p for p, _, _ in selection.values()]
+                })
+
+        if not rest_needed:
+            print("\n✅ No players currently require rest - squad fitness is good!")
+        else:
+            # Sort by priority (URGENT first), then by number of reasons
+            rest_needed.sort(key=lambda x: (x['priority'] != 'URGENT', -len(x['reasons'])))
+
+            print(f"\n{len(rest_needed)} players requiring rest:\n")
+            for item in rest_needed:
+                status = "[IN STARTING XI - RISKY!]" if item['in_xi'] else "[Available for rest]"
+                print(f"  {item['priority']:11} | {item['player']:25} {status}")
+                for reason in item['reasons']:
+                    print(f"             → {reason}")
+                print()
+
+        print("=" * 100)
 
     def _print_rotation_summary(self):
         """Print summary of player usage across matches."""
