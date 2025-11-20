@@ -1,4 +1,5 @@
 Player,Position,Priority,Current_Skill_Rating,Ability_Tier,Training_Score,Category,Reason
+Jamie McMurdo,GK,Low,1,Adequate,0.5,Learn Position,"Has potential, train new position | very young (19) | good training attributes"
 Andrey Quintino,D(R),High,15,Excellent,0.45,Become Natural,"Good ability, train to become natural | excellent ability at position"
 Joseph James,D(C),High,16,Good,0.53,Become Natural,"Good ability, train to become natural | very young (20) | good training attributes | good ability at position"
 Joe Cassidy,D(C),Medium,20,Adequate,0.53,Improve Natural,"Already natural, train to improve ability | young (21) | good training attributes"
@@ -7,9 +8,8 @@ Freddie Hammond,D(L),Medium,20,Poor,0.54,Improve Natural,"Already natural, train
 Aydin Webb,DM,High,16,Good,0.58,Become Natural,"Good ability, train to become natural | very young (16) | good training attributes | good ability at position"
 Asa Hall,DM,Medium,18,Adequate,0.46,Improve Natural,"Already natural, train to improve ability"
 Paul Stroud,AM(R),High,16,Good,0.49,Become Natural,"Good ability, train to become natural | very young (17) | good ability at position"
-Erdal Peker,AM(R),Medium,20,Inadequate,0.56,Improve Natural,"Already natural, train to improve ability | very young (16) | good training attributes"
+Peter Purcell,AM(R),Medium,19,Adequate,0.64,Improve Natural,"Already natural, train to improve ability | very young (17) | good training attributes"
 Allan Hall,AM(C),High,16,Good,0.54,Become Natural,"Good ability, train to become natural | very young (16) | good training attributes | good ability at position"
 Robbie Gallagher,AM(L),High,16,Adequate,0.65,Become Natural,"Good ability, train to become natural | very young (20) | good training attributes"
-Teddy Lawrence,AM(L),Medium,20,Adequate,0.47,Improve Natural,"Already natural, train to improve ability | very young (20)"
 Mateusz Widz,ST,High,16,Good,0.55,Become Natural,"Good ability, train to become natural | very young (16) | good training attributes | good ability at position"
 Karnell Dunton,ST,Medium,20,Adequate,0.52,Improve Natural,"Already natural, train to improve ability | very young (17) | good training attributes"
