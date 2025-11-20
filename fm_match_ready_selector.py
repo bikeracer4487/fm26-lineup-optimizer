@@ -940,8 +940,111 @@ class MatchReadySelector:
         print("  💪 Low Natural Fitness (<10, recovers slower)")
         print("  🎓 In position training (priority shown)")
 
+        # Add notable exclusions section
+        self._print_notable_exclusions(selection, importance)
+
         # Add rest recommendations section
         self._print_rest_recommendations(selection)
+
+    def _print_notable_exclusions(self, selection: Dict, match_importance: str):
+        """
+        Print explanation for high-quality players excluded due to fatigue/condition.
+
+        Helps users understand why expected starters aren't selected.
+
+        Args:
+            selection: Current match selection
+            match_importance: Match importance level
+        """
+        print("\n" + "=" * 100)
+        print("NOTABLE EXCLUSIONS (High-Quality Players Not Selected)")
+        print("=" * 100)
+
+        # Get selected player names
+        selected_names = {p for p, _, _ in selection.values()}
+
+        # Find high-CA players who weren't selected
+        exclusions = []
+
+        for idx, row in self.df.iterrows():
+            player_name = row['Name']
+            ca = row.get('CA', 0)
+
+            # Skip if selected, injured, or banned
+            if (player_name in selected_names or
+                row.get('Is Injured', False) or
+                row.get('Banned', False)):
+                continue
+
+            # Only flag players with CA >= squad average (likely starters)
+            squad_avg_ca = self.df['CA'].mean()
+            if pd.notna(ca) and ca < squad_avg_ca * 0.9:  # 90% of average
+                continue
+
+            # Determine exclusion reasons
+            age = row.get('Age', 25)
+            fatigue = row.get('Fatigue', 0)
+            condition = row.get('Condition', 100)
+            natural_fitness = row.get('Natural Fitness', 15)
+            stamina = row.get('Stamina', 15)
+
+            # Normalize condition
+            if pd.notna(condition) and condition > 100:
+                condition = condition / 100
+
+            reasons = []
+
+            # Calculate personalized threshold
+            if pd.notna(fatigue):
+                threshold = self._get_adjusted_fatigue_threshold(age, natural_fitness, stamina)
+
+                # Check if fatigue caused exclusion
+                if fatigue >= threshold + 100:
+                    reasons.append(f"CRITICAL FATIGUE: {fatigue:.0f} (threshold: {threshold:.0f}, needs VACATION)")
+                elif fatigue >= threshold:
+                    reasons.append(f"High fatigue: {fatigue:.0f} (threshold: {threshold:.0f})")
+                elif fatigue >= threshold - 50:
+                    reasons.append(f"Elevated fatigue: {fatigue:.0f} (approaching threshold {threshold:.0f})")
+
+            # Consecutive matches
+            if player_name in self.player_match_count:
+                consecutive = self.player_match_count[player_name]
+                if consecutive >= 5:
+                    reasons.append(f"OVERWORKED: {consecutive} consecutive matches")
+                elif consecutive >= 3:
+                    reasons.append(f"{consecutive} consecutive matches (rotation needed)")
+
+            # Low condition (only if severe)
+            if pd.notna(condition) and condition < 80:
+                reasons.append(f"Low condition: {condition:.0f}%")
+
+            # Age + fatigue combination
+            if pd.notna(age) and age >= 32 and pd.notna(fatigue) and fatigue >= 250:
+                if not any('fatigue' in r.lower() for r in reasons):
+                    reasons.append(f"Age {age} + fatigue {fatigue:.0f} (veterans tire faster)")
+
+            if reasons:
+                exclusions.append({
+                    'player': player_name,
+                    'ca': ca,
+                    'position': row.get('Best Position', 'Unknown'),
+                    'reasons': reasons
+                })
+
+        if not exclusions:
+            print("\n✅ All high-quality players are available and selected.")
+        else:
+            # Sort by CA descending (most important players first)
+            exclusions.sort(key=lambda x: x['ca'], reverse=True)
+
+            print(f"\n{len(exclusions)} high-quality players excluded due to fitness:\n")
+            for item in exclusions:
+                print(f"  {item['player']:25} [CA: {item['ca']:3.0f}, {item['position']}]")
+                for reason in item['reasons']:
+                    print(f"      → {reason}")
+                print()
+
+        print("=" * 100)
 
     def _print_rest_recommendations(self, selection: Dict):
         """
@@ -981,10 +1084,6 @@ class MatchReadySelector:
             # Determine if rest is needed
             reasons = []
 
-            # Critical condition
-            if pd.notna(condition) and condition < 85:
-                reasons.append(f"Condition {condition:.0f}% (below 85% threshold)")
-
             # Fatigue above personalized threshold
             if pd.notna(fatigue) and fatigue >= threshold:
                 reasons.append(f"Fatigue {fatigue:.0f} (threshold: {threshold:.0f})")
@@ -1000,11 +1099,16 @@ class MatchReadySelector:
 
             # Add to list if any reasons exist
             if reasons:
-                priority = "URGENT" if (condition < 80 or fatigue >= threshold + 100) else "Recommended"
+                priority = "URGENT" if (fatigue >= threshold + 100) else "Recommended"
                 rest_needed.append({
                     'player': player_name,
                     'priority': priority,
                     'reasons': reasons,
+                    'fatigue': fatigue,
+                    'threshold': threshold,
+                    'age': age,
+                    'natural_fitness': natural_fitness,
+                    'stamina': stamina,
                     'in_xi': player_name in [p for p, _, _ in selection.values()]
                 })
 
@@ -1014,13 +1118,56 @@ class MatchReadySelector:
             # Sort by priority (URGENT first), then by number of reasons
             rest_needed.sort(key=lambda x: (x['priority'] != 'URGENT', -len(x['reasons'])))
 
-            print(f"\n{len(rest_needed)} players requiring rest:\n")
+            # Separate into vacation candidates vs regular rest
+            vacation_candidates = []
+            regular_rest = []
+
             for item in rest_needed:
-                status = "[IN STARTING XI - RISKY!]" if item['in_xi'] else "[Available for rest]"
-                print(f"  {item['priority']:11} | {item['player']:25} {status}")
-                for reason in item['reasons']:
-                    print(f"             → {reason}")
-                print()
+                # Vacation criteria (from jadedness-fatigue.md):
+                # - Fatigue >= threshold (400+ typically)
+                # - Vacation recovers 152.4 points over 3 days (most effective method)
+                needs_vacation = (
+                    pd.notna(item['fatigue']) and item['fatigue'] >= item['threshold'] and
+                    (item['priority'] == 'URGENT' or item['fatigue'] >= item['threshold'] + 100)
+                )
+
+                if needs_vacation:
+                    vacation_candidates.append(item)
+                else:
+                    regular_rest.append(item)
+
+            # Print vacation recommendations first (highest priority)
+            if vacation_candidates:
+                print("\n🏖️  VACATION RECOMMENDED (Most Effective Recovery):")
+                print("    Research: Vacation + rest sessions recovers 152.4 fatigue points over 3 days\n")
+
+                for item in vacation_candidates:
+                    status = "[IN STARTING XI - SEND ASAP!]" if item['in_xi'] else "[Available - send now]"
+                    print(f"  {item['player']:25} {status}")
+                    print(f"      Fatigue: {item['fatigue']:.0f} (threshold: {item['threshold']:.0f})")
+                    print(f"      Recommended: 3-day vacation with rest training sessions")
+                    for reason in item['reasons']:
+                        print(f"      → {reason}")
+                    print()
+
+            # Print regular rest recommendations
+            if regular_rest:
+                print("\n⚠️  REST RECOMMENDED (Regular Rotation):\n")
+                for item in regular_rest:
+                    status = "[IN STARTING XI - RISKY!]" if item['in_xi'] else "[Available for rest]"
+                    print(f"  {item['priority']:11} | {item['player']:25} {status}")
+                    for reason in item['reasons']:
+                        print(f"             → {reason}")
+                    print()
+
+            # Add vacation instructions
+            if vacation_candidates:
+                print("\n📋 How to send on vacation (maximum recovery):")
+                print("    1. Right-click player → Squad → Send On Holiday")
+                print("    2. Set duration: 3 days")
+                print("    3. Fill training schedule with REST sessions (not recovery)")
+                print("    4. Expected recovery: ~152 fatigue points")
+                print("    5. Player will return with significantly reduced jadedness\n")
 
         print("=" * 100)
 

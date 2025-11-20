@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { AppState, MatchPlanItem, MatchSelectionPlayer } from '../types';
 import { api } from '../api';
 import { Button, Card, Badge } from '../components/UI';
-import { RefreshCw, UserX, AlertTriangle, Star, Activity, Battery, Zap } from 'lucide-react';
+import { RefreshCw, UserX, AlertTriangle, Star, Activity, Battery, Zap, ChevronDown, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface MatchSelectionTabProps {
@@ -15,6 +15,7 @@ export function MatchSelectionTab({ state, onRejectPlayer, onResetRejections }: 
   const [plan, setPlan] = useState<MatchPlanItem[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPast, setShowPast] = useState(false);
 
   const generatePlan = async () => {
     if (state.matches.length === 0) {
@@ -61,6 +62,10 @@ export function MatchSelectionTab({ state, onRejectPlayer, onResetRejections }: 
     }
   };
 
+  // Filter plan items based on current date
+  const upcomingMatches = plan?.filter(item => item.date >= state.currentDate) || [];
+  const pastMatches = plan?.filter(item => item.date < state.currentDate).reverse() || [];
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -90,14 +95,43 @@ export function MatchSelectionTab({ state, onRejectPlayer, onResetRejections }: 
       )}
 
       <div className="space-y-8">
-        {plan?.map((item) => (
-          <MatchCard 
-            key={item.matchIndex} 
-            item={item} 
-            onReject={(name) => handleReject(item.matchIndex, name)}
-            opponent={state.matches[item.matchIndex]?.opponent || "Unknown"}
-          />
-        ))}
+        {upcomingMatches.length > 0 && (
+          <div className="space-y-8">
+            {upcomingMatches.map((item) => (
+              <MatchCard 
+                key={item.matchIndex} 
+                item={item} 
+                onReject={(name) => handleReject(item.matchIndex, name)}
+                opponent={state.matches[item.matchIndex]?.opponent || "Unknown"}
+              />
+            ))}
+          </div>
+        )}
+
+        {pastMatches.length > 0 && (
+          <div className="pt-6 border-t border-white/5">
+            <button 
+                onClick={() => setShowPast(!showPast)}
+                className="flex items-center gap-2 text-fm-light/50 hover:text-white transition-colors text-sm font-bold uppercase tracking-wider mb-4 w-full text-left"
+            >
+                {showPast ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                Past Matches Archive ({pastMatches.length})
+            </button>
+
+            {showPast && (
+              <div className="space-y-8 opacity-75 grayscale-[0.5]">
+                {pastMatches.map((item) => (
+                  <MatchCard 
+                    key={item.matchIndex} 
+                    item={item} 
+                    onReject={(name) => handleReject(item.matchIndex, name)}
+                    opponent={state.matches[item.matchIndex]?.opponent || "Unknown"}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         
         {!loading && (!plan || plan.length === 0) && !error && (
             <div className="text-center text-fm-light/50 py-12">

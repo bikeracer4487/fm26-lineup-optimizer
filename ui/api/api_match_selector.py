@@ -304,8 +304,21 @@ class MatchReadySelector:
         """
         results = []
         
+        # Sort matches by date to ensure proper rotation tracking
+        # But we need to preserve the original index to map rejections correctly?
+        # Actually, the UI sends matches in order, but let's just process them in the order received
+        # as that's what the rotation logic expects (chronological)
+        
         # Reset internal state
         self.player_match_count = {} # We assume clean slate for the simulation unless persistent data passed
+        
+        # Filter for upcoming matches ONLY for the plan generation
+        # The UI filters what it shows, but if we process past matches here, it affects rotation for future ones
+        # However, maybe we WANT past matches to influence fatigue/rotation state?
+        # Let's assume the UI sends ALL matches (past and future) so we can build the state correctly
+        # but we should mark which ones are "active" for display if needed?
+        # Actually, the prompt asks for "Next match" to be at the top.
+        # The Python script just returns the plan for ALL matches sent. The UI handles display.
         
         for i, match in enumerate(matches_data):
             importance = match.get('importance', 'Medium')

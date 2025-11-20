@@ -1,5 +1,5 @@
 {
-  "currentDate": "2026-11-05",
+  "currentDate": "2026-11-10",
   "matches": [
     {
       "id": "d329a55a-7016-40c3-9d02-5ddedf1a4073",
@@ -24,9 +24,68 @@
       "date": "2026-11-14",
       "opponent": "Boston Utd",
       "importance": "High"
+    },
+    {
+      "id": "071f49ca-6da9-413e-8ab0-1f3db948c044",
+      "date": "2026-11-22",
+      "opponent": "Weymouth",
+      "importance": "Medium"
+    },
+    {
+      "id": "32f6ca52-ec05-4146-b32b-ff1eb1e44a93",
+      "date": "2026-11-28",
+      "opponent": "Basingstoke Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "ccbd1b5c-4504-48af-820e-dfe8907c7690",
+      "date": "2026-12-06",
+      "opponent": "Walton & Hersham",
+      "importance": "Medium"
+    },
+    {
+      "id": "cb4ce7e8-4fe2-473b-b632-59485542deb1",
+      "date": "2026-12-12",
+      "opponent": "Farnham Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "5a098762-e3f1-4339-9623-91d6430dd657",
+      "date": "2026-12-19",
+      "opponent": "London Lions",
+      "importance": "Medium"
+    },
+    {
+      "id": "a1626aeb-a022-4a73-b983-6219e71ada3d",
+      "date": "2026-12-26",
+      "opponent": "Weston-super-mare",
+      "importance": "Medium"
+    },
+    {
+      "id": "f97e0ef1-55d0-4dd0-9e33-3b9fa5f3ed90",
+      "date": "2027-01-02",
+      "opponent": "Potters Bar Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "d8aa1282-4eba-43e1-b699-e36d3e60c8a1",
+      "date": "2027-01-09",
+      "opponent": "Sholing",
+      "importance": "Medium"
+    },
+    {
+      "id": "26dbb373-e407-4567-a797-6ad3c0ed87e5",
+      "date": "2027-01-17",
+      "opponent": "Yate Town",
+      "importance": "Medium"
     }
   ],
-  "rejectedPlayers": {},
+  "rejectedPlayers": {
+    "2": [
+      "Maxwell Redman",
+      "Alan Hackney"
+    ]
+  },
   "rejectedTraining": {},
   "files": {
     "status": "players-current.csv",

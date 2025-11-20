@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { Match } from '../types';
 import { Button, Card, Input, Select } from '../components/UI';
-import { Trash2, Plus, Calendar } from 'lucide-react';
+import { Trash2, Plus, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface FixtureTabProps {
@@ -16,6 +16,8 @@ export function FixtureTab({ matches, onUpdateMatches, currentDate }: FixtureTab
     opponent: '',
     importance: 'Medium'
   });
+  
+  const [showPast, setShowPast] = useState(false);
 
   const addMatch = () => {
     if (!newMatch.date || !newMatch.opponent) return;
@@ -39,6 +41,10 @@ export function FixtureTab({ matches, onUpdateMatches, currentDate }: FixtureTab
   const updateMatch = (id: string, field: keyof Match, value: string) => {
     onUpdateMatches(matches.map(m => m.id === id ? { ...m, [field]: value } : m));
   };
+
+  // Separate past and upcoming matches
+  const upcomingMatches = matches.filter(m => m.date >= currentDate);
+  const pastMatches = matches.filter(m => m.date < currentDate).reverse(); // Most recent past match first
 
   return (
     <div className="space-y-6 p-6">
@@ -90,60 +96,106 @@ export function FixtureTab({ matches, onUpdateMatches, currentDate }: FixtureTab
           </div>
         </div>
       </Card>
-
+      
+      {/* Upcoming Matches */}
       <div className="space-y-3">
+        <h3 className="text-fm-light/50 text-sm font-bold uppercase tracking-wider">Upcoming Matches</h3>
         <AnimatePresence mode="popLayout">
-          {matches.map((match) => (
-            <motion.div
-              key={match.id}
-              layout
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Card className="flex items-center gap-4 p-3 hover:bg-white/5 transition-colors group">
-                <Input 
-                  type="date" 
-                  className="w-32 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal" 
-                  value={match.date} 
-                  onChange={e => updateMatch(match.id, 'date', e.target.value)}
-                />
-                <Input 
-                  type="text" 
-                  className="flex-1 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal font-medium text-lg" 
-                  value={match.opponent} 
-                  onChange={e => updateMatch(match.id, 'opponent', e.target.value)}
-                />
-                 <Select 
-                  className="w-32 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal text-sm" 
-                  value={match.importance} 
-                  onChange={e => updateMatch(match.id, 'importance', e.target.value)}
-                >
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                </Select>
-                
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => removeMatch(match.id)}
-                  className="opacity-0 group-hover:opacity-100 text-fm-danger hover:bg-fm-danger/10"
-                >
-                  <Trash2 size={18} />
-                </Button>
-              </Card>
-            </motion.div>
+          {upcomingMatches.map((match) => (
+            <MatchRow 
+                key={match.id} 
+                match={match} 
+                onUpdate={updateMatch} 
+                onRemove={removeMatch} 
+            />
           ))}
         </AnimatePresence>
         
-        {matches.length === 0 && (
-          <div className="text-center py-12 text-fm-light/30 italic">
-            No matches scheduled. Add one above.
+        {upcomingMatches.length === 0 && (
+          <div className="text-center py-8 text-fm-light/30 italic bg-white/5 rounded-lg border border-white/5">
+            No upcoming matches scheduled.
           </div>
         )}
       </div>
+
+      {/* Past Matches Archive */}
+      {pastMatches.length > 0 && (
+        <div className="pt-6 border-t border-white/5">
+            <button 
+                onClick={() => setShowPast(!showPast)}
+                className="flex items-center gap-2 text-fm-light/50 hover:text-white transition-colors text-sm font-bold uppercase tracking-wider mb-4 w-full text-left"
+            >
+                {showPast ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                Past Matches Archive ({pastMatches.length})
+            </button>
+
+            <AnimatePresence>
+                {showPast && (
+                    <motion.div 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="space-y-3 overflow-hidden"
+                    >
+                        {pastMatches.map((match) => (
+                            <MatchRow 
+                                key={match.id} 
+                                match={match} 
+                                onUpdate={updateMatch} 
+                                onRemove={removeMatch} 
+                                isPast
+                            />
+                        ))}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+      )}
     </div>
   );
+}
+
+function MatchRow({ match, onUpdate, onRemove, isPast }: { match: Match, onUpdate: any, onRemove: any, isPast?: boolean }) {
+    return (
+        <motion.div
+            layout
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+        >
+            <Card className={`flex items-center gap-4 p-3 hover:bg-white/5 transition-colors group ${isPast ? 'opacity-60 grayscale' : ''}`}>
+            <Input 
+                type="date" 
+                className="w-32 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal" 
+                value={match.date} 
+                onChange={e => onUpdate(match.id, 'date', e.target.value)}
+            />
+            <Input 
+                type="text" 
+                className="flex-1 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal font-medium text-lg" 
+                value={match.opponent} 
+                onChange={e => onUpdate(match.id, 'opponent', e.target.value)}
+            />
+                <Select 
+                className="w-32 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal text-sm" 
+                value={match.importance} 
+                onChange={e => onUpdate(match.id, 'importance', e.target.value)}
+            >
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+            </Select>
+            
+            <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => onRemove(match.id)}
+                className="opacity-0 group-hover:opacity-100 text-fm-danger hover:bg-fm-danger/10"
+            >
+                <Trash2 size={18} />
+            </Button>
+            </Card>
+        </motion.div>
+    );
 }
