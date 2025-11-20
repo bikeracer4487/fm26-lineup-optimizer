@@ -21,13 +21,15 @@ class MatchReadySelector:
     match sharpness, and fixture scheduling for optimal rotation.
     """
 
-    def __init__(self, status_filepath: str, abilities_filepath: Optional[str] = None):
+    def __init__(self, status_filepath: str, abilities_filepath: Optional[str] = None,
+                 training_recommendations_filepath: Optional[str] = None):
         """
         Initialize the selector with player data.
 
         Args:
             status_filepath: Path to CSV with positional skill ratings & status (players-current.csv)
             abilities_filepath: Optional path to CSV with role ability ratings (players.csv)
+            training_recommendations_filepath: Optional path to CSV with training recommendations
         """
         # Load status/attributes file (players-current.csv)
         if status_filepath.endswith('.csv'):
@@ -129,12 +131,39 @@ class MatchReadySelector:
                 ('STC', 'Striker', None)
             ]
 
+        # Load training recommendations if provided
+        self.training_recommendations = {}
+        if training_recommendations_filepath:
+            try:
+                training_df = pd.read_csv(training_recommendations_filepath, encoding='utf-8-sig')
+                # Convert numeric columns
+                if 'Current_Skill_Rating' in training_df.columns:
+                    training_df['Current_Skill_Rating'] = pd.to_numeric(training_df['Current_Skill_Rating'], errors='coerce')
+                if 'Training_Score' in training_df.columns:
+                    training_df['Training_Score'] = pd.to_numeric(training_df['Training_Score'], errors='coerce')
+
+                # Create lookup dictionary
+                for idx, row in training_df.iterrows():
+                    self.training_recommendations[row['Player']] = {
+                        'position': row['Position'],
+                        'priority': row['Priority'],
+                        'skill_rating': row.get('Current_Skill_Rating', 0),
+                        'ability_tier': row.get('Ability_Tier', 'Unknown'),
+                        'training_score': row.get('Training_Score', 0)
+                    }
+                print(f"Loaded {len(self.training_recommendations)} training recommendations")
+            except FileNotFoundError:
+                print(f"Training recommendations file not found: {training_recommendations_filepath}")
+            except Exception as e:
+                print(f"Error loading training recommendations: {str(e)}")
+
         # Store selections for multiple matches
         self.match_selections = []
 
     def calculate_effective_rating(self, row: pd.Series, skill_col: str, ability_col: Optional[str] = None,
                                    match_importance: str = 'Medium',
-                                   prioritize_sharpness: bool = False) -> float:
+                                   prioritize_sharpness: bool = False,
+                                   position_name: Optional[str] = None) -> float:
         """
         Calculate effective rating considering familiarity, ability, and status factors.
 
@@ -144,6 +173,7 @@ class MatchReadySelector:
             ability_col: Role ability rating column (0-200 quality) - optional
             match_importance: 'Low', 'Medium', or 'High'
             prioritize_sharpness: Give minutes to low-sharpness players
+            position_name: Position being evaluated (for training bonus)
 
         Returns:
             Effective rating (lower is worse, can be negative)
@@ -222,6 +252,47 @@ class MatchReadySelector:
         if match_importance == 'High':
             if fatigue >= 400 or condition < 80:
                 effective_rating *= 0.85  # Extra penalty in important matches
+
+        # 6. Training bonus for low/medium importance matches
+        if (match_importance in ['Low', 'Medium'] and
+            position_name and
+            row['Name'] in self.training_recommendations):
+
+            training_info = self.training_recommendations[row['Name']]
+            training_pos = training_info['position']
+
+            # Map position_name to training position format
+            pos_map = {
+                'STC': 'ST', 'AML': 'AM(L)', 'AMC': 'AM(C)', 'AMR': 'AM(R)',
+                'DL': 'D(L)', 'DC1': 'D(C)', 'DC2': 'D(C)', 'DR': 'D(R)',
+                'DM(L)': 'DM', 'DM(R)': 'DM', 'GK': 'GK'
+            }
+
+            mapped_pos = pos_map.get(position_name, position_name)
+
+            # If this position matches training position
+            if mapped_pos == training_pos:
+                skill_rating = row.get(skill_col, 0)
+
+                # Only boost if player is playable (≥10 Competent)
+                if skill_rating >= 10:
+                    priority = training_info['priority']
+
+                    if match_importance == 'Low':
+                        # Stronger boost in unimportant matches
+                        if priority == 'High':
+                            effective_rating *= 1.15  # 15% boost
+                        elif priority == 'Medium':
+                            effective_rating *= 1.10  # 10% boost
+                        else:
+                            effective_rating *= 1.05  # 5% boost
+
+                    elif match_importance == 'Medium':
+                        # Modest boost in medium matches
+                        if priority == 'High':
+                            effective_rating *= 1.08  # 8% boost
+                        elif priority == 'Medium':
+                            effective_rating *= 1.05  # 5% boost
 
         return effective_rating
 
@@ -303,7 +374,7 @@ class MatchReadySelector:
                     ability_col = None
 
                 effective_rating = self.calculate_effective_rating(
-                    player, skill_col, ability_col, match_importance, prioritize_sharpness
+                    player, skill_col, ability_col, match_importance, prioritize_sharpness, pos_name
                 )
 
                 if effective_rating > -999.0:
@@ -551,10 +622,23 @@ class MatchReadySelector:
 
                     status_str = ' '.join(status_icons) if status_icons else ''
 
+                    # Check if player is in training for this position
+                    training_indicator = ''
+                    if player_name in self.training_recommendations:
+                        training_info = self.training_recommendations[player_name]
+                        # Map selector position to training position format
+                        pos_map = {
+                            'STC': 'ST', 'AML': 'AM(L)', 'AMC': 'AM(C)', 'AMR': 'AM(R)',
+                            'DL': 'D(L)', 'DC1': 'D(C)', 'DC2': 'D(C)', 'DR': 'D(R)',
+                            'DM(L)': 'DM', 'DM(R)': 'DM', 'GK': 'GK'
+                        }
+                        if pos_map.get(pos, pos) == training_info['position']:
+                            training_indicator = f" 🎓[Training: {training_info['priority']}]"
+
                     print(f"  {pos:6}: {player_name:25} "
                           f"(Eff: {eff_rating:4.1f}) "
                           f"[Cond: {condition:3.0f}% | Fatigue: {fatigue:4.0f} | Sharp: {sharpness:3.0%}] "
-                          f"{status_str}")
+                          f"{status_str}{training_indicator}")
                 else:
                     print(f"  {pos:6}: NO PLAYER FOUND")
             print()
@@ -571,6 +655,7 @@ class MatchReadySelector:
         print("  💤 High fatigue (≥400, needs rest)")
         print("  ❤️  Low condition (<80%, injury risk)")
         print("  🔄 Needs match sharpness (<80%)")
+        print("  🎓 In position training (priority shown)")
 
     def _print_rotation_summary(self):
         """Print summary of player usage across matches."""
@@ -692,6 +777,11 @@ def main():
         if os.path.exists('players.csv') and status_file != 'players.csv':
             abilities_file = 'players.csv'
 
+    # Look for training recommendations file
+    training_file = None
+    if os.path.exists('training_recommendations.csv'):
+        training_file = 'training_recommendations.csv'
+
     if not status_file:
         print("Error: No player data file found!")
         print("\nUsage:")
@@ -702,9 +792,11 @@ def main():
     print(f"\nLoading player status/attributes from: {status_file}")
     if abilities_file:
         print(f"Loading role abilities from: {abilities_file}")
+    if training_file:
+        print(f"Loading training recommendations from: {training_file}")
 
     try:
-        selector = MatchReadySelector(status_file, abilities_file)
+        selector = MatchReadySelector(status_file, abilities_file, training_file)
 
         # Interactive input for match planning
         print("\n" + "=" * 100)

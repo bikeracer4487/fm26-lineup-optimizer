@@ -795,6 +795,43 @@ class TrainingAdvisor:
         print("  • Both individual training AND match experience needed")
         print("=" * 110)
 
+    def export_training_recommendations_to_csv(self, output_file: str = 'training_recommendations.csv') -> str:
+        """
+        Export training recommendations to CSV file for use by match selector.
+
+        Args:
+            output_file: Path to output CSV file
+
+        Returns:
+            Path to created file
+        """
+        recommendations = self.recommend_training()
+
+        if not recommendations:
+            print(f"\nNo training recommendations to export.")
+            return None
+
+        # Convert recommendations to DataFrame
+        export_data = []
+        for rec in recommendations:
+            export_data.append({
+                'Player': rec['player'],
+                'Position': rec['position'],
+                'Priority': rec['priority'],
+                'Current_Skill_Rating': rec['current_skill_rating'],
+                'Ability_Tier': rec['ability_tier'],
+                'Training_Score': round(rec['training_score'], 2),
+                'Category': rec['category'],
+                'Reason': rec['reason']
+            })
+
+        df = pd.DataFrame(export_data)
+
+        # Export to CSV
+        df.to_csv(output_file, index=False, encoding='utf-8')
+
+        return output_file
+
 
 def main():
     """Main execution function."""
@@ -841,6 +878,11 @@ def main():
         advisor = TrainingAdvisor(status_file, abilities_file)
         advisor.print_depth_analysis()
         advisor.print_training_recommendations()
+
+        # Export training recommendations to CSV
+        output_file = advisor.export_training_recommendations_to_csv()
+        if output_file:
+            print(f"\n✓ Training recommendations exported to: {output_file}")
 
     except FileNotFoundError as e:
         print(f"\nError: {str(e)}")
