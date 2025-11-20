@@ -1,0 +1,35 @@
+{
+  "currentDate": "2026-11-05",
+  "matches": [
+    {
+      "id": "d329a55a-7016-40c3-9d02-5ddedf1a4073",
+      "date": "2026-11-04",
+      "opponent": "Dorchester Town",
+      "importance": "High"
+    },
+    {
+      "id": "e06f733a-a4eb-4a31-b81b-9823891f3678",
+      "date": "2026-11-07",
+      "opponent": "Hanwell Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "deac13a1-0115-4021-9bf5-9b0e3c50f583",
+      "date": "2026-11-10",
+      "opponent": "Poole Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "9ff2ea5f-93ea-497b-a2ab-f7ed4d187137",
+      "date": "2026-11-14",
+      "opponent": "Boston Utd",
+      "importance": "High"
+    }
+  ],
+  "rejectedPlayers": {},
+  "rejectedTraining": {},
+  "files": {
+    "status": "players-current.csv",
+    "abilities": "players.csv"
+  }
+}
