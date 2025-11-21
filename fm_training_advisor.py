@@ -14,7 +14,24 @@ from typing import Dict, List, Tuple, Optional
 
 
 class TrainingAdvisor:
-    """Analyzes squad and recommends position training for players."""
+    """
+    FM26 Strategic Training Advisor for 4-2-3-1 Formation.
+
+    Implements the "25+3" Squad Architecture Model based on lineup-depth-strategy.md research:
+    - Tier 1 (14-15 players): Elite starters, 70%+ playing time
+    - Tier 2 (7-8 players): Rotation squad, 30-40% playing time
+    - Tier 3 (3 players): Universalists covering 3+ positions, emergency backup
+
+    Key FM26 Unity Engine Considerations:
+    - High-attrition zones: Wing-backs (5 total), DMs (5 total) need extra depth
+    - Strategic retraining pathways: Winger→WB (most efficient), Aging AMC→DM
+    - Universalist doctrine: 4th CB must cover DM/FB roles
+    - Condition Floor: Injury risk exponential below 90% condition
+    - Tactical variety: Strikers need pace + target man profiles
+
+    Provides depth analysis, quality assessment, injury risk evaluation, and
+    intelligent training recommendations aligned with FM26 tactical demands.
+    """
 
     def __init__(self, status_filepath: str, abilities_filepath: Optional[str] = None):
         """
@@ -68,8 +85,17 @@ class TrainingAdvisor:
 
         # Convert numeric columns
         numeric_columns = [
-            'Age', 'CA', 'PA', 'Versatility', 'Professionalism', 'Determination',
-            'Natural Fitness', 'Stamina', 'Work Rate', 'Adaptability',
+            # Core attributes
+            'Age', 'CA', 'PA',
+            # Training attributes
+            'Versatility', 'Professionalism', 'Determination', 'Adaptability',
+            # Physical/Fitness attributes (FM26 Unity engine fatigue model)
+            'Natural Fitness', 'Stamina', 'Work Rate',
+            'Condition (%)', 'Injury Proneness',
+            # Technical attributes for strategic retraining analysis
+            'Pace', 'Acceleration', 'Strength', 'Jumping Reach', 'Heading',
+            'Technique', 'Dribbling', 'Flair', 'Vision', 'Passing', 'Decisions',
+            'Off the Ball', 'Finishing',
             # Positional skill ratings (1-20 familiarity scale)
             'GoalKeeper', 'Defender Right', 'Defender Center', 'Defender Left',
             'Defensive Midfielder', 'Attacking Mid. Right', 'Attacking Mid. Center',
@@ -120,18 +146,85 @@ class TrainingAdvisor:
                 'ST': ('Striker', None)
             }
 
-        # Formation needs for 4-2-3-1
-        self.formation_needs = {
-            'GK': 1,
-            'D(R)': 1,
-            'D(C)': 2,
-            'D(L)': 1,
-            'DM': 2,
-            'AM(R)': 1,
-            'AM(C)': 1,
-            'AM(L)': 1,
-            'ST': 1
+        # FM26 4-2-3-1 Depth Targets based on "25+3" Squad Architecture Model
+        # See: lineup-depth-strategy.md for strategic rationale
+        # Tier 1: Elite starters (70%+ starts), Tier 2: Rotation (30-40%), Tier 3: Universalists (<10%)
+        # High-attrition zones (WB, DM) need significantly more depth due to Unity engine fatigue
+        self.formation_depth_targets = {
+            'GK': {
+                'tier1': 1,      # Starting GK
+                'tier2': 1,      # Backup GK
+                'tier3_hg': 1,   # 3rd choice (Home-Grown for registration)
+                'total_target': 3,
+                'high_attrition': False,
+                'notes': 'GK suffers minimal fatigue - 90% budget on No.1'
+            },
+            'D(R)': {
+                'tier1': 1,      # Starting RB/RWB
+                'tier2': 2,      # Rotation options
+                'universalist_share': 0.5,  # Share of utility player
+                'total_target': 4,   # ~3.5 rounded up
+                'high_attrition': True,  # Wing-backs are highest attrition zone
+                'notes': 'Pressing WB role extremely demanding - need depth + tactical variety'
+            },
+            'D(C)': {
+                'tier1': 2,      # Starting CB partnership
+                'tier2': 2,      # Rotation CBs
+                'universalist': 1,  # 4th/5th CB must cover DM/FB
+                'total_target': 5,
+                'high_attrition': False,
+                'notes': '4th CB MUST be universalist covering DM/FB - "CB only" is wasted bench slot'
+            },
+            'D(L)': {
+                'tier1': 1,      # Starting LB/LWB
+                'tier2': 2,      # Rotation options
+                'universalist_share': 0.5,  # Share of utility player
+                'total_target': 4,   # ~3.5 rounded up
+                'high_attrition': True,  # Wing-backs are highest attrition zone
+                'notes': 'Pressing WB role extremely demanding - need depth + tactical variety'
+            },
+            'DM': {
+                'tier1': 2,      # Starting pivot partnership
+                'tier2': 2,      # Rotation DMs
+                'youth': 1,      # High-potential youth
+                'total_target': 5,
+                'high_attrition': True,  # High-collision zone with frequent injuries
+                'notes': 'Pressing DM reaches critical fatigue by 65min - Condition Floor must be respected'
+            },
+            'AM(R)': {
+                'tier1': 1,      # Starting right winger
+                'tier2': 1,      # Rotation/backup
+                'total_target': 2,
+                'high_attrition': False,
+                'notes': 'Must pair tactically with right full-back (Playmaking WB needs Inside Forward)'
+            },
+            'AM(C)': {
+                'tier1': 1,      # Starting CAM
+                'tier2': 1,      # Rotation (consider Tracking AM for defensive subs)
+                'total_target': 2,
+                'high_attrition': False,
+                'notes': 'Backup should be Tracking AM profile for defensive solidity'
+            },
+            'AM(L)': {
+                'tier1': 1,      # Starting left winger
+                'tier2': 1,      # Rotation/backup
+                'total_target': 2,
+                'high_attrition': False,
+                'notes': 'Must pair tactically with left full-back (Playmaking WB needs Inside Forward)'
+            },
+            'ST': {
+                'tier1': 1,      # Starting striker
+                'tier2': 1,      # Rotation striker (MUST be different profile)
+                'youth': 1,      # Development striker
+                'total_target': 3,
+                'high_attrition': False,
+                'tactical_variety_required': True,
+                'notes': 'CRITICAL: Need tactical variety - pace striker + target man for different approaches'
+            }
         }
+
+        # Legacy simple count (for backward compatibility in some methods)
+        self.formation_needs = {pos: data['total_target'] for pos, data in self.formation_depth_targets.items()}
 
         # Note: Role ability ratings are on 0-200 scale
         # Quality will be determined relative to squad distribution (percentiles)
@@ -330,6 +423,311 @@ class TrainingAdvisor:
 
         return gaps
 
+    def analyze_injury_risk(self, player: pd.Series) -> Dict:
+        """
+        Analyze player's injury risk based on FM26 Unity engine factors.
+
+        Based on lineup-depth-strategy.md:
+        - "Condition Floor" has risen in FM26 - 85% condition now risky
+        - Exponential injury probability at low condition
+        - Natural Fitness and Injury Proneness are critical indicators
+
+        Args:
+            player: Player row with condition/fitness data
+
+        Returns:
+            Dict with injury_risk_score, urgency_multiplier, and warnings
+        """
+        condition = player.get('Condition (%)', 100)
+        natural_fitness = player.get('Natural Fitness', 15)
+        injury_proneness = player.get('Injury Proneness', 10)
+
+        warnings = []
+        risk_score = 0.0
+
+        # Condition below 90% is risky in FM26 Unity engine
+        if pd.notna(condition):
+            if condition < 85:
+                risk_score += 0.4
+                warnings.append(f"Low condition ({condition}%) - high injury risk")
+            elif condition < 90:
+                risk_score += 0.2
+                warnings.append(f"Condition ({condition}%) below ideal")
+
+        # Natural Fitness < 12 means slower recovery and higher injury risk
+        if pd.notna(natural_fitness):
+            if natural_fitness < 10:
+                risk_score += 0.3
+                warnings.append(f"Very low Natural Fitness ({natural_fitness}) - injury prone")
+            elif natural_fitness < 12:
+                risk_score += 0.15
+                warnings.append(f"Low Natural Fitness ({natural_fitness})")
+
+        # Injury Proneness > 15 is a red flag
+        if pd.notna(injury_proneness):
+            if injury_proneness > 17:
+                risk_score += 0.3
+                warnings.append(f"Very injury prone ({injury_proneness})")
+            elif injury_proneness > 15:
+                risk_score += 0.15
+                warnings.append(f"Injury prone ({injury_proneness})")
+
+        # Calculate urgency multiplier (increases backup priority)
+        if risk_score >= 0.5:
+            urgency_multiplier = 2.0  # Double the gap severity for this position
+        elif risk_score >= 0.3:
+            urgency_multiplier = 1.5
+        elif risk_score >= 0.15:
+            urgency_multiplier = 1.2
+        else:
+            urgency_multiplier = 1.0
+
+        return {
+            'risk_score': risk_score,
+            'urgency_multiplier': urgency_multiplier,
+            'warnings': warnings,
+            'high_risk': risk_score >= 0.3
+        }
+
+    def assess_positional_variety(self, position: str) -> Dict:
+        """
+        Assess whether squad has tactical variety at a given position.
+
+        Based on lineup-depth-strategy.md:
+        - Strikers need BOTH pace striker AND target man for different approaches
+        - "When 4-2-3-1 struggles against low block, swap runner for physical presence"
+        - DM pivot should have BOTH destroyer AND progressor
+
+        Args:
+            position: Position to assess
+
+        Returns:
+            Dict with variety analysis and recommendations
+        """
+        if position == 'ST':
+            # Analyze striker profiles
+            pace_strikers = []
+            target_men = []
+            technical_strikers = []
+
+            for idx, row in self.df.iterrows():
+                st_skill = row.get('Striker', 0)
+                if pd.notna(st_skill) and st_skill >= 10:  # At least Competent
+                    name = row['Name']
+                    pace = row.get('Pace', 10)
+                    acceleration = row.get('Acceleration', 10)
+                    strength = row.get('Strength', 10)
+                    jumping = row.get('Jumping Reach', 10)
+                    heading = row.get('Heading', 10)
+                    technique = row.get('Technique', 10)
+                    dribbling = row.get('Dribbling', 10)
+
+                    # Pace striker: High pace/acceleration
+                    if pd.notna(pace) and pd.notna(acceleration) and pace >= 14 and acceleration >= 14:
+                        pace_strikers.append(name)
+
+                    # Target man: High strength/jumping/heading
+                    if pd.notna(strength) and pd.notna(jumping) and pd.notna(heading):
+                        if strength >= 14 and jumping >= 13 and heading >= 13:
+                            target_men.append(name)
+
+                    # Technical striker: High technique/dribbling
+                    if pd.notna(technique) and pd.notna(dribbling):
+                        if technique >= 14 and dribbling >= 13:
+                            technical_strikers.append(name)
+
+            variety_score = len(set(pace_strikers)) + len(set(target_men)) + len(set(technical_strikers))
+            has_variety = len(pace_strikers) >= 1 and len(target_men) >= 1
+
+            return {
+                'has_variety': has_variety,
+                'variety_score': variety_score,
+                'pace_strikers': pace_strikers,
+                'target_men': target_men,
+                'technical_strikers': technical_strikers,
+                'needs': [] if has_variety else (['target man'] if pace_strikers else ['pace striker'])
+            }
+
+        elif position == 'DM':
+            # Analyze DM profiles
+            destroyers = []
+            progressors = []
+
+            for idx, row in self.df.iterrows():
+                dm_skill = row.get('Defensive Midfielder', 0)
+                if pd.notna(dm_skill) and dm_skill >= 10:  # At least Competent
+                    name = row['Name']
+                    tackling = row.get('Tackling', 10)
+                    aggression = row.get('Aggression', 10)
+                    vision = row.get('Vision', 10)
+                    passing = row.get('Passing', 10)
+
+                    # Destroyer: High tackling/aggression
+                    if pd.notna(tackling) and pd.notna(aggression) and tackling >= 13 and aggression >= 13:
+                        destroyers.append(name)
+
+                    # Progressor: High vision/passing
+                    if pd.notna(vision) and pd.notna(passing) and vision >= 13 and passing >= 13:
+                        progressors.append(name)
+
+            has_variety = len(destroyers) >= 1 and len(progressors) >= 1
+
+            return {
+                'has_variety': has_variety,
+                'variety_score': len(set(destroyers)) + len(set(progressors)),
+                'destroyers': destroyers,
+                'progressors': progressors,
+                'needs': [] if has_variety else (['destroyer'] if progressors else ['progressor'])
+            }
+
+        return {'has_variety': True, 'variety_score': 1, 'needs': []}
+
+    def identify_universalist_candidates(self) -> List[Dict]:
+        """
+        Identify players who can/should be trained as utility players covering 3+ positions.
+
+        Based on lineup-depth-strategy.md "Universalist Doctrine":
+        - "A CB who can only play CB is a wasted bench slot"
+        - 4th CB MUST cover DM/FB roles
+        - Tier 3 players valued by FLEXIBILITY not raw output
+        - Target: Cover 3+ positions at Competent level or higher
+
+        Returns:
+            List of universalist candidates with their coverage analysis
+        """
+        candidates = []
+
+        for idx, row in self.df.iterrows():
+            name = row['Name']
+            age = row.get('Age', 99)
+            versatility = row.get('Versatility', 10)
+
+            # Count positions where player is at least Competent (10+)
+            competent_positions = []
+            accomplished_positions = []
+
+            for pos_name, (skill_col, ability_col) in self.position_mapping.items():
+                skill_rating = row.get(skill_col, 0)
+
+                if pd.notna(skill_rating) and skill_rating >= 13:  # Accomplished or better
+                    accomplished_positions.append(pos_name)
+                elif pd.notna(skill_rating) and skill_rating >= 10:  # Competent
+                    competent_positions.append(pos_name)
+
+            total_coverage = len(accomplished_positions) + len(competent_positions)
+
+            # Universalist candidates: either already cover 3+ OR high versatility for training
+            is_current_universalist = total_coverage >= 3
+            is_potential_universalist = (versatility >= 13 and total_coverage >= 2)
+
+            # Special check: CB who can also play DM/FB (critical need)
+            cb_skill = row.get('Defender Center', 0)
+            dm_skill = row.get('Defensive Midfielder', 0)
+            fb_right_skill = row.get('Defender Right', 0)
+            fb_left_skill = row.get('Defender Left', 0)
+
+            is_cb_universalist = (
+                pd.notna(cb_skill) and cb_skill >= 13 and
+                ((pd.notna(dm_skill) and dm_skill >= 10) or
+                 (pd.notna(fb_right_skill) and fb_right_skill >= 10) or
+                 (pd.notna(fb_left_skill) and fb_left_skill >= 10))
+            )
+
+            if is_current_universalist or is_potential_universalist or is_cb_universalist:
+                candidates.append({
+                    'name': name,
+                    'age': age,
+                    'versatility': versatility,
+                    'accomplished_positions': accomplished_positions,
+                    'competent_positions': competent_positions,
+                    'total_coverage': total_coverage,
+                    'is_cb_universalist': is_cb_universalist,
+                    'universalist_score': total_coverage + (versatility / 20),
+                    'tier3_candidate': total_coverage >= 3 or (versatility >= 15 and total_coverage >= 2)
+                })
+
+        # Sort by universalist score
+        candidates.sort(key=lambda x: x['universalist_score'], reverse=True)
+
+        return candidates
+
+    def calculate_age_factor_strategic(self, age: float, target_pos: str, row: pd.Series) -> Tuple[float, str]:
+        """
+        Calculate age factor using step function with special handling for strategic aging conversions.
+
+        Based on lineup-depth-strategy.md research:
+        - Under 24: Peak developmental years for position retraining
+        - 24-27: Still viable for retraining
+        - 28+: Generally avoid EXCEPT strategic aging conversions (AMC → DM)
+
+        Args:
+            age: Player age
+            target_pos: Position being trained for
+            row: Full player data for attribute analysis
+
+        Returns:
+            Tuple of (age_factor_score, explanation_string)
+        """
+        if pd.isna(age):
+            return (0.5, "unknown age")
+
+        # SPECIAL CASE: Aging Playmaker → Deep DM Conversion (strategy doc line 108-112)
+        # "31-year-old No. 10 who can no longer press in advanced strata... train as Deep Lying Playmaker"
+        if age >= 28 and target_pos == 'DM':
+            # Check if player is a playmaker (natural in AMC positions)
+            amc_skill = row.get('Attacking Mid. Center', 0)
+            aml_skill = row.get('Attacking Mid. Left', 0)
+            amr_skill = row.get('Attacking Mid. Right', 0)
+
+            is_playmaker = (amc_skill >= 15 or aml_skill >= 15 or amr_skill >= 15)
+
+            if is_playmaker:
+                # Check for elite mental/technical attributes
+                vision = row.get('Vision', 10)
+                passing = row.get('Passing', 10)
+                decisions = row.get('Decisions', 10)
+
+                # Check for pace decline (key indicator)
+                pace = row.get('Pace', 10)
+                acceleration = row.get('Acceleration', 10)
+
+                has_elite_mentals = (vision >= 15 and passing >= 15 and decisions >= 14)
+                has_pace_decline = (pace <= 12 or acceleration <= 12)
+
+                if has_elite_mentals and has_pace_decline:
+                    # Perfect candidate for aging playmaker conversion!
+                    return (0.75, f"STRATEGIC: Aging playmaker ({age}) with elite mentals, declining pace - ideal DM conversion")
+                elif has_elite_mentals:
+                    return (0.60, f"aging playmaker ({age}) with elite mentals - good DM candidate")
+
+        # STRATEGIC CASE: Young winger → Wing-Back conversion (strategy doc line 173-178)
+        # "Young winger with acceptable Work Rate (12+)" is IDEAL candidate
+        if age < 26 and target_pos in ['D(R)', 'D(L)']:
+            amr_skill = row.get('Attacking Mid. Right', 0)
+            aml_skill = row.get('Attacking Mid. Left', 0)
+
+            is_winger = (amr_skill >= 13 or aml_skill >= 13)
+            work_rate = row.get('Work Rate', 10)
+
+            if is_winger and work_rate >= 12:
+                return (0.95, f"STRATEGIC: Young winger ({age}) with good work rate - ideal WB conversion (most efficient pathway)")
+            elif is_winger:
+                return (0.75, f"young winger ({age}) - good WB conversion candidate (needs work rate development)")
+
+        # General age-based retraining factor (step function, not linear)
+        if age < 21:
+            return (1.0, f"very young ({age}) - peak developmental years")
+        elif age < 24:
+            return (0.95, f"young ({age}) - peak developmental years")
+        elif age < 26:
+            return (0.70, f"young ({age}) - still good for retraining")
+        elif age < 28:
+            return (0.40, f"age {age} - retraining viable but slower")
+        elif age < 30:
+            return (0.15, f"age {age} - only for strategic conversions")
+        else:
+            return (0.05, f"age {age} - avoid unless exceptional strategic case")
+
     def recommend_training(self) -> List[Dict]:
         """
         Generate intelligent training recommendations using squad-relative quality assessment.
@@ -371,17 +769,27 @@ class TrainingAdvisor:
                 ca = row.get('CA', 0)
                 pa = row.get('PA', 0)
 
-                # Calculate training potential
-                age_factor = max(0, (28 - age) / 24) if pd.notna(age) else 0.5  # Younger is better
+                # Calculate training potential using strategic model
+                # Age factor with strategic conversion logic (winger→WB, aging AMC→DM)
+                age_factor, age_reason = self.calculate_age_factor_strategic(age, pos_name, row)
+
+                # Versatility is PRIMARY factor (research shows it's most critical for retraining speed)
+                # Increased from 30% to 45% based on lineup-depth-strategy.md findings
                 versatility_factor = versatility / 20 if pd.notna(versatility) else 0.5
+
+                # Apply heavy penalty for low versatility (may take 18+ months or never adapt)
+                if pd.notna(versatility) and versatility < 10:
+                    versatility_factor *= 0.3  # Heavy penalty
+
                 professionalism_factor = professionalism / 20 if pd.notna(professionalism) else 0.5
                 growth_potential = (pa - ca) if pd.notna(pa) and pd.notna(ca) else 10
 
+                # Updated weighting: Versatility 45%, Age 25%, Professionalism 20%, Growth 10%
                 training_score = (
-                    age_factor * 0.3 +
-                    versatility_factor * 0.3 +
-                    professionalism_factor * 0.3 +
-                    min(growth_potential / 30, 1.0) * 0.1
+                    versatility_factor * 0.45 +      # PRIMARY factor (up from 0.3)
+                    age_factor * 0.25 +               # Important but secondary
+                    professionalism_factor * 0.20 +   # Helps training effectiveness
+                    min(growth_potential / 30, 1.0) * 0.10  # Nice to have
                 )
 
                 # Categorize the candidate using squad-relative quality tiers
@@ -398,6 +806,7 @@ class TrainingAdvisor:
                                 'ability_rating': ability_rating,
                                 'ability_tier': ability_tier,
                                 'training_score': training_score,
+                                'age_reason': age_reason,
                                 'reason': 'Already natural, train to improve ability'
                             })
 
@@ -415,11 +824,17 @@ class TrainingAdvisor:
                                 'ability_rating': ability_rating,
                                 'ability_tier': ability_tier,
                                 'training_score': training_score,
+                                'age_reason': age_reason,
                                 'reason': 'Good ability, train to become natural'
                             })
 
                 else:  # Below Competent
-                    if pd.notna(ability_rating) and ability_tier in ['Adequate', 'Good', 'Excellent']:
+                    # Only recommend learning new positions for Good/Excellent candidates
+                    if pd.notna(ability_rating) and ability_tier in ['Good', 'Excellent']:
+                        # Special handling for GK - don't recommend unless already somewhat familiar or Excellent
+                        if pos_name == 'GK' and skill_rating < 8 and ability_tier != 'Excellent':
+                            continue  # Skip GK recommendations for unfamiliar outfield players
+
                         # Has potential but needs to learn position
                         # Check if player is natural in similar position
                         has_similar = self._check_similar_positions(row, pos_name)
@@ -436,6 +851,7 @@ class TrainingAdvisor:
                                     'ability_rating': ability_rating,
                                     'ability_tier': ability_tier,
                                     'training_score': training_score,
+                                    'age_reason': age_reason,
                                     'has_similar': has_similar,
                                     'reason': 'Has potential, train new position'
                                 })
@@ -588,17 +1004,61 @@ class TrainingAdvisor:
         return True
 
     def _check_similar_positions(self, row: pd.Series, target_pos: str) -> bool:
-        """Check if player is natural in similar positions."""
+        """
+        Check if player is natural in similar positions, including STRATEGIC retraining pathways.
+
+        Strategic pathways based on lineup-depth-strategy.md:
+        - Winger → Wing-Back: "Most efficient retraining pathway in modern FM"
+        - Aging AMC → DM: Extends utility of playmakers losing pace
+        - Winger → Channel Forward (ST): Ideal for inside forwards lacking top speed
+        - Full-Back → Wide CB: For 3-at-back hybrid formations
+        """
         similarity_groups = {
-            'D(R)': ['Defender Right', 'Defender Left'],
-            'D(L)': ['Defender Left', 'Defender Right'],
-            'D(C)': ['Defender Center'],
-            'DM': ['Defensive Midfielder', 'Defender Center'],
-            'AM(R)': ['Attacking Mid. Right', 'Attacking Mid. Left', 'Attacking Mid. Center'],
-            'AM(L)': ['Attacking Mid. Left', 'Attacking Mid. Right', 'Attacking Mid. Center'],
-            'AM(C)': ['Attacking Mid. Center', 'Attacking Mid. Left', 'Attacking Mid. Right'],
-            'ST': ['Striker', 'Attacking Mid. Center'],
-            'GK': []
+            'D(R)': [
+                'Defender Right', 'Defender Left',
+                # STRATEGIC: Winger → Wing-Back pipeline (line 173-178 of strategy doc)
+                'Attacking Mid. Right',  # Young wingers with Work Rate 12+ are IDEAL WB candidates
+                'Defender Center'  # Wide CB role for hybrid systems
+            ],
+            'D(L)': [
+                'Defender Left', 'Defender Right',
+                # STRATEGIC: Winger → Wing-Back pipeline
+                'Attacking Mid. Left',  # Young wingers with Work Rate 12+ are IDEAL WB candidates
+                'Defender Center'  # Wide CB role for hybrid systems
+            ],
+            'D(C)': [
+                'Defender Center',
+                # STRATEGIC: Full-Back → Wide CB (line 94)
+                'Defender Right', 'Defender Left',  # Robust full-backs can retrain to CB
+                'Defensive Midfielder'  # DMs can drop to CB for universalist role
+            ],
+            'DM': [
+                'Defensive Midfielder',
+                'Defender Center',  # CBs can move up to DM
+                # STRATEGIC: Aging Playmaker → Deep DM (line 108-112)
+                'Attacking Mid. Center',  # 28+ AMCs with elite Vision/Passing, declining pace
+                'Attacking Mid. Left', 'Attacking Mid. Right'  # Wide playmakers can also transition
+            ],
+            'AM(R)': [
+                'Attacking Mid. Right', 'Attacking Mid. Left', 'Attacking Mid. Center',
+                'Striker'  # Strikers can drop to winger role
+            ],
+            'AM(L)': [
+                'Attacking Mid. Left', 'Attacking Mid. Right', 'Attacking Mid. Center',
+                'Striker'  # Strikers can drop to winger role
+            ],
+            'AM(C)': [
+                'Attacking Mid. Center', 'Attacking Mid. Left', 'Attacking Mid. Right',
+                'Striker',  # Strikers can drop deep
+                'Defensive Midfielder'  # Deep playmakers can push forward
+            ],
+            'ST': [
+                'Striker',
+                'Attacking Mid. Center',
+                # STRATEGIC: Winger → Channel Forward (line 147-152)
+                'Attacking Mid. Right', 'Attacking Mid. Left'  # Inside forwards lacking pace make ideal Channel Forwards
+            ],
+            'GK': []  # GK is specialist position, no strategic retraining pathways
         }
 
         similar_cols = similarity_groups.get(target_pos, [])
@@ -610,7 +1070,7 @@ class TrainingAdvisor:
         return False
 
     def _generate_detailed_reason(self, candidate: Dict, position: str) -> str:
-        """Generate comprehensive reason for recommendation."""
+        """Generate comprehensive reason with strategic context."""
         reasons = []
 
         # Check current positions for retraining context
@@ -629,12 +1089,10 @@ class TrainingAdvisor:
                     base_reason += f" (currently Natural at {', '.join(current_pos_names)})"
             reasons.append(base_reason)
 
-        # Age
-        age = candidate['age']
-        if age < 21:
-            reasons.append(f"very young ({age})")
-        elif age < 24:
-            reasons.append(f"young ({age})")
+        # Strategic age reason (includes winger→WB, aging AMC→DM special cases)
+        age_reason = candidate.get('age_reason', '')
+        if age_reason:
+            reasons.append(age_reason)
 
         # Training characteristics
         if candidate['training_score'] >= 0.7:
@@ -651,51 +1109,86 @@ class TrainingAdvisor:
         if candidate.get('has_similar'):
             reasons.append("natural in similar position")
 
+        # Low versatility warning
+        if row is not None:
+            versatility = row.get('Versatility', 10)
+            if pd.notna(versatility) and versatility < 10:
+                reasons.append("WARNING: Low versatility - may take 18+ months")
+
         return " | ".join(reasons)
 
     def print_depth_analysis(self):
-        """Print comprehensive depth analysis with quality assessment."""
+        """Print comprehensive depth analysis with quality assessment, injury risk, and universalists."""
         depth_analysis = self.analyze_squad_depth_quality()
         gaps = self.identify_quality_gaps(depth_analysis)
+        universalists = self.identify_universalist_candidates()
 
-        print("=" * 110)
-        print("SQUAD DEPTH & QUALITY ANALYSIS FOR 4-2-3-1 FORMATION")
-        print("=" * 110)
+        print("=" * 120)
+        print("SQUAD DEPTH & QUALITY ANALYSIS FOR 4-2-3-1 FORMATION (FM26 Unity Engine)")
+        print("=" * 120)
         print()
 
         has_abilities = any(pd.notna(players[0][2]) for players in depth_analysis.values() if players)
 
+        # Analyze each position
         for pos_name in ['GK', 'D(L)', 'D(C)', 'D(R)', 'DM', 'AM(L)', 'AM(C)', 'AM(R)', 'ST']:
             players_data = depth_analysis.get(pos_name, [])
-            needed = self.formation_needs.get(pos_name, 1)
+            target_info = self.formation_depth_targets.get(pos_name, {})
+            total_target = target_info.get('total_target', 1)
+            is_high_attrition = target_info.get('high_attrition', False)
 
-            print(f"{pos_name:8} (Need {needed} in XI, want 2+ competent & 1+ good quality):")
+            # Header with strategic context
+            attrition_flag = " [HIGH ATTRITION]" if is_high_attrition else ""
+            print(f"{pos_name:8} (Target: {total_target} total){attrition_flag}:")
+            if target_info.get('notes'):
+                print(f"         Strategy: {target_info['notes']}")
 
             if not players_data:
                 print(f"  {'NO PLAYERS AVAILABLE':50} - CRITICAL GAP!")
             else:
                 for i, (name, skill_rating, ability_rating, skill_tier, ability_tier) in enumerate(players_data[:6], 1):
+                    # Get player row for injury analysis
+                    player_row = self.df[self.df['Name'] == name].iloc[0]
+                    injury_analysis = self.analyze_injury_risk(player_row)
+
                     # Status indicator
-                    status = "✓" if skill_rating >= 10 else "⚠"
+                    status = "OK" if skill_rating >= 10 else "!!"
 
                     # Quality indicator based on ability tier
                     if ability_tier == 'Excellent':
-                        quality_icon = "⭐"
+                        quality_icon = "**"
                     elif ability_tier == 'Good':
-                        quality_icon = "✓✓"
+                        quality_icon = "++"
                     elif ability_tier == 'Adequate':
-                        quality_icon = "→"
+                        quality_icon = "=="
                     elif ability_tier in ['Poor', 'Inadequate']:
-                        quality_icon = "⚠"
+                        quality_icon = "--"
                     else:
-                        quality_icon = "?"
+                        quality_icon = "??"
+
+                    # Injury risk indicator
+                    injury_icon = ""
+                    if injury_analysis['high_risk']:
+                        injury_icon = " [INJ]"
+                        status = "!!"  # Override status if high injury risk
+
+                    # Universalist indicator
+                    is_universalist = any(u['name'] == name and u['total_coverage'] >= 3 for u in universalists)
+                    universalist_icon = " [UTIL]" if is_universalist else ""
 
                     # Format output
                     if has_abilities and pd.notna(ability_rating):
-                        print(f"  {status} {quality_icon} {name:28} {skill_tier:15} ({skill_rating:4.1f}/20) | "
+                        print(f"  {status} {quality_icon} {name:28}{injury_icon}{universalist_icon} "
+                              f"{skill_tier:15} ({skill_rating:4.1f}/20) | "
                               f"{ability_tier:10} ability ({ability_rating:5.1f}/200)")
                     else:
-                        print(f"  {status} {name:30} {skill_tier:15} ({skill_rating:4.1f}/20)")
+                        print(f"  {status} {name:30}{injury_icon}{universalist_icon} "
+                              f"{skill_tier:15} ({skill_rating:4.1f}/20)")
+
+                    # Show injury warnings
+                    if injury_analysis['warnings']:
+                        for warning in injury_analysis['warnings']:
+                            print(f"       WARNING: {warning}")
 
             # Show gaps
             if pos_name in gaps:
@@ -707,14 +1200,31 @@ class TrainingAdvisor:
 
             print()
 
-        if has_abilities:
-            print("\nQUALITY INDICATORS:")
-            print("  ⭐ = Excellent ability (17+)")
-            print("  ✓✓ = Good ability (15+)")
-            print("  → = Adequate ability (13+)")
-            print("  ⚠ = Below standard")
+        # Universalist summary
+        if universalists:
+            print("\n" + "=" * 120)
+            print("UNIVERSALIST PLAYERS (Multi-Position Coverage):")
+            print("=" * 120)
+            for u in universalists[:5]:  # Show top 5
+                accomplished = ', '.join(u['accomplished_positions'])
+                competent = ', '.join(u['competent_positions'])
+                tier3_marker = " [TIER 3 CANDIDATE]" if u['tier3_candidate'] else ""
+                cb_marker = " [CRITICAL: CB/DM/FB coverage]" if u['is_cb_universalist'] else ""
 
-        print("=" * 110)
+                print(f"  [UTIL] {u['name']:28} (Versatility: {u['versatility']:2.0f}) | Coverage: {u['total_coverage']} positions{tier3_marker}{cb_marker}")
+                if accomplished:
+                    print(f"         Accomplished: {accomplished}")
+                if competent:
+                    print(f"         Competent: {competent}")
+                print()
+
+        if has_abilities:
+            print("\nICON LEGEND:")
+            print("  QUALITY: ** = Excellent | ++ = Good | == = Adequate | -- = Below standard")
+            print("  STATUS:  [INJ] = Injury risk | [UTIL] = Universalist (3+ positions)")
+            print("  ZONES:   [HIGH ATTRITION] = Needs extra depth due to Unity engine fatigue")
+
+        print("=" * 120)
 
     def print_training_recommendations(self):
         """Print formatted training recommendations."""
@@ -726,7 +1236,7 @@ class TrainingAdvisor:
             print("=" * 110)
 
             if not self.has_abilities:
-                print("\n⚠️  Cannot provide training recommendations without role ability data.")
+                print("\nWARNING: Cannot provide training recommendations without role ability data.")
                 print("\nTo get intelligent training recommendations:")
                 print("  1. Export player role ability ratings from FM26 (Squad view with Striker, AM(L), etc. columns)")
                 print("  2. Save as players.csv")
@@ -734,7 +1244,7 @@ class TrainingAdvisor:
                 print("\nRole ability ratings show how GOOD each player is at each position based on their attributes.")
                 print("This is different from positional skill ratings (1-20 familiarity scale) already in players-current.csv.")
             else:
-                print("\n✅ No training recommendations needed - squad depth and quality are adequate at all positions!")
+                print("\nSUCCESS: No training recommendations needed - squad depth and quality are adequate at all positions!")
 
             print("=" * 110)
             return
@@ -761,7 +1271,7 @@ class TrainingAdvisor:
             print("-" * 110)
 
             for rec in recs:
-                print(f"  Player: {rec['player']:28} → Train as: {rec['position']:8} [{rec['category']}]")
+                print(f"  Player: {rec['player']:28} -> Train as: {rec['position']:8} [{rec['category']}]")
 
                 if has_abilities and pd.notna(rec['ability_rating']):
                     print(f"         Familiarity: {rec['current_skill']:15} ({rec['current_skill_rating']:4.1f}/20) | "
@@ -778,26 +1288,26 @@ class TrainingAdvisor:
 
         print("=" * 110)
         print("\nTRAINING CATEGORIES EXPLAINED:")
-        print("  • Become Natural: Players with good ability who should train to reach Natural (18+) familiarity")
-        print("  • Improve Natural: Players already Natural but need to improve their ability through training")
-        print("  • Learn Position: Players with potential who should train into a new position")
+        print("  * Become Natural: Players with good ability who should train to reach Natural (18+) familiarity")
+        print("  * Improve Natural: Players already Natural but need to improve their ability through training")
+        print("  * Learn Position: Players with potential who should train into a new position")
         print()
         print("TRAINING TIMELINE EXPECTATIONS:")
-        print("  • Competent level (10/20):  6-9 months of training + match experience")
-        print("  • Accomplished level (13+): 12 months of training + regular playing time")
-        print("  • Natural level (18+):      12-24 months (requires consistent matches)")
+        print("  * Competent level (10/20):  6-9 months of training + match experience")
+        print("  * Accomplished level (13+): 12 months of training + regular playing time")
+        print("  * Natural level (18+):      12-24 months (requires consistent matches)")
         print()
         print("KEY FACTORS FOR FASTER TRAINING:")
-        print("  • Age under 24 (younger players learn faster)")
-        print("  • High Versatility attribute (accelerates position learning)")
-        print("  • High Professionalism (trains harder and more effectively)")
-        print("  • Natural in similar positions (easier to adapt)")
-        print("  • Both individual training AND match experience needed")
+        print("  * Age under 24 (younger players learn faster)")
+        print("  * High Versatility attribute (accelerates position learning)")
+        print("  * High Professionalism (trains harder and more effectively)")
+        print("  * Natural in similar positions (easier to adapt)")
+        print("  * Both individual training AND match experience needed")
         print("=" * 110)
 
     def export_training_recommendations_to_csv(self, output_file: str = 'training_recommendations.csv') -> str:
         """
-        Export training recommendations to CSV file for use by match selector.
+        Export training recommendations to CSV file with strategic context.
 
         Args:
             output_file: Path to output CSV file
@@ -811,17 +1321,57 @@ class TrainingAdvisor:
             print(f"\nNo training recommendations to export.")
             return None
 
-        # Convert recommendations to DataFrame
+        # Get universalists and tactical variety info for export
+        universalists = self.identify_universalist_candidates()
+        universalist_names = {u['name']: u['total_coverage'] for u in universalists}
+
+        # Convert recommendations to DataFrame with strategic columns
         export_data = []
         for rec in recommendations:
+            player_name = rec['player']
+            position = rec['position']
+
+            # Determine strategic category
+            strategic_category = rec.get('category', 'Standard')
+            if 'winger' in rec['reason'].lower() and position in ['D(R)', 'D(L)']:
+                strategic_category += ' | Winger→WB Pipeline'
+            elif 'aging' in rec['reason'].lower() and 'playmaker' in rec['reason'].lower():
+                strategic_category += ' | Aging AMC→DM'
+
+            # Check if universalist
+            is_universalist = player_name in universalist_names
+            universalist_positions = universalist_names.get(player_name, 0)
+
+            # Estimate timeline based on current skill
+            current_skill = rec['current_skill_rating']
+            if current_skill >= 13:
+                timeline = '2-4 months to Natural'
+            elif current_skill >= 10:
+                timeline = '6-9 months to Natural'
+            elif current_skill >= 8:
+                timeline = '12+ months to Competent'
+            else:
+                timeline = '18+ months (high versatility needed)'
+
+            # Check for tactical variety fill
+            variety_info = self.assess_positional_variety(position)
+            fills_variety_gap = len(variety_info.get('needs', [])) > 0
+
             export_data.append({
-                'Player': rec['player'],
-                'Position': rec['position'],
+                'Player': player_name,
+                'Position': position,
                 'Priority': rec['priority'],
+                'Strategic_Category': strategic_category,
                 'Current_Skill_Rating': rec['current_skill_rating'],
+                'Current_Skill_Tier': rec['current_skill'],
                 'Ability_Tier': rec['ability_tier'],
+                'Ability_Rating': rec.get('ability_rating', ''),
+                'Age': rec['age'],
                 'Training_Score': round(rec['training_score'], 2),
-                'Category': rec['category'],
+                'Estimated_Timeline': timeline,
+                'Is_Universalist': 'Yes' if is_universalist else 'No',
+                'Universalist_Coverage': universalist_positions if is_universalist else 0,
+                'Fills_Variety_Gap': 'Yes' if fills_variety_gap else 'No',
                 'Reason': rec['reason']
             })
 
@@ -882,7 +1432,7 @@ def main():
         # Export training recommendations to CSV
         output_file = advisor.export_training_recommendations_to_csv()
         if output_file:
-            print(f"\n✓ Training recommendations exported to: {output_file}")
+            print(f"\n[SUCCESS] Training recommendations exported to: {output_file}")
 
     except FileNotFoundError as e:
         print(f"\nError: {str(e)}")

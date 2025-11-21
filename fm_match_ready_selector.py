@@ -18,8 +18,52 @@ from typing import Dict, List, Tuple, Optional
 
 class MatchReadySelector:
     """
+    FM26 Match-Ready Lineup Selector with Unity Engine Research Integration.
+
     Intelligent team selector that factors in player condition, fatigue,
     match sharpness, and fixture scheduling for optimal rotation.
+
+    FM26 Unity Engine Enhancements (lineup-depth-strategy.md):
+    =========================================================
+
+    1. HIGH-ATTRITION ZONE MODELING:
+       - Wing-backs (DL, DR) reclassified as highest attrition (equal to DMs)
+       - Position-specific fatigue multipliers: WB/DM 1.2x, Attack 1.1x, CB/GK 1.0x
+
+    2. POSITION-SPECIFIC ROTATION THRESHOLDS:
+       - Wing-backs/DMs: Rotate after 2-3 consecutive matches
+       - Attackers/Midfielders: Rotate after 3-4 consecutive matches
+       - Center-backs/GK: Can sustain 5-6 consecutive matches
+
+    3. INJURY RISK INTEGRATION:
+       - Injury Proneness attribute integrated into fatigue thresholds
+       - High proneness (15+): -100 to threshold (very fragile)
+       - Low proneness (≤8): +50 to threshold (can handle higher load)
+
+    4. 85% CONDITION FLOOR ENFORCEMENT:
+       - FM26 Unity Engine: Exponential injury risk below 85% condition
+       - High importance matches: 0.20x penalty (near-prohibition)
+       - Medium importance: 0.50x penalty
+       - Low importance: 0.70x penalty
+
+    5. UNIVERSALIST/VERSATILITY BONUSES:
+       - 3+ competent positions (15+ rating): 1.05x bonus (Tier 3 value)
+       - 2 competent positions: 1.03x bonus
+       - Rewards squad depth flexibility per 25+3 model
+
+    6. STRATEGIC PATHWAY DETECTION:
+       - Winger→Wing-Back: Young wingers (AMR/AML) with work rate → DL/DR (1.04x)
+       - Aging AMC→DM: Playmakers losing pace with elite mentals → DM (1.03x)
+       - Aligns with most efficient retraining pathways
+
+    7. PERSONALIZED FATIGUE THRESHOLDS:
+       - Base: 400, adjusted for age/natural fitness/stamina/injury proneness
+       - Veterans (32+): 300, Aging (30-32): 350, Youth (<19): 350
+       - Natural Fitness/Stamina/Injury Proneness modifiers: -100 to +50
+
+    Usage:
+        selector = MatchReadySelector('players-current.csv', 'players.csv')
+        selection = selector.select_optimal_xi(match_importance='High')
     """
 
     def __init__(self, status_filepath: str, abilities_filepath: Optional[str] = None,
@@ -80,7 +124,7 @@ class MatchReadySelector:
         # Convert numeric columns
         numeric_columns = [
             'Age', 'CA', 'PA', 'Condition', 'Fatigue', 'Match Sharpness',
-            'Natural Fitness', 'Stamina', 'Work Rate',
+            'Natural Fitness', 'Stamina', 'Work Rate', 'Injury Proneness',
             'GoalKeeper', 'Defender Right', 'Defender Center', 'Defender Left',
             'Defensive Midfielder', 'Attacking Mid. Right', 'Attacking Mid. Center',
             'Attacking Mid. Left', 'Striker'
@@ -243,10 +287,12 @@ class MatchReadySelector:
             if condition > 100:
                 condition = condition / 100
 
-            # ENHANCEMENT 1: Enforce 85% condition rule
+            # ENHANCEMENT 1: Enforce 85% condition rule (FM26 Unity Engine)
             if condition < 85:
-                # Strict enforcement for Medium/High importance
-                if match_importance in ['Medium', 'High']:
+                # CRITICAL: FM26 Unity Engine has exponential injury risk below 85%
+                if match_importance == 'High':
+                    effective_rating *= 0.20  # NEAR-PROHIBITION for critical matches
+                elif match_importance == 'Medium':
                     effective_rating *= 0.50  # Heavy penalty - absolute safety threshold
                 else:
                     effective_rating *= 0.70  # Moderate penalty for Low importance
@@ -258,16 +304,17 @@ class MatchReadySelector:
                 effective_rating *= 0.90  # Minor penalty
 
         # 4. Fatigue penalty with research-based adjustments
-        # ENHANCEMENTS 2, 3, 5, 6, 7: Age/fitness/stamina/position-adjusted thresholds
+        # ENHANCEMENTS 2, 3, 5, 6, 7: Age/fitness/stamina/injury-adjusted thresholds
         fatigue = row.get('Fatigue', 0)
         if pd.notna(fatigue):
             # Get player attributes for threshold calculation
             age = row.get('Age', 25)
             natural_fitness = row.get('Natural Fitness', 10)
             stamina = row.get('Stamina', 10)
+            injury_proneness = row.get('Injury Proneness', None)
 
             # Calculate personalized fatigue threshold (200-550 range)
-            fatigue_threshold = self._get_adjusted_fatigue_threshold(age, natural_fitness, stamina)
+            fatigue_threshold = self._get_adjusted_fatigue_threshold(age, natural_fitness, stamina, injury_proneness)
 
             # Apply position-specific fatigue multiplier
             if position_name:
@@ -286,17 +333,14 @@ class MatchReadySelector:
 
             # ENHANCEMENT 6: Removed penalty for negative fatigue (under-conditioned, not rested)
 
-        # 5. Consecutive match tracking penalty
-        # ENHANCEMENT 4: Penalize players playing too many consecutive matches
+        # 5. Consecutive match tracking penalty (position-specific)
+        # ENHANCEMENT 4: Penalize players based on position-specific rotation needs
+        # Research: Wing-backs/DMs need rotation after 2-3 matches, CBs can sustain 5+
         player_name = row.get('Name', '')
         if player_name in self.player_match_count:
             consecutive_matches = self.player_match_count[player_name]
-            if consecutive_matches >= 5:
-                effective_rating *= 0.70  # Heavy penalty - overworked
-            elif consecutive_matches >= 4:
-                effective_rating *= 0.80  # Moderate penalty
-            elif consecutive_matches >= 3:
-                effective_rating *= 0.90  # Minor penalty - rotation recommended
+            consecutive_penalty = self._get_consecutive_match_penalty(consecutive_matches, position_name)
+            effective_rating *= consecutive_penalty
 
         # 6. Match importance modifier
         if match_importance == 'High':
@@ -348,6 +392,19 @@ class MatchReadySelector:
                         elif priority == 'Medium':
                             effective_rating *= 1.05  # 5% boost
 
+        # 8. Universalist/Versatility bonus (FM26 25+3 squad model)
+        # Reward players who can cover multiple positions (Tier 3 strategic value)
+        competent_positions = self._get_player_competent_positions(row)
+        if competent_positions >= 3:
+            effective_rating *= 1.05  # 5% bonus for universalists (3+ positions)
+        elif competent_positions == 2:
+            effective_rating *= 1.03  # 3% bonus for dual-position players
+
+        # 9. Strategic pathway bonus (FM26 positional conversion research)
+        # Reward players who fit strategic retraining pathways (winger→WB, aging AMC→DM)
+        pathway_bonus = self._get_strategic_pathway_bonus(row, position_name)
+        effective_rating *= pathway_bonus
+
         return effective_rating
 
     def _get_familiarity_penalty(self, rating: float) -> float:
@@ -367,11 +424,11 @@ class MatchReadySelector:
         else:               # Ineffectual
             return 0.40
 
-    def _get_adjusted_fatigue_threshold(self, age: float, natural_fitness: float, stamina: float) -> float:
+    def _get_adjusted_fatigue_threshold(self, age: float, natural_fitness: float, stamina: float, injury_proneness: float = None) -> float:
         """
-        Calculate age/fitness/stamina-adjusted fatigue threshold.
+        Calculate age/fitness/stamina/injury-adjusted fatigue threshold.
 
-        Research-based thresholds:
+        Research-based thresholds (FM26 Unity Engine):
         - Standard: 400
         - Ages 30-32: 350 (more sensitive)
         - Ages 32+: 300 (highly sensitive)
@@ -380,11 +437,14 @@ class MatchReadySelector:
         - High Natural Fitness (≥15): +50
         - Low Stamina (<10): -50
         - High Stamina (≥15): +30
+        - High Injury Proneness (≥15): -100 (CRITICAL: much more fragile)
+        - Low Injury Proneness (≤8): +50 (robust, can handle load)
 
         Args:
             age: Player age
             natural_fitness: Natural Fitness attribute (0-20)
             stamina: Stamina attribute (0-20)
+            injury_proneness: Injury Proneness attribute (0-20, higher = more injury prone)
 
         Returns:
             Adjusted fatigue threshold
@@ -415,6 +475,13 @@ class MatchReadySelector:
             elif stamina >= 15:
                 threshold += 30  # Good stamina = sustains load better
 
+        # Injury Proneness modifiers (FM26 Unity Engine - critical factor)
+        if pd.notna(injury_proneness):
+            if injury_proneness >= 15:
+                threshold -= 100  # CRITICAL: Highly injury-prone players are fragile
+            elif injury_proneness <= 8:
+                threshold += 50  # Low injury risk = can handle higher load
+
         # Ensure threshold doesn't go below 200 or above 550
         return max(200.0, min(550.0, threshold))
 
@@ -422,10 +489,15 @@ class MatchReadySelector:
         """
         Get position-specific fatigue sensitivity multiplier.
 
-        Research shows different roles have vastly different physical demands:
-        - High-intensity (1.2x): Box-to-Box, Wing-Backs, Pressing roles
-        - Medium-intensity (1.0x): Standard midfield/attack roles
-        - Low-intensity (0.8x): Center-backs, Goalkeepers, deep playmakers
+        FM26 Unity Engine Research (lineup-depth-strategy.md):
+        - Wing-backs are THE highest attrition zone (Section 4.2)
+        - Pressing Wing-Back role has equal/higher demands than Pressing DM
+        - "Players in these high-intensity roles can reach critical fatigue levels as early as the 65th minute"
+
+        Classification:
+        - High-intensity (1.2x): Wing-Backs, Defensive Midfielders (most ground covered)
+        - Medium-intensity (1.0x): Wingers, Attacking midfielders, Striker
+        - Low-intensity (0.8x): Center-backs, Goalkeepers (positional roles)
 
         Args:
             position_name: Position code (e.g., 'STC', 'DM(L)', 'DC1')
@@ -434,10 +506,11 @@ class MatchReadySelector:
             Fatigue multiplier (0.8 - 1.2)
         """
         # High-intensity positions - require more frequent rotation
-        high_intensity = ['DM(L)', 'DM(R)']  # Defensive midfielders cover most ground
+        # CRITICAL: Wing-backs (DL, DR) reclassified as high-attrition based on FM26 research
+        high_intensity = ['DL', 'DR', 'DM(L)', 'DM(R)']  # Wing-backs AND DMs
 
         # Medium-intensity positions - standard rotation
-        medium_intensity = ['AML', 'AMC', 'AMR', 'STC', 'DL', 'DR']
+        medium_intensity = ['AML', 'AMC', 'AMR', 'STC']
 
         # Low-intensity positions - can sustain longer runs
         low_intensity = ['GK', 'DC1', 'DC2']
@@ -448,6 +521,140 @@ class MatchReadySelector:
             return 0.8
         else:  # medium_intensity or unknown
             return 1.0
+
+    def _get_consecutive_match_penalty(self, consecutive_matches: int, position_name: str) -> float:
+        """
+        Position-specific consecutive match penalties based on attrition research.
+
+        FM26 Unity Engine Research (lineup-depth-strategy.md):
+        - Wing-backs/DMs are highest attrition zones (rotate after 2-3 matches)
+        - Attackers/midfielders are medium attrition (rotate after 3-4 matches)
+        - CBs/GK are low attrition (can play 5+ consecutive matches)
+        - "Players in high-intensity roles can reach critical fatigue levels as early as the 65th minute"
+
+        Args:
+            consecutive_matches: Number of consecutive matches played
+            position_name: Position code (e.g., 'DL', 'AMC', 'DC1')
+
+        Returns:
+            Penalty multiplier (0.60-1.0, where lower = heavier penalty)
+        """
+        if position_name is None:
+            position_name = ''
+
+        # High-attrition positions (Wing-backs, Defensive midfielders)
+        # Need rotation EARLIER than standard positions
+        if position_name in ['DL', 'DR', 'DM(L)', 'DM(R)']:
+            if consecutive_matches >= 4:
+                return 0.60  # Severe - overworked, injury risk high
+            elif consecutive_matches >= 3:
+                return 0.75  # Heavy - rotation critical
+            elif consecutive_matches >= 2:
+                return 0.90  # Early warning - start planning rotation
+
+        # Medium-attrition positions (Wingers, Attacking mids, Striker)
+        # Standard rotation schedule
+        elif position_name in ['AML', 'AMC', 'AMR', 'STC']:
+            if consecutive_matches >= 5:
+                return 0.70  # Severe - overworked
+            elif consecutive_matches >= 4:
+                return 0.80  # Heavy - rotation needed
+            elif consecutive_matches >= 3:
+                return 0.90  # Warning - consider rotation
+
+        # Low-attrition positions (Center-backs, Goalkeeper)
+        # Can sustain longer consecutive runs
+        elif position_name in ['DC1', 'DC2', 'GK']:
+            if consecutive_matches >= 6:
+                return 0.80  # Even CBs need occasional rest
+            elif consecutive_matches >= 5:
+                return 0.90  # Minor warning
+
+        return 1.0  # No penalty
+
+    def _get_player_competent_positions(self, row) -> int:
+        """
+        Count how many positions a player can play at Accomplished/Natural level (15+).
+
+        FM26 Strategic Value (lineup-depth-strategy.md):
+        - Universalists (3+ positions) are Tier 3 emergency backup
+        - Versatility is critical for squad depth in 25+3 model
+
+        Args:
+            row: Player data row
+
+        Returns:
+            Number of positions at 15+ familiarity (Accomplished or Natural)
+        """
+        position_columns = [
+            'GoalKeeper', 'Defender Right', 'Defender Center', 'Defender Left',
+            'Defensive Midfielder', 'Attacking Mid. Right', 'Attacking Mid. Center',
+            'Attacking Mid. Left', 'Striker'
+        ]
+
+        competent_count = 0
+        for col in position_columns:
+            rating = row.get(col, 0)
+            if pd.notna(rating) and rating >= 15:  # Accomplished (16) or Natural (18-20)
+                competent_count += 1
+
+        return competent_count
+
+    def _get_strategic_pathway_bonus(self, row, position_name: str) -> float:
+        """
+        Detect and reward strategic positional conversion pathways (FM26 research).
+
+        Strategic Pathways (lineup-depth-strategy.md):
+        1. Winger→Wing-Back: Young wingers with work rate → full-backs (most efficient retraining)
+        2. Aging AMC→DM: Playmakers losing pace → deep-lying midfielders (career extension)
+
+        Args:
+            row: Player data row
+            position_name: Position being evaluated (DL, DR, DM(L), DM(R), etc.)
+
+        Returns:
+            Bonus multiplier (1.0 = no bonus, 1.02-1.04 for strategic fit)
+        """
+        if not position_name:
+            return 1.0
+
+        age = row.get('Age', 25)
+
+        # PATHWAY 1: Winger → Wing-Back (for DL/DR positions)
+        if position_name in ['DL', 'DR']:
+            # Check if player is a winger (strong at AML/AMR)
+            aml_rating = row.get('Attacking Mid. Left', 0)
+            amr_rating = row.get('Attacking Mid. Right', 0)
+            is_winger = (pd.notna(aml_rating) and aml_rating >= 13) or (pd.notna(amr_rating) and amr_rating >= 13)
+
+            if is_winger and age < 26:  # Young winger
+                work_rate = row.get('Work Rate', 10)
+                if pd.notna(work_rate) and work_rate >= 12:
+                    return 1.04  # Strategic pathway bonus
+
+        # PATHWAY 2: Aging AMC → DM (for DM positions)
+        elif position_name in ['DM(L)', 'DM(R)']:
+            # Check if player is an aging playmaker (strong at AMC)
+            amc_rating = row.get('Attacking Mid. Center', 0)
+            is_playmaker = pd.notna(amc_rating) and amc_rating >= 15
+
+            if is_playmaker and age >= 28:  # Aging playmaker
+                # Check for elite mental attributes and pace decline
+                vision = row.get('Vision', 10)
+                passing = row.get('Passing', 10)
+                decisions = row.get('Decisions', 10)
+                pace = row.get('Pace', 10)
+                acceleration = row.get('Acceleration', 10)
+
+                has_elite_mentals = (pd.notna(vision) and vision >= 14 and
+                                    pd.notna(passing) and passing >= 14 and
+                                    pd.notna(decisions) and decisions >= 13)
+                has_pace_decline = (pd.notna(pace) and pace <= 12) or (pd.notna(acceleration) and acceleration <= 12)
+
+                if has_elite_mentals and has_pace_decline:
+                    return 1.03  # Career extension pathway bonus
+
+        return 1.0  # No strategic pathway detected
 
     def _update_consecutive_match_counts(self, selection: Dict):
         """
@@ -987,6 +1194,7 @@ class MatchReadySelector:
             condition = row.get('Condition', 100)
             natural_fitness = row.get('Natural Fitness', 15)
             stamina = row.get('Stamina', 15)
+            injury_proneness = row.get('Injury Proneness', None)
 
             # Normalize condition
             if pd.notna(condition) and condition > 100:
@@ -996,7 +1204,7 @@ class MatchReadySelector:
 
             # Calculate personalized threshold
             if pd.notna(fatigue):
-                threshold = self._get_adjusted_fatigue_threshold(age, natural_fitness, stamina)
+                threshold = self._get_adjusted_fatigue_threshold(age, natural_fitness, stamina, injury_proneness)
 
                 # Check if fatigue caused exclusion
                 if fatigue >= threshold + 100:
@@ -1066,6 +1274,7 @@ class MatchReadySelector:
             condition = row.get('Condition', 100)
             natural_fitness = row.get('Natural Fitness', 15)
             stamina = row.get('Stamina', 15)
+            injury_proneness = row.get('Injury Proneness', None)
 
             # Normalize condition
             if pd.notna(condition) and condition > 100:
@@ -1077,7 +1286,7 @@ class MatchReadySelector:
 
             # Calculate personalized fatigue threshold
             if pd.notna(fatigue):
-                threshold = self._get_adjusted_fatigue_threshold(age, natural_fitness, stamina)
+                threshold = self._get_adjusted_fatigue_threshold(age, natural_fitness, stamina, injury_proneness)
             else:
                 threshold = 400
 

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile:*)",
+      "Bash(python fm_training_advisor.py:*)",
+      "Bash(test_output.txt)",
+      "Bash(findstr:*)",
+      "Bash(final_test.txt)",
+      "Bash(python fm_match_ready_selector.py:*)",
+      "Bash(python -c:*)",
+      "Bash(python test_fm26_enhancements.py:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
