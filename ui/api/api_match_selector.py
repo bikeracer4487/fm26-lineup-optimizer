@@ -10,6 +10,7 @@ from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from fm_match_ready_selector import MatchReadySelector
+import data_manager
 
 @contextlib.contextmanager
 def suppress_stdout():
@@ -37,6 +38,64 @@ class ApiMatchReadySelector(MatchReadySelector):
         # Initialize parent with suppressed output
         with suppress_stdout():
             super().__init__(status_filepath, abilities_filepath, training_filepath)
+            
+        # Data Repair for Single-File Mode
+        if self.has_abilities:
+            # 1. Restore Ability Columns
+            # The merge renamed columns to {col}_ability. We need them back as {col} for calculation logic.
+            merged_cols = ['AM(L)', 'AM(C)', 'AM(R)', 'DM(L)', 'DM(R)', 'D(C)', 'D(R/L)', 'GK', 'Striker']
+            
+            for col in merged_cols:
+                ability_col = f"{col}_ability"
+                if ability_col in self.df.columns:
+                    self.df[col] = self.df[ability_col]
+                    
+            # 2. Fix Formation Mapping (Striker)
+            # MatchReadySelector uses ('STC', 'Striker_skill', 'Striker_ability') by default.
+            # 'Striker_skill' (from merge) is currently Ability score (140) because of name collision.
+            # We need to point it to 'Striker_Familiarity' which we preserved in data_manager.py.
+            
+            new_formation = []
+            for pos in self.formation:
+                pos_name = pos[0]
+                if pos_name == 'STC':
+                    # Point skill to Familiarity column, ability to Ability column
+                    # Note: 'Striker' was restored in Step 1 to be the Ability Score
+                    new_formation.append(('STC', 'Striker_Familiarity', 'Striker'))
+                else:
+                    new_formation.append(pos)
+            self.formation = new_formation
+            
+    def calculate_effective_rating(self, row: pd.Series, skill_col: str, ability_col: str = None,
+                                   match_importance: str = 'Medium',
+                                   prioritize_sharpness: bool = False,
+                                   position_name: str = None) -> float:
+        """
+        Override to apply loan logic penalties.
+        """
+        # Call parent method
+        effective_rating = super().calculate_effective_rating(
+            row, skill_col, ability_col, match_importance, prioritize_sharpness, position_name
+        )
+        
+        if effective_rating <= -998.0:
+            return effective_rating
+            
+        # Apply Loan Logic
+        # 'LoanStatus' added by data_manager.py ('Own' or 'LoanedIn')
+        # Note: LoanedOut players are filtered out by data_manager
+        loan_status = row.get('LoanStatus', 'Own')
+        
+        if loan_status == 'LoanedIn':
+            if match_importance == 'Low':
+                # Much lower priority
+                effective_rating *= 0.70
+            elif match_importance == 'Medium':
+                # Slightly lower priority
+                effective_rating *= 0.90
+            # High importance: Unaffected
+            
+        return effective_rating
             
     def generate_plan(self, matches_data, rejected_players_map):
         """
@@ -175,6 +234,10 @@ class ApiMatchReadySelector(MatchReadySelector):
         if pd.notna(injury_proneness) and injury_proneness >= 15:
              flags.append("Injury Prone")
             
+        # Loan Status
+        if player.get('LoanStatus') == 'LoanedIn':
+            flags.append("Loaned In")
+            
         return flags
 
 # --- Custom JSON Encoder to handle numpy types ---
@@ -202,8 +265,16 @@ def main():
 
         data = json.loads(input_str)
         
-        status_file = data.get('files', {}).get('status', 'players-current.csv')
-        abilities_file = data.get('files', {}).get('abilities', 'players.csv')
+        # 1. UPDATE DATA FROM EXCEL
+        # Use the new data_manager to refresh from Paste Full sheet
+        # This updates players-current.csv
+        with suppress_stdout():
+            data_manager.update_player_data()
+        
+        # 2. Use players-current.csv for BOTH status and abilities
+        # data_manager.py now puts calculated skill ratings into players-current.csv
+        status_file = 'players-current.csv'
+        abilities_file = 'players-current.csv' 
         
         # Initialize wrapper
         selector = ApiMatchReadySelector(status_file, abilities_file)

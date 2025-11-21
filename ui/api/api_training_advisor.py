@@ -9,6 +9,7 @@ import numpy as np
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from fm_training_advisor import TrainingAdvisor
+import data_manager
 
 @contextlib.contextmanager
 def suppress_stdout():
@@ -29,6 +30,29 @@ class ApiTrainingAdvisor(TrainingAdvisor):
     def __init__(self, status_filepath, abilities_filepath=None):
         with suppress_stdout():
             super().__init__(status_filepath, abilities_filepath)
+
+        # Data Repair for Single-File Mode (Fixes column name collisions from merge)
+        if self.has_abilities:
+            # 1. Restore Ability Columns
+            # The merge renamed columns to {col}_ability because they existed in both files
+            # We need to copy them back to their original names so get_quality_tier works
+            # List based on required_cols in fm_training_advisor.py
+            merged_cols = ['AM(L)', 'AM(C)', 'AM(R)', 'DM(L)', 'DM(R)', 'D(C)', 'D(R/L)', 'GK', 'Striker']
+            
+            for col in merged_cols:
+                ability_col = f"{col}_ability"
+                if ability_col in self.df.columns:
+                    self.df[col] = self.df[ability_col]
+            
+            # 2. Fix Striker Mapping
+            # Striker (Familiarity) was renamed to 'Striker_Familiarity' in data_manager.py
+            # to avoid being overwritten by Striker (Ability).
+            # The parent class mapping expects 'Striker_skill' (which is currently Ability score ~140).
+            # We must point it to the correct familiarity column.
+            if 'Striker_Familiarity' in self.df.columns:
+                # Update mapping: (Familiarity Column, Ability Column)
+                # Use 'Striker' for ability because we restored it in step 1
+                self.position_mapping['ST'] = ('Striker_Familiarity', 'Striker')
 
 # --- Custom JSON Encoder to handle numpy types ---
 class NumpyEncoder(json.JSONEncoder):
@@ -55,8 +79,15 @@ def main():
 
         data = json.loads(input_str)
         
-        status_file = data.get('files', {}).get('status', 'players-current.csv')
-        abilities_file = data.get('files', {}).get('abilities', 'players.csv')
+        # 1. UPDATE DATA FROM EXCEL
+        # Use the new data_manager to refresh from Paste Full sheet
+        with suppress_stdout():
+            data_manager.update_player_data()
+        
+        # 2. Use players-current.csv for BOTH files
+        status_file = 'players-current.csv'
+        abilities_file = 'players-current.csv'
+        
         rejected_map = data.get('rejected', {}) # { "Player Name": "GK" } -> Rejected training for this position
         
         # Initialize wrapper

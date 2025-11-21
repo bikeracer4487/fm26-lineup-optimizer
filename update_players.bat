@@ -3,8 +3,8 @@ REM ============================================================================
 REM Update Player Data from FM26 Players.xlsx
 REM ============================================================================
 REM This batch file:
-REM 1. Extracts data from FM26 Players.xlsx to CSV files
-REM 2. Runs the match-ready team selector
+REM 1. Extracts data from FM26 Players.xlsx to CSV files using data_manager.py
+REM 2. Runs the match-ready team selector (optional/informational)
 REM ============================================================================
 
 echo.
@@ -13,11 +13,11 @@ echo FM26 Lineup Optimizer - Player Data Update
 echo ============================================================================
 echo.
 
-REM Step 1: Update CSV files from Excel
-echo Updating player CSV files from FM26 Players.xlsx...
+REM Step 1: Update CSV files from Excel using new Data Manager
+echo Updating player data using data_manager.py...
 echo.
 
-python update_player_data.py
+python data_manager.py
 
 REM Check if the Python script succeeded
 if %ERRORLEVEL% NEQ 0 (
