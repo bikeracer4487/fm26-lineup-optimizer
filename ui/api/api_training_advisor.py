@@ -148,6 +148,25 @@ def main():
             
             enriched_recs.append(rec)
             
+        # 3. SAVE TO CSV for Match Selector
+        # We save the *filtered* recommendations so user rejections are respected by the match engine
+        output_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../training_recommendations.csv'))
+        
+        export_data = []
+        for rec in enriched_recs:
+            export_data.append({
+                'Player': rec['player'],
+                'Position': rec['position'],
+                'Priority': rec['priority'],
+                'Strategic_Category': rec['strategic_category'],
+                'Current_Skill_Rating': rec['current_skill_rating'],
+                'Ability_Tier': rec['ability_tier'],
+                'Training_Score': rec['training_score']
+            })
+            
+        if export_data:
+            pd.DataFrame(export_data).to_csv(output_path, index=False, encoding='utf-8-sig')
+
         print(json.dumps({"success": True, "recommendations": enriched_recs}, cls=NumpyEncoder))
         
     except Exception as e:

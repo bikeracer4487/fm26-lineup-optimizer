@@ -1,5 +1,5 @@
 {
-  "currentDate": "2026-11-26",
+  "currentDate": "2026-11-28",
   "matches": [
     {
       "id": "d329a55a-7016-40c3-9d02-5ddedf1a4073",
@@ -164,13 +164,7 @@
       "importance": "Medium"
     }
   ],
-  "rejectedPlayers": {
-    "2": [
-      "Maxwell Redman",
-      "Alan Hackney",
-      "Marc Mitchell"
-    ]
-  },
+  "rejectedPlayers": {},
   "rejectedTraining": {},
   "files": {
     "status": "players-current.csv",
