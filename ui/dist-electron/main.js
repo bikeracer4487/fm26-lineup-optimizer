@@ -57,6 +57,9 @@ function setupIpcHandlers() {
   ipcMain.handle("run-training-advisor", async (event, args) => {
     return runPythonScript("api_training_advisor.py", args);
   });
+  ipcMain.handle("run-rest-advisor", async (event, args) => {
+    return runPythonScript("api_rest_advisor.py", args);
+  });
   const DATA_DIR = path.join(__dirname$1, "../data");
   const STATE_FILE = path.join(DATA_DIR, "app_state.json");
   ipcMain.handle("get-app-state", async () => {

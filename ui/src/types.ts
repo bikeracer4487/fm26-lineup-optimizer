@@ -77,9 +77,27 @@ export interface TrainingRecommendation {
   fills_variety_gap?: boolean;
 }
 
+export interface RestRecommendation {
+  name: string;
+  fatigue: number;
+  condition: number;
+  sharpness: number;
+  status: string;
+  action: string;
+  priority: string; // "Urgent", "High", "Medium", "Low"
+  reasons: string[];
+  threshold: number;
+}
+
 export interface TrainingResponse {
   success: boolean;
   recommendations?: TrainingRecommendation[];
+  error?: string;
+}
+
+export interface RestResponse {
+  success: boolean;
+  recommendations?: RestRecommendation[];
   error?: string;
 }
 

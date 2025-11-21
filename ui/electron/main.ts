@@ -85,7 +85,12 @@ function setupIpcHandlers() {
     return runPythonScript('api_training_advisor.py', args)
   })
 
-  // 3. App State Management
+  // 3. Run Rest Advisor
+  ipcMain.handle('run-rest-advisor', async (event, args) => {
+    return runPythonScript('api_rest_advisor.py', args)
+  })
+
+  // 4. App State Management
   const DATA_DIR = path.join(__dirname, '../data')
   const STATE_FILE = path.join(DATA_DIR, 'app_state.json')
 

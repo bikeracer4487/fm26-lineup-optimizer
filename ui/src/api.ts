@@ -1,4 +1,4 @@
-import type { AppState, MatchPlanResponse, TrainingResponse } from './types';
+import type { AppState, MatchPlanResponse, TrainingResponse, RestResponse } from './types';
 
 // Type definition for window.ipcRenderer
 declare global {
@@ -31,5 +31,11 @@ export const api = {
     files: { status: string; abilities: string }
   ): Promise<TrainingResponse> => {
     return await window.ipcRenderer.invoke('run-training-advisor', { rejected, files });
+  },
+
+  runRestAdvisor: async (
+    files: { status: string; abilities: string }
+  ): Promise<RestResponse> => {
+    return await window.ipcRenderer.invoke('run-rest-advisor', { files });
   }
 };

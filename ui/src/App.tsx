@@ -3,8 +3,9 @@ import { useAppState } from './hooks/useAppState';
 import { FixtureTab } from './tabs/FixtureTab';
 import { MatchSelectionTab } from './tabs/MatchSelectionTab';
 import { TrainingTab } from './tabs/TrainingTab';
+import { RestTab } from './tabs/RestTab';
 import { Button, Input } from './components/UI';
-import { Calendar, Users, Dumbbell, Settings, Save, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Users, Dumbbell, Settings, Save, ChevronLeft, ChevronRight, BatteryCharging } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
@@ -20,7 +21,7 @@ function App() {
     updateFiles
   } = useAppState();
 
-  const [activeTab, setActiveTab] = useState<'fixtures' | 'selection' | 'training'>('fixtures');
+  const [activeTab, setActiveTab] = useState<'fixtures' | 'selection' | 'training' | 'rest'>('fixtures');
   const [showSettings, setShowSettings] = useState(false);
 
   const changeDate = (days: number) => {
@@ -96,6 +97,12 @@ function App() {
             icon={<Dumbbell size={20} />} 
             label="Position Training" 
           />
+          <SidebarItem 
+            active={activeTab === 'rest'} 
+            onClick={() => setActiveTab('rest')} 
+            icon={<BatteryCharging size={20} />} 
+            label="Rest & Rotation" 
+          />
         </nav>
 
         <div className="p-4 mt-auto border-t border-white/5">
@@ -168,6 +175,9 @@ function App() {
                 onRejectTraining={updateRejectedTraining}
                 onResetRejections={resetRejectedTraining}
               />
+            )}
+            {activeTab === 'rest' && (
+              <RestTab state={state} />
             )}
           </motion.div>
         </AnimatePresence>
