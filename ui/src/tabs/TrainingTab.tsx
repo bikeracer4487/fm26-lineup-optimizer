@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { AppState, TrainingRecommendation } from '../types';
 import { api } from '../api';
 import { Button, Card, Badge } from '../components/UI';
-import { RefreshCw, XCircle, TrendingUp, Target, BookOpen } from 'lucide-react';
+import { RefreshCw, XCircle, TrendingUp, Target, BookOpen, Clock, Layers, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface TrainingTabProps {
@@ -126,18 +126,49 @@ function TrainingGroup({ title, items, color, onReject }: { title: string, items
 }
 
 function TrainingCard({ rec, onReject }: { rec: TrainingRecommendation, onReject: (p: string, pos: string) => void }) {
+  // Check for strategic categories
+  const isStrategic = rec.strategic_category && rec.strategic_category !== 'Standard';
+  const isPipeline = isStrategic && rec.strategic_category?.includes('Pipeline');
+  
   return (
     <motion.div 
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="bg-fm-surface p-4 rounded-lg border border-white/5 hover:border-fm-teal/30 transition-all group"
+      className="bg-fm-surface p-4 rounded-lg border border-white/5 hover:border-fm-teal/30 transition-all group relative overflow-hidden"
     >
-      <div className="flex justify-between items-start">
+      {/* Background indicators for special statuses */}
+      {isPipeline && (
+        <div className="absolute -right-8 -top-8 w-24 h-24 bg-purple-500/10 rotate-45 blur-xl pointer-events-none"></div>
+      )}
+      {rec.is_universalist && (
+        <div className="absolute -right-8 -bottom-8 w-24 h-24 bg-blue-500/10 rotate-45 blur-xl pointer-events-none"></div>
+      )}
+
+      <div className="flex justify-between items-start relative z-10">
         <div>
-          <div className="text-lg font-bold text-white">{rec.player}</div>
+          <div className="flex items-center gap-2">
+            <div className="text-lg font-bold text-white">{rec.player}</div>
+            {rec.is_universalist && (
+              <Badge variant="info" className="text-[10px] px-1 h-5 flex items-center" title={`Covers ${rec.universalist_coverage} positions`}>
+                UTIL
+              </Badge>
+            )}
+            {rec.fills_variety_gap && (
+              <Badge variant="warning" className="text-[10px] px-1 h-5 flex items-center" title="Fills a tactical variety gap">
+                VAR
+              </Badge>
+            )}
+          </div>
+          
           <div className="flex items-center gap-2 mt-1">
             <span className="text-fm-light/70 text-sm">Train as:</span>
             <Badge className="bg-fm-teal/20 text-fm-teal border-fm-teal/30">{rec.position}</Badge>
+            
+            {isStrategic && (
+               <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-[10px]">
+                 {isPipeline ? 'STRATEGIC PIPELINE' : 'STRATEGIC'}
+               </Badge>
+            )}
           </div>
         </div>
         <button 
@@ -149,29 +180,39 @@ function TrainingCard({ rec, onReject }: { rec: TrainingRecommendation, onReject
         </button>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-fm-light/70">
+      <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-fm-light/70 relative z-10">
         <div>
-          <span className="block text-fm-light/40">Current Familiarity</span>
-          <span className="font-medium text-white">{rec.current_skill}</span>
+          <span className="block text-fm-light/40 flex items-center gap-1">
+             <Clock size={10} /> Estimated Timeline
+          </span>
+          <span className="font-medium text-white">{rec.estimated_timeline || 'Unknown'}</span>
         </div>
+        
         <div>
           <span className="block text-fm-light/40">Potential Ability</span>
-          <span className="font-medium text-white">{rec.ability_tier}</span>
+          <span className="font-medium text-white">
+            {rec.ability_tier} 
+            {rec.ability_rating ? ` (${rec.ability_rating.toFixed(0)})` : ''}
+          </span>
         </div>
+        
         <div>
            <span className="block text-fm-light/40">Category</span>
-           <span className="font-medium text-white flex items-center gap-1">
+           <span className="font-medium text-white flex items-center gap-1 truncate" title={rec.strategic_category}>
              {rec.category === 'Become Natural' ? <TrendingUp size={10} /> : <BookOpen size={10} />}
-             {rec.category}
+             {isStrategic ? 'Strategic Conversion' : rec.category}
            </span>
         </div>
+        
         <div>
-          <span className="block text-fm-light/40">Training Score</span>
+          <span className="block text-fm-light/40 flex items-center gap-1">
+            <Zap size={10} /> Training Score
+          </span>
           <span className="font-medium text-white">{rec.training_score.toFixed(2)}</span>
         </div>
       </div>
 
-      <div className="mt-3 pt-3 border-t border-white/5 text-xs text-fm-light/60 italic">
+      <div className="mt-3 pt-3 border-t border-white/5 text-xs text-fm-light/60 italic relative z-10">
         "{rec.reason}"
       </div>
     </motion.div>

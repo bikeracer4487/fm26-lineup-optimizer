@@ -72,7 +72,52 @@ def main():
             if player_rejected_pos != rec['position']:
                 filtered_recs.append(rec)
                 
-        print(json.dumps({"success": True, "recommendations": filtered_recs}, cls=NumpyEncoder))
+        # Enrich recommendations with strategic data
+        universalists = advisor.identify_universalist_candidates()
+        universalist_names = {u['name']: u['total_coverage'] for u in universalists}
+
+        enriched_recs = []
+        for rec in filtered_recs:
+            player_name = rec['player']
+            position = rec['position']
+            
+            # Strategic Category
+            strategic_category = rec.get('category', 'Standard')
+            reason_lower = rec['reason'].lower()
+            if 'winger' in reason_lower and position in ['D(R)', 'D(L)']:
+                strategic_category += ' | Winger→WB Pipeline'
+            elif 'aging' in reason_lower and 'playmaker' in reason_lower:
+                strategic_category += ' | Aging AMC→DM'
+            
+            # Universalist
+            is_universalist = player_name in universalist_names
+            universalist_coverage = universalist_names.get(player_name, 0)
+            
+            # Timeline
+            current_skill = rec['current_skill_rating']
+            if current_skill >= 13:
+                timeline = '2-4 months to Natural'
+            elif current_skill >= 10:
+                timeline = '6-9 months to Natural'
+            elif current_skill >= 8:
+                timeline = '12+ months to Competent'
+            else:
+                timeline = '18+ months (high versatility needed)'
+                
+            # Variety
+            variety_info = advisor.assess_positional_variety(position)
+            fills_variety_gap = len(variety_info.get('needs', [])) > 0
+
+            # Add new fields
+            rec['strategic_category'] = strategic_category
+            rec['estimated_timeline'] = timeline
+            rec['is_universalist'] = is_universalist
+            rec['universalist_coverage'] = universalist_coverage
+            rec['fills_variety_gap'] = fills_variety_gap
+            
+            enriched_recs.append(rec)
+            
+        print(json.dumps({"success": True, "recommendations": enriched_recs}, cls=NumpyEncoder))
         
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e)}))

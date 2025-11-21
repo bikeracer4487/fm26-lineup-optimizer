@@ -39,7 +39,11 @@ export function FixtureTab({ matches, onUpdateMatches, currentDate }: FixtureTab
   };
 
   const updateMatch = (id: string, field: keyof Match, value: string) => {
-    onUpdateMatches(matches.map(m => m.id === id ? { ...m, [field]: value } : m));
+    const updatedMatches = matches.map(m => m.id === id ? { ...m, [field]: value } : m);
+    const sortedMatches = field === 'date' 
+      ? [...updatedMatches].sort((a, b) => a.date.localeCompare(b.date))
+      : updatedMatches;
+    onUpdateMatches(sortedMatches);
   };
 
   // Separate past and upcoming matches

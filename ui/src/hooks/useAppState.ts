@@ -49,7 +49,23 @@ export function useAppState() {
   };
 
   const updateMatches = (matches: Match[]) => {
-    save({ ...state, matches });
+    const idToRejections: Record<string, string[]> = {};
+    Object.entries(state.rejectedPlayers).forEach(([index, players]) => {
+      const originalMatch = state.matches[Number(index)];
+      if (originalMatch) {
+        idToRejections[originalMatch.id] = players;
+      }
+    });
+
+    const remappedRejected: Record<string, string[]> = {};
+    matches.forEach((match, idx) => {
+      const players = idToRejections[match.id];
+      if (players && players.length > 0) {
+        remappedRejected[idx.toString()] = players;
+      }
+    });
+
+    save({ ...state, matches, rejectedPlayers: remappedRejected });
   };
 
   const updateRejectedPlayers = (matchIndex: string, players: string[]) => {

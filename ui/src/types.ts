@@ -59,13 +59,22 @@ export interface TrainingRecommendation {
   position: string;
   category: string;
   current_skill: string;
+  current_skill_rating: number; // Added missing field
   ability_tier: string;
+  ability_rating?: number; // Added missing field
   age: number;
   training_score: number;
   priority: string;
   priority_score: number;
   gap_severity: number;
   reason: string;
+  
+  // New fields
+  strategic_category?: string;
+  estimated_timeline?: string;
+  is_universalist?: boolean;
+  universalist_coverage?: number;
+  fills_variety_gap?: boolean;
 }
 
 export interface TrainingResponse {
@@ -79,4 +88,3 @@ export interface MatchPlanResponse {
   plan?: MatchPlanItem[];
   error?: string;
 }
-

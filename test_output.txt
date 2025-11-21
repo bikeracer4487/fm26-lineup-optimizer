@@ -222,24 +222,12 @@ MEDIUM PRIORITY (Improve existing players):
          Familiarity: Natural         (19.0/20) | Ability: Adequate   ( 82.3/200)
          Age: 17 | Training Score: 0.85 | Already natural, train to improve ability | very young (17) - peak developmental years | excellent training attributes
 
-  Player: Joshua Adepoju               -> Train as: ST       [Improve Natural]Traceback (most recent call last):
-  File "C:\GitHub\fm26-lineup-optimizer\fm_training_advisor.py", line 1435, in main
-    print(f"\n\u2713 Training recommendations exported to: {output_file}")
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Program Files\Python313\Lib\encodings\cp1252.py", line 19, in encode
-    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
-           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-UnicodeEncodeError: 'charmap' codec can't encode character '\u2713' in position 2: character maps to <undefined>
-
+  Player: Joshua Adepoju               -> Train as: ST       [Improve Natural]
          Familiarity: Natural         (20.0/20) | Ability: Adequate   ( 74.6/200)
          Age: 20 | Training Score: 0.64 | Already natural, train to improve ability | very young (20) - peak developmental years | good training attributes
 
 LOW PRIORITY (Long-term investments):
 --------------------------------------------------------------------------------------------------------------
-  Player: Alan Hackney                 -> Train as: GK       [Learn Position]
-         Familiarity: Ineffectual     ( 1.0/20) | Ability: Excellent  ( 60.7/200)
-         Age: 17 | Training Score: 0.67 | Has potential, train new position (currently Natural at DM) | very young (17) - peak developmental years | good training attributes | excellent ability at position
-
   Player: Ryan Penny                   -> Train as: D(R)     [Learn Position]
          Familiarity: Ineffectual     ( 1.0/20) | Ability: Good       ( 81.0/200)
          Age: 20 | Training Score: 0.83 | Has potential, train new position (currently Natural at DM) | very young (20) - peak developmental years | excellent training attributes | good ability at position
@@ -251,21 +239,21 @@ LOW PRIORITY (Long-term investments):
 ==============================================================================================================
 
 TRAINING CATEGORIES EXPLAINED:
-  • Become Natural: Players with good ability who should train to reach Natural (18+) familiarity
-  • Improve Natural: Players already Natural but need to improve their ability through training
-  • Learn Position: Players with potential who should train into a new position
+  * Become Natural: Players with good ability who should train to reach Natural (18+) familiarity
+  * Improve Natural: Players already Natural but need to improve their ability through training
+  * Learn Position: Players with potential who should train into a new position
 
 TRAINING TIMELINE EXPECTATIONS:
-  • Competent level (10/20):  6-9 months of training + match experience
-  • Accomplished level (13+): 12 months of training + regular playing time
-  • Natural level (18+):      12-24 months (requires consistent matches)
+  * Competent level (10/20):  6-9 months of training + match experience
+  * Accomplished level (13+): 12 months of training + regular playing time
+  * Natural level (18+):      12-24 months (requires consistent matches)
 
 KEY FACTORS FOR FASTER TRAINING:
-  • Age under 24 (younger players learn faster)
-  • High Versatility attribute (accelerates position learning)
-  • High Professionalism (trains harder and more effectively)
-  • Natural in similar positions (easier to adapt)
-  • Both individual training AND match experience needed
+  * Age under 24 (younger players learn faster)
+  * High Versatility attribute (accelerates position learning)
+  * High Professionalism (trains harder and more effectively)
+  * Natural in similar positions (easier to adapt)
+  * Both individual training AND match experience needed
 ==============================================================================================================
 
-Error: 'charmap' codec can't encode character '\u2713' in position 2: character maps to <undefined>
+[SUCCESS] Training recommendations exported to: training_recommendations.csv
