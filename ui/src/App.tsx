@@ -4,7 +4,7 @@ import { FixtureTab } from './tabs/FixtureTab';
 import { MatchSelectionTab } from './tabs/MatchSelectionTab';
 import { TrainingTab } from './tabs/TrainingTab';
 import { Button, Input } from './components/UI';
-import { Calendar, Users, Dumbbell, Settings, Save } from 'lucide-react';
+import { Calendar, Users, Dumbbell, Settings, Save, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
@@ -22,6 +22,12 @@ function App() {
 
   const [activeTab, setActiveTab] = useState<'fixtures' | 'selection' | 'training'>('fixtures');
   const [showSettings, setShowSettings] = useState(false);
+
+  const changeDate = (days: number) => {
+    const date = new Date(state.currentDate);
+    date.setDate(date.getDate() + days);
+    updateDate(date.toISOString().split('T')[0]);
+  };
 
   if (loading) {
     return <div className="h-screen w-screen bg-fm-dark flex items-center justify-center text-fm-teal font-bold text-xl animate-pulse">
@@ -49,6 +55,25 @@ function App() {
                 value={state.currentDate}
                 onChange={(e) => updateDate(e.target.value)}
              />
+           </div>
+           
+           <div className="flex gap-2 mt-2">
+             <Button 
+               variant="secondary" 
+               size="sm" 
+               className="flex-1 flex justify-center"
+               onClick={() => changeDate(-1)}
+             >
+               <ChevronLeft size={16} />
+             </Button>
+             <Button 
+               variant="secondary" 
+               size="sm" 
+               className="flex-1 flex justify-center"
+               onClick={() => changeDate(1)}
+             >
+               <ChevronRight size={16} />
+             </Button>
            </div>
         </div>
 

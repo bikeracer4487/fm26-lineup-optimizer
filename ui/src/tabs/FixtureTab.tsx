@@ -167,7 +167,7 @@ function MatchRow({ match, onUpdate, onRemove, isPast }: { match: Match, onUpdat
             <Card className={`flex items-center gap-4 p-3 hover:bg-white/5 transition-colors group ${isPast ? 'opacity-60 grayscale' : ''}`}>
             <Input 
                 type="date" 
-                className="w-32 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal" 
+                className="w-40 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal" 
                 value={match.date} 
                 onChange={e => onUpdate(match.id, 'date', e.target.value)}
             />

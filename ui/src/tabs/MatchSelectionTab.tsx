@@ -74,7 +74,7 @@ export function MatchSelectionTab({ state, onRejectPlayer, onResetRejections }: 
           <Button variant="secondary" size="sm" onClick={onResetRejections} title="Clear all manual rejections">
             Reset Rejections
           </Button>
-          <Button onClick={generatePlan} disabled={loading} size="sm">
+          <Button onClick={generatePlan} disabled={loading} size="sm" className="flex items-center whitespace-nowrap">
             <RefreshCw size={16} className={loading ? "animate-spin mr-2" : "mr-2"} />
             Refresh
           </Button>

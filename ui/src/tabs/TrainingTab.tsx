@@ -55,7 +55,7 @@ export function TrainingTab({ state, onRejectTraining, onResetRejections }: Trai
           <Button variant="secondary" size="sm" onClick={onResetRejections}>
             Reset Rejections
           </Button>
-          <Button onClick={loadRecommendations} disabled={loading} size="sm">
+          <Button onClick={loadRecommendations} disabled={loading} size="sm" className="flex items-center whitespace-nowrap">
             <RefreshCw size={16} className={loading ? "animate-spin mr-2" : "mr-2"} />
             Refresh
           </Button>

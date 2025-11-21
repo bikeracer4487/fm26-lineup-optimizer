@@ -1,0 +1,19 @@
+
+Loading player status/attributes from: players-current.csv
+Loading role abilities from: players.csv
+Loading training recommendations from: training_recommendations.csv
+Loaded 50 players with role abilities
+Loaded 20 training recommendations
+Loaded match tracking: Last match counted was 2026-11-04 (11 players with active streaks)
+
+====================================================================================================
+FM26 MATCH-READY LINEUP SELECTOR
+====================================================================================================
+
+Enter current date (MM-DD-YYYY): Traceback (most recent call last):
+  File "C:\GitHub\fm26-lineup-optimizer\fm_match_ready_selector.py", line 1530, in main
+    current_date_input = input("\nEnter current date (MM-DD-YYYY): ").strip()
+                         ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+EOFError: EOF when reading a line
+
+Error: EOF when reading a line

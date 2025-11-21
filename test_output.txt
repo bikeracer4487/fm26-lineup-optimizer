@@ -1,0 +1,271 @@
+
+Loading player status/attributes from: players-current.csv
+Loading role abilities from: players.csv
+========================================================================================================================
+SQUAD DEPTH & QUALITY ANALYSIS FOR 4-2-3-1 FORMATION (FM26 Unity Engine)
+========================================================================================================================
+
+GK       (Target: 3 total):
+         Strategy: GK suffers minimal fatigue - 90% budget on No.1
+  !! ** Ashley Sarahs                [INJ] Natural         (20.0/20) | Excellent  ability ( 93.7/200)
+       WARNING: Very low Natural Fitness (7) - injury prone
+  OK ** Michael Shaw                 Natural         (20.0/20) | Excellent  ability ( 82.7/200)
+  !! ** Andrey Quintino              [UTIL] Ineffectual     ( 1.0/20) | Excellent  ability ( 60.9/200)
+       WARNING: Low Natural Fitness (11)
+  !! ** Alan Hackney                 Ineffectual     ( 1.0/20) | Excellent  ability ( 60.7/200)
+  !! ** Jackson Longridge            Ineffectual     ( 1.0/20) | Excellent  ability ( 58.8/200)
+       WARNING: Low Natural Fitness (11)
+  !! ++ Hisashi Roddy                Ineffectual     ( 1.0/20) | Good       ability ( 58.5/200)
+  >>> DEPTH GAP: Need 1 more competent player(s)
+  >>> QUALITY GAP: Need 1 more good-quality player(s)
+
+D(L)     (Target: 4 total) [HIGH ATTRITION]:
+         Strategy: Pressing WB role extremely demanding - need depth + tactical variety
+  OK ** Jackson Longridge            Natural         (20.0/20) | Excellent  ability ( 94.9/200)
+       WARNING: Low Natural Fitness (11)
+  OK ++ Sonny Parkes                 Natural         (20.0/20) | Good       ability ( 81.4/200)
+  OK == Taye Weir                    Natural         (18.0/20) | Adequate   ability ( 79.8/200)
+       WARNING: Low Natural Fitness (11)
+  OK -- Junior McQuilken             Natural         (20.0/20) | Poor       ability ( 70.7/200)
+  !! -- Jordan Tait                  [INJ] Natural         (20.0/20) | Poor       ability ( 70.6/200)
+       WARNING: Very low Natural Fitness (8) - injury prone
+  !! -- Freddie Hammond              [INJ] Natural         (20.0/20) | Poor       ability ( 69.0/200)
+       WARNING: Very low Natural Fitness (7) - injury prone
+  >>> QUALITY GAP: Need 1 more good-quality player(s)
+
+D(C)     (Target: 5 total):
+         Strategy: 4th CB MUST be universalist covering DM/FB - "CB only" is wasted bench slot
+  OK ** Jayden Cumberbatch           Natural         (20.0/20) | Excellent  ability ( 86.4/200)
+  !! ** Jada Mawongo                 [INJ] Natural         (20.0/20) | Excellent  ability ( 85.8/200)
+       WARNING: Very low Natural Fitness (7) - injury prone
+  OK ++ Maxwell Redman               Natural         (20.0/20) | Good       ability ( 84.5/200)
+  OK == Joe Cassidy                  Natural         (20.0/20) | Adequate   ability ( 75.5/200)
+  !! == Danny Jordan                 [INJ] Natural         (20.0/20) | Adequate   ability ( 74.7/200)
+       WARNING: Very low Natural Fitness (7) - injury prone
+  OK == Sam Joce                     Natural         (20.0/20) | Adequate   ability ( 72.8/200)
+       WARNING: Low Natural Fitness (11)
+
+D(R)     (Target: 4 total) [HIGH ATTRITION]:
+         Strategy: Pressing WB role extremely demanding - need depth + tactical variety
+  OK ** Hisashi Roddy                Natural         (20.0/20) | Excellent  ability ( 93.4/200)
+  OK == Joseph James                 Natural         (20.0/20) | Adequate   ability ( 78.3/200)
+       WARNING: Low Natural Fitness (11)
+  OK -- Tommy Taggert                Natural         (20.0/20) | Poor       ability ( 65.5/200)
+       WARNING: Low Natural Fitness (11)
+  OK ** Andrey Quintino              [UTIL] Accomplished    (15.0/20) | Excellent  ability ( 89.3/200)
+       WARNING: Low Natural Fitness (11)
+  !! -- Freddie Hammond              [INJ] Accomplished    (16.0/20) | Poor       ability ( 69.0/200)
+       WARNING: Very low Natural Fitness (7) - injury prone
+  !! == Jada Mawongo                 [INJ] Competent       (10.0/20) | Adequate   ability ( 77.9/200)
+       WARNING: Very low Natural Fitness (7) - injury prone
+  >>> QUALITY GAP: Need 2 more good-quality player(s)
+
+DM       (Target: 5 total) [HIGH ATTRITION]:
+         Strategy: Pressing DM reaches critical fatigue by 65min - Condition Floor must be respected
+  OK ** Alan Hackney                 Natural         (18.0/20) | Excellent  ability ( 91.9/200)
+  !! ++ Jake Hicks                   [INJ] Natural         (20.0/20) | Good       ability ( 81.2/200)
+       WARNING: Very low Natural Fitness (7) - injury prone
+  OK ++ Ryan Penny                   Natural         (20.0/20) | Good       ability ( 81.2/200)
+       WARNING: Low Natural Fitness (10)
+  OK == Asa Hall                     Natural         (18.0/20) | Adequate   ability ( 75.8/200)
+       WARNING: Low Natural Fitness (11)
+  OK ++ Aydin Webb                   [UTIL] Accomplished    (16.0/20) | Good       ability ( 87.1/200)
+  OK == Allan Hall                   Accomplished    (16.0/20) | Adequate   ability ( 74.1/200)
+
+AM(L)    (Target: 2 total):
+         Strategy: Must pair tactically with left full-back (Playmaking WB needs Inside Forward)
+  OK ** Andrey Quintino              [UTIL] Natural         (18.0/20) | Excellent  ability ( 92.2/200)
+       WARNING: Low Natural Fitness (11)
+  !! ++ Daniel Willard               [INJ] Natural         (20.0/20) | Good       ability ( 80.9/200)
+       WARNING: Very low Natural Fitness (6) - injury prone
+  !! == Peter Purcell                [INJ] Natural         (20.0/20) | Adequate   ability ( 80.9/200)
+       WARNING: Very low Natural Fitness (5) - injury prone
+  OK == Teddy Lawrence               Natural         (20.0/20) | Adequate   ability ( 76.6/200)
+  OK -- Nnaemeka Anyanwu             [UTIL] Natural         (20.0/20) | Poor       ability ( 69.5/200)
+  OK ** Scot Little                  Accomplished    (16.0/20) | Excellent  ability ( 93.4/200)
+
+AM(C)    (Target: 2 total):
+         Strategy: Backup should be Tracking AM profile for defensive solidity
+  !! ** Marc Mitchell                [INJ] Natural         (20.0/20) | Excellent  ability ( 95.8/200)
+       WARNING: Very low Natural Fitness (6) - injury prone
+       WARNING: Injury prone (16)
+  OK ++ Paul Stroud                  [UTIL] Accomplished    (16.0/20) | Good       ability ( 88.9/200)
+  OK ++ Allan Hall                   Accomplished    (16.0/20) | Good       ability ( 81.3/200)
+  OK == Connor Underhill             Accomplished    (16.0/20) | Adequate   ability ( 80.2/200)
+  OK == Teddy Lawrence               Accomplished    (16.0/20) | Adequate   ability ( 76.3/200)
+  OK == Joshua Adepoju               [UTIL] Accomplished    (13.0/20) | Adequate   ability ( 74.1/200)
+
+AM(R)    (Target: 2 total):
+         Strategy: Must pair tactically with right full-back (Playmaking WB needs Inside Forward)
+  OK ** Andrey Quintino              [UTIL] Natural         (20.0/20) | Excellent  ability ( 92.8/200)
+       WARNING: Low Natural Fitness (11)
+  OK ++ Mateusz Widz                 Natural         (20.0/20) | Good       ability ( 90.7/200)
+       WARNING: Low Natural Fitness (10)
+  OK ++ Aydin Webb                   [UTIL] Natural         (20.0/20) | Good       ability ( 88.1/200)
+  !! == Peter Purcell                [INJ] Natural         (19.0/20) | Adequate   ability ( 82.3/200)
+       WARNING: Very low Natural Fitness (5) - injury prone
+  OK == Joshua Adepoju               [UTIL] Natural         (18.0/20) | Adequate   ability ( 75.4/200)
+  !! -- Will Hancox                  [INJ] Natural         (18.0/20) | Poor       ability ( 72.1/200)
+       WARNING: Very low Natural Fitness (9) - injury prone
+
+ST       (Target: 3 total):
+         Strategy: CRITICAL: Need tactical variety - pace striker + target man for different approaches
+  !! ** Fabricio                     [INJ] Natural         (20.0/20) | Excellent  ability ( 91.2/200)
+       WARNING: Very low Natural Fitness (6) - injury prone
+  OK ++ Scot Little                  Natural         (20.0/20) | Good       ability ( 90.3/200)
+  OK ++ Paul Stroud                  [UTIL] Natural         (20.0/20) | Good       ability ( 86.4/200)
+  OK ++ Robbie Gallagher             Natural         (20.0/20) | Good       ability ( 81.2/200)
+       WARNING: Low Natural Fitness (11)
+  !! == Ephraim Yeboah               [INJ] [UTIL] Natural         (20.0/20) | Adequate   ability ( 79.1/200)
+       WARNING: Very low Natural Fitness (9) - injury prone
+  OK == Joshua Adepoju               [UTIL] Natural         (20.0/20) | Adequate   ability ( 74.6/200)
+
+
+========================================================================================================================
+UNIVERSALIST PLAYERS (Multi-Position Coverage):
+========================================================================================================================
+  [UTIL] Andrey Quintino              (Versatility: 15) | Coverage: 3 positions [TIER 3 CANDIDATE]
+         Accomplished: D(R), AM(R), AM(L)
+
+  [UTIL] Aydin Webb                   (Versatility: 12) | Coverage: 3 positions [TIER 3 CANDIDATE]
+         Accomplished: DM, AM(R), AM(L)
+
+  [UTIL] Joshua Adepoju               (Versatility: 10) | Coverage: 3 positions [TIER 3 CANDIDATE]
+         Accomplished: AM(R), AM(C), ST
+
+  [UTIL] Nnaemeka Anyanwu             (Versatility:  9) | Coverage: 3 positions [TIER 3 CANDIDATE]
+         Accomplished: AM(L), ST
+         Competent: AM(C)
+
+  [UTIL] Paul Stroud                  (Versatility:  7) | Coverage: 3 positions [TIER 3 CANDIDATE]
+         Accomplished: AM(R), AM(C), ST
+
+
+ICON LEGEND:
+  QUALITY: ** = Excellent | ++ = Good | == = Adequate | -- = Below standard
+  STATUS:  [INJ] = Injury risk | [UTIL] = Universalist (3+ positions)
+  ZONES:   [HIGH ATTRITION] = Needs extra depth due to Unity engine fatigue
+========================================================================================================================
+
+==============================================================================================================
+INTELLIGENT TRAINING RECOMMENDATIONS
+==============================================================================================================
+
+Recommendations based on positional skill ratings, role abilities, and training attributes:
+NOTE: Each player appears only once - assigned to the position where training provides greatest squad benefit.
+
+HIGH PRIORITY (Address quality gaps):
+--------------------------------------------------------------------------------------------------------------
+  Player: Jada Mawongo                 -> Train as: D(R)     [Become Natural]
+         Familiarity: Competent       (10.0/20) | Ability: Adequate   ( 77.9/200)
+         Age: 22 | Training Score: 0.86 | Good ability, train to become natural (currently Natural at D(C)) | young (22) - peak developmental years | excellent training attributes
+
+  Player: Andrey Quintino              -> Train as: D(R)     [Become Natural]
+         Familiarity: Accomplished    (15.0/20) | Ability: Excellent  ( 89.3/200)
+         Age: 24 | Training Score: 0.66 | Good ability, train to become natural | young winger (24) - good WB conversion candidate (needs work rate development) | good training attributes | excellent ability at position
+
+  Player: Joseph James                 -> Train as: D(C)     [Become Natural]
+         Familiarity: Accomplished    (16.0/20) | Ability: Good       ( 83.8/200)
+         Age: 20 | Training Score: 0.73 | Good ability, train to become natural | very young (20) - peak developmental years | excellent training attributes | good ability at position
+
+  Player: Jayden Cumberbatch           -> Train as: D(L)     [Become Natural]
+         Familiarity: Accomplished    (16.0/20) | Ability: Adequate   ( 77.4/200)
+         Age: 16 | Training Score: 0.72 | Good ability, train to become natural | very young (16) - peak developmental years | excellent training attributes
+
+  Player: Hisashi Roddy                -> Train as: D(L)     [Become Natural]
+         Familiarity: Accomplished    (16.0/20) | Ability: Excellent  ( 93.4/200)
+         Age: 16 | Training Score: 0.67 | Good ability, train to become natural | very young (16) - peak developmental years | good training attributes | excellent ability at position
+
+  Player: Aydin Webb                   -> Train as: DM       [Become Natural]
+         Familiarity: Accomplished    (16.0/20) | Ability: Good       ( 87.1/200)
+         Age: 16 | Training Score: 0.72 | Good ability, train to become natural | very young (16) - peak developmental years | excellent training attributes | good ability at position
+
+  Player: Paul Stroud                  -> Train as: AM(R)    [Become Natural]
+         Familiarity: Accomplished    (16.0/20) | Ability: Good       ( 91.2/200)
+         Age: 17 | Training Score: 0.50 | Good ability, train to become natural | very young (17) - peak developmental years | good ability at position | WARNING: Low versatility - may take 18+ months
+
+  Player: Teddy Lawrence               -> Train as: AM(C)    [Become Natural]
+         Familiarity: Accomplished    (16.0/20) | Ability: Adequate   ( 76.3/200)
+         Age: 20 | Training Score: 0.64 | Good ability, train to become natural | very young (20) - peak developmental years | good training attributes
+
+  Player: Robbie Gallagher             -> Train as: AM(L)    [Become Natural]
+         Familiarity: Accomplished    (16.0/20) | Ability: Adequate   ( 80.2/200)
+         Age: 20 | Training Score: 0.90 | Good ability, train to become natural | very young (20) - peak developmental years | excellent training attributes
+
+  Player: Mateusz Widz                 -> Train as: ST       [Become Natural]
+         Familiarity: Accomplished    (16.0/20) | Ability: Good       ( 88.5/200)
+         Age: 16 | Training Score: 0.67 | Good ability, train to become natural | very young (16) - peak developmental years | good training attributes | good ability at position
+
+MEDIUM PRIORITY (Improve existing players):
+--------------------------------------------------------------------------------------------------------------
+  Player: Tommy Taggert                -> Train as: D(R)     [Improve Natural]
+         Familiarity: Natural         (20.0/20) | Ability: Poor       ( 65.5/200)
+         Age: 20 | Training Score: 0.51 | Already natural, train to improve ability | very young (20) - peak developmental years | good training attributes | WARNING: Low versatility - may take 18+ months
+
+  Player: Joe Cassidy                  -> Train as: D(C)     [Improve Natural]
+         Familiarity: Natural         (20.0/20) | Ability: Adequate   ( 75.5/200)
+         Age: 21 | Training Score: 0.73 | Already natural, train to improve ability | young (21) - peak developmental years | excellent training attributes
+
+  Player: Taye Weir                    -> Train as: D(L)     [Improve Natural]
+         Familiarity: Natural         (18.0/20) | Ability: Adequate   ( 79.8/200)
+         Age: 21 | Training Score: 0.73 | Already natural, train to improve ability | young (21) - peak developmental years | excellent training attributes
+
+  Player: Freddie Hammond              -> Train as: D(L)     [Improve Natural]
+         Familiarity: Natural         (20.0/20) | Ability: Poor       ( 69.0/200)
+         Age: 19 | Training Score: 0.72 | Already natural, train to improve ability | very young (19) - peak developmental years | excellent training attributes
+
+  Player: Asa Hall                     -> Train as: DM       [Improve Natural]
+         Familiarity: Natural         (18.0/20) | Ability: Adequate   ( 75.8/200)
+         Age: 39 | Training Score: 0.53 | Already natural, train to improve ability | age 39 - avoid unless exceptional strategic case | good training attributes
+
+  Player: Peter Purcell                -> Train as: AM(R)    [Improve Natural]
+         Familiarity: Natural         (19.0/20) | Ability: Adequate   ( 82.3/200)
+         Age: 17 | Training Score: 0.85 | Already natural, train to improve ability | very young (17) - peak developmental years | excellent training attributes
+
+  Player: Joshua Adepoju               -> Train as: ST       [Improve Natural]Traceback (most recent call last):
+  File "C:\GitHub\fm26-lineup-optimizer\fm_training_advisor.py", line 1435, in main
+    print(f"\n\u2713 Training recommendations exported to: {output_file}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2713' in position 2: character maps to <undefined>
+
+         Familiarity: Natural         (20.0/20) | Ability: Adequate   ( 74.6/200)
+         Age: 20 | Training Score: 0.64 | Already natural, train to improve ability | very young (20) - peak developmental years | good training attributes
+
+LOW PRIORITY (Long-term investments):
+--------------------------------------------------------------------------------------------------------------
+  Player: Alan Hackney                 -> Train as: GK       [Learn Position]
+         Familiarity: Ineffectual     ( 1.0/20) | Ability: Excellent  ( 60.7/200)
+         Age: 17 | Training Score: 0.67 | Has potential, train new position (currently Natural at DM) | very young (17) - peak developmental years | good training attributes | excellent ability at position
+
+  Player: Ryan Penny                   -> Train as: D(R)     [Learn Position]
+         Familiarity: Ineffectual     ( 1.0/20) | Ability: Good       ( 81.0/200)
+         Age: 20 | Training Score: 0.83 | Has potential, train new position (currently Natural at DM) | very young (20) - peak developmental years | excellent training attributes | good ability at position
+
+  Player: Jamie McMurdo                -> Train as: D(C)     [Learn Position]
+         Familiarity: Ineffectual     ( 1.0/20) | Ability: Good       ( 83.6/200)
+         Age: 19 | Training Score: 0.69 | Has potential, train new position | very young (19) - peak developmental years | good training attributes | good ability at position
+
+==============================================================================================================
+
+TRAINING CATEGORIES EXPLAINED:
+  • Become Natural: Players with good ability who should train to reach Natural (18+) familiarity
+  • Improve Natural: Players already Natural but need to improve their ability through training
+  • Learn Position: Players with potential who should train into a new position
+
+TRAINING TIMELINE EXPECTATIONS:
+  • Competent level (10/20):  6-9 months of training + match experience
+  • Accomplished level (13+): 12 months of training + regular playing time
+  • Natural level (18+):      12-24 months (requires consistent matches)
+
+KEY FACTORS FOR FASTER TRAINING:
+  • Age under 24 (younger players learn faster)
+  • High Versatility attribute (accelerates position learning)
+  • High Professionalism (trains harder and more effectively)
+  • Natural in similar positions (easier to adapt)
+  • Both individual training AND match experience needed
+==============================================================================================================
+
+Error: 'charmap' codec can't encode character '\u2713' in position 2: character maps to <undefined>
