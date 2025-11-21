@@ -8,7 +8,8 @@
       "Bash(final_test.txt)",
       "Bash(python fm_match_ready_selector.py:*)",
       "Bash(python -c:*)",
-      "Bash(python test_fm26_enhancements.py:*)"
+      "Bash(python test_fm26_enhancements.py:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

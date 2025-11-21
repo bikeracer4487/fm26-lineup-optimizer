@@ -831,9 +831,57 @@ class TrainingAdvisor:
                 else:  # Below Competent
                     # Only recommend learning new positions for Good/Excellent candidates
                     if pd.notna(ability_rating) and ability_tier in ['Good', 'Excellent']:
-                        # Special handling for GK - don't recommend unless already somewhat familiar or Excellent
-                        if pos_name == 'GK' and skill_rating < 8 and ability_tier != 'Excellent':
-                            continue  # Skip GK recommendations for unfamiliar outfield players
+                        # CRITICAL: GK is highly specialist position - use absolute threshold
+                        # Bug fix: Percentile-based tiers can be skewed when outfield players
+                        # have terrible GK ratings, making 60/200 (30%) appear "Excellent"
+                        if pos_name == 'GK':
+                            ABSOLUTE_GK_THRESHOLD = 150  # 75% on 0-200 scale
+                            if skill_rating < 8 and ability_rating < ABSOLUTE_GK_THRESHOLD:
+                                continue  # Skip GK unless genuinely exceptional ability (not just relative)
+
+                        # CRITICAL: Attack/Defense Separation for Established Players (16+)
+                        # Bug fix: Natural strikers shouldn't train as defenders and vice versa
+                        # Define position categories
+                        attack_position_cols = ['Striker', 'Attacking Mid. Left', 'Attacking Mid. Center', 'Attacking Mid. Right']
+                        defense_position_cols = ['Defender Left', 'Defender Center', 'Defender Right']
+
+                        # Get player's highest familiarity in attack and defense
+                        player_attack_skills = [row.get(col, 0) for col in attack_position_cols]
+                        player_defense_skills = [row.get(col, 0) for col in defense_position_cols]
+
+                        max_attack_skill = max([s for s in player_attack_skills if pd.notna(s)], default=0)
+                        max_defense_skill = max([s for s in player_defense_skills if pd.notna(s)], default=0)
+
+                        # Get target position's skill column name
+                        target_skill_col, _ = self.position_mapping.get(pos_name, (None, None))
+
+                        # Check if target is pure attack or pure defense (DM is neither - it's the bridge)
+                        target_is_defense = target_skill_col in defense_position_cols
+                        target_is_attack = target_skill_col in attack_position_cols
+
+                        # Block cross-category training for established players (16+ familiarity)
+                        if max_attack_skill >= 16 and target_is_defense:
+                            continue  # Skip: Accomplished+ at attack positions, don't recommend pure defense
+
+                        if max_defense_skill >= 16 and target_is_attack:
+                            continue  # Skip: Accomplished+ at defense positions, don't recommend pure attack
+
+                        # Note: DM is neither attack nor defense, so never blocked (acts as bridge position)
+
+                        # PROTECTION: Don't recommend Natural players for unrelated positions
+                        # Bug fix: Natural DM (18+) shouldn't be recommended to train as GK/ST/etc.
+                        # unless those positions are in the similarity group
+                        best_position = row.get('Best Position', '')
+                        if best_position and pd.notna(best_position):
+                            # Get player's current familiarity at their best position
+                            best_pos_skill = self._get_position_skill(row, best_position)
+                            if pd.notna(best_pos_skill) and best_pos_skill >= 18:  # Natural at current position
+                                # Check if target position is in similarity group of best position
+                                similar_to_best = self.similarity_groups.get(best_position, [])
+                                if pos_name != best_position and pos_name not in similar_to_best:
+                                    # Unrelated position - only allow if player already somewhat familiar
+                                    if skill_rating < 8:
+                                        continue  # Skip unrelated positions for Natural specialists
 
                         # Has potential but needs to learn position
                         # Check if player is natural in similar position
@@ -1016,14 +1064,16 @@ class TrainingAdvisor:
         similarity_groups = {
             'D(R)': [
                 'Defender Right', 'Defender Left',
-                # STRATEGIC: Winger → Wing-Back pipeline (line 173-178 of strategy doc)
-                'Attacking Mid. Right',  # Young wingers with Work Rate 12+ are IDEAL WB candidates
+                # NOTE: Winger → Wing-Back removed from similarity group
+                # Young wingers (< 16 familiarity) can still train via age exception (age < 24)
+                # Natural wingers (18+) blocked by attack/defense separation filter
                 'Defender Center'  # Wide CB role for hybrid systems
             ],
             'D(L)': [
                 'Defender Left', 'Defender Right',
-                # STRATEGIC: Winger → Wing-Back pipeline
-                'Attacking Mid. Left',  # Young wingers with Work Rate 12+ are IDEAL WB candidates
+                # NOTE: Winger → Wing-Back removed from similarity group
+                # Young wingers (< 16 familiarity) can still train via age exception (age < 24)
+                # Natural wingers (18+) blocked by attack/defense separation filter
                 'Defender Center'  # Wide CB role for hybrid systems
             ],
             'D(C)': [
@@ -1034,10 +1084,12 @@ class TrainingAdvisor:
             ],
             'DM': [
                 'Defensive Midfielder',
-                'Defender Center',  # CBs can move up to DM
+                'Defender Center',  # CBs can move up to DM (universalist coverage)
                 # STRATEGIC: Aging Playmaker → Deep DM (line 108-112)
                 'Attacking Mid. Center',  # 28+ AMCs with elite Vision/Passing, declining pace
-                'Attacking Mid. Left', 'Attacking Mid. Right'  # Wide playmakers can also transition
+                'Attacking Mid. Left', 'Attacking Mid. Right',  # Wide playmakers can also transition
+                # STRATEGIC: Pressing Forward → Ball Winning DM (position-retraining-strategy.md)
+                'Striker'  # High work rate/aggression strikers ideal for pressing DM role
             ],
             'AM(R)': [
                 'Attacking Mid. Right', 'Attacking Mid. Left', 'Attacking Mid. Center',

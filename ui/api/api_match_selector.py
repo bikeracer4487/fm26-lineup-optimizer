@@ -135,9 +135,15 @@ class ApiMatchReadySelector(MatchReadySelector):
         age = player.get('Age', 25)
         stamina = player.get('Stamina', 15)
         natural_fitness = player.get('Natural Fitness', 15)
+        injury_proneness = player.get('Injury Proneness', 10)
+        
+        # Calculate personalized fatigue threshold
+        threshold = self._get_adjusted_fatigue_threshold(age, natural_fitness, stamina, injury_proneness)
         
         # Status mapping
-        if fatigue >= 400:
+        if fatigue >= threshold + 100:
+            flags.append("Need Vacation")
+        elif fatigue >= threshold:
             flags.append("Fatigued")
             
         if condition < 0.80:
@@ -158,13 +164,16 @@ class ApiMatchReadySelector(MatchReadySelector):
         if name in self.player_match_count:
             consecutive = self.player_match_count[name]
             if consecutive >= 3:
-                flags.append("Overplayed")
+                flags.append("Rotation Risk") # Replaced "Overplayed"
                 
         if pd.notna(stamina) and stamina < 10:
             flags.append("Low Stamina")
             
         if pd.notna(natural_fitness) and natural_fitness < 10:
             flags.append("Low Fitness")
+
+        if pd.notna(injury_proneness) and injury_proneness >= 15:
+             flags.append("Injury Prone")
             
         return flags
 

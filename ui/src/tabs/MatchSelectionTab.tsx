@@ -62,9 +62,23 @@ export function MatchSelectionTab({ state, onRejectPlayer, onResetRejections }: 
     }
   };
 
+  const sortedPlan = plan 
+    ? [...plan].sort((a, b) => {
+        if (a.date && b.date) {
+          const compare = a.date.localeCompare(b.date);
+          if (compare !== 0) return compare;
+        } else if (a.date) {
+          return -1;
+        } else if (b.date) {
+          return 1;
+        }
+        return a.matchIndex - b.matchIndex;
+      })
+    : [];
+
   // Filter plan items based on current date
-  const upcomingMatches = plan?.filter(item => item.date >= state.currentDate) || [];
-  const pastMatches = plan?.filter(item => item.date < state.currentDate).reverse() || [];
+  const upcomingMatches = sortedPlan.filter(item => item.date >= state.currentDate);
+  const pastMatches = sortedPlan.filter(item => item.date < state.currentDate).reverse();
 
   return (
     <div className="p-6 space-y-6">
@@ -161,7 +175,7 @@ function MatchCard({ item, onReject, opponent }: { item: MatchPlanItem, onReject
       animate={{ opacity: 1, y: 0 }}
       className="bg-fm-surface rounded-xl overflow-hidden shadow-xl border border-white/5"
     >
-      <div className="bg-fm-dark/40 p-4 flex justify-between items-center border-b border-white/5">
+      <div className="bg-fm-dark/40 p-4 flex items-center border-b border-white/5">
         <div>
           <h3 className="text-lg font-bold text-white">{item.date} vs {opponent}</h3>
           <div className="flex gap-2 mt-1">
@@ -169,9 +183,6 @@ function MatchCard({ item, onReject, opponent }: { item: MatchPlanItem, onReject
               {item.importance} Priority
             </Badge>
           </div>
-        </div>
-        <div className="text-right text-xs text-fm-light/50">
-          Match #{item.matchIndex + 1}
         </div>
       </div>
 
@@ -195,6 +206,21 @@ function MatchCard({ item, onReject, opponent }: { item: MatchPlanItem, onReject
 }
 
 function PlayerCard({ pos, player, onReject }: { pos: string, player: MatchSelectionPlayer, onReject: () => void }) {
+  
+  const getStatusColor = (status: string) => {
+    const lowerStatus = status.toLowerCase();
+    if (lowerStatus.includes('vacation') || lowerStatus.includes('fatigued') || lowerStatus.includes('injury') || lowerStatus.includes('low condition')) {
+      return "bg-red-500/10 text-red-500 border-red-500/20";
+    }
+    if (lowerStatus.includes('risk') || lowerStatus.includes('sharpness') || lowerStatus.includes('low')) {
+      return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
+    }
+    if (lowerStatus.includes('peak') || lowerStatus.includes('form')) {
+      return "bg-green-500/10 text-green-500 border-green-500/20";
+    }
+    return "bg-blue-500/10 text-blue-400 border-blue-500/20";
+  };
+
   return (
     <div className="bg-white/5 rounded-lg p-3 border border-white/5 hover:border-fm-teal/30 transition-colors group relative">
       <div className="flex justify-between items-start mb-2">
@@ -230,7 +256,7 @@ function PlayerCard({ pos, player, onReject }: { pos: string, player: MatchSelec
       {player.status && player.status.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {player.status.map((s, i) => (
-            <span key={i} className="text-[10px] px-1 rounded bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
+            <span key={i} className={`text-[10px] px-1 rounded border ${getStatusColor(s)}`}>
               {s}
             </span>
           ))}
