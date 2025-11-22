@@ -1,20 +1,16 @@
-Player,Position,Priority,Strategic_Category,Current_Skill_Rating,Current_Skill_Tier,Ability_Tier,Ability_Rating,Age,Training_Score,Estimated_Timeline,Is_Universalist,Universalist_Coverage,Fills_Variety_Gap,Reason
-Jada Mawongo,D(R),High,Become Natural,10,Competent,Adequate,77.85607008760951,22,0.86,6-9 months to Natural,Yes,2,No,"Good ability, train to become natural (currently Natural at D(C)) | young (22) - peak developmental years | excellent training attributes"
-Andrey Quintino,D(R),High,Become Natural | Winger→WB Pipeline,15,Accomplished,Excellent,89.25344180225281,24,0.66,2-4 months to Natural,Yes,3,No,"Good ability, train to become natural | young winger (24) - good WB conversion candidate (needs work rate development) | good training attributes | excellent ability at position"
-Joseph James,D(C),High,Become Natural,16,Accomplished,Good,83.81868131868131,20,0.73,2-4 months to Natural,Yes,2,No,"Good ability, train to become natural | very young (20) - peak developmental years | excellent training attributes | good ability at position"
-Tommy Taggert,D(R),Medium,Improve Natural,20,Natural,Poor,65.54630788485608,20,0.51,2-4 months to Natural,No,0,No,"Already natural, train to improve ability | very young (20) - peak developmental years | good training attributes | WARNING: Low versatility - may take 18+ months"
-Ryan Penny,D(R),Low,Learn Position,1,Ineffectual,Good,81.00093867334166,20,0.83,18+ months (high versatility needed),No,0,No,"Has potential, train new position (currently Natural at DM) | very young (20) - peak developmental years | excellent training attributes | good ability at position"
-Joe Cassidy,D(C),Medium,Improve Natural,20,Natural,Adequate,75.50824175824175,21,0.73,2-4 months to Natural,No,0,No,"Already natural, train to improve ability | young (21) - peak developmental years | excellent training attributes"
-Jamie McMurdo,D(C),Low,Learn Position,1,Ineffectual,Good,83.6263736263736,19,0.69,18+ months (high versatility needed),No,0,No,"Has potential, train new position | very young (19) - peak developmental years | good training attributes | good ability at position"
-Jayden Cumberbatch,D(L),High,Become Natural,16,Accomplished,Adequate,77.3851689612015,16,0.72,2-4 months to Natural,Yes,2,No,"Good ability, train to become natural | very young (16) - peak developmental years | excellent training attributes"
-Hisashi Roddy,D(L),High,Become Natural,16,Accomplished,Excellent,93.3607634543179,16,0.67,2-4 months to Natural,No,0,No,"Good ability, train to become natural | very young (16) - peak developmental years | good training attributes | excellent ability at position"
-Taye Weir,D(L),Medium,Improve Natural,18,Natural,Adequate,79.75657071339174,21,0.73,2-4 months to Natural,No,0,No,"Already natural, train to improve ability | young (21) - peak developmental years | excellent training attributes"
-Freddie Hammond,D(L),Medium,Improve Natural,20,Natural,Poor,68.98498122653316,19,0.72,2-4 months to Natural,No,0,No,"Already natural, train to improve ability | very young (19) - peak developmental years | excellent training attributes"
-Aydin Webb,DM,High,Become Natural,16,Accomplished,Good,87.11262804216453,16,0.72,2-4 months to Natural,Yes,3,Yes,"Good ability, train to become natural | very young (16) - peak developmental years | excellent training attributes | good ability at position"
-Asa Hall,DM,Medium,Improve Natural,18,Natural,Adequate,75.76200314226355,39,0.53,2-4 months to Natural,Yes,2,Yes,"Already natural, train to improve ability | age 39 - avoid unless exceptional strategic case | good training attributes"
-Paul Stroud,AM(R),High,Become Natural,16,Accomplished,Good,91.19673031566025,17,0.5,2-4 months to Natural,Yes,3,No,"Good ability, train to become natural | very young (17) - peak developmental years | good ability at position | WARNING: Low versatility - may take 18+ months"
-Peter Purcell,AM(R),Medium,Improve Natural,19,Natural,Adequate,82.2522697166489,17,0.85,2-4 months to Natural,Yes,2,No,"Already natural, train to improve ability | very young (17) - peak developmental years | excellent training attributes"
-Teddy Lawrence,AM(C),High,Become Natural,16,Accomplished,Adequate,76.3436179564983,20,0.64,2-4 months to Natural,No,0,No,"Good ability, train to become natural | very young (20) - peak developmental years | good training attributes"
-Robbie Gallagher,AM(L),High,Become Natural,16,Accomplished,Adequate,80.24302800552469,20,0.9,2-4 months to Natural,Yes,2,No,"Good ability, train to become natural | very young (20) - peak developmental years | excellent training attributes"
-Mateusz Widz,ST,High,Become Natural,16,Accomplished,Good,88.51496920212003,16,0.67,2-4 months to Natural,No,0,Yes,"Good ability, train to become natural | very young (16) - peak developmental years | good training attributes | good ability at position"
-Joshua Adepoju,ST,Medium,Improve Natural,20,Natural,Adequate,74.60779257985962,20,0.64,2-4 months to Natural,Yes,3,Yes,"Already natural, train to improve ability | very young (20) - peak developmental years | good training attributes"
+﻿Player,Position,Priority,Strategic_Category,Current_Skill_Rating,Ability_Tier,Training_Score
+Jada Mawongo,D(R),High,Become Natural,12,Adequate,0.8608333333333333
+Andrey Quintino,D(R),High,Become Natural | Winger→WB Pipeline,15,Good,0.655
+Joseph James,D(C),High,Become Natural,16,Good,0.7316666666666666
+Jude Horn,D(R),Medium,Improve Natural,20,Adequate,0.72
+Tommy Taggert,D(R),Medium,Improve Natural,20,Poor,0.51075
+Joe Cassidy,D(C),Medium,Improve Natural,20,Adequate,0.73
+Jayden Cumberbatch,D(L),High,Become Natural,16,Adequate,0.72
+Freddie Hammond,D(L),Medium,Improve Natural,20,Poor,0.72
+Paul Stroud,AM(R),High,Become Natural,16,Excellent,0.49724999999999997
+Peter Purcell,AM(R),Medium,Improve Natural,19,Adequate,0.85
+Jamie McMurdo,AM(R),Low,Learn Position,1,Good,0.6858333333333333
+Gabe Reivers,AM(C),High,Become Natural,17,Adequate,0.6716666666666666
+Robbie Gallagher,AM(L),High,Become Natural,16,Good,0.8999999999999999
+Mateusz Widz,ST,High,Become Natural,16,Good,0.6749999999999999
+Joshua Adepoju,ST,Medium,Improve Natural,20,Adequate,0.6416666666666666

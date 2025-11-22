@@ -1,5 +1,5 @@
 {
-  "currentDate": "2026-11-28",
+  "currentDate": "2026-12-30",
   "matches": [
     {
       "id": "d329a55a-7016-40c3-9d02-5ddedf1a4073",
@@ -59,109 +59,115 @@
       "id": "5a098762-e3f1-4339-9623-91d6430dd657",
       "date": "2026-12-19",
       "opponent": "London Lions",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "a1626aeb-a022-4a73-b983-6219e71ada3d",
       "date": "2026-12-26",
       "opponent": "Weston-super-mare",
-      "importance": "Medium"
+      "importance": "Low"
+    },
+    {
+      "id": "d8aa1282-4eba-43e1-b699-e36d3e60c8a1",
+      "date": "2026-12-30",
+      "opponent": "Sholing",
+      "importance": "Low"
     },
     {
       "id": "f97e0ef1-55d0-4dd0-9e33-3b9fa5f3ed90",
       "date": "2027-01-02",
       "opponent": "Potters Bar Town",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
-      "id": "d8aa1282-4eba-43e1-b699-e36d3e60c8a1",
+      "id": "afb1bc80-c88e-4adb-8322-77768d9c78dd",
       "date": "2027-01-09",
-      "opponent": "Sholing",
-      "importance": "Medium"
+      "opponent": "Eastbourne Town",
+      "importance": "High"
     },
     {
       "id": "26dbb373-e407-4567-a797-6ad3c0ed87e5",
       "date": "2027-01-17",
       "opponent": "Yate Town",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "d9b2c3a2-0ff9-4953-ac98-71ade05a4a35",
       "date": "2027-01-23",
       "opponent": "Gloucester City",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "31552f4c-e475-4d64-ae18-13d2294aa9ab",
       "date": "2027-02-06",
       "opponent": "Bracknell Town",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "98f9da0f-e348-4b7f-be09-f13b62e37339",
       "date": "2027-02-13",
       "opponent": "Slough Town",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "4ca7e9ae-b5e4-441a-b20b-6d1ea2468c3d",
       "date": "2027-02-20",
       "opponent": "Evesham Utd",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "3a830759-6763-47b9-b9b7-91f54e204020",
       "date": "2027-02-27",
       "opponent": "Wimborne Town",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "dcc6a003-56c8-4677-aaef-5c304f4c0cbd",
       "date": "2027-03-06",
       "opponent": "Gosport Borough",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "5d24a325-3145-43d8-9426-9bddc01db89b",
       "date": "2027-03-13",
       "opponent": "Wingate & Finchley",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "91c9c2aa-7a18-47ed-a5a8-f54ff1f03f2c",
       "date": "2027-03-20",
       "opponent": "Hungerford Town",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "326d4032-5deb-4c6a-bee0-95573b5fbf93",
       "date": "2027-03-27",
       "opponent": "Poole Town",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "ee62c910-be93-4637-abc6-3b7902c6983e",
       "date": "2027-04-03",
       "opponent": "Dorchester Town",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "0a3e540f-0d94-406f-a616-864fc03e5f06",
       "date": "2027-04-10",
       "opponent": "Hanwell Town",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "e548196a-a9d1-415c-86b9-9125b753213f",
       "date": "2027-04-17",
       "opponent": "Weymouth",
-      "importance": "Medium"
+      "importance": "Low"
     },
     {
       "id": "6ea9b71e-584d-4db6-9a65-c1cb7074e505",
       "date": "2027-04-24",
       "opponent": "Basingstoke Town",
-      "importance": "Medium"
+      "importance": "Low"
     }
   ],
   "rejectedPlayers": {},
