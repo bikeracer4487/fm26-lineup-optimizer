@@ -1,5 +1,21 @@
 # CLAUDE.md - AI Assistant Guide for FM26 Lineup Optimizer
 
+## Primary Interaction Method
+
+**IMPORTANT: The UI application is the primary way to interact with this tool.**
+
+The Electron/React UI app (`ui/` directory) provides:
+- Visual fixture management and match planning
+- Automatic lineup generation for upcoming matches (limited to next 5 for performance)
+- Manual player overrides with visual indicators
+- Lineup confirmation/locking to preserve selections
+- Historical lineup tracking for rotation penalties
+- Training recommendations and rest/rotation advice
+
+CLI scripts (`fm_*.py`) are available for advanced users, automation, or when the UI is not suitable.
+
+**Note:** The `player_match_tracking.json` file is NOT used by the UI. The UI tracks consecutive matches per-simulation and stores confirmed lineups separately in `ui/data/confirmed_lineups.json`.
+
 ## Project Overview
 
 This is a Football Manager 2026 lineup optimization tool that uses advanced algorithms to select the best Starting XI and rotation squads based on position-specific player ratings. The project was created for Brixham AFC save in FM2026.
@@ -15,10 +31,17 @@ This is a Football Manager 2026 lineup optimization tool that uses advanced algo
 
 ```
 fm26-lineup-optimizer/
-├── fm_team_selector_optimal.py    # RECOMMENDED: Optimal selector using Hungarian algorithm
-├── fm_team_selector.py            # Basic greedy algorithm selector
-├── fm_rotation_selector.py        # Dual squad selector (First XI + Rotation XI)
-├── compare_selections.py          # Comparison tool for greedy vs optimal
+├── ui/                            # PRIMARY: Electron/React UI application
+│   ├── src/                       # React frontend source
+│   ├── electron/                  # Electron main process
+│   ├── api/                       # Python API wrappers for UI
+│   └── data/                      # UI state and confirmed lineups
+├── fm_team_selector_optimal.py    # CLI: Optimal selector using Hungarian algorithm
+├── fm_team_selector.py            # CLI: Basic greedy algorithm selector
+├── fm_rotation_selector.py        # CLI: Dual squad selector (First XI + Rotation XI)
+├── fm_match_ready_selector.py     # Core: Match-day selection with condition/fatigue
+├── compare_selections.py          # CLI: Comparison tool for greedy vs optimal
+├── data_manager.py                # Core: Excel to CSV data pipeline
 ├── requirements.txt               # Python dependencies
 ├── README.md                      # User-facing documentation
 ├── PROJECT_SUMMARY.md             # Project overview and features
@@ -36,7 +59,7 @@ fm26-lineup-optimizer/
 **Algorithm:** Hungarian/Munkres assignment algorithm via `scipy.optimize.linear_sum_assignment`
 
 **Key Methods:**
-- `__init__(filepath)` - Loads player data from CSV/Excel, creates DM_avg column
+- `__init__(filepath)` - Loads player data from CSV/Excel
 - `select_optimal_xi(formation)` - Returns optimal XI using linear sum assignment
 - `print_starting_xi()` - Displays formatted lineup with ratings and natural positions
 - `export_to_csv()` - Exports selection to CSV with player metadata
@@ -123,8 +146,7 @@ fm26-lineup-optimizer/
 - `D(R/L)` - Full Back rating (numeric)
 - `GK` - Goalkeeper rating (numeric)
 
-**Generated Columns:**
-- `DM_avg` - Average of DM(L) and DM(R), created automatically
+**Note:** DM positions now use `DM(L)` and `DM(R)` separately rather than averaging them, allowing for better player differentiation.
 
 ### Formation Specification
 
@@ -138,8 +160,8 @@ formation = [
     ('DC1', 'D(C)'),
     ('DC2', 'D(C)'),
     ('DR', 'D(R/L)'),
-    ('DM1', 'DM(L)'),      # or 'DM_avg'
-    ('DM2', 'DM(R)'),      # or 'DM_avg'
+    ('DM1', 'DM(L)'),      # Use DM(L) for better differentiation
+    ('DM2', 'DM(R)'),      # Use DM(R) for better differentiation
     ('AML', 'AM(L)'),
     ('AMC', 'AM(C)'),
     ('AMR', 'AM(R)'),
@@ -159,7 +181,6 @@ class Selector:
     def __init__(self, filepath):
         # Load data
         # Type conversion for numeric columns
-        # Create DM_avg column
 
     def select_*_xi(self, formation):
         # Selection logic
@@ -357,7 +378,7 @@ xi_df.to_html('starting_xi.html', index=False)
 
 **Compare outputs:**
 ```bash
-python compare_selections.py players.csv
+python compare_selections.py players-current.csv
 ```
 Expected: Optimal rating >= Greedy rating (always)
 
@@ -368,7 +389,7 @@ Expected: Optimal rating >= Greedy rating (always)
 
 ### Edge Cases
 
-1. **DM(L) and DM(R) both NaN** - DM_avg will be NaN, position unfilled
+1. **DM(L) and DM(R) both NaN** - Position will be unfilled if no valid players available
 2. **Player excels at multiple positions** - Optimal should assign to best value position
 3. **Only 10 players available** - One position will show "NO PLAYER FOUND"
 4. **Excel vs CSV formats** - Both should produce identical results
@@ -403,24 +424,19 @@ cost_matrix[i, j] = -rating  # Negative!
 
 **Never** use positive ratings or the algorithm will minimize team rating instead of maximizing.
 
-### 4. DM_avg Creation
+### 4. DM Position Handling
 
-If `DM(L)` or `DM(R)` is missing, DM_avg will be NaN for that player:
-```python
-self.df['DM_avg'] = (self.df['DM(L)'] + self.df['DM(R)']) / 2
-```
-
-**Solution:** Check both columns exist before averaging, or handle NaN in selection.
+DM positions use `DM(L)` and `DM(R)` columns separately rather than averaging them. This allows for better player differentiation - a player who excels at DM(L) but not DM(R) will be correctly prioritized for the left defensive midfield slot.
 
 ### 5. File Path Handling
 
 Scripts accept file paths as command-line arguments:
 ```bash
-python fm_team_selector_optimal.py players.csv  # Relative path
-python fm_team_selector_optimal.py /full/path/to/players.csv  # Absolute
+python fm_team_selector_optimal.py players-current.csv  # Relative path
+python fm_team_selector_optimal.py /full/path/to/players-current.csv  # Absolute
 ```
 
-**Default:** Falls back to 'players.csv' or 'players.xlsx' if no argument provided.
+**Default:** Falls back to 'players-current.csv' or 'players.xlsx' if no argument provided.
 
 ### 6. Output File Overwriting
 
@@ -466,7 +482,7 @@ openpyxl>=3.0.0  # Excel file support
 ### Ignored Files
 
 Per .gitignore:
-- `players.csv` - User's personal player data
+- `players-current.csv` - User's personal player data
 - `starting_xi.csv`, `first_xi.csv`, `rotation_xi.csv` - Generated output files
 - Standard Python ignores: `__pycache__/`, `*.pyc`, etc.
 
@@ -510,6 +526,67 @@ From PROJECT_SUMMARY.md, potential areas for expansion:
 6. **Opposition analysis** - Adjust selection based on opponent
 7. **Automated testing** - Unit tests for selection logic
 8. **GUI interface** - Web or desktop interface for non-technical users
+
+## Match Importance-Based Selection Logic
+
+The `fm_match_ready_selector.py` applies different selection strategies based on match importance:
+
+### High Priority Matches (Pure Match Effectiveness)
+
+For High priority matches, the selector uses **pure match effectiveness** - selecting the best possible lineup based only on factors that affect actual in-match performance:
+
+**Factors APPLIED for High priority:**
+- Base ability rating (position-specific skill)
+- Familiarity penalty (natural position affects performance)
+- Match sharpness penalty (affects match performance)
+- Condition penalty (physical readiness)
+- Fatigue penalty (energy levels)
+- Match importance safety modifier (extra caution for high fatigue/low condition)
+
+**Factors SKIPPED for High priority:**
+- Consecutive match penalty (rotation feature)
+- Training bonus (development feature)
+- Versatility bonus (squad planning feature)
+- Strategic pathway bonus (position retraining feature)
+- Loan penalty (squad planning feature)
+
+This ensures High priority matches get the absolute best XI based purely on match-day effectiveness.
+
+### Medium/Low Priority Matches (Development & Rotation)
+
+For Medium and Low priority matches, additional bonuses/penalties are applied to facilitate squad development and rotation:
+
+- **Consecutive match penalty** - Players who've started many matches in a row get small penalties to encourage rotation
+- **Training bonus** - Players actively training at a position get a small boost
+- **Versatility bonus** - Players who can cover multiple positions get slight preference
+- **Strategic pathway bonus** - Players fitting retraining pathways (e.g., winger→WB, AMC→DM) get preference
+- **Loan penalty** - Loaned-in players are deprioritized in favor of owned players
+- **Sharpness prioritization** (Low only) - Players needing match time get boosted
+
+### Sharpness Priority Matches (Development Focus)
+
+For Sharpness priority matches, the selector maximizes **match sharpness development** for the Starting XI and top backups:
+
+**Two-Phase Selection:**
+1. **Phase 1:** Calculate theoretical best XI using High priority logic, plus top 6 backups by CA
+2. **Phase 2:** From that 18-player pool, prioritize players who need sharpness
+
+**Priority Order (highest to lowest):**
+1. Starting XI with LOW sharpness (<75%) - 1.50x boost
+2. Starting XI with MEDIUM sharpness (75-85%) - 1.20x boost
+3. Top 6 Backups with LOW sharpness - 1.30x boost
+4. Top 6 Backups with MEDIUM sharpness - 1.10x boost
+5. Starting XI with HIGH sharpness (85-99%) - 0.70x penalty
+6. Top 6 Backups with HIGH sharpness - 0.60x penalty
+7. MAX sharpness (100%) players - 0.30x penalty (avoid unless necessary)
+
+**Use Case:** Schedule a "Sharpness" match (e.g., friendly) when key players need to build form before important fixtures.
+
+**Safety:** Condition/fatigue penalties still apply - won't risk injury to build sharpness.
+
+### Proactive Rotation
+
+The selector also clears proactive rotation rests for High priority matches - if a player was scheduled to be rested, they're still available for selection in High priority matches where we need the best XI.
 
 ## When to Use Each Script
 

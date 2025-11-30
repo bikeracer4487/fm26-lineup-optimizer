@@ -129,9 +129,11 @@ def update_player_data():
             if pd.isna(club) or str(club).strip() == '':
                 return 'Own'
             elif str(club).strip() == 'Brixham':
-                return 'LoanedOut'
-            else:
+                # Club "Brixham" means loaned TO Brixham (Loaned In)
                 return 'LoanedIn'
+            else:
+                # Any other club means loaned TO that club (Loaned Out)
+                return 'LoanedOut'
                 
         df['LoanStatus'] = df['Club'].apply(get_loan_status)
         

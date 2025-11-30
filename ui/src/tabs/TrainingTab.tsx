@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import type { AppState, TrainingRecommendation } from '../types';
 import { api } from '../api';
-import { Button, Card, Badge } from '../components/UI';
-import { RefreshCw, XCircle, TrendingUp, Target, BookOpen, Clock, Layers, Zap } from 'lucide-react';
+import { Button, Badge } from '../components/UI';
+import { RefreshCw, XCircle, TrendingUp, Target, BookOpen, Clock, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface TrainingTabProps {
@@ -117,7 +117,7 @@ function TrainingGroup({ title, items, color, onReject }: { title: string, items
         <Target size={18} /> {title}
       </h3>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {items.map((rec, i) => (
+        {items.map((rec) => (
           <TrainingCard key={`${rec.player}-${rec.position}`} rec={rec} onReject={onReject} />
         ))}
       </div>

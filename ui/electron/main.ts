@@ -120,6 +120,128 @@ function setupIpcHandlers() {
     }
   })
   
+  // 5. Get Player List (for override modal)
+  ipcMain.handle('get-player-list', async (event, args) => {
+    try {
+      const filename = args?.statusFile || 'players-current.csv'
+      const csvPath = path.join(PROJECT_ROOT, filename)
+
+      if (!fs.existsSync(csvPath)) {
+        return { success: false, error: `File not found: ${filename}` }
+      }
+
+      const content = fs.readFileSync(csvPath, 'utf-8')
+      const lines = content.split('\n')
+
+      if (lines.length < 2) {
+        return { success: false, error: 'CSV file is empty or invalid' }
+      }
+
+      // Parse header to find column indices
+      const header = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
+      const nameIdx = header.findIndex(h => h === 'Name')
+      // Try 'Best Position' first, then fall back to 'Positions'
+      let posIdx = header.findIndex(h => h === 'Best Position')
+      if (posIdx === -1) {
+        posIdx = header.findIndex(h => h === 'Positions')
+      }
+
+      if (nameIdx === -1) {
+        return { success: false, error: 'Required column (Name) not found' }
+      }
+
+      // Parse rows (skip header)
+      const players: { name: string, position: string }[] = []
+
+      // CSV parser that handles quoted fields with commas
+      const parseCSVLine = (line: string): string[] => {
+        const result: string[] = []
+        let current = ''
+        let inQuotes = false
+
+        for (let j = 0; j < line.length; j++) {
+          const char = line[j]
+          if (char === '"') {
+            inQuotes = !inQuotes
+          } else if (char === ',' && !inQuotes) {
+            result.push(current.trim())
+            current = ''
+          } else {
+            current += char
+          }
+        }
+        result.push(current.trim())
+        return result
+      }
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim()
+        if (!line) continue
+
+        const values = parseCSVLine(line)
+        const name = values[nameIdx]
+        const position = posIdx !== -1 ? values[posIdx] : 'Unknown'
+
+        if (name && name !== '') {
+          players.push({ name, position: position || 'Unknown' })
+        }
+      }
+
+      // Sort alphabetically by name
+      players.sort((a, b) => a.name.localeCompare(b.name))
+
+      return { success: true, players }
+    } catch (error) {
+      console.error('Error reading player list:', error)
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // 6. Confirmed Lineups Management
+  const CONFIRMED_LINEUPS_FILE = path.join(DATA_DIR, 'confirmed_lineups.json')
+
+  ipcMain.handle('get-confirmed-lineups', async () => {
+    try {
+      if (fs.existsSync(CONFIRMED_LINEUPS_FILE)) {
+        const data = fs.readFileSync(CONFIRMED_LINEUPS_FILE, 'utf-8')
+        return JSON.parse(data)
+      }
+      return { lineups: [] }
+    } catch (error) {
+      console.error('Error reading confirmed lineups:', error)
+      return { lineups: [] }
+    }
+  })
+
+  ipcMain.handle('save-confirmed-lineup', async (event, lineup) => {
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true })
+      }
+
+      // Load existing
+      let data = { lineups: [] as any[] }
+      if (fs.existsSync(CONFIRMED_LINEUPS_FILE)) {
+        data = JSON.parse(fs.readFileSync(CONFIRMED_LINEUPS_FILE, 'utf-8'))
+      }
+
+      // Remove existing entry for same matchId if any
+      data.lineups = data.lineups.filter((l: any) => l.matchId !== lineup.matchId)
+
+      // Add new lineup
+      data.lineups.push(lineup)
+
+      // Sort by date
+      data.lineups.sort((a: any, b: any) => a.date.localeCompare(b.date))
+
+      fs.writeFileSync(CONFIRMED_LINEUPS_FILE, JSON.stringify(data, null, 2), 'utf-8')
+      return { success: true }
+    } catch (error) {
+      console.error('Error saving confirmed lineup:', error)
+      return { success: false, error: String(error) }
+    }
+  })
+
   // 4. File Picker (Dialog) - if needed for selecting CSVs
   // ipcMain.handle('select-file', ...)
 }

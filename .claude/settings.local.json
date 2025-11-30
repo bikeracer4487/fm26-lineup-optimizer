@@ -1,15 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -m py_compile:*)",
+      "Bash(powershell -Command \"Import-Csv ''players-current.csv'' | Select-Object -First 10 Name,''Match Sharpness'' | Format-Table\")",
+      "Bash(npm run build:*)",
+      "Bash(powershell -Command \"Import-Csv ''C:\\GitHub\\fm26-lineup-optimizer\\players-current.csv'' | Select-Object Name, ''Defensive Midfielder'', ''Best Position'', Age, CA, PA, Versatility | Sort-Object -Property @{Expression={[int]$_''Defensive Midfielder''}} -Descending | Format-Table -AutoSize\")",
+      "Bash(powershell -Command \"Import-Csv ''C:\\GitHub\\fm26-lineup-optimizer\\players-current.csv'' | Where-Object { $_Name -like ''*Ababio*'' } | Select-Object Name, ''D(R/L)'', ''Best Position'', Age, CA, PA, Versatility, ''Match Sharpness'', Condition, ''Consecutive Starts'', ''Owned/Loaned'' | Format-List\")",
+      "Bash(powershell -Command \"Import-Csv ''C:\\GitHub\\fm26-lineup-optimizer\\players-current.csv'' | Where-Object { [int]$_''D(R/L)'' -gt 0 } | Select-Object Name, ''D(R/L)'', ''Best Position'', Age, CA, PA, Versatility, ''Match Sharpness'', Condition, ''Consecutive Starts'', ''Owned/Loaned'' | Sort-Object -Property @{Expression={[int]$_''D(R/L)''}} -Descending | Select-Object -First 15 | Format-Table -AutoSize\")",
       "Bash(python fm_training_advisor.py:*)",
-      "Bash(test_output.txt)",
-      "Bash(findstr:*)",
-      "Bash(final_test.txt)",
-      "Bash(python fm_match_ready_selector.py:*)",
-      "Bash(python -c:*)",
-      "Bash(python test_fm26_enhancements.py:*)",
-      "Bash(dir:*)"
+      "Bash(python:*)",
+      "Bash(powershell -Command \"Get-Content ''C:\\GitHub\\fm26-lineup-optimizer\\players-current.csv'' | Select-Object -First 2\")",
+      "Bash(powershell -Command \"cd ''C:\\GitHub\\fm26-lineup-optimizer\\ui''; npm run build\")",
+      "Bash(powershell -Command:*)"
     ],
     "deny": [],
     "ask": []

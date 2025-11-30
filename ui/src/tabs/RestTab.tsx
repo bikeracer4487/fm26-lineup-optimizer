@@ -118,7 +118,7 @@ function RestGroup({ title, items, color, icon }: { title: string, items: RestRe
         {icon} {title}
       </h3>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {items.map((rec, i) => (
+        {items.map((rec) => (
           <RestCard key={rec.name} rec={rec} />
         ))}
       </div>
@@ -128,8 +128,7 @@ function RestGroup({ title, items, color, icon }: { title: string, items: RestRe
 
 function RestCard({ rec }: { rec: RestRecommendation }) {
   const isVacation = rec.action.toLowerCase().includes('vacation');
-  const isRest = rec.action.toLowerCase().includes('rest');
-  
+
   return (
     <motion.div 
       initial={{ opacity: 0, scale: 0.95 }}

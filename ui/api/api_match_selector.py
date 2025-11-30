@@ -23,11 +23,71 @@ def suppress_stdout():
         finally:
             sys.stdout = old_stdout
 
+CONFIRMED_LINEUPS_PATH = os.path.join(os.path.dirname(__file__), '../data/confirmed_lineups.json')
+
 class ApiMatchReadySelector(MatchReadySelector):
     """
     Wrapper around MatchReadySelector to adapt it for the UI API.
     Suppresses stdout and formats output as JSON-compatible structures.
     """
+
+    def _load_consecutive_counts_from_history(self, current_date: str) -> dict:
+        """
+        Load confirmed lineups and calculate consecutive match counts.
+
+        Args:
+            current_date: The simulation start date (YYYY-MM-DD). Only count lineups before this date.
+
+        Returns:
+            Dict of player_name -> consecutive_match_count
+        """
+        if not os.path.exists(CONFIRMED_LINEUPS_PATH):
+            return {}
+
+        try:
+            with open(CONFIRMED_LINEUPS_PATH, 'r') as f:
+                data = json.load(f)
+
+            lineups = data.get('lineups', [])
+
+            # Filter to lineups before current_date, sorted by date (ascending)
+            past_lineups = sorted(
+                [l for l in lineups if l.get('date', '') < current_date],
+                key=lambda x: x.get('date', '')
+            )
+
+            if not past_lineups:
+                return {}
+
+            # Calculate consecutive match streaks (from most recent backwards)
+            player_counts = {}
+
+            # Start with the most recent lineup - all players have 1 match
+            most_recent = past_lineups[-1]
+            recent_players = set(most_recent.get('selection', {}).values())
+            for player in recent_players:
+                if player:
+                    player_counts[player] = 1
+
+            # Walk backwards through lineups to extend streaks
+            for i in range(len(past_lineups) - 2, -1, -1):
+                lineup = past_lineups[i]
+                lineup_players = set(lineup.get('selection', {}).values())
+
+                # Check each player still with an active streak
+                players_to_check = list(player_counts.keys())
+                for player in players_to_check:
+                    if player in lineup_players:
+                        player_counts[player] += 1
+                    else:
+                        # Player missed this match - streak is BROKEN, remove from tracking
+                        del player_counts[player]
+
+            return player_counts
+
+        except Exception as e:
+            # If anything goes wrong, return empty dict (no historical data)
+            return {}
     def __init__(self, status_filepath, abilities_filepath=None, training_filepath=None):
         # Automatically look for training recommendations in root if not provided
         if not training_filepath:
@@ -69,13 +129,14 @@ class ApiMatchReadySelector(MatchReadySelector):
     def calculate_effective_rating(self, row: pd.Series, skill_col: str, ability_col: str = None,
                                    match_importance: str = 'Medium',
                                    prioritize_sharpness: bool = False,
-                                   position_name: str = None) -> float:
+                                   position_name: str = None,
+                                   player_tier: str = None) -> float:
         """
         Override to apply loan logic penalties.
         """
         # Call parent method
         effective_rating = super().calculate_effective_rating(
-            row, skill_col, ability_col, match_importance, prioritize_sharpness, position_name
+            row, skill_col, ability_col, match_importance, prioritize_sharpness, position_name, player_tier
         )
         
         if effective_rating <= -998.0:
@@ -89,46 +150,78 @@ class ApiMatchReadySelector(MatchReadySelector):
         if loan_status == 'LoanedIn':
             if match_importance == 'Low':
                 # Much lower priority
-                effective_rating *= 0.70
+                effective_rating *= 0.85
             elif match_importance == 'Medium':
                 # Slightly lower priority
-                effective_rating *= 0.90
+                effective_rating *= 0.95
             # High importance: Unaffected
             
         return effective_rating
             
-    def generate_plan(self, matches_data, rejected_players_map):
+    def generate_plan(self, matches_data, rejected_players_map, manual_overrides_map=None):
         """
         Generate a match plan using the core logic from MatchReadySelector.
-        
+
         Args:
-            matches_data: List of dicts {date, importance, opponent}
-            rejected_players_map: Dict of match_index (str) -> list of player names (manual rejections)
-            
+            matches_data: List of dicts {id, date, importance, opponent, manualOverrides}
+            rejected_players_map: Dict of match_id (str) -> list of player names (manual rejections)
+            manual_overrides_map: Dict of match_id (str) -> dict of position -> player name
+
         Returns:
             List of match plan items suitable for the UI
         """
         results = []
-        
-        # Reset internal match tracking state for this simulation run
-        # We assume a clean slate for the simulation unless we want to persist state between UI runs
-        self.player_match_count = {}
-        
+
+        # Get the current date from the first match (or use empty string if no matches)
+        current_date = matches_data[0].get('date', '') if matches_data else ''
+
+        # Initialize player_match_count from confirmed lineups history
+        # This enables rotation penalties to account for matches played before this simulation
+        self.player_match_count = self._load_consecutive_counts_from_history(current_date)
+
         # For rotation logic, we might need to auto-rest players
         auto_rested_players = []
-        
+
+        # Default empty dict for manual overrides
+        if manual_overrides_map is None:
+            manual_overrides_map = {}
+
         for i, match in enumerate(matches_data):
+            # Get unique match ID for rejection/override lookups
+            match_id = match.get('id', str(i))
+
             importance = match.get('importance', 'Medium')
-            prioritize_sharpness = (importance == 'Low')
+            prioritize_sharpness = (importance in ['Low', 'Sharpness'])
             match_date_str = match.get('date')
-            
-            # Combine manual rejections with auto-rested players
-            manual_rejections = rejected_players_map.get(str(i), [])
+
+            # Get manual overrides for this match (from match data or from map by match ID)
+            match_overrides = match.get('manualOverrides', {}) or manual_overrides_map.get(match_id, {})
+
+            # FIX: Clear proactive rests for High priority matches - we want best XI
+            # auto_rested_players from previous iteration should not affect High priority selection
+            if importance == 'High':
+                auto_rested_players = []
+
+            # Combine manual rejections (by match ID) with auto-rested players
+            manual_rejections = rejected_players_map.get(match_id, [])
             current_rested = list(set(manual_rejections + auto_rested_players))
-            
-            # Select XI using parent logic
+
+            # Also exclude manually overridden players from being selected for other positions
+            overridden_players = list(match_overrides.values())
+            current_rested = list(set(current_rested + overridden_players))
+
+            # Select XI using parent logic (excluding overridden players)
             # select_match_xi returns: Dict[pos, (player_name, effective_rating, player_data)]
             selection_raw = self.select_match_xi(importance, prioritize_sharpness, current_rested)
+
+            # Apply manual overrides - replace calculated selections with manual choices
+            for pos, player_name in match_overrides.items():
+                # Find player data for the overridden player
+                player_row = self.df[self.df['Name'] == player_name]
+                if not player_row.empty:
+                    player_data = player_row.iloc[0].to_dict()
+                    # Use a dummy rating for manual selections (we don't recalculate)
+                    selection_raw[pos] = (player_name, 0.0, player_data)
             
             # Transform to UI format
             selection_formatted = {}
@@ -149,6 +242,7 @@ class ApiMatchReadySelector(MatchReadySelector):
             
             results.append({
                 "matchIndex": i,
+                "matchId": match_id,  # Return match ID for frontend correlation
                 "date": match_date_str,
                 "importance": importance,
                 "selection": selection_formatted
@@ -157,26 +251,17 @@ class ApiMatchReadySelector(MatchReadySelector):
             # Update consecutive counts (logic from parent class)
             self._update_consecutive_match_counts(selection_raw)
             
-            # MATCH ROTATION LOGIC (Copied from plan_rotation in parent)
+            # MATCH ROTATION LOGIC
             # Check if we should rest players for the NEXT match
+            # Now includes PROACTIVE ROTATION - looks ahead for high priority matches
             auto_rested_players = [] # Reset for next iteration
-            
+
             if i < len(matches_data) - 1:
-                next_match = matches_data[i+1]
-                next_importance = next_match.get('importance', 'Medium')
-                
-                if next_importance == 'High' and match_date_str and next_match.get('date'):
-                    try:
-                        curr_date = datetime.strptime(match_date_str, '%Y-%m-%d')
-                        next_date = datetime.strptime(next_match['date'], '%Y-%m-%d')
-                        days_until = (next_date - curr_date).days
-                        
-                        if days_until <= 3:
-                            # Rest high-fatigue players before important match
-                            auto_rested_players = self._identify_players_to_rest()
-                    except (ValueError, TypeError):
-                        # Ignore date parsing errors
-                        pass
+                upcoming_matches = matches_data[i+1:]  # All future matches for lookahead
+
+                # Pass upcoming matches to enable proactive rotation planning
+                # This allows resting players who would hit rotation threshold by high priority match
+                auto_rested_players = self._identify_players_to_rest(upcoming_matches=upcoming_matches)
                         
         return results
 

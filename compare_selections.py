@@ -20,8 +20,8 @@ def compare_selections(filepath: str):
         ('DC1', 'D(C)'),
         ('DC2', 'D(C)'),
         ('DR', 'D(R/L)'),
-        ('DM1', 'DM_avg'),
-        ('DM2', 'DM_avg'),
+        ('DM1', 'DM(L)'),
+        ('DM2', 'DM(R)'),
         ('AML', 'AM(L)'),
         ('AMC', 'AM(C)'),
         ('AMR', 'AM(R)'),
@@ -83,7 +83,7 @@ def compare_selections(filepath: str):
 
 
 if __name__ == "__main__":
-    filepath = sys.argv[1] if len(sys.argv) > 1 else 'players.csv'
+    filepath = sys.argv[1] if len(sys.argv) > 1 else 'players-current.csv'
     
     try:
         compare_selections(filepath)

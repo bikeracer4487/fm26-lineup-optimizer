@@ -1,34 +1,97 @@
-import React, { useState, useEffect } from 'react';
-import type { AppState, MatchPlanItem, MatchSelectionPlayer } from '../types';
+import { useState, useEffect, useMemo } from 'react';
+import type { AppState, MatchPlanItem, MatchSelectionPlayer, Match, ConfirmedLineup } from '../types';
 import { api } from '../api';
-import { Button, Card, Badge } from '../components/UI';
-import { RefreshCw, UserX, AlertTriangle, Star, Activity, Battery, Zap, ChevronDown, ChevronRight } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Button, Badge } from '../components/UI';
+import { RefreshCw, UserX, AlertTriangle, Activity, Battery, Zap, ChevronDown, ChevronRight, Calendar, Edit3, RotateCcw, CheckCircle, Lock, Unlock } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { PlayerSelectModal } from '../components/PlayerSelectModal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+
+// Maximum number of matches to calculate lineups for
+const MAX_LINEUP_MATCHES = 5;
 
 interface MatchSelectionTabProps {
   state: AppState;
   onRejectPlayer: (matchIndex: string, players: string[]) => void;
   onResetRejections: () => void;
+  onConfirmMatch: (matchId: string) => void;
+  onUndoConfirmation: (matchId: string) => void;
+  onUpdateManualOverrides: (matchId: string, overrides: Record<string, string>) => void;
+  onClearManualOverrides: (matchId: string) => void;
 }
 
-export function MatchSelectionTab({ state, onRejectPlayer, onResetRejections }: MatchSelectionTabProps) {
+export function MatchSelectionTab({
+  state,
+  onRejectPlayer,
+  onResetRejections,
+  onConfirmMatch,
+  onUndoConfirmation,
+  onUpdateManualOverrides,
+  onClearManualOverrides
+}: MatchSelectionTabProps) {
   const [plan, setPlan] = useState<MatchPlanItem[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPast, setShowPast] = useState(false);
+  const [showFuture, setShowFuture] = useState(false);
+
+  // Override modal state
+  const [overrideModal, setOverrideModal] = useState<{
+    isOpen: boolean;
+    matchId: string;
+    position: string;
+    excludedPlayers: string[];
+  }>({ isOpen: false, matchId: '', position: '', excludedPlayers: [] });
+
+  // Confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    matchId: string;
+    opponent: string;
+    date: string;
+    action: 'confirm' | 'undo';
+  }>({ isOpen: false, matchId: '', opponent: '', date: '', action: 'confirm' });
+
+  // Categorize matches: past, next 5, and future (6+)
+  const { upcomingMatches, futureMatches, pastMatches, matchesForBackend } = useMemo(() => {
+    const sorted = [...state.matches].sort((a, b) => a.date.localeCompare(b.date));
+    const upcoming = sorted.filter(m => m.date >= state.currentDate);
+    const past = sorted.filter(m => m.date < state.currentDate).reverse();
+
+    // Only first 5 upcoming get lineups calculated
+    const forBackend = upcoming.slice(0, MAX_LINEUP_MATCHES);
+    // Matches 6+ shown as display-only
+    const future = upcoming.slice(MAX_LINEUP_MATCHES);
+
+    return {
+      upcomingMatches: forBackend,
+      futureMatches: future,
+      pastMatches: past,
+      matchesForBackend: forBackend
+    };
+  }, [state.matches, state.currentDate]);
 
   const generatePlan = async () => {
-    if (state.matches.length === 0) {
-      setError("No matches scheduled. Please add matches in the Fixture List.");
+    if (matchesForBackend.length === 0) {
+      setError("No upcoming matches to generate lineups for.");
       return;
     }
 
     setLoading(true);
     setError(null);
-    
+
     try {
+      // Only send the first 5 upcoming matches, excluding confirmed ones
+      const unconfirmedMatches = matchesForBackend.filter(m => !m.confirmed);
+
+      if (unconfirmedMatches.length === 0) {
+        // All matches are confirmed, no need to call backend
+        setLoading(false);
+        return;
+      }
+
       const response = await api.runMatchSelector(
-        state.matches,
+        unconfirmedMatches,
         state.rejectedPlayers,
         state.files
       );
@@ -45,24 +108,108 @@ export function MatchSelectionTab({ state, onRejectPlayer, onResetRejections }: 
     }
   };
 
-  // Auto-run when dependencies change (debounced ideally, but simple effect for now)
+  // Auto-run when dependencies change
   useEffect(() => {
-    // Only run if we have matches
-    if (state.matches.length > 0) {
-      const timer = setTimeout(generatePlan, 100); // Small delay to prevent double-fires
+    if (matchesForBackend.length > 0) {
+      const timer = setTimeout(generatePlan, 100);
       return () => clearTimeout(timer);
     }
-  }, [state.matches, state.rejectedPlayers, state.files]);
+  }, [state.matches, state.rejectedPlayers, state.files, state.currentDate]);
 
-  const handleReject = (matchIndex: number, playerName: string) => {
-    const indexStr = String(matchIndex);
-    const currentRejected = state.rejectedPlayers[indexStr] || [];
+  const handleReject = (matchId: string, playerName: string) => {
+    const currentRejected = state.rejectedPlayers[matchId] || [];
     if (!currentRejected.includes(playerName)) {
-      onRejectPlayer(indexStr, [...currentRejected, playerName]);
+      onRejectPlayer(matchId, [...currentRejected, playerName]);
     }
   };
 
-  const sortedPlan = plan 
+  // Handle override modal
+  const openOverrideModal = (matchId: string, position: string, currentSelection: Record<string, MatchSelectionPlayer>, manualOverrides?: Record<string, string>) => {
+    // Get list of already selected players (to exclude from selection)
+    const selectedPlayers = Object.values(currentSelection)
+      .filter(p => p)
+      .map(p => p.name);
+
+    // Also include manually overridden players
+    const overriddenPlayers = manualOverrides ? Object.values(manualOverrides) : [];
+
+    // Don't exclude the current player in this position (they can be replaced)
+    const currentPlayer = manualOverrides?.[position] || currentSelection[position]?.name;
+    const excludedPlayers = [...new Set([...selectedPlayers, ...overriddenPlayers])].filter(p => p !== currentPlayer);
+
+    // Also add rejected players for this match (keyed by match ID)
+    const rejectedPlayers = state.rejectedPlayers[matchId] || [];
+
+    setOverrideModal({
+      isOpen: true,
+      matchId,
+      position,
+      excludedPlayers: [...excludedPlayers, ...rejectedPlayers]
+    });
+  };
+
+  const handleOverrideSelect = (playerName: string) => {
+    const match = state.matches.find(m => m.id === overrideModal.matchId);
+    if (match) {
+      const currentOverrides = match.manualOverrides || {};
+      onUpdateManualOverrides(match.id, {
+        ...currentOverrides,
+        [overrideModal.position]: playerName
+      });
+    }
+    setOverrideModal({ ...overrideModal, isOpen: false });
+  };
+
+  const handleClearOverride = (matchId: string, position: string) => {
+    const match = state.matches.find(m => m.id === matchId);
+    if (match && match.manualOverrides) {
+      const newOverrides = { ...match.manualOverrides };
+      delete newOverrides[position];
+      if (Object.keys(newOverrides).length === 0) {
+        onClearManualOverrides(matchId);
+      } else {
+        onUpdateManualOverrides(matchId, newOverrides);
+      }
+    }
+  };
+
+  // Handle confirm dialog
+  const openConfirmDialog = (matchId: string, opponent: string, date: string, action: 'confirm' | 'undo') => {
+    setConfirmDialog({ isOpen: true, matchId, opponent, date, action });
+  };
+
+  const handleConfirmAction = async () => {
+    if (confirmDialog.action === 'confirm') {
+      // Get the plan item for this match
+      const match = state.matches.find(m => m.id === confirmDialog.matchId);
+      const planItem = plan?.find(p => p.date === match?.date);
+
+      if (match && planItem) {
+        // Save confirmed lineup to history
+        const confirmedLineup: ConfirmedLineup = {
+          matchId: match.id,
+          date: match.date,
+          opponent: match.opponent,
+          importance: match.importance,
+          confirmedAt: new Date().toISOString(),
+          selection: Object.entries(planItem.selection).reduce((acc, [pos, player]) => {
+            if (player) acc[pos] = player.name;
+            return acc;
+          }, {} as Record<string, string>)
+        };
+
+        await api.saveConfirmedLineup(confirmedLineup);
+      }
+
+      onConfirmMatch(confirmDialog.matchId);
+    } else {
+      onUndoConfirmation(confirmDialog.matchId);
+    }
+    setConfirmDialog({ ...confirmDialog, isOpen: false });
+  };
+
+  // Sort plan items by date
+  const sortedPlan = plan
     ? [...plan].sort((a, b) => {
         if (a.date && b.date) {
           const compare = a.date.localeCompare(b.date);
@@ -76,9 +223,13 @@ export function MatchSelectionTab({ state, onRejectPlayer, onResetRejections }: 
       })
     : [];
 
-  // Filter plan items based on current date
-  const upcomingMatches = sortedPlan.filter(item => item.date >= state.currentDate);
-  const pastMatches = sortedPlan.filter(item => item.date < state.currentDate).reverse();
+  // Filter plan items based on current date (these are lineup results from backend)
+  const upcomingPlanItems = sortedPlan.filter(item => item.date >= state.currentDate);
+
+  // Find match data by date for display purposes
+  const getMatchByDate = (date: string): Match | undefined => {
+    return state.matches.find(m => m.date === date);
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -109,80 +260,185 @@ export function MatchSelectionTab({ state, onRejectPlayer, onResetRejections }: 
       )}
 
       <div className="space-y-8">
-        {upcomingMatches.length > 0 && (
+        {/* Upcoming matches with lineups (first 5) */}
+        {upcomingPlanItems.length > 0 && (
           <div className="space-y-8">
-            {upcomingMatches.map((item) => (
-              <MatchCard 
-                key={item.matchIndex} 
-                item={item} 
-                onReject={(name) => handleReject(item.matchIndex, name)}
-                opponent={state.matches[item.matchIndex]?.opponent || "Unknown"}
-              />
-            ))}
+            {upcomingPlanItems.map((item) => {
+              const match = getMatchByDate(item.date);
+              return (
+                <MatchCard
+                  key={item.matchId || item.matchIndex}
+                  item={item}
+                  match={match}
+                  onReject={(name) => handleReject(item.matchId, name)}
+                  onOverride={(pos) => match && openOverrideModal(match.id, pos, item.selection, match.manualOverrides)}
+                  onClearOverride={(pos) => match && handleClearOverride(match.id, pos)}
+                  onConfirm={() => match && openConfirmDialog(match.id, match.opponent, match.date, 'confirm')}
+                  onUndoConfirm={() => match && openConfirmDialog(match.id, match.opponent, match.date, 'undo')}
+                  onClearAllOverrides={() => match && onClearManualOverrides(match.id)}
+                />
+              );
+            })}
           </div>
         )}
 
-        {pastMatches.length > 0 && (
+        {/* Future matches (6+) - display only, no lineup calculation */}
+        {futureMatches.length > 0 && (
           <div className="pt-6 border-t border-white/5">
-            <button 
-                onClick={() => setShowPast(!showPast)}
-                className="flex items-center gap-2 text-fm-light/50 hover:text-white transition-colors text-sm font-bold uppercase tracking-wider mb-4 w-full text-left"
+            <button
+              onClick={() => setShowFuture(!showFuture)}
+              className="flex items-center gap-2 text-fm-light/50 hover:text-white transition-colors text-sm font-bold uppercase tracking-wider mb-4 w-full text-left"
             >
-                {showPast ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                Past Matches Archive ({pastMatches.length})
+              {showFuture ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              <Calendar size={16} />
+              Future Fixtures ({futureMatches.length})
             </button>
 
-            {showPast && (
-              <div className="space-y-8 opacity-75 grayscale-[0.5]">
-                {pastMatches.map((item) => (
-                  <MatchCard 
-                    key={item.matchIndex} 
-                    item={item} 
-                    onReject={(name) => handleReject(item.matchIndex, name)}
-                    opponent={state.matches[item.matchIndex]?.opponent || "Unknown"}
-                  />
+            {showFuture && (
+              <div className="space-y-2">
+                {futureMatches.map((match) => (
+                  <FutureMatchCard key={match.id} match={match} />
                 ))}
               </div>
             )}
           </div>
         )}
-        
-        {!loading && (!plan || plan.length === 0) && !error && (
-            <div className="text-center text-fm-light/50 py-12">
-                Add matches to the fixture list to generate a plan.
-            </div>
+
+        {/* Past matches archive */}
+        {pastMatches.length > 0 && (
+          <div className="pt-6 border-t border-white/5">
+            <button
+              onClick={() => setShowPast(!showPast)}
+              className="flex items-center gap-2 text-fm-light/50 hover:text-white transition-colors text-sm font-bold uppercase tracking-wider mb-4 w-full text-left"
+            >
+              {showPast ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              Past Matches Archive ({pastMatches.length})
+            </button>
+
+            {showPast && (
+              <div className="space-y-2 opacity-75">
+                {pastMatches.map((match) => (
+                  <PastMatchCard key={match.id} match={match} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && (!plan || plan.length === 0) && upcomingMatches.length === 0 && !error && (
+          <div className="text-center text-fm-light/50 py-12">
+            Add matches to the fixture list to generate a plan.
+          </div>
         )}
       </div>
+
+      {/* Override Modal */}
+      <PlayerSelectModal
+        isOpen={overrideModal.isOpen}
+        onClose={() => setOverrideModal({ ...overrideModal, isOpen: false })}
+        onSelect={handleOverrideSelect}
+        position={overrideModal.position}
+        excludedPlayers={overrideModal.excludedPlayers}
+        statusFile={state.files.status}
+      />
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        onConfirm={handleConfirmAction}
+        title={confirmDialog.action === 'confirm' ? 'Confirm Lineup' : 'Undo Confirmation'}
+        message={
+          confirmDialog.action === 'confirm'
+            ? `Lock the lineup for ${confirmDialog.opponent} on ${confirmDialog.date}? This will prevent automatic recalculation.`
+            : `Unlock the lineup for ${confirmDialog.opponent} on ${confirmDialog.date}? This will allow automatic recalculation.`
+        }
+        confirmText={confirmDialog.action === 'confirm' ? 'Lock Lineup' : 'Unlock'}
+        variant={confirmDialog.action === 'confirm' ? 'success' : 'warning'}
+      />
     </div>
   );
 }
 
-function MatchCard({ item, onReject, opponent }: { item: MatchPlanItem, onReject: (name: string) => void, opponent: string }) {
+interface MatchCardProps {
+  item: MatchPlanItem;
+  match?: Match;
+  onReject: (name: string) => void;
+  onOverride: (position: string) => void;
+  onClearOverride: (position: string) => void;
+  onConfirm: () => void;
+  onUndoConfirm: () => void;
+  onClearAllOverrides: () => void;
+}
+
+function MatchCard({ item, match, onReject, onOverride, onClearOverride, onConfirm, onUndoConfirm, onClearAllOverrides }: MatchCardProps) {
   const positions = [
-    'GK', 
+    'GK',
     'DR', 'DC1', 'DC2', 'DL',
     'DM(R)', 'DM(L)',
     'AMR', 'AMC', 'AML',
     'STC'
   ];
 
+  const opponent = match?.opponent || 'Unknown';
+  const isConfirmed = match?.confirmed || false;
+  const manualOverrides = match?.manualOverrides || {};
+  const hasOverrides = Object.keys(manualOverrides).length > 0;
+
   // Helper to find player in selection by position key
   const getPlayer = (pos: string) => item.selection[pos];
+
+  // Check if position has manual override
+  const isOverridden = (pos: string) => pos in manualOverrides;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-fm-surface rounded-xl overflow-hidden shadow-xl border border-white/5"
+      className={`bg-fm-surface rounded-xl overflow-hidden shadow-xl border ${isConfirmed ? 'border-fm-success/30' : 'border-white/5'}`}
     >
-      <div className="bg-fm-dark/40 p-4 flex items-center border-b border-white/5">
+      <div className="bg-fm-dark/40 p-4 flex items-center justify-between border-b border-white/5">
         <div>
-          <h3 className="text-lg font-bold text-white">{item.date} vs {opponent}</h3>
+          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            {item.date} vs {opponent}
+            {isConfirmed && (
+              <span className="text-fm-success flex items-center gap-1 text-sm font-normal">
+                <CheckCircle size={16} />
+                Confirmed
+              </span>
+            )}
+          </h3>
           <div className="flex gap-2 mt-1">
-            <Badge variant={item.importance === 'High' ? 'danger' : item.importance === 'Medium' ? 'warning' : 'success'}>
+            <Badge variant={item.importance === 'High' ? 'danger' : item.importance === 'Medium' ? 'warning' : item.importance === 'Sharpness' ? 'info' : 'success'}>
               {item.importance} Priority
             </Badge>
+            {hasOverrides && (
+              <Badge variant="warning">
+                {Object.keys(manualOverrides).length} Override{Object.keys(manualOverrides).length > 1 ? 's' : ''}
+              </Badge>
+            )}
           </div>
+        </div>
+
+        <div className="flex gap-2">
+          {hasOverrides && !isConfirmed && (
+            <Button variant="ghost" size="sm" onClick={onClearAllOverrides} title="Clear all overrides">
+              <RotateCcw size={16} className="mr-1" />
+              Clear All
+            </Button>
+          )}
+
+          {isConfirmed ? (
+            <Button variant="outline" size="sm" onClick={onUndoConfirm} title="Unlock lineup for recalculation">
+              <Unlock size={16} className="mr-1" />
+              Unlock
+            </Button>
+          ) : (
+            <Button variant="primary" size="sm" onClick={onConfirm} title="Lock this lineup">
+              <Lock size={16} className="mr-1" />
+              Confirm
+            </Button>
+          )}
         </div>
       </div>
 
@@ -190,13 +446,19 @@ function MatchCard({ item, onReject, opponent }: { item: MatchPlanItem, onReject
         {positions.map(pos => {
           const player = getPlayer(pos);
           if (!player) return null;
-          
+
+          const overridden = isOverridden(pos);
+
           return (
-            <PlayerCard 
-              key={pos} 
-              pos={pos} 
-              player={player} 
-              onReject={() => onReject(player.name)} 
+            <PlayerCard
+              key={pos}
+              pos={pos}
+              player={player}
+              isOverridden={overridden}
+              isConfirmed={isConfirmed}
+              onReject={() => onReject(player.name)}
+              onOverride={() => onOverride(pos)}
+              onClearOverride={() => onClearOverride(pos)}
             />
           );
         })}
@@ -205,8 +467,18 @@ function MatchCard({ item, onReject, opponent }: { item: MatchPlanItem, onReject
   );
 }
 
-function PlayerCard({ pos, player, onReject }: { pos: string, player: MatchSelectionPlayer, onReject: () => void }) {
-  
+interface PlayerCardProps {
+  pos: string;
+  player: MatchSelectionPlayer;
+  isOverridden?: boolean;
+  isConfirmed?: boolean;
+  onReject: () => void;
+  onOverride: () => void;
+  onClearOverride: () => void;
+}
+
+function PlayerCard({ pos, player, isOverridden, isConfirmed, onReject, onOverride, onClearOverride }: PlayerCardProps) {
+
   const getStatusColor = (status: string) => {
     const lowerStatus = status.toLowerCase();
     if (lowerStatus.includes('vacation') || lowerStatus.includes('fatigued') || lowerStatus.includes('injury') || lowerStatus.includes('low condition')) {
@@ -222,33 +494,66 @@ function PlayerCard({ pos, player, onReject }: { pos: string, player: MatchSelec
   };
 
   return (
-    <div className="bg-white/5 rounded-lg p-3 border border-white/5 hover:border-fm-teal/30 transition-colors group relative">
+    <div className={`bg-white/5 rounded-lg p-3 border transition-colors group relative ${
+      isOverridden
+        ? 'border-yellow-500/40 bg-yellow-500/5'
+        : 'border-white/5 hover:border-fm-teal/30'
+    }`}>
       <div className="flex justify-between items-start mb-2">
-        <span className="text-xs font-bold text-fm-teal bg-fm-teal/10 px-1.5 py-0.5 rounded">{pos}</span>
-        <button 
-          onClick={onReject}
-          className="text-fm-light/30 hover:text-fm-danger transition-colors opacity-0 group-hover:opacity-100"
-          title="Reject from lineup"
-        >
-          <UserX size={14} />
-        </button>
+        <div className="flex items-center gap-1">
+          <span className="text-xs font-bold text-fm-teal bg-fm-teal/10 px-1.5 py-0.5 rounded">{pos}</span>
+          {isOverridden && (
+            <span className="text-[10px] font-bold text-yellow-500 bg-yellow-500/10 px-1 py-0.5 rounded">
+              MANUAL
+            </span>
+          )}
+        </div>
+
+        {!isConfirmed && (
+          <div className="flex gap-1">
+            {isOverridden ? (
+              <button
+                onClick={onClearOverride}
+                className="text-yellow-500/70 hover:text-yellow-500 transition-colors"
+                title="Clear override"
+              >
+                <RotateCcw size={14} />
+              </button>
+            ) : (
+              <button
+                onClick={onOverride}
+                className="text-fm-light/30 hover:text-fm-teal transition-colors opacity-0 group-hover:opacity-100"
+                title="Override with different player"
+              >
+                <Edit3 size={14} />
+              </button>
+            )}
+            <button
+              onClick={onReject}
+              className="text-fm-light/30 hover:text-fm-danger transition-colors opacity-0 group-hover:opacity-100"
+              title="Reject from lineup"
+            >
+              <UserX size={14} />
+            </button>
+          </div>
+        )}
       </div>
-      
+
       <div className="font-bold text-white truncate mb-1" title={player.name}>{player.name}</div>
-      
+
       <div className="flex gap-3 text-xs text-fm-light/70 mb-2">
         <div className="flex items-center gap-1" title="Condition">
-           <Battery size={12} className={player.condition < 0.9 ? "text-fm-danger" : "text-fm-success"} />
-           {Math.round(player.condition * 100)}%
+          <Battery size={12} className={player.condition < 0.9 ? "text-fm-danger" : "text-fm-success"} />
+          {Math.round(player.condition * 100)}%
         </div>
         <div className="flex items-center gap-1" title="Match Sharpness">
-           <Activity size={12} className={player.sharpness < 0.8 ? "text-yellow-500" : "text-fm-success"} />
-           {Math.round(player.sharpness * 100)}%
+          <Activity size={12} className={player.sharpness < 0.8 ? "text-yellow-500" : "text-fm-success"} />
+          {Math.round(player.sharpness * 100)}%
         </div>
         {player.fatigue > 0 && (
-             <div className="flex items-center gap-1" title="Fatigue">
-             <Zap size={12} className={player.fatigue > 400 ? "text-fm-danger" : "text-fm-light"} />
-             {player.fatigue}
+          <div className="flex items-center gap-1" title="Fatigue">
+            <Zap size={12} className={player.fatigue > 400 ? "text-fm-danger" : "text-fm-light"} />
+            {player.fatigue}
           </div>
         )}
       </div>
@@ -262,6 +567,44 @@ function PlayerCard({ pos, player, onReject }: { pos: string, player: MatchSelec
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// Display-only card for future matches (6+) - no lineup data
+function FutureMatchCard({ match }: { match: Match }) {
+  return (
+    <div className="bg-fm-surface/50 rounded-lg p-3 border border-white/5 flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        <span className="text-fm-light/50 text-sm font-mono">{match.date}</span>
+        <span className="text-white font-medium">vs {match.opponent}</span>
+        <Badge variant={match.importance === 'High' ? 'danger' : match.importance === 'Medium' ? 'warning' : match.importance === 'Sharpness' ? 'info' : 'success'}>
+          {match.importance}
+        </Badge>
+      </div>
+      <span className="text-fm-light/40 text-xs italic">
+        Lineup calculated when closer
+      </span>
+    </div>
+  );
+}
+
+// Display-only card for past matches - basic fixture info only
+function PastMatchCard({ match }: { match: Match }) {
+  return (
+    <div className="bg-fm-surface/30 rounded-lg p-3 border border-white/5 flex items-center justify-between grayscale-[0.3]">
+      <div className="flex items-center gap-4">
+        <span className="text-fm-light/40 text-sm font-mono">{match.date}</span>
+        <span className="text-fm-light/70 font-medium">vs {match.opponent}</span>
+        <Badge variant={match.importance === 'High' ? 'danger' : match.importance === 'Medium' ? 'warning' : match.importance === 'Sharpness' ? 'info' : 'success'}>
+          {match.importance}
+        </Badge>
+        {match.confirmed && (
+          <span className="text-xs text-fm-success/70 flex items-center gap-1">
+            ✓ Confirmed
+          </span>
+        )}
+      </div>
     </div>
   );
 }

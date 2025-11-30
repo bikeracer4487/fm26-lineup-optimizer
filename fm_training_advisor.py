@@ -39,7 +39,7 @@ class TrainingAdvisor:
 
         Args:
             status_filepath: Path to CSV with positional skill ratings & attributes (players-current.csv)
-            abilities_filepath: Optional path to CSV with role ability ratings (players.csv)
+            abilities_filepath: Optional path to CSV with role ability ratings
         """
         # Load status/attributes file (players-current.csv)
         if status_filepath.endswith('.csv'):
@@ -49,7 +49,7 @@ class TrainingAdvisor:
 
         self.status_df.columns = self.status_df.columns.str.strip()
 
-        # Load abilities file if provided (players.csv)
+        # Load abilities file if provided
         self.has_abilities = False
         if abilities_filepath:
             if abilities_filepath.endswith('.csv'):
@@ -79,7 +79,7 @@ class TrainingAdvisor:
             # Use status file only - no quality analysis possible
             self.df = self.status_df.copy()
             print("\nWARNING: No role abilities file provided. Quality analysis will be limited.")
-            print("For best results, export role ability ratings to players.csv and provide both files.")
+            print("For best results, export role ability ratings to a separate file and provide both files.")
             print("The role ability file should have columns: Striker, AM(L), AM(C), AM(R), DM(L), DM(R), D(C), D(R/L), GK")
             print("These show how GOOD players are at each role (based on attributes), different from positional skill ratings!\n")
 
@@ -103,8 +103,9 @@ class TrainingAdvisor:
         ]
 
         # Add role ability columns if they exist
-        ability_columns = ['Striker', 'AM(L)', 'AM(C)', 'AM(R)', 'DM(L)', 'DM(R)',
-                          'D(C)', 'D(R/L)', 'GK']
+        # Note: After merge, ability columns have '_ability' suffix (except when no conflict)
+        ability_columns = ['Striker_ability', 'AM(L)_ability', 'AM(C)_ability', 'AM(R)_ability',
+                          'DM(L)_ability', 'DM(R)_ability', 'D(C)_ability', 'D(R/L)_ability', 'GK_ability']
         for col in ability_columns:
             if col in self.df.columns:
                 numeric_columns.append(col)
@@ -114,22 +115,22 @@ class TrainingAdvisor:
                 self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
 
         # Create DM_avg for abilities if we have them
-        if 'DM(L)' in self.df.columns and 'DM(R)' in self.df.columns:
-            self.df['DM_avg'] = (self.df['DM(L)'] + self.df['DM(R)']) / 2
+        if 'DM(L)_ability' in self.df.columns and 'DM(R)_ability' in self.df.columns:
+            self.df['DM_avg'] = (self.df['DM(L)_ability'] + self.df['DM(R)_ability']) / 2
 
         # Position mappings
         # Format: Position display name -> (skill rating column, ability rating column or None)
         # Note: "Striker" appears in both files, so after merge it becomes "Striker_skill" and "Striker_ability"
         if self.has_abilities:
             self.position_mapping = {
-                'GK': ('GoalKeeper', 'GK'),
-                'D(R)': ('Defender Right', 'D(R/L)'),
-                'D(C)': ('Defender Center', 'D(C)'),
-                'D(L)': ('Defender Left', 'D(R/L)'),
+                'GK': ('GoalKeeper', 'GK_ability'),
+                'D(R)': ('Defender Right', 'D(R/L)_ability'),
+                'D(C)': ('Defender Center', 'D(C)_ability'),
+                'D(L)': ('Defender Left', 'D(R/L)_ability'),
                 'DM': ('Defensive Midfielder', 'DM_avg'),
-                'AM(R)': ('Attacking Mid. Right', 'AM(R)'),
-                'AM(C)': ('Attacking Mid. Center', 'AM(C)'),
-                'AM(L)': ('Attacking Mid. Left', 'AM(L)'),
+                'AM(R)': ('Attacking Mid. Right', 'AM(R)_ability'),
+                'AM(C)': ('Attacking Mid. Center', 'AM(C)_ability'),
+                'AM(L)': ('Attacking Mid. Left', 'AM(L)_ability'),
                 'ST': ('Striker_skill', 'Striker_ability')  # Different from others due to name collision
             }
         else:
@@ -311,7 +312,8 @@ class TrainingAdvisor:
         Analyze squad depth considering both familiarity AND ability.
 
         Returns:
-            Dictionary mapping positions to list of (name, skill_rating, ability_rating, tiers) tuples
+            Dictionary mapping positions to list of tuples:
+            (name, skill_rating, ability_rating, skill_tier, ability_tier, loan_status)
         """
         depth_analysis = {}
 
@@ -335,12 +337,14 @@ class TrainingAdvisor:
                 is_training_candidate = ability_tier in ['Good', 'Excellent']
 
                 if is_somewhat_familiar or is_training_candidate:
+                    loan_status = row.get('LoanStatus', 'Own')
                     players_data.append((
                         row['Name'],
                         skill_rating,
                         ability_rating,
                         skill_tier,
-                        ability_tier
+                        ability_tier,
+                        loan_status
                     ))
 
             # Sort with familiarity weighted heavily - players who can actually play the position rank higher
@@ -396,7 +400,8 @@ class TrainingAdvisor:
             good_players = [p for p in players_data if p[4] in ['Good', 'Excellent']]
 
             # Count USABLE good players (both competent familiarity AND good ability)
-            usable_good_players = [p for p in players_data if p[1] >= 10 and p[4] in ['Good', 'Excellent']]
+            # EXCLUDE loaned-in players - they don't provide long-term depth for training priorities
+            usable_good_players = [p for p in players_data if p[1] >= 10 and p[4] in ['Good', 'Excellent'] and p[5] != 'LoanedIn']
 
             # Count good ability players who AREN'T competent yet (training candidates)
             good_but_not_competent = [p for p in players_data if p[1] < 10 and p[4] in ['Good', 'Excellent']]
@@ -1198,7 +1203,7 @@ class TrainingAdvisor:
             if not players_data:
                 print(f"  {'NO PLAYERS AVAILABLE':50} - CRITICAL GAP!")
             else:
-                for i, (name, skill_rating, ability_rating, skill_tier, ability_tier) in enumerate(players_data[:6], 1):
+                for i, (name, skill_rating, ability_rating, skill_tier, ability_tier, loan_status) in enumerate(players_data[:6], 1):
                     # Get player row for injury analysis
                     player_row = self.df[self.df['Name'] == name].iloc[0]
                     injury_analysis = self.analyze_injury_risk(player_row)
@@ -1291,8 +1296,8 @@ class TrainingAdvisor:
                 print("\nWARNING: Cannot provide training recommendations without role ability data.")
                 print("\nTo get intelligent training recommendations:")
                 print("  1. Export player role ability ratings from FM26 (Squad view with Striker, AM(L), etc. columns)")
-                print("  2. Save as players.csv")
-                print("  3. Run: python fm_training_advisor.py players-current.csv players.csv")
+                print("  2. Save as a separate abilities file")
+                print("  3. Run: python fm_training_advisor.py players-current.csv <abilities_file.csv>")
                 print("\nRole ability ratings show how GOOD each player is at each position based on their attributes.")
                 print("This is different from positional skill ratings (1-20 familiarity scale) already in players-current.csv.")
             else:
@@ -1451,13 +1456,9 @@ def main():
         # Try common filenames
         if os.path.exists('players-current.csv'):
             status_file = 'players-current.csv'
-        elif os.path.exists('players.csv'):
-            status_file = 'players.csv'
 
         # Look for abilities file
-        if os.path.exists('players.csv') and status_file == 'players-current.csv':
-            abilities_file = 'players.csv'
-        elif os.path.exists('players-abilities.csv'):
+        if os.path.exists('players-abilities.csv'):
             abilities_file = 'players-abilities.csv'
 
     if not status_file:
@@ -1466,7 +1467,7 @@ def main():
         print("  python fm_training_advisor.py <status_file.csv> [abilities_file.csv]")
         print("\nFiles needed:")
         print("  1. Status file (players-current.csv): Positional skill ratings, attributes, condition, etc.")
-        print("  2. Abilities file (players.csv): Role ability ratings [OPTIONAL but RECOMMENDED]")
+        print("  2. Abilities file: Role ability ratings [OPTIONAL]")
         print("\nFor best results, provide both files!")
         sys.exit(1)
 

@@ -2,18 +2,42 @@
 
 Automatically selects the best Starting XI for your Football Manager team based on position-specific ratings.
 
-## 🆕 Advanced Features (NEW!)
+## UI Application (Primary Method)
 
-**Two new scripts** now available that factor in match sharpness, physical condition, fatigue, and intelligent rotation:
+**The Electron/React UI application is the recommended way to use this tool.**
+
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+The UI provides:
+- Visual fixture management with drag-and-drop
+- Automatic lineup generation (next 5 matches)
+- Manual player overrides with visual indicators
+- Lineup confirmation to lock selections
+- Historical tracking for rotation penalties
+- Training and rest recommendations
+
+See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.
+
+---
+
+## CLI Scripts (Advanced Users)
+
+For automation or advanced use cases, CLI scripts are available:
+
+### Advanced Features
+
+**Two scripts** factor in match sharpness, physical condition, fatigue, and intelligent rotation:
 
 - **fm_training_advisor.py** - Analyzes squad depth and recommends position training
 - **fm_match_ready_selector.py** - Selects lineups considering fitness, fatigue, and fixture scheduling
 
-**📚 [See the Advanced Features Guide](ADVANCED_FEATURES.md) for complete documentation**
+**[See the Advanced Features Guide](ADVANCED_FEATURES.md) for complete documentation**
 
----
-
-## Core Selection Scripts
+### Core Selection Scripts
 
 ### 1. **fm_team_selector_optimal.py** (RECOMMENDED)
 Uses the **Hungarian algorithm** to find the truly optimal player-position assignment that maximizes total team rating.
@@ -59,17 +83,17 @@ pip install -r requirements.txt
 
 ### Using the Optimal Version (Recommended)
 ```bash
-python fm_team_selector_optimal.py players.csv
+python fm_team_selector_optimal.py players-current.csv
 ```
 
 ### Using the Basic Version
 ```bash
-python fm_team_selector.py players.csv
+python fm_team_selector.py players-current.csv
 ```
 
 ### Compare Both Approaches
 ```bash
-python compare_selections.py players.csv
+python compare_selections.py players-current.csv
 ```
 
 ## Input File Format
@@ -96,7 +120,7 @@ Your spreadsheet should have the following columns:
 
 1. **Greedy Selection Algorithm**: The script selects the best available player for each position based on their position-specific rating
 2. **No Duplicates**: Each player can only be selected once
-3. **DM Positions**: Uses the average of DM(L) and DM(R) ratings for both DM positions
+3. **DM Positions**: Uses `DM(L)` and `DM(R)` ratings separately for better player differentiation
 4. **Full Back Positions**: Uses D(R/L) rating for both DL and DR positions
 
 ## Output
@@ -151,8 +175,8 @@ formation = [
     ('DC1', 'D(C)'),
     ('DC2', 'D(C)'),
     ('DR', 'D(R/L)'),
-    ('DM1', 'DM_avg'),
-    ('DM2', 'DM_avg'),
+    ('DM1', 'DM(L)'),
+    ('DM2', 'DM(R)'),
     ('AML', 'AM(L)'),
     ('AMC', 'AM(C)'),
     ('AMR', 'AM(R)'),
@@ -162,19 +186,9 @@ formation = [
 
 ### Change DM Selection Method
 
-By default, DM positions use the average of DM(L) and DM(R). To change this:
+By default, DM positions use `DM(L)` and `DM(R)` separately for better player differentiation. Alternative options:
 
-**Option A: Use DM(L) for DM1 and DM(R) for DM2:**
-```python
-formation = [
-    # ... other positions ...
-    ('DM1', 'DM(L)'),
-    ('DM2', 'DM(R)'),
-    # ... other positions ...
-]
-```
-
-**Option B: Use only DM(C) if you have that column:**
+**Option A: Use DM(C) if you have that column:**
 ```python
 formation = [
     # ... other positions ...

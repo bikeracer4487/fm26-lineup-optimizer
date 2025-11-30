@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import type { Match } from '../types';
 import { Button, Card, Input, Select } from '../components/UI';
 import { Trash2, Plus, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
@@ -91,6 +91,7 @@ export function FixtureTab({ matches, onUpdateMatches, currentDate }: FixtureTab
               <option value="Low">Low</option>
               <option value="Medium">Medium</option>
               <option value="High">High</option>
+              <option value="Sharpness">Sharpness</option>
             </Select>
           </div>
           <div className="col-span-1">
@@ -100,7 +101,7 @@ export function FixtureTab({ matches, onUpdateMatches, currentDate }: FixtureTab
           </div>
         </div>
       </Card>
-      
+
       {/* Upcoming Matches */}
       <div className="space-y-3">
         <h3 className="text-fm-light/50 text-sm font-bold uppercase tracking-wider">Upcoming Matches</h3>
@@ -181,14 +182,15 @@ function MatchRow({ match, onUpdate, onRemove, isPast }: { match: Match, onUpdat
                 value={match.opponent} 
                 onChange={e => onUpdate(match.id, 'opponent', e.target.value)}
             />
-                <Select 
-                className="w-32 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal text-sm" 
-                value={match.importance} 
+                <Select
+                className="w-32 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal text-sm"
+                value={match.importance}
                 onChange={e => onUpdate(match.id, 'importance', e.target.value)}
             >
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
                 <option value="High">High</option>
+                <option value="Sharpness">Sharpness</option>
             </Select>
             
             <Button 

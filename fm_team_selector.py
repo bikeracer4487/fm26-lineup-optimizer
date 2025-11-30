@@ -28,10 +28,6 @@ class TeamSelector:
             if col in self.df.columns:
                 self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
         
-        # Add a DM average column for easier selection
-        if 'DM(L)' in self.df.columns and 'DM(R)' in self.df.columns:
-            self.df['DM_avg'] = (self.df['DM(L)'] + self.df['DM(R)']) / 2
-        
         self.selected_players = set()
         self.starting_xi = {}
     
@@ -182,8 +178,8 @@ def main():
             ('DC1', 'D(C)'),
             ('DC2', 'D(C)'),
             ('DR', 'D(R/L)'),
-            ('DM1', 'DM_avg'),
-            ('DM2', 'DM_avg'),
+            ('DM1', 'DM(L)'),
+            ('DM2', 'DM(R)'),
             ('AML', 'AM(L)'),
             ('AMC', 'AM(C)'),
             ('AMR', 'AM(R)'),

@@ -82,18 +82,14 @@ The advisor analyzes BOTH familiarity AND ability:
 
 ### Required Data Files
 
-The training advisor works best with **TWO separate CSV files**:
+The training advisor uses **players-current.csv** which contains all required data:
 
-1. **players-current.csv** - Positional skill ratings + attributes + status
+1. **players-current.csv** - Complete player data including:
    - Export from: Squad → Development → Include ALL columns
-   - Must have: Positional skill ratings (GoalKeeper, Defender Right, Defender Center, etc. on 1-20 scale)
-   - Must have: Attributes (Age, Versatility, Professionalism, CA, PA, etc.)
-   - Must have: Status (Condition, Fatigue, Match Sharpness)
-
-2. **players.csv** - Role ability ratings
-   - Export from: Squad view with role rating columns visible
-   - Must have: Name, Striker, AM(L), AM(C), AM(R), DM(L), DM(R), D(C), D(R/L), GK
-   - These are the calculated ratings showing how good each player is at each role based on their attributes
+   - Positional skill ratings (GoalKeeper, Defender Right, Defender Center, etc. on 1-20 scale)
+   - Calculated role ability ratings (GK, D(R/L), D(C), DM(L), DM(R), AM(L), AM(C), AM(R), Striker)
+   - Attributes (Age, Versatility, Professionalism, CA, PA, etc.)
+   - Status (Condition, Fatigue, Match Sharpness)
 
 **Important:** Role ability ratings are DIFFERENT from positional skill ratings!
 - **Positional skill rating** (1-20): How familiar/comfortable a player is with a position (Natural, Accomplished, etc.)
@@ -108,10 +104,7 @@ The advisor uses **squad-relative percentiles** to evaluate player quality, not 
 ### Usage
 
 ```bash
-# Recommended: Provide both files for intelligent recommendations
-python fm_training_advisor.py players-current.csv players.csv
-
-# Limited mode: Only positional skill ratings (no quality analysis)
+# Run with the default player data file
 python fm_training_advisor.py players-current.csv
 ```
 
@@ -170,9 +163,8 @@ MEDIUM PRIORITY (Improve existing players):
 ⚠️  Cannot provide training recommendations without role ability data.
 
 To get intelligent training recommendations:
-  1. Export player role ability ratings from FM26
-  2. Save as players.csv
-  3. Run: python fm_training_advisor.py players-current.csv players.csv
+  1. Export player data from FM26 using the data manager
+  2. Run: python fm_training_advisor.py players-current.csv
 ```
 
 ### Interpretation
@@ -239,7 +231,7 @@ The selector calculates an **effective rating** for each player-position combina
 python fm_match_ready_selector.py
 
 # Or specify custom file
-python fm_match_ready_selector.py path/to/your/players.csv
+python fm_match_ready_selector.py path/to/your/players-current.csv
 ```
 
 The script will prompt you for:
@@ -339,22 +331,65 @@ Recommendations:
      Consider match practice sessions in training
 ```
 
+### Match Importance-Based Selection
+
+The selector applies different strategies based on match importance level:
+
+#### High Priority Matches (Pure Match Effectiveness)
+
+For High priority matches, the selector uses **pure match effectiveness** - only factors that affect actual in-match performance are considered:
+
+**Factors APPLIED:**
+- Base ability rating (position-specific skill)
+- Familiarity penalty (natural position affects performance)
+- Match sharpness penalty (affects match performance)
+- Condition penalty (physical readiness)
+- Fatigue penalty (energy levels)
+- Match importance safety modifier (extra caution for high fatigue/low condition)
+
+**Factors SKIPPED:**
+- Consecutive match penalty (rotation feature)
+- Training bonus (development feature)
+- Versatility bonus (squad planning feature)
+- Strategic pathway bonus (position retraining feature)
+- Loan penalty (squad planning feature)
+
+This ensures High priority matches get the absolute best XI.
+
+#### Medium Priority Matches (Balanced)
+
+- All penalties and bonuses apply
+- Some rotation encouraged but not prioritized
+- Loan penalties slightly reduce loaned-in player ratings
+
+#### Low Priority Matches (Development Focus)
+
+- **Sharpness prioritization** - Players needing match time get boosted
+- **Training bonus** - Players actively training at a position get a small boost
+- **Versatility bonus** - Players who can cover multiple positions get slight preference
+- **Strategic pathway bonus** - Players fitting retraining pathways get preference
+- **Loan penalty** - Loaned-in players significantly deprioritized
+
 ### Intelligent Rotation Features
 
 The selector automatically:
 
-1. **Rests High-Fatigue Players Before Important Matches**
-   - If a high-importance match is coming within 3 days, fatigued players are rested
+1. **Clears Proactive Rests for High Priority Matches**
+   - If a player was scheduled to be rested, they're still available for High priority matches
+   - Ensures best XI is always available for important games
 
-2. **Prioritizes Sharpness Development in Low-Importance Matches**
+2. **Rests High-Fatigue Players Before Important Matches**
+   - If a high-importance match is coming within 3 days, fatigued players are rested in lower-priority games
+
+3. **Prioritizes Sharpness Development in Low-Importance Matches**
    - Low-sharpness players get a rating boost in unimportant matches
    - Helps maintain squad sharpness across the season
 
-3. **Balances Match Fitness with Performance**
-   - For important matches: Prioritizes best effective ratings (even if players need rest afterward)
+4. **Balances Match Fitness with Performance**
+   - For important matches: Prioritizes best effective ratings (pure match effectiveness)
    - For unimportant matches: Rotates in fringe players who need minutes
 
-4. **Considers Recovery Time**
+5. **Considers Recovery Time**
    - Tracks days between matches
    - Adjusts rotation strategy based on fixture congestion
 
@@ -546,6 +581,20 @@ The selector automatically:
 
 ### Effective Rating Calculation Formula
 
+The formula varies based on match importance:
+
+**High Priority Matches (Pure Match Effectiveness):**
+```python
+effective_rating = base_positional_rating
+effective_rating *= (1 - familiarity_penalty)      # 0-40% based on tier
+effective_rating *= sharpness_factor                # Based on current match sharpness
+effective_rating *= condition_factor                # 0.60-1.00 based on condition
+effective_rating *= fatigue_factor                  # 0.65-1.00 based on fatigue
+effective_rating *= importance_modifier             # Extra penalty for unfit in important matches
+# NO rotation/development bonuses applied
+```
+
+**Medium/Low Priority Matches (With Development Factors):**
 ```python
 effective_rating = base_positional_rating
 effective_rating *= (1 - familiarity_penalty)      # 0-40% based on tier
@@ -553,6 +602,10 @@ effective_rating *= sharpness_factor                # 0.70-1.10 based on sharpne
 effective_rating *= condition_factor                # 0.60-1.00 based on condition
 effective_rating *= fatigue_factor                  # 0.65-1.00 based on fatigue
 effective_rating *= importance_modifier             # Extra penalty for unfit in important matches
+effective_rating *= consecutive_match_factor        # Penalty for overplayed (Low/Medium only)
+effective_rating *= training_bonus                  # Boost for training position (Low/Medium only)
+effective_rating *= versatility_bonus               # Boost for multi-position players (Low/Medium only)
+effective_rating *= strategic_pathway_bonus         # Boost for retraining candidates (Low/Medium only)
 ```
 
 ### Algorithm
