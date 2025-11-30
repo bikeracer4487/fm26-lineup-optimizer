@@ -5,16 +5,21 @@ export interface Player {
 }
 
 export interface Match {
-  id: string; // Generated UUID or index
+  id: string; // Generated UUID
   date: string; // YYYY-MM-DD
   opponent: string;
-  importance: 'Low' | 'Medium' | 'High';
+  importance: 'Low' | 'Medium' | 'High' | 'Sharpness';
+  // Confirmation state
+  confirmed?: boolean;
+  confirmedAt?: string; // ISO timestamp
+  // Manual overrides for this match only (position -> playerName)
+  manualOverrides?: Record<string, string>;
 }
 
 export interface AppState {
   currentDate: string;
   matches: Match[];
-  rejectedPlayers: Record<string, string[]>; // matchIndex -> [playerNames]
+  rejectedPlayers: Record<string, string[]>; // matchId (UUID) -> [playerNames] (per-match rejections)
   rejectedTraining: Record<string, string>; // playerName -> rejectedPosition
   files: {
     status: string;
@@ -49,6 +54,7 @@ export interface MatchSelection {
 
 export interface MatchPlanItem {
   matchIndex: number;
+  matchId: string;  // Unique match ID for correlation with rejections
   date: string;
   importance: string;
   selection: MatchSelection;
@@ -105,4 +111,25 @@ export interface MatchPlanResponse {
   success: boolean;
   plan?: MatchPlanItem[];
   error?: string;
+}
+
+// Confirmed lineup entry for history tracking
+export interface ConfirmedLineup {
+  matchId: string;
+  date: string;
+  opponent: string;
+  importance: string;
+  confirmedAt: string;
+  selection: Record<string, string>; // position -> playerName (names only, not full player data)
+}
+
+// For player selection modal
+export interface PlayerListItem {
+  name: string;
+  position: string; // Natural/best position
+}
+
+// Confirmed lineups file structure
+export interface ConfirmedLineupsData {
+  lineups: ConfirmedLineup[];
 }

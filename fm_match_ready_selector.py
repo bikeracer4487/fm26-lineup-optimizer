@@ -62,7 +62,7 @@ class MatchReadySelector:
        - Natural Fitness/Stamina/Injury Proneness modifiers: -100 to +50
 
     Usage:
-        selector = MatchReadySelector('players-current.csv', 'players.csv')
+        selector = MatchReadySelector('players-current.csv')
         selection = selector.select_optimal_xi(match_importance='High')
     """
 
@@ -73,7 +73,7 @@ class MatchReadySelector:
 
         Args:
             status_filepath: Path to CSV with positional skill ratings & status (players-current.csv)
-            abilities_filepath: Optional path to CSV with role ability ratings (players.csv)
+            abilities_filepath: Optional path to CSV with role ability ratings
             training_recommendations_filepath: Optional path to CSV with training recommendations
         """
         # Load status/attributes file (players-current.csv)
@@ -88,7 +88,7 @@ class MatchReadySelector:
         if 'Condition (%)' in self.status_df.columns:
             self.status_df.rename(columns={'Condition (%)': 'Condition'}, inplace=True)
 
-        # Load abilities file (players.csv)
+        # Load abilities file if provided
         self.has_abilities = False
         if abilities_filepath:
             if abilities_filepath.endswith('.csv'):
@@ -118,8 +118,7 @@ class MatchReadySelector:
         else:
             self.df = self.status_df.copy()
             print("\nWARNING: No role abilities file provided. Selection based only on familiarity.")
-            print("For best results, provide both files:")
-            print("  python fm_match_ready_selector.py players-current.csv players.csv\n")
+            print("For best results, provide an abilities file as the second argument.\n")
 
         # Convert numeric columns
         numeric_columns = [
@@ -141,12 +140,9 @@ class MatchReadySelector:
             if col in self.df.columns:
                 self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
 
-        # Create DM_avg for abilities if we have them
-        if 'DM(L)' in self.df.columns and 'DM(R)' in self.df.columns:
-            self.df['DM_avg'] = (self.df['DM(L)'] + self.df['DM(R)']) / 2
-
         # Formation for 4-2-3-1
         # Format: (pos_name, skill_rating_column, ability_rating_column or None)
+        # Note: DM(L) and DM(R) use separate ability columns since they have different tactical roles
         if self.has_abilities:
             self.formation = [
                 ('GK', 'GoalKeeper', 'GK'),
@@ -154,8 +150,8 @@ class MatchReadySelector:
                 ('DC1', 'Defender Center', 'D(C)'),
                 ('DC2', 'Defender Center', 'D(C)'),
                 ('DR', 'Defender Right', 'D(R/L)'),
-                ('DM(L)', 'Defensive Midfielder', 'DM_avg'),
-                ('DM(R)', 'Defensive Midfielder', 'DM_avg'),
+                ('DM(L)', 'Defensive Midfielder', 'DM(L)'),
+                ('DM(R)', 'Defensive Midfielder', 'DM(R)'),
                 ('AML', 'Attacking Mid. Left', 'AM(L)'),
                 ('AMC', 'Attacking Mid. Center', 'AM(C)'),
                 ('AMR', 'Attacking Mid. Right', 'AM(R)'),
@@ -218,7 +214,8 @@ class MatchReadySelector:
     def calculate_effective_rating(self, row: pd.Series, skill_col: str, ability_col: Optional[str] = None,
                                    match_importance: str = 'Medium',
                                    prioritize_sharpness: bool = False,
-                                   position_name: Optional[str] = None) -> float:
+                                   position_name: Optional[str] = None,
+                                   player_tier: Optional[str] = None) -> float:
         """
         Calculate effective rating considering familiarity, ability, and status factors.
 
@@ -226,15 +223,16 @@ class MatchReadySelector:
             row: Player data row
             skill_col: Positional skill rating column (1-20 familiarity)
             ability_col: Role ability rating column (0-200 quality) - optional
-            match_importance: 'Low', 'Medium', or 'High'
+            match_importance: 'Low', 'Medium', 'High', or 'Sharpness'
             prioritize_sharpness: Give minutes to low-sharpness players
             position_name: Position being evaluated (for training bonus)
+            player_tier: Player's tier for Sharpness mode ('starting_xi', 'top_backup', 'squad', or None)
 
         Returns:
             Effective rating (lower is worse, can be negative)
         """
-        # Check if player is available
-        if row.get('Is Injured', False) or row.get('Banned', False):
+        # Check if player is available (injured only - banned players may be eligible for other competitions)
+        if row.get('Is Injured', False):
             return -999.0
 
         # Get positional skill rating (familiarity 1-20)
@@ -278,6 +276,31 @@ class MatchReadySelector:
                     effective_rating *= 0.85
                 elif sharpness_pct < 0.85:
                     effective_rating *= 0.95
+
+            # SHARPNESS PRIORITY MODE: Maximize sharpness development for key players
+            # Apply tier-based boosts/penalties to prioritize players who need sharpness
+            if match_importance == 'Sharpness' and player_tier is not None:
+                sharpness_need = self._calculate_sharpness_need_score(
+                    sharpness_pct,
+                    player_tier == 'starting_xi'
+                )
+
+                # Convert need score to rating multiplier
+                # Higher need = higher boost, low/no need = penalty
+                if sharpness_need >= 1000:
+                    effective_rating *= 1.50  # LOW sharpness Starting XI - highest priority
+                elif sharpness_need >= 800:
+                    effective_rating *= 1.20  # MEDIUM sharpness Starting XI
+                elif sharpness_need >= 600:
+                    effective_rating *= 1.30  # LOW sharpness Backup
+                elif sharpness_need >= 400:
+                    effective_rating *= 1.10  # MEDIUM sharpness Backup
+                elif sharpness_need >= 200:
+                    effective_rating *= 0.70  # HIGH sharpness Starting XI - low priority
+                elif sharpness_need >= 100:
+                    effective_rating *= 0.60  # HIGH sharpness Backup
+                else:
+                    effective_rating *= 0.30  # MAX sharpness (100%) - avoid unless necessary
 
         # 3. Physical condition factor (percentage)
         # Research: "NEVER field players below 85% condition"
@@ -336,10 +359,13 @@ class MatchReadySelector:
         # 5. Consecutive match tracking penalty (position-specific)
         # ENHANCEMENT 4: Penalize players based on position-specific rotation needs
         # Research: Wing-backs/DMs need rotation after 2-3 matches, CBs can sustain 5+
+        # NOTE: Penalties are skipped for high priority matches (proactive rotation should happen before)
         player_name = row.get('Name', '')
         if player_name in self.player_match_count:
             consecutive_matches = self.player_match_count[player_name]
-            consecutive_penalty = self._get_consecutive_match_penalty(consecutive_matches, position_name)
+            consecutive_penalty = self._get_consecutive_match_penalty(
+                consecutive_matches, position_name, match_importance
+            )
             effective_rating *= consecutive_penalty
 
         # 6. Match importance modifier
@@ -394,16 +420,22 @@ class MatchReadySelector:
 
         # 8. Universalist/Versatility bonus (FM26 25+3 squad model)
         # Reward players who can cover multiple positions (Tier 3 strategic value)
-        competent_positions = self._get_player_competent_positions(row)
-        if competent_positions >= 3:
-            effective_rating *= 1.05  # 5% bonus for universalists (3+ positions)
-        elif competent_positions == 2:
-            effective_rating *= 1.03  # 3% bonus for dual-position players
+        # SKIP for High priority matches - we want the BEST player at each position
+        # Versatility matters more for squad rotation in Low/Medium matches
+        if match_importance != 'High':
+            competent_positions = self._get_player_competent_positions(row)
+            if competent_positions >= 3:
+                effective_rating *= 1.05  # 5% bonus for universalists (3+ positions)
+            elif competent_positions == 2:
+                effective_rating *= 1.03  # 3% bonus for dual-position players
 
         # 9. Strategic pathway bonus (FM26 positional conversion research)
         # Reward players who fit strategic retraining pathways (winger→WB, aging AMC→DM)
-        pathway_bonus = self._get_strategic_pathway_bonus(row, position_name)
-        effective_rating *= pathway_bonus
+        # SKIP for High priority matches - we want the BEST player at each position
+        # Pathway development matters more for squad planning in Low/Medium matches
+        if match_importance != 'High':
+            pathway_bonus = self._get_strategic_pathway_bonus(row, position_name)
+            effective_rating *= pathway_bonus
 
         return effective_rating
 
@@ -522,7 +554,8 @@ class MatchReadySelector:
         else:  # medium_intensity or unknown
             return 1.0
 
-    def _get_consecutive_match_penalty(self, consecutive_matches: int, position_name: str) -> float:
+    def _get_consecutive_match_penalty(self, consecutive_matches: int, position_name: str,
+                                       match_importance: str = 'Medium') -> float:
         """
         Position-specific consecutive match penalties based on attrition research.
 
@@ -532,13 +565,23 @@ class MatchReadySelector:
         - CBs/GK are low attrition (can play 5+ consecutive matches)
         - "Players in high-intensity roles can reach critical fatigue levels as early as the 65th minute"
 
+        HIGH PRIORITY PROTECTION:
+        - No consecutive match penalties for high priority matches
+        - Best XI should play important games regardless of streak
+        - Proactive rotation should happen in preceding low/medium matches instead
+
         Args:
             consecutive_matches: Number of consecutive matches played
             position_name: Position code (e.g., 'DL', 'AMC', 'DC1')
+            match_importance: 'Low', 'Medium', or 'High'
 
         Returns:
             Penalty multiplier (0.60-1.0, where lower = heavier penalty)
         """
+        # No consecutive match penalty for high priority matches - we want best XI
+        if match_importance == 'High':
+            return 1.0
+
         if position_name is None:
             position_name = ''
 
@@ -656,6 +699,144 @@ class MatchReadySelector:
 
         return 1.0  # No strategic pathway detected
 
+    def _calculate_sharpness_need_score(self, sharpness_pct: float, is_starting_xi: bool) -> float:
+        """
+        Calculate priority score for sharpness development (higher = needs more).
+
+        Used by Sharpness priority mode to prioritize players who need match minutes
+        to build sharpness over those already at maximum.
+
+        Priority Order (based on returned score):
+        1. Starting XI with LOW sharpness (<75%): 1000+ points
+        2. Starting XI with MEDIUM sharpness (75-85%): 800+ points
+        3. Backups with LOW sharpness (<75%): 600+ points
+        4. Backups with MEDIUM sharpness (75-85%): 400+ points
+        5. Starting XI with HIGH sharpness (85-99%): 200 points
+        6. Backups with HIGH sharpness (85-99%): 100 points
+        7. MAX sharpness (100%): 0 points (avoid)
+
+        Args:
+            sharpness_pct: Match sharpness as 0-1 scale (1.0 = 100%)
+            is_starting_xi: True if player is in theoretical best XI
+
+        Returns:
+            Score 0-1050 (higher = needs more sharpness development)
+        """
+        if sharpness_pct >= 1.0:  # MAX (100%) - avoid
+            return 0
+        elif sharpness_pct >= 0.85:  # HIGH (85-99%)
+            tier_score = 200 if is_starting_xi else 100
+        elif sharpness_pct >= 0.75:  # MEDIUM (75-85%)
+            tier_score = 800 if is_starting_xi else 400
+        else:  # LOW (<75%)
+            tier_score = 1000 if is_starting_xi else 600
+
+        # Fine-grained: lower sharpness = higher need (0-50 bonus)
+        fine_score = (1.0 - sharpness_pct) * 50
+
+        return tier_score + fine_score
+
+    def _get_theoretical_best_xi_names(self, available_df: pd.DataFrame) -> set:
+        """
+        Run a quick High priority selection to determine theoretical best XI names.
+
+        This identifies who WOULD be in the starting XI if we were playing a High
+        priority match, ignoring sharpness considerations. Used to classify players
+        into tiers for Sharpness priority mode.
+
+        Args:
+            available_df: DataFrame of available (non-injured, non-banned) players
+
+        Returns:
+            Set of player names who would be in the theoretical best XI
+        """
+        n_players = len(available_df)
+        n_positions = len(self.formation)
+
+        # Create cost matrix using High priority logic (pure ability, no sharpness boosts)
+        cost_matrix = np.full((n_players, n_positions), -999.0)
+
+        for i in range(n_players):
+            player = available_df.iloc[i]
+
+            for j, pos_info in enumerate(self.formation):
+                if len(pos_info) == 3:
+                    pos_name, skill_col, ability_col = pos_info
+                else:
+                    pos_name, skill_col = pos_info
+                    ability_col = None
+
+                # Use High priority for theoretical best XI (no tier needed, no sharpness boost)
+                effective_rating = self.calculate_effective_rating(
+                    player, skill_col, ability_col,
+                    match_importance='High',
+                    prioritize_sharpness=False,
+                    position_name=pos_name,
+                    player_tier=None
+                )
+
+                if effective_rating > -999.0:
+                    cost_matrix[i, j] = -effective_rating
+
+        # Solve assignment
+        row_ind, col_ind = linear_sum_assignment(cost_matrix)
+
+        # Collect names of best XI
+        best_xi_names = set()
+        for i, j in zip(row_ind, col_ind):
+            if cost_matrix[i, j] > -998:  # Valid assignment
+                player_name = available_df.iloc[i]['Name']
+                best_xi_names.add(player_name)
+
+        return best_xi_names
+
+    def _calculate_player_tiers(self, available_df: pd.DataFrame) -> Dict[str, str]:
+        """
+        Identify which players are 'starting_xi', 'top_backup', or 'squad'.
+
+        Used by Sharpness priority mode to determine player tiers for
+        sharpness need scoring.
+
+        Tiers:
+        - 'starting_xi': Players who would be selected in a High priority match
+        - 'top_backup': Top 6 non-starting players by CA (Current Ability)
+        - 'squad': All other players
+
+        Args:
+            available_df: DataFrame of available players
+
+        Returns:
+            Dict mapping player name to tier string
+        """
+        # Run preliminary High priority selection to identify theoretical best XI
+        best_xi_names = self._get_theoretical_best_xi_names(available_df)
+
+        # Get top 6 non-starters by CA (Current Ability)
+        backup_candidates = []
+        for idx, row in available_df.iterrows():
+            name = row['Name']
+            if name not in best_xi_names:
+                ca = row.get('CA', 0)
+                if pd.notna(ca) and ca > 0:
+                    backup_candidates.append((name, ca))
+
+        # Sort by CA descending and take top 6
+        backup_candidates.sort(key=lambda x: x[1], reverse=True)
+        top_backup_names = set(name for name, _ in backup_candidates[:6])
+
+        # Build tier mapping
+        tiers = {}
+        for idx, row in available_df.iterrows():
+            name = row['Name']
+            if name in best_xi_names:
+                tiers[name] = 'starting_xi'
+            elif name in top_backup_names:
+                tiers[name] = 'top_backup'
+            else:
+                tiers[name] = 'squad'
+
+        return tiers
+
     def _update_consecutive_match_counts(self, selection: Dict):
         """
         Update consecutive match tracking based on current selection.
@@ -762,7 +943,7 @@ class MatchReadySelector:
         Select optimal XI for a specific match.
 
         Args:
-            match_importance: 'Low', 'Medium', or 'High'
+            match_importance: 'Low', 'Medium', 'High', or 'Sharpness'
             prioritize_sharpness: Give playing time to low-sharpness players
             rested_players: List of player names to rest (avoid selecting)
             debug: Enable detailed debug output
@@ -774,10 +955,9 @@ class MatchReadySelector:
             rested_players = []
 
         # Filter out unavailable players BEFORE creating cost matrix
-        # Remove: injured, banned, and rested players
+        # Remove: injured and rested players (banned players may be eligible for other competitions)
         unavailable_mask = (
             (self.df['Is Injured'] == True) |
-            (self.df['Banned'] == True) |
             (self.df['Name'].isin(rested_players))
         )
         available_df = self.df[~unavailable_mask].copy()
@@ -788,12 +968,21 @@ class MatchReadySelector:
 
         if debug:
             injured = self.df[self.df['Is Injured'] == True]['Name'].tolist()
-            banned = self.df[self.df['Banned'] == True]['Name'].tolist()
             print(f"\n[DEBUG] Injured players: {injured}")
-            print(f"[DEBUG] Banned players: {banned}")
             print(f"[DEBUG] Rested players: {rested_players}")
             print(f"[DEBUG] Total available players (after filtering): {n_players}")
             print(f"[DEBUG] Total positions to fill: {n_positions}")
+
+        # Calculate player tiers for Sharpness priority mode
+        player_tiers = {}
+        if match_importance == 'Sharpness':
+            player_tiers = self._calculate_player_tiers(available_df)
+            if debug:
+                starting_xi = [n for n, t in player_tiers.items() if t == 'starting_xi']
+                top_backups = [n for n, t in player_tiers.items() if t == 'top_backup']
+                print(f"\n[DEBUG] Sharpness mode - Player tiers calculated:")
+                print(f"  Starting XI: {starting_xi}")
+                print(f"  Top 6 Backups: {top_backups}")
 
         # Create cost matrix (negative effective ratings for minimization)
         cost_matrix = np.full((n_players, n_positions), -999.0)
@@ -814,8 +1003,11 @@ class MatchReadySelector:
                     pos_name, skill_col = pos_info
                     ability_col = None
 
+                # Get player tier for Sharpness mode (None for other modes)
+                tier = player_tiers.get(player['Name']) if player_tiers else None
+
                 effective_rating = self.calculate_effective_rating(
-                    player, skill_col, ability_col, match_importance, prioritize_sharpness, pos_name
+                    player, skill_col, ability_col, match_importance, prioritize_sharpness, pos_name, tier
                 )
 
                 if effective_rating > -999.0:
@@ -949,7 +1141,7 @@ class MatchReadySelector:
             print("=" * 100)
 
             # Determine selection strategy
-            prioritize_sharpness = (importance == 'Low')
+            prioritize_sharpness = (importance in ['Low', 'Sharpness'])
 
             # If high-importance match is coming soon, rest high-fatigue players
             if i < len(match_dates) - 1:
@@ -1014,10 +1206,25 @@ class MatchReadySelector:
         except (ValueError, AttributeError) as e:
             raise ValueError(f"Invalid date format '{month_day_str}'. Expected MM-DD format.")
 
-    def _identify_players_to_rest(self) -> List[str]:
-        """Identify players who should be rested (high fatigue or low condition)."""
+    def _identify_players_to_rest(self, upcoming_matches: List = None) -> List[str]:
+        """
+        Identify players who should be rested.
+
+        Reasons for rest:
+        1. High fatigue (>= 400)
+        2. Low condition (< 75%)
+        3. PROACTIVE ROTATION: Approaching rotation threshold with high priority match coming
+
+        Args:
+            upcoming_matches: List of upcoming match dicts with 'importance' key for lookahead
+                              (used for proactive rotation planning)
+
+        Returns:
+            List of player names to rest
+        """
         rest_candidates = []
 
+        # 1. REST FOR FATIGUE/CONDITION
         for idx, row in self.df.iterrows():
             fatigue = row.get('Fatigue', 0)
             condition = row.get('Condition', 100)
@@ -1038,7 +1245,73 @@ class MatchReadySelector:
             if should_rest_fatigue or should_rest_condition:
                 rest_candidates.append(row['Name'])
 
+        # 2. PROACTIVE ROTATION: Rest players approaching threshold before high priority matches
+        if upcoming_matches:
+            # Find the next high priority match
+            matches_until_high_priority = None
+            for i, match in enumerate(upcoming_matches):
+                importance = match.get('importance', 'Medium')
+                if importance == 'High':
+                    matches_until_high_priority = i + 1  # +1 because index 0 = next match
+                    break
+
+            # If high priority match is coming and not the immediate next match
+            if matches_until_high_priority is not None and matches_until_high_priority > 1:
+                for player_name, consecutive in self.player_match_count.items():
+                    if player_name in rest_candidates:
+                        continue  # Already being rested
+
+                    # Get position-specific rotation threshold
+                    threshold = self._get_rotation_threshold_for_player(player_name)
+
+                    # If player would hit threshold by the high priority match, rest them now
+                    # This resets their consecutive count so they're fresh for the big game
+                    projected_consecutive = consecutive + matches_until_high_priority
+                    if projected_consecutive >= threshold:
+                        rest_candidates.append(player_name)
+
         return rest_candidates
+
+    def _get_rotation_threshold_for_player(self, player_name: str) -> int:
+        """
+        Get the consecutive match threshold where rotation penalties start for a player.
+
+        Based on position-specific attrition zones (FM26 Unity Engine research):
+        - GK/CB: Can sustain 5+ consecutive matches (low attrition)
+        - DM/WB: Rotate after 2-3 matches (high attrition)
+        - Attackers/Mids: Rotate after 3-4 matches (medium attrition)
+
+        Args:
+            player_name: Name of the player
+
+        Returns:
+            Threshold where rotation penalties start (lower = needs more frequent rest)
+        """
+        player = self.df[self.df['Name'] == player_name]
+        if player.empty:
+            return 4  # Default threshold
+
+        positions = str(player.iloc[0].get('Positions', ''))
+
+        # GK and center-backs have higher threshold (low attrition)
+        if 'GK' in positions:
+            return 5  # GKs can play 5+ before penalty kicks in
+        elif 'D C' in positions or 'DC' in positions:
+            return 5  # CBs can also play 5+
+
+        # Wing-backs and DMs have lower threshold (high attrition)
+        if 'WB' in positions:
+            return 2  # Wing-backs need frequent rotation
+        if 'DM' in positions:
+            return 2  # Defensive mids need frequent rotation
+
+        # Full-backs (D L, D R) - treat similar to wing-backs in FM26
+        if ('D L' in positions or 'D R' in positions or
+            'DL' in positions or 'DR' in positions):
+            return 3  # Full-backs need some rotation
+
+        # Attackers and midfielders - medium attrition
+        return 3  # Default for AM, M, ST positions
 
     def _print_match_selection(self, selection: Dict, importance: str, prioritize_sharpness: bool):
         """Print formatted match selection."""
@@ -1131,7 +1404,9 @@ class MatchReadySelector:
 
         print("=" * 100)
         print(f"Team Average Effective Rating: {avg_rating:.2f}")
-        if prioritize_sharpness:
+        if importance == 'Sharpness':
+            print("Strategy: SHARPNESS DEVELOPMENT - Maximizing minutes for Starting XI + Backups needing form")
+        elif prioritize_sharpness:
             print("Strategy: Prioritizing match sharpness development for fringe players")
         print("=" * 100)
 
@@ -1177,10 +1452,9 @@ class MatchReadySelector:
             player_name = row['Name']
             ca = row.get('CA', 0)
 
-            # Skip if selected, injured, or banned
+            # Skip if selected or injured (banned players may be eligible for other competitions)
             if (player_name in selected_names or
-                row.get('Is Injured', False) or
-                row.get('Banned', False)):
+                row.get('Is Injured', False)):
                 continue
 
             # Only flag players with CA >= squad average (likely starters)
@@ -1491,14 +1765,8 @@ def main():
         # Try common filenames
         if os.path.exists('players-current.csv'):
             status_file = 'players-current.csv'
-        elif os.path.exists('players.csv'):
-            status_file = 'players.csv'
         elif os.path.exists('players.xlsx'):
             status_file = 'players.xlsx'
-
-        # Look for abilities file
-        if os.path.exists('players.csv') and status_file != 'players.csv':
-            abilities_file = 'players.csv'
 
     # Look for training recommendations file
     training_file = None
@@ -1508,7 +1776,7 @@ def main():
     if not status_file:
         print("Error: No player data file found!")
         print("\nUsage:")
-        print("  python fm_match_ready_selector.py players-current.csv players.csv")
+        print("  python fm_match_ready_selector.py players-current.csv")
         print("  python fm_match_ready_selector.py <status_file> [abilities_file]")
         sys.exit(1)
 
@@ -1544,12 +1812,14 @@ def main():
         for i in range(3):
             print(f"\nMatch {i+1}:")
             match_date_input = input("  Date (MM-DD): ").strip()
-            imp_input = input("  Importance (Low/Medium/High): ").strip().lower()
+            imp_input = input("  Importance (Low/Medium/High/Sharpness): ").strip().lower()
 
             if imp_input in ['l', 'low']:
                 importance = 'Low'
             elif imp_input in ['h', 'high']:
                 importance = 'High'
+            elif imp_input in ['s', 'sharpness']:
+                importance = 'Sharpness'
             else:
                 importance = 'Medium'
 

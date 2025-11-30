@@ -1,5 +1,5 @@
 {
-  "currentDate": "2026-12-30",
+  "currentDate": "2027-10-15",
   "matches": [
     {
       "id": "d329a55a-7016-40c3-9d02-5ddedf1a4073",
@@ -95,7 +95,19 @@
       "id": "d9b2c3a2-0ff9-4953-ac98-71ade05a4a35",
       "date": "2027-01-23",
       "opponent": "Gloucester City",
-      "importance": "Low"
+      "importance": "Medium"
+    },
+    {
+      "id": "e8eb7f30-c2ca-4ec3-b929-91218957a0ed",
+      "date": "2027-01-27",
+      "opponent": "Merthyr Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "57aa87fa-36de-4f60-b5ed-1a23565bb7a2",
+      "date": "2027-01-30",
+      "opponent": "Welling Utd",
+      "importance": "High"
     },
     {
       "id": "31552f4c-e475-4d64-ae18-13d2294aa9ab",
@@ -110,70 +122,446 @@
       "importance": "Low"
     },
     {
+      "id": "3a830759-6763-47b9-b9b7-91f54e204020",
+      "date": "2027-02-17",
+      "opponent": "Wimborne Town",
+      "importance": "Low"
+    },
+    {
       "id": "4ca7e9ae-b5e4-441a-b20b-6d1ea2468c3d",
       "date": "2027-02-20",
       "opponent": "Evesham Utd",
       "importance": "Low"
     },
     {
-      "id": "3a830759-6763-47b9-b9b7-91f54e204020",
+      "id": "bb05897a-a8aa-4615-a3a3-1c5684bb3d95",
       "date": "2027-02-27",
-      "opponent": "Wimborne Town",
-      "importance": "Low"
+      "opponent": "Scunthorpe Utd",
+      "importance": "High"
     },
     {
       "id": "dcc6a003-56c8-4677-aaef-5c304f4c0cbd",
       "date": "2027-03-06",
       "opponent": "Gosport Borough",
-      "importance": "Low"
+      "importance": "Medium"
     },
     {
       "id": "5d24a325-3145-43d8-9426-9bddc01db89b",
       "date": "2027-03-13",
       "opponent": "Wingate & Finchley",
-      "importance": "Low"
+      "importance": "Medium"
+    },
+    {
+      "id": "326d4032-5deb-4c6a-bee0-95573b5fbf93",
+      "date": "2027-03-17",
+      "opponent": "Poole Town",
+      "importance": "Medium"
     },
     {
       "id": "91c9c2aa-7a18-47ed-a5a8-f54ff1f03f2c",
       "date": "2027-03-20",
       "opponent": "Hungerford Town",
-      "importance": "Low"
+      "importance": "Medium"
     },
     {
-      "id": "326d4032-5deb-4c6a-bee0-95573b5fbf93",
+      "id": "18ccd347-32d7-49c2-a8b4-b4090ead9cc1",
       "date": "2027-03-27",
-      "opponent": "Poole Town",
-      "importance": "Low"
+      "opponent": "Aldershot Town",
+      "importance": "High"
     },
     {
       "id": "ee62c910-be93-4637-abc6-3b7902c6983e",
       "date": "2027-04-03",
       "opponent": "Dorchester Town",
-      "importance": "Low"
+      "importance": "Medium"
     },
     {
       "id": "0a3e540f-0d94-406f-a616-864fc03e5f06",
       "date": "2027-04-10",
       "opponent": "Hanwell Town",
-      "importance": "Low"
+      "importance": "Sharpness"
     },
     {
       "id": "e548196a-a9d1-415c-86b9-9125b753213f",
       "date": "2027-04-17",
       "opponent": "Weymouth",
-      "importance": "Low"
+      "importance": "Sharpness"
     },
     {
       "id": "6ea9b71e-584d-4db6-9a65-c1cb7074e505",
       "date": "2027-04-24",
       "opponent": "Basingstoke Town",
+      "importance": "Sharpness"
+    },
+    {
+      "id": "93b1d616-ad8c-447b-8b07-05a42936fe35",
+      "date": "2027-07-03",
+      "opponent": "Buckland Athletic",
       "importance": "Low"
+    },
+    {
+      "id": "2ab2df91-8ab7-4ae1-81e9-2e51f290daa1",
+      "date": "2027-07-07",
+      "opponent": "Willand Rovers",
+      "importance": "Low"
+    },
+    {
+      "id": "1bebf4ed-95df-4364-8853-92103da03e15",
+      "date": "2027-07-10",
+      "opponent": "Plymouth Parkway",
+      "importance": "Low"
+    },
+    {
+      "id": "fe4d286e-1856-4008-b66d-fd27fa77088a",
+      "date": "2027-07-17",
+      "opponent": "Tiverton Town",
+      "importance": "Low"
+    },
+    {
+      "id": "b8a515cb-d0ae-44b9-ace5-c3c6805cc1b6",
+      "date": "2027-07-24",
+      "opponent": "Salisbury",
+      "importance": "Low"
+    },
+    {
+      "id": "e7c4ad82-cea5-4b88-b359-5864203bb824",
+      "date": "2027-07-31",
+      "opponent": "Chippenham Town",
+      "importance": "Low"
+    },
+    {
+      "id": "c7ca197e-cb3a-41e7-ba3e-c3e4458cd93c",
+      "date": "2027-08-07",
+      "opponent": "Torquay Utd",
+      "importance": "Medium"
+    },
+    {
+      "id": "af82d19e-fe2d-4e03-818a-931860b36e2c",
+      "date": "2027-08-10",
+      "opponent": "Taunton Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "3ddf3d19-8fd4-4b3e-8ec5-5e157bbe4824",
+      "date": "2027-08-14",
+      "opponent": "Chippenham Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "c363ea55-f5e3-48f6-9668-c8187311b1e1",
+      "date": "2027-08-21",
+      "opponent": "Hemel Hempstead Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "5132431f-655e-43af-8137-a1222a98124e",
+      "date": "2027-08-24",
+      "opponent": "Horsham",
+      "importance": "Medium"
+    },
+    {
+      "id": "62439137-da02-4c96-8623-c6979421b692",
+      "date": "2027-08-28",
+      "opponent": "Ebbsfleet Utd",
+      "importance": "Medium"
+    },
+    {
+      "id": "9d7da948-9433-41de-b640-a4411b858dec",
+      "date": "2027-08-30",
+      "opponent": "Chelmsford City",
+      "importance": "Medium",
+      "manualOverrides": {
+        "DC1": "Joseph James",
+        "DM(R)": "Allan Hall"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-11-30T02:49:36.255Z"
+    },
+    {
+      "id": "c235bb83-4992-4a60-8f04-5c6575ccfc0f",
+      "date": "2027-09-07",
+      "opponent": "Worthing",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-11-30T03:33:12.841Z"
+    },
+    {
+      "id": "656838ab-6b18-49fa-a773-3b4c835fe53b",
+      "date": "2027-09-11",
+      "opponent": "Truro City",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-11-30T03:34:35.344Z"
+    },
+    {
+      "id": "9a80e851-4792-4402-89d1-8a7170adec48",
+      "date": "2027-09-18",
+      "opponent": "Aldershot Town",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-11-30T04:21:40.834Z"
+    },
+    {
+      "id": "7a6785f9-7bb3-40e0-a01b-fb32822ed2fb",
+      "date": "2027-09-21",
+      "opponent": "Cheshunt",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-11-30T04:33:57.892Z"
+    },
+    {
+      "id": "fdcdfb39-0897-4465-8f7e-a46d7259a775",
+      "date": "2027-09-25",
+      "opponent": "Chipstead",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-11-30T05:37:29.627Z"
+    },
+    {
+      "id": "f246e671-d31a-47e6-8280-888ad8901ec9",
+      "date": "2027-09-28",
+      "opponent": "Hornchurch",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-11-30T06:21:00.664Z"
+    },
+    {
+      "id": "1b0c32cc-e752-4952-b01a-1ebb82358ee5",
+      "date": "2027-10-05",
+      "opponent": "Billericay Town",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-11-30T17:12:24.718Z"
+    },
+    {
+      "id": "4fe719ee-dbe8-48ad-9cc8-b5af6eeefba7",
+      "date": "2027-10-09",
+      "opponent": "Stanway Rovers",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-11-30T18:23:04.134Z"
+    },
+    {
+      "id": "9fa2104a-470f-473a-a938-8b2830815ab2",
+      "date": "2027-10-12",
+      "opponent": "Bracknell Town",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-11-30T18:51:32.546Z"
+    },
+    {
+      "id": "32e028c4-32e7-4384-a016-7323598298fe",
+      "date": "2027-10-16",
+      "opponent": "Truro City",
+      "importance": "Medium"
+    },
+    {
+      "id": "9f1d3c3a-ae33-449c-9f0c-0f11d5af4214",
+      "date": "2027-10-19",
+      "opponent": "Chatham Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "4d83d5e5-a462-49e3-95b5-8a48611a1d89",
+      "date": "2027-10-23",
+      "opponent": "Havant & Waterlooville",
+      "importance": "Medium"
+    },
+    {
+      "id": "2ca085ae-f6f6-4ffe-8169-295dc1993b80",
+      "date": "2027-10-26",
+      "opponent": "Dorking Wanderers",
+      "importance": "Medium"
+    },
+    {
+      "id": "e1e89d2b-0e05-47be-9f8c-2fd7d76f72dd",
+      "date": "2027-10-30",
+      "opponent": "King's Lynn Town",
+      "importance": "High"
+    },
+    {
+      "id": "1f2e9251-27d9-4a00-afb7-2bcaa9960697",
+      "date": "2027-11-06",
+      "opponent": "Braintree Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "e382dfe8-b23f-4d86-976e-214125df9888",
+      "date": "2027-11-09",
+      "opponent": "Dover Athletic",
+      "importance": "Medium"
+    },
+    {
+      "id": "f2f59164-6adf-4f81-b124-7459eaf89a7d",
+      "date": "2027-11-20",
+      "opponent": "Maidstone United",
+      "importance": "Medium"
+    },
+    {
+      "id": "15839cff-f235-4bbb-a50b-2465cf51edb9",
+      "date": "2027-11-27",
+      "opponent": "AFC Totton",
+      "importance": "Medium"
+    },
+    {
+      "id": "a6140927-5ad6-477e-a3d0-c7c8d8d1b223",
+      "date": "2027-12-07",
+      "opponent": "Farnborough",
+      "importance": "Medium"
+    },
+    {
+      "id": "e0ee74ee-6735-4207-9828-edbfe429b12b",
+      "date": "2027-12-18",
+      "opponent": "Salisbury",
+      "importance": "Medium"
+    },
+    {
+      "id": "b585ecda-1727-4eb6-88a1-12b588a57644",
+      "date": "2027-12-26",
+      "opponent": "Taunton Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "7a23c648-aff1-4547-81b6-39413a01f119",
+      "date": "2027-12-29",
+      "opponent": "Torquay Utd",
+      "importance": "Medium"
+    },
+    {
+      "id": "54194b38-ba4b-40fb-8e7a-09901b69726f",
+      "date": "2028-01-02",
+      "opponent": "Chippenham Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "c8d8b840-7c49-40f6-a4f9-ace07c7efeca",
+      "date": "2028-01-08",
+      "opponent": "Hemel Hempstead Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "79bac723-6509-4791-a6a3-d2d7ff2b0dfe",
+      "date": "2028-01-15",
+      "opponent": "Horsham",
+      "importance": "Medium"
+    },
+    {
+      "id": "678cbae8-14c3-4176-9c3d-cf1ef7330b32",
+      "date": "2028-01-22",
+      "opponent": "Ebbsfleet Utd",
+      "importance": "Medium"
+    },
+    {
+      "id": "bef8bb3b-40ed-423b-89a0-e68c9be63298",
+      "date": "2028-01-29",
+      "opponent": "Chelmsford City",
+      "importance": "Medium"
+    },
+    {
+      "id": "c1d6e8dc-1e7f-45b1-98bd-781c121bfa66",
+      "date": "2028-02-05",
+      "opponent": "Worthing",
+      "importance": "Medium"
+    },
+    {
+      "id": "081c65d0-1b81-4b52-8eaf-2ac5ab012040",
+      "date": "2028-02-12",
+      "opponent": "Hornchurch",
+      "importance": "Medium"
+    },
+    {
+      "id": "389fd219-1cd4-49b4-910c-6144e3dce8f3",
+      "date": "2028-02-19",
+      "opponent": "Aldershot Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "7904f4bd-0f5d-4cb9-8d8f-99ec5be42ae9",
+      "date": "2028-02-22",
+      "opponent": "Cheshunt",
+      "importance": "Medium"
+    },
+    {
+      "id": "b6fe7a12-09a9-4e18-a1eb-a1f3157137a7",
+      "date": "2028-02-26",
+      "opponent": "Billericay Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "db782867-514a-4e75-bc90-198f730be799",
+      "date": "2028-03-04",
+      "opponent": "Chatham Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "7cda4f0f-afd6-4578-8048-4d6d861517b9",
+      "date": "2028-03-07",
+      "opponent": "Truro City",
+      "importance": "Medium"
+    },
+    {
+      "id": "12c1aa04-6bba-41fc-ae2d-8febd27a42d1",
+      "date": "2028-03-11",
+      "opponent": "Havant & Waterlooville",
+      "importance": "Medium"
+    },
+    {
+      "id": "d6bf072c-192d-4fa6-9274-5b11c015ad33",
+      "date": "2028-03-18",
+      "opponent": "Dorking Wanderers",
+      "importance": "Medium"
+    },
+    {
+      "id": "f767810e-babd-4dc6-8d13-bb2c0f73b47c",
+      "date": "2028-03-25",
+      "opponent": "Braintree Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "0b4e80ba-7204-4287-8773-84ec8bfb13c2",
+      "date": "2028-04-01",
+      "opponent": "Dover Athletic",
+      "importance": "Medium"
+    },
+    {
+      "id": "d3b466d9-d75e-49f1-bc48-f86a406e9be1",
+      "date": "2028-04-07",
+      "opponent": "Maidstone United",
+      "importance": "Medium"
+    },
+    {
+      "id": "d84a6ff5-c11b-4b05-8199-b3a438df6b3e",
+      "date": "2028-04-10",
+      "opponent": "AFC Totton",
+      "importance": "Medium"
+    },
+    {
+      "id": "06e8c4a8-22fa-4978-8461-d582348345d8",
+      "date": "2028-04-14",
+      "opponent": "Bracknell Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "bfc8924a-ee86-43a4-8f3e-a6567a821b2b",
+      "date": "2028-04-17",
+      "opponent": "Farnborough",
+      "importance": "Medium"
+    },
+    {
+      "id": "d8e82aba-38e3-4f9f-b8f6-d6420b865805",
+      "date": "2028-04-22",
+      "opponent": "Salisbury",
+      "importance": "Medium"
     }
   ],
-  "rejectedPlayers": {},
+  "rejectedPlayers": {
+    "9fa2104a-470f-473a-a938-8b2830815ab2": [
+      "Hisashi Roddy"
+    ]
+  },
   "rejectedTraining": {},
   "files": {
     "status": "players-current.csv",
-    "abilities": "players.csv"
+    "abilities": "players-current.csv"
   }
 }

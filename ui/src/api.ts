@@ -1,4 +1,4 @@
-import type { AppState, MatchPlanResponse, TrainingResponse, RestResponse } from './types';
+import type { AppState, MatchPlanResponse, TrainingResponse, RestResponse, PlayerListItem, ConfirmedLineup, ConfirmedLineupsData } from './types';
 
 // Type definition for window.ipcRenderer
 declare global {
@@ -19,15 +19,15 @@ export const api = {
   },
 
   runMatchSelector: async (
-    matches: any[], 
-    rejected: Record<string, string[]>, 
+    matches: any[],
+    rejected: Record<string, string[]>,
     files: { status: string; abilities: string }
   ): Promise<MatchPlanResponse> => {
     return await window.ipcRenderer.invoke('run-match-selector', { matches, rejected, files });
   },
 
   runTrainingAdvisor: async (
-    rejected: Record<string, string>, 
+    rejected: Record<string, string>,
     files: { status: string; abilities: string }
   ): Promise<TrainingResponse> => {
     return await window.ipcRenderer.invoke('run-training-advisor', { rejected, files });
@@ -37,5 +37,23 @@ export const api = {
     files: { status: string; abilities: string }
   ): Promise<RestResponse> => {
     return await window.ipcRenderer.invoke('run-rest-advisor', { files });
+  },
+
+  // Get player list for override modal
+  getPlayerList: async (
+    statusFile: string = 'players-current.csv'
+  ): Promise<{ success: boolean; players?: PlayerListItem[]; error?: string }> => {
+    return await window.ipcRenderer.invoke('get-player-list', { statusFile });
+  },
+
+  // Confirmed lineups management
+  getConfirmedLineups: async (): Promise<ConfirmedLineupsData> => {
+    return await window.ipcRenderer.invoke('get-confirmed-lineups');
+  },
+
+  saveConfirmedLineup: async (
+    lineup: ConfirmedLineup
+  ): Promise<{ success: boolean; error?: string }> => {
+    return await window.ipcRenderer.invoke('save-confirmed-lineup', lineup);
   }
 };

@@ -1,147 +1,119 @@
 # Quick Start Guide
 
-## Getting Your Football Manager Team Selection Script Running
+## Using the UI Application (Recommended)
 
-### Step 1: Install Python Dependencies
+The UI application is the primary way to use this tool.
+
+### Step 1: Install Dependencies
 
 ```bash
+# Install Python dependencies
 pip install -r requirements.txt
+
+# Install Node.js dependencies for UI
+cd ui
+npm install
 ```
 
 ### Step 2: Prepare Your Data
 
-You have two options:
+1. Export your Football Manager player data from FMRTE to `FM26 Players.xlsx`
+2. Place the file in the project root directory
+3. The UI will automatically refresh player data when launched
 
-**Option A: Export from your existing spreadsheet**
-- Save your Football Manager spreadsheet as `players.csv` or `players.xlsx`
-- Place it in the same folder as the Python scripts
+### Step 3: Launch the UI
 
-**Option B: Use the sample data**
-- The included `players.csv` contains sample data you can use for testing
-- Replace it with your own data when ready
-
-### Step 3: Run the Script
-
-**For the best results (recommended):**
 ```bash
-python fm_team_selector_optimal.py players.csv
+cd ui
+npm run dev
 ```
 
-**For a quick/simple selection:**
+This opens the Electron application with these tabs:
+
+- **Fixture List** - Manage your upcoming matches
+- **Match Selection** - View optimized lineups for each match
+- **Position Training** - Training recommendations
+- **Rest & Rotation** - Player fatigue management
+
+### Step 4: Workflow
+
+1. **Add Fixtures**: In the Fixture List tab, add your upcoming matches with dates and importance levels
+2. **Generate Lineups**: Switch to Match Selection tab - lineups are auto-generated for the next 5 matches
+3. **Manual Overrides**: Click the edit icon on any position to override with a different player
+4. **Confirm Lineup**: Click "Confirm" to lock a lineup - this prevents automatic recalculation
+5. **Advance Date**: Use the sidebar date picker to move through your season
+
+### Match Importance Levels
+
+- **High**: Best XI selected based purely on match effectiveness (no rotation penalties)
+- **Medium**: Balanced selection with some rotation consideration
+- **Low**: Development-focused, rotates players and considers training
+- **Sharpness**: Prioritizes players who need match time to build form
+
+### Key Features
+
+- **5-Match Limit**: Only next 5 matches have lineups calculated (performance optimization)
+- **Manual Overrides**: Override any position, shows "MANUAL" badge
+- **Confirm/Lock**: Prevents recalculation of confirmed lineups
+- **Historical Tracking**: Confirmed lineups are saved to track consecutive matches
+
+---
+
+## CLI Scripts (Advanced Users)
+
+For automation or when the UI isn't suitable:
+
+### Quick Selection
+
 ```bash
-python fm_team_selector.py players.csv
+# Optimal lineup (recommended)
+python fm_team_selector_optimal.py players-current.csv
+
+# Basic greedy selection
+python fm_team_selector.py players-current.csv
+
+# Compare both methods
+python compare_selections.py players-current.csv
 ```
 
-**To compare both methods:**
+### Match-Ready Selection (with fitness/fatigue)
+
 ```bash
-python compare_selections.py players.csv
+python fm_match_ready_selector.py
 ```
 
-### Step 4: View Results
+### Training Advisor
 
-The script will:
-1. Display your optimal Starting XI in the terminal
-2. Show natural positions and ratings for each player
-3. Suggest 7 substitutes
-4. Export everything to `starting_xi.csv`
-
-## Example Output
-
-```
-======================================================================
-OPTIMAL STARTING XI
-======================================================================
-
-Attack:
-  STC   : Alan Hackney         [AM(C)]   (92.5)
-
-Attacking Midfield:
-  AML   : Scott Little         [AM(R)]   (91.1)
-  AMC   : Marc Mitchell        [AM(C)]   (91.9)
-  AMR   : Paul Stroud          [AM(R)]   (90.2)
-
-Defensive Midfield:
-  DM1   : Andrey Quintino      [AM(R)]   (89.3)
-  DM2   : Aydin Webb           [AM(C)]   (86.6)
-
-Defense:
-  DL    : Hisashi Roddy        [D(R/L)]  (91.6)
-  DC1   : Asa Hall             [D(C)]    (87.1)
-  DC2   : Jayden Batterbatch   [D(C)]    (84.1)
-  DR    : Ryan Penny           [DM(L)]   (80.4)
-
-Goalkeeper:
-  GK    : Ashley Sarahs        [GK]      (89.3)
-
-======================================================================
-Average Team Rating: 88.55
-======================================================================
+```bash
+python fm_training_advisor.py
 ```
 
-## Customizing for Different Formations
+See [ADVANCED_FEATURES.md](ADVANCED_FEATURES.md) for detailed CLI documentation.
 
-To change the formation, edit the `formation` list in the script:
-
-### Example: 4-4-2 Formation
-```python
-formation = [
-    ('GK', 'GK'),
-    ('DL', 'D(R/L)'),
-    ('DC1', 'D(C)'),
-    ('DC2', 'D(C)'),
-    ('DR', 'D(R/L)'),
-    ('ML', 'AM(L)'),   # Changed from AML
-    ('MC1', 'DM_avg'), # Changed from DM1
-    ('MC2', 'DM_avg'), # Changed from DM2
-    ('MR', 'AM(R)'),   # Changed from AMR
-    ('STC1', 'Striker'),
-    ('STC2', 'Striker')
-]
-```
-
-### Example: 3-5-2 Formation
-```python
-formation = [
-    ('GK', 'GK'),
-    ('DC1', 'D(C)'),
-    ('DC2', 'D(C)'),
-    ('DC3', 'D(C)'),
-    ('WBL', 'D(R/L)'),  # Wing back left
-    ('DM', 'DM_avg'),
-    ('MC1', 'AM(C)'),
-    ('MC2', 'AM(C)'),
-    ('WBR', 'D(R/L)'),  # Wing back right
-    ('STC1', 'Striker'),
-    ('STC2', 'Striker')
-]
-```
+---
 
 ## Troubleshooting
 
-**"ModuleNotFoundError: No module named 'pandas'"**
-- Run: `pip install -r requirements.txt`
+**UI won't start:**
+- Ensure Node.js 18+ is installed
+- Run `npm install` in the `ui/` directory
+- Check the console for Python path errors
 
-**"FileNotFoundError: [Errno 2] No such file or directory: 'players.csv'"**
-- Make sure your data file is in the same folder as the script
-- Or provide the full path: `python fm_team_selector_optimal.py /path/to/players.csv`
+**No players shown:**
+- Verify `FM26 Players.xlsx` exists in the project root
+- Check that it has a "Paste Full" sheet with player data
 
-**Players have weird ratings or missing data**
-- Check your CSV/Excel file has the correct column names
-- Column names are case-sensitive: `AM(L)` not `am(l)`
+**Wrong lineups:**
+- Check match importance settings
+- Verify player data is up to date (condition, fatigue, sharpness)
+- Clear manual overrides if needed
 
-## Tips for Best Results
-
-1. **Keep your spreadsheet updated** - Update player ratings as they develop
-2. **Use the optimal version** - It's barely slower but gives much better results
-3. **Check natural positions** - The script shows [Natural Position] so you can see who's playing out of position
-4. **Review substitutes** - Good backup options are suggested automatically
-5. **Export results** - The CSV export makes it easy to track your selections
+**Rotation not working:**
+- Confirm lineups to track consecutive matches
+- Check `ui/data/confirmed_lineups.json` for history
 
 ## Need Help?
 
-Check these files:
 - `README.md` - Full documentation
-- `compare_selections.py` - See the difference between greedy and optimal
-- Sample data in `players.csv` - Example of correct format
-
-Happy managing!
+- `CLAUDE.md` - Technical reference for AI assistants
+- `ADVANCED_FEATURES.md` - CLI script documentation

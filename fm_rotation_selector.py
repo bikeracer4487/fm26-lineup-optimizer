@@ -30,10 +30,6 @@ class RotationSelector:
             if col in self.df.columns:
                 self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
         
-        # Add a DM average column
-        if 'DM(L)' in self.df.columns and 'DM(R)' in self.df.columns:
-            self.df['DM_avg'] = (self.df['DM(L)'] + self.df['DM(R)']) / 2
-        
         self.first_xi = {}
         self.rotation_xi = {}
     
@@ -313,7 +309,7 @@ def main():
     if len(sys.argv) > 1:
         filepath = sys.argv[1]
     else:
-        filepath = 'players.csv'
+        filepath = 'players-current.csv'
     
     try:
         # Initialize selector

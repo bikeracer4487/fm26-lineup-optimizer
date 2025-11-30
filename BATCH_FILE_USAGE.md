@@ -19,10 +19,9 @@ The `update_players.bat` batch file automates the process of updating player dat
 The batch file performs the following steps automatically:
 
 1. **Reads FM26 Players.xlsx** and counts populated rows in the "Paste Full" sheet
-2. **Updates players.csv** with data from the "Planner" sheet (columns A-N)
-3. **Updates players-current.csv** with data from the "Paste Full" sheet (columns A-CH)
-4. **Runs the match-ready team selector** using the updated data
-5. **Pauses** so you can read the lineup results
+2. **Updates players-current.csv** with data from the "Paste Full" sheet (columns A-CH)
+3. **Runs the match-ready team selector** using the updated data
+4. **Pauses** so you can read the lineup results
 
 ## Usage
 
@@ -48,8 +47,7 @@ Your `FM26 Players.xlsx` file must contain:
 
 | File | Source | Columns | Purpose |
 |------|--------|---------|---------|
-| `players.csv` | Planner sheet | A-N (14 cols) | Basic player ratings for lineup selection |
-| `players-current.csv` | Paste Full sheet | A-CH (86 cols) | Detailed player data including injuries, fitness, etc. |
+| `players-current.csv` | Paste Full sheet | A-CH (86 cols) | Complete player data including ratings, injuries, fitness, etc. |
 
 ## Output
 
@@ -94,7 +92,7 @@ If you prefer to run the steps manually:
 python update_player_data.py
 
 # Step 2: Run team selector
-python fm_match_ready_selector.py players-current.csv players.csv
+python fm_match_ready_selector.py players-current.csv
 ```
 
 ## How the Row Counting Works

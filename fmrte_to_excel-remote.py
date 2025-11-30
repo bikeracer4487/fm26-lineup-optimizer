@@ -417,13 +417,13 @@ def get_tab_coordinates(window_rect, tab_name):
     hwnd, left, top, right, bottom = window_rect
     
     # Y position: tabs are 205 pixels from window top
-    y = top + 260
+    y = top + 205
     
     # X positions for each tab (from window left edge)
     tab_x_offsets = {
-        "Brixham": 240,
-        "Brixham U21": 350,
-        "Brixham U18": 480,
+        "Brixham": 189,
+        "Brixham U21": 284,
+        "Brixham U18": 385,
     }
     
     x_offset = tab_x_offsets.get(tab_name, 189)
@@ -449,8 +449,8 @@ def get_player_grid_coordinates(window_rect):
     hwnd, left, top, right, bottom = window_rect
     
     # First player name cell position
-    x = left + 410
-    y = top + 340
+    x = left + 335
+    y = top + 270
     
     return (x, y)
 

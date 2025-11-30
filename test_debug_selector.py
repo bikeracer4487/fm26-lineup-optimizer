@@ -6,7 +6,7 @@ Quick test script to debug DC2 and DM(R) assignment issues.
 from fm_match_ready_selector import MatchReadySelector
 
 # Load the selector
-selector = MatchReadySelector('players-current.csv', 'players.csv')
+selector = MatchReadySelector('players-current.csv')
 
 # Run with debug mode for a single match
 print("\n" + "=" * 100)

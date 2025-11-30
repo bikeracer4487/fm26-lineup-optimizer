@@ -9,7 +9,7 @@ const DEFAULT_STATE: AppState = {
   rejectedTraining: {},
   files: {
     status: 'players-current.csv',
-    abilities: 'players.csv'
+    abilities: 'players-current.csv'
   }
 };
 
@@ -49,31 +49,25 @@ export function useAppState() {
   };
 
   const updateMatches = (matches: Match[]) => {
-    const idToRejections: Record<string, string[]> = {};
-    Object.entries(state.rejectedPlayers).forEach(([index, players]) => {
-      const originalMatch = state.matches[Number(index)];
-      if (originalMatch) {
-        idToRejections[originalMatch.id] = players;
+    // Rejections are now keyed by matchId (UUID), no index remapping needed
+    // Just filter out rejections for matches that no longer exist
+    const validMatchIds = new Set(matches.map(m => m.id));
+    const filteredRejections: Record<string, string[]> = {};
+    Object.entries(state.rejectedPlayers).forEach(([matchId, players]) => {
+      if (validMatchIds.has(matchId) && players.length > 0) {
+        filteredRejections[matchId] = players;
       }
     });
 
-    const remappedRejected: Record<string, string[]> = {};
-    matches.forEach((match, idx) => {
-      const players = idToRejections[match.id];
-      if (players && players.length > 0) {
-        remappedRejected[idx.toString()] = players;
-      }
-    });
-
-    save({ ...state, matches, rejectedPlayers: remappedRejected });
+    save({ ...state, matches, rejectedPlayers: filteredRejections });
   };
 
-  const updateRejectedPlayers = (matchIndex: string, players: string[]) => {
+  const updateRejectedPlayers = (matchId: string, players: string[]) => {
     save({
       ...state,
       rejectedPlayers: {
         ...state.rejectedPlayers,
-        [matchIndex]: players
+        [matchId]: players
       }
     });
   };
@@ -100,6 +94,64 @@ export function useAppState() {
     save({ ...state, files });
   };
 
+  // Confirm a match lineup (locks it from recalculation)
+  const confirmMatch = (matchId: string) => {
+    const updatedMatches = state.matches.map(m => {
+      if (m.id === matchId) {
+        return {
+          ...m,
+          confirmed: true,
+          confirmedAt: new Date().toISOString()
+        };
+      }
+      return m;
+    });
+    save({ ...state, matches: updatedMatches });
+  };
+
+  // Undo confirmation (allows recalculation again)
+  const undoConfirmation = (matchId: string) => {
+    const updatedMatches = state.matches.map(m => {
+      if (m.id === matchId) {
+        return {
+          ...m,
+          confirmed: false,
+          confirmedAt: undefined
+        };
+      }
+      return m;
+    });
+    save({ ...state, matches: updatedMatches });
+  };
+
+  // Update manual overrides for a specific match
+  const updateManualOverrides = (matchId: string, overrides: Record<string, string>) => {
+    const updatedMatches = state.matches.map(m => {
+      if (m.id === matchId) {
+        return {
+          ...m,
+          manualOverrides: overrides
+        };
+      }
+      return m;
+    });
+    save({ ...state, matches: updatedMatches });
+  };
+
+  // Clear all manual overrides for a specific match
+  const clearManualOverrides = (matchId: string) => {
+    const updatedMatches = state.matches.map(m => {
+      if (m.id === matchId) {
+        return {
+          ...m,
+          manualOverrides: undefined
+        };
+      }
+      return m;
+    });
+    save({ ...state, matches: updatedMatches });
+  };
+
   return {
     state,
     loading,
@@ -110,6 +162,10 @@ export function useAppState() {
     resetRejectedPlayers,
     updateRejectedTraining,
     resetRejectedTraining,
-    updateFiles
+    updateFiles,
+    confirmMatch,
+    undoConfirmation,
+    updateManualOverrides,
+    clearManualOverrides
   };
 }

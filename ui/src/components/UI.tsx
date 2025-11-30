@@ -1,7 +1,6 @@
 import React from 'react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { motion } from 'framer-motion';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -29,11 +28,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     return (
-      <motion.button
+      <button
         ref={ref}
-        whileTap={{ scale: 0.98 }}
         className={cn(
-          'rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-fm-teal/50 disabled:opacity-50 disabled:cursor-not-allowed',
+          'rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-fm-teal/50 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]',
           variants[variant],
           sizes[size],
           className
@@ -76,16 +74,17 @@ export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttrib
   )
 );
 
-export const Badge = ({ children, variant = 'default', className }: { children: React.ReactNode, variant?: 'default' | 'success' | 'warning' | 'danger', className?: string }) => {
+export const Badge = ({ children, variant = 'default', className, title }: { children: React.ReactNode, variant?: 'default' | 'success' | 'warning' | 'danger' | 'info', className?: string, title?: string }) => {
   const variants = {
     default: 'bg-white/10 text-white',
     success: 'bg-fm-success/20 text-fm-success border border-fm-success/20',
     warning: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/20',
     danger: 'bg-fm-danger/20 text-fm-danger border border-fm-danger/20',
+    info: 'bg-blue-500/20 text-blue-400 border border-blue-500/20',
   };
-  
+
   return (
-    <span className={cn('px-2 py-0.5 rounded text-xs font-medium', variants[variant], className)}>
+    <span className={cn('px-2 py-0.5 rounded text-xs font-medium', variants[variant], className)} title={title}>
       {children}
     </span>
   );

@@ -5,20 +5,24 @@ import { MatchSelectionTab } from './tabs/MatchSelectionTab';
 import { TrainingTab } from './tabs/TrainingTab';
 import { RestTab } from './tabs/RestTab';
 import { Button, Input } from './components/UI';
-import { Calendar, Users, Dumbbell, Settings, Save, ChevronLeft, ChevronRight, BatteryCharging } from 'lucide-react';
+import { Calendar, Users, Dumbbell, Settings, ChevronLeft, ChevronRight, BatteryCharging } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
-  const { 
-    state, 
-    loading, 
-    updateDate, 
-    updateMatches, 
-    updateRejectedPlayers, 
+  const {
+    state,
+    loading,
+    updateDate,
+    updateMatches,
+    updateRejectedPlayers,
     resetRejectedPlayers,
     updateRejectedTraining,
     resetRejectedTraining,
-    updateFiles
+    updateFiles,
+    confirmMatch,
+    undoConfirmation,
+    updateManualOverrides,
+    clearManualOverrides
   } = useAppState();
 
   const [activeTab, setActiveTab] = useState<'fixtures' | 'selection' | 'training' | 'rest'>('fixtures');
@@ -163,10 +167,14 @@ function App() {
               />
             )}
             {activeTab === 'selection' && (
-              <MatchSelectionTab 
-                state={state} 
+              <MatchSelectionTab
+                state={state}
                 onRejectPlayer={updateRejectedPlayers}
                 onResetRejections={resetRejectedPlayers}
+                onConfirmMatch={confirmMatch}
+                onUndoConfirmation={undoConfirmation}
+                onUpdateManualOverrides={updateManualOverrides}
+                onClearManualOverrides={clearManualOverrides}
               />
             )}
             {activeTab === 'training' && (

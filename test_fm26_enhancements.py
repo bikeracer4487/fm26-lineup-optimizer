@@ -21,7 +21,7 @@ def test_fm26_enhancements():
         print("\n[TEST 2] Class Instantiation...")
         selector = MatchReadySelector(
             'players-current.csv',
-            'players.csv',
+            None,
             'training_recommendations.csv'
         )
         print("         Class instantiated successfully: PASSED")
