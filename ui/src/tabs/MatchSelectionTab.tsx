@@ -550,10 +550,28 @@ function MatchCard({ item, match, onReject, onOverride, onClearOverride, onConfi
 
       <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         {positions.map(pos => {
-          const player = getPlayer(pos);
-          if (!player) return null;
-
+          let player = getPlayer(pos);
           const overridden = isOverridden(pos);
+          const overriddenPlayerName = overridden ? manualOverrides[pos] : null;
+
+          // Handle case where selection doesn't reflect override yet
+          if (!player && overridden && overriddenPlayerName) {
+            // Create minimal player object for display
+            player = {
+              name: overriddenPlayerName,
+              rating: 0,
+              condition: 1,
+              sharpness: 1,
+              fatigue: 0,
+              age: 0,
+              status: []
+            };
+          } else if (player && overridden && player.name !== overriddenPlayerName) {
+            // Override exists but selection has different player - use override name
+            player = { ...player, name: overriddenPlayerName! };
+          }
+
+          if (!player) return null;
 
           return (
             <PlayerCard
