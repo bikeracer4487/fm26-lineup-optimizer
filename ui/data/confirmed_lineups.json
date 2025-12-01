@@ -165,7 +165,7 @@
       "date": "2027-10-09",
       "opponent": "Stanway Rovers",
       "importance": "High",
-      "confirmedAt": "2025-11-30T18:23:04.100Z",
+      "confirmedAt": "2025-11-30T22:11:39.836Z",
       "selection": {
         "GK": "Ashley Sarahs",
         "DM(L)": "Aydin Webb",
@@ -185,19 +185,179 @@
       "date": "2027-10-12",
       "opponent": "Bracknell Town",
       "importance": "Medium",
-      "confirmedAt": "2025-11-30T18:51:32.511Z",
+      "confirmedAt": "2025-11-30T22:18:18.596Z",
       "selection": {
         "GK": "Ashley Sarahs",
         "DM(L)": "Aydin Webb",
-        "AML": "Daniel Willard",
         "DL": "Gustavo Xavier",
         "DC2": "Jayden Cumberbatch",
+        "DR": "Joseph James",
         "AMR": "Mateusz Widz",
         "DM(R)": "Ollie Harrison",
         "AMC": "Paul Stroud",
         "STC": "Scot Little",
         "DC1": "Zach Awe",
-        "DR": "Nesbert Ncube"
+        "AML": "Teddy Lawrence"
+      }
+    },
+    {
+      "matchId": "32e028c4-32e7-4384-a016-7323598298fe",
+      "date": "2027-10-16",
+      "opponent": "Truro City",
+      "importance": "Medium",
+      "confirmedAt": "2025-11-30T22:36:05.889Z",
+      "selection": {
+        "GK": "Ashley Sarahs",
+        "DM(L)": "Aydin Webb",
+        "AML": "Daniel Willard",
+        "DL": "Gustavo Xavier",
+        "DR": "Hisashi Roddy",
+        "DC2": "Joseph James",
+        "AMR": "Mateusz Widz",
+        "DM(R)": "Ollie Harrison",
+        "AMC": "Paul Stroud",
+        "STC": "Scot Little",
+        "DC1": "Zach Awe"
+      }
+    },
+    {
+      "matchId": "9f1d3c3a-ae33-449c-9f0c-0f11d5af4214",
+      "date": "2027-10-19",
+      "opponent": "Chatham Town",
+      "importance": "Medium",
+      "confirmedAt": "2025-11-30T22:42:13.552Z",
+      "selection": {
+        "GK": "Ashley Sarahs",
+        "DM(L)": "Aydin Webb",
+        "DL": "Gustavo Xavier",
+        "DR": "Hisashi Roddy",
+        "DC2": "Joseph James",
+        "AMR": "Mateusz Widz",
+        "AMC": "Mattia Mendolia",
+        "DM(R)": "Ollie Harrison",
+        "STC": "Paul Stroud",
+        "AML": "Scot Little",
+        "DC1": "Zach Awe"
+      }
+    },
+    {
+      "matchId": "4d83d5e5-a462-49e3-95b5-8a48611a1d89",
+      "date": "2027-10-23",
+      "opponent": "Havant & Waterlooville",
+      "importance": "Medium",
+      "confirmedAt": "2025-11-30T22:55:54.675Z",
+      "selection": {
+        "DM(L)": "Allan Hall",
+        "GK": "Ashley Sarahs",
+        "DM(R)": "Aydin Webb",
+        "AML": "Daniel Willard",
+        "DL": "Gustavo Xavier",
+        "DR": "Hisashi Roddy",
+        "DC2": "Joseph James",
+        "AMR": "Mateusz Widz",
+        "AMC": "Mattia Mendolia",
+        "STC": "Paul Stroud",
+        "DC1": "Zach Awe"
+      }
+    },
+    {
+      "matchId": "2ca085ae-f6f6-4ffe-8169-295dc1993b80",
+      "date": "2027-10-26",
+      "opponent": "Dorking Wanderers",
+      "importance": "Medium",
+      "confirmedAt": "2025-12-01T00:30:06.318Z",
+      "selection": {
+        "DM(L)": "Allan Hall",
+        "GK": "Ashley Sarahs",
+        "DM(R)": "Aydin Webb",
+        "AML": "Daniel Willard",
+        "AMR": "Fletcher Poole",
+        "DL": "Gustavo Xavier",
+        "DR": "Hisashi Roddy",
+        "DC2": "Jayden Cumberbatch",
+        "AMC": "Paul Stroud",
+        "STC": "Mateusz Widz",
+        "DC1": "Zach Awe"
+      }
+    },
+    {
+      "matchId": "e1e89d2b-0e05-47be-9f8c-2fd7d76f72dd",
+      "date": "2027-10-30",
+      "opponent": "Scunthorpe Utd",
+      "importance": "High",
+      "confirmedAt": "2025-12-01T01:04:50.782Z",
+      "selection": {
+        "GK": "Ashley Sarahs",
+        "DM(L)": "Aydin Webb",
+        "AML": "Daniel Willard",
+        "DL": "Gustavo Xavier",
+        "DR": "Hisashi Roddy",
+        "DC2": "Jayden Cumberbatch",
+        "AMR": "Mateusz Widz",
+        "AMC": "Mattia Mendolia",
+        "DM(R)": "Ollie Harrison",
+        "STC": "Paul Stroud",
+        "DC1": "Zach Awe"
+      }
+    },
+    {
+      "matchId": "1f2e9251-27d9-4a00-afb7-2bcaa9960697",
+      "date": "2027-11-06",
+      "opponent": "Braintree Town",
+      "importance": "Medium",
+      "confirmedAt": "2025-12-01T02:56:49.964Z",
+      "selection": {
+        "GK": "Ashley Sarahs",
+        "DM(L)": "Aydin Webb",
+        "AML": "Daniel Willard",
+        "DL": "Gustavo Xavier",
+        "DR": "Hisashi Roddy",
+        "DC2": "Jayden Cumberbatch",
+        "AMR": "Korbyn Ednie",
+        "AMC": "Paul Stroud",
+        "DM(R)": "Allan Hall",
+        "STC": "Scot Little",
+        "DC1": "Zach Awe"
+      }
+    },
+    {
+      "matchId": "e382dfe8-b23f-4d86-976e-214125df9888",
+      "date": "2027-11-09",
+      "opponent": "Dover Athletic",
+      "importance": "Medium",
+      "confirmedAt": "2025-12-01T03:37:20.042Z",
+      "selection": {
+        "GK": "Ashley Sarahs",
+        "DM(L)": "Aydin Webb",
+        "DL": "Gustavo Xavier",
+        "DR": "Hisashi Roddy",
+        "DC2": "Jayden Cumberbatch",
+        "STC": "Korbyn Ednie",
+        "AMR": "Mateusz Widz",
+        "AMC": "Paul Stroud",
+        "DM(R)": "Allan Hall",
+        "AML": "Scot Little",
+        "DC1": "Zach Awe"
+      }
+    },
+    {
+      "matchId": "6717e8f0-2b4e-4fc9-ab63-b00a8dc4e34a",
+      "date": "2027-11-13",
+      "opponent": "Hereford",
+      "importance": "High",
+      "confirmedAt": "2025-12-01T03:42:51.480Z",
+      "selection": {
+        "GK": "Ashley Sarahs",
+        "DM(L)": "Aydin Webb",
+        "AML": "Daniel Willard",
+        "STC": "Scot Little",
+        "DL": "Gustavo Xavier",
+        "DR": "Hisashi Roddy",
+        "DC2": "Jayden Cumberbatch",
+        "AMR": "Korbyn Ednie",
+        "AMC": "Paul Stroud",
+        "DM(R)": "Allan Hall",
+        "DC1": "Zach Awe"
       }
     }
   ]

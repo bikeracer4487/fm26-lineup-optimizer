@@ -55,5 +55,11 @@ export const api = {
     lineup: ConfirmedLineup
   ): Promise<{ success: boolean; error?: string }> => {
     return await window.ipcRenderer.invoke('save-confirmed-lineup', lineup);
+  },
+
+  removeConfirmedLineup: async (
+    matchId: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    return await window.ipcRenderer.invoke('remove-confirmed-lineup', matchId);
   }
 };

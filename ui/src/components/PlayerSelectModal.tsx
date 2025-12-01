@@ -10,6 +10,7 @@ interface PlayerSelectModalProps {
   onSelect: (playerName: string) => void;
   position: string;
   excludedPlayers: string[];
+  playersInPositions?: Record<string, string>;  // playerName -> position (for visual indicator)
   statusFile?: string;
 }
 
@@ -19,6 +20,7 @@ export function PlayerSelectModal({
   onSelect,
   position,
   excludedPlayers,
+  playersInPositions,
   statusFile = 'players-current.csv'
 }: PlayerSelectModalProps) {
   const [players, setPlayers] = useState<PlayerListItem[]>([]);
@@ -150,20 +152,30 @@ export function PlayerSelectModal({
 
             {!loading && !error && filteredPlayers.length > 0 && (
               <div className="space-y-1">
-                {filteredPlayers.map(player => (
-                  <button
-                    key={player.name}
-                    onClick={() => handleSelect(player.name)}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/10 transition-colors text-left group"
-                  >
-                    <span className="text-white font-medium group-hover:text-fm-teal transition-colors">
-                      {player.name}
-                    </span>
-                    <span className="text-fm-light/50 text-sm">
-                      {player.position}
-                    </span>
-                  </button>
-                ))}
+                {filteredPlayers.map(player => {
+                  const currentPosition = playersInPositions?.[player.name];
+                  return (
+                    <button
+                      key={player.name}
+                      onClick={() => handleSelect(player.name)}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/10 transition-colors text-left group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-white font-medium group-hover:text-fm-teal transition-colors">
+                          {player.name}
+                        </span>
+                        {currentPosition && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-fm-amber/20 text-fm-amber">
+                            in {currentPosition}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-fm-light/50 text-sm">
+                        {player.position}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
