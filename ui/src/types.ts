@@ -93,6 +93,11 @@ export interface RestRecommendation {
   priority: string; // "Urgent", "High", "Medium", "Low"
   reasons: string[];
   threshold: number;
+  // New fatigue-focused fields
+  recovery_days: number;           // Estimated days to recover to safe zone
+  recovery_method: string;         // "vacation", "rest", "rotation", "monitor"
+  fatigue_percentage: number;      // Fatigue as percentage of personal threshold
+  warning_threshold: number;       // 80% of personal threshold
 }
 
 export interface TrainingResponse {
