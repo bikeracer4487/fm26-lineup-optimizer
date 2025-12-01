@@ -1,5 +1,5 @@
 {
-  "currentDate": "2027-12-17",
+  "currentDate": "2028-01-12",
   "matches": [
     {
       "id": "d329a55a-7016-40c3-9d02-5ddedf1a4073",
@@ -489,37 +489,79 @@
       "id": "e0ee74ee-6735-4207-9828-edbfe429b12b",
       "date": "2027-12-18",
       "opponent": "Salisbury",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "DL": "Taye Weir",
+        "DM(R)": "Allan Hall"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-01T17:33:40.102Z"
     },
     {
       "id": "b585ecda-1727-4eb6-88a1-12b588a57644",
       "date": "2027-12-26",
       "opponent": "Taunton Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "DR": "Nesbert Ncube",
+        "DL": "Hisashi Roddy",
+        "DM(R)": "Allan Hall",
+        "DM(L)": "Ollie Harrison",
+        "AMR": "Korbyn Ednie",
+        "AMC": "Paul Stroud",
+        "STC": "Scot Little",
+        "DC1": "Zach Awe",
+        "DC2": "Jayden Cumberbatch"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-01T18:35:39.840Z"
     },
     {
       "id": "7a23c648-aff1-4547-81b6-39413a01f119",
       "date": "2027-12-29",
       "opponent": "Torquay Utd",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "DR": "Nesbert Ncube",
+        "DM(L)": "Ollie Harrison",
+        "DM(R)": "Allan Hall",
+        "AMR": "Korbyn Ednie",
+        "STC": "Scot Little",
+        "AML": "Gastón Ramírez"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-01T19:20:00.995Z"
     },
     {
       "id": "54194b38-ba4b-40fb-8e7a-09901b69726f",
       "date": "2028-01-02",
       "opponent": "Chippenham Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "STC": "Scot Little"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-01T20:06:55.187Z"
     },
     {
       "id": "ef40f596-1199-4479-82de-9dbefc643348",
       "date": "2028-01-08",
       "opponent": "Carlisle Utd",
-      "importance": "High"
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-01T22:54:58.486Z"
     },
     {
       "id": "49d01a6d-1415-4ac3-8798-021cafdf26e8",
       "date": "2028-01-12",
       "opponent": "Forest Green",
-      "importance": "High"
+      "importance": "High",
+      "manualOverrides": {
+        "AMC": "Paul Stroud",
+        "STC": "Scot Little"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-01T22:57:33.555Z"
     },
     {
       "id": "79bac723-6509-4791-a6a3-d2d7ff2b0dfe",
@@ -540,8 +582,14 @@
       "importance": "Medium"
     },
     {
-      "id": "bef8bb3b-40ed-423b-89a0-e68c9be63298",
+      "id": "4de3678d-8435-4074-b7ea-9e9f5a266ade",
       "date": "2028-01-29",
+      "opponent": "South Shields",
+      "importance": "High"
+    },
+    {
+      "id": "bef8bb3b-40ed-423b-89a0-e68c9be63298",
+      "date": "2028-02-01",
       "opponent": "Chelmsford City",
       "importance": "Medium"
     },
@@ -643,14 +691,18 @@
     }
   ],
   "rejectedPlayers": {
-    "15839cff-f235-4bbb-a50b-2465cf51edb9": [
-      "Gustavo Xavier"
+    "b585ecda-1727-4eb6-88a1-12b588a57644": [
+      "Daniel Willard",
+      "Paul Jarvis",
+      "Fletcher Poole",
+      "Aydin Webb",
+      "Marcel Guzynski"
     ],
-    "a423047c-5afc-40c0-b227-ab6aa04377b6": [
-      "Gustavo Xavier"
+    "ef40f596-1199-4479-82de-9dbefc643348": [
+      "Daniel Willard"
     ],
-    "a6140927-5ad6-477e-a3d0-c7c8d8d1b223": [
-      "Zach Awe"
+    "49d01a6d-1415-4ac3-8798-021cafdf26e8": [
+      "Hisashi Roddy"
     ]
   },
   "rejectedTraining": {},
