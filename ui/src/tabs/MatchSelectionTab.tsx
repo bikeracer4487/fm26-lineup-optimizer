@@ -41,7 +41,8 @@ export function MatchSelectionTab({
     matchId: string;
     position: string;
     excludedPlayers: string[];
-  }>({ isOpen: false, matchId: '', position: '', excludedPlayers: [] });
+    playersInPositions: Record<string, string>;  // playerName -> position (for visual indicator)
+  }>({ isOpen: false, matchId: '', position: '', excludedPlayers: [], playersInPositions: {} });
 
   // Confirm dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -51,6 +52,22 @@ export function MatchSelectionTab({
     date: string;
     action: 'confirm' | 'undo';
   }>({ isOpen: false, matchId: '', opponent: '', date: '', action: 'confirm' });
+
+  // Confirmed lineups from storage (for displaying confirmed matches)
+  const [confirmedLineups, setConfirmedLineups] = useState<ConfirmedLineup[]>([]);
+
+  // Load confirmed lineups on mount and when matches change
+  useEffect(() => {
+    const loadConfirmedLineups = async () => {
+      try {
+        const data = await api.getConfirmedLineups();
+        setConfirmedLineups(data.lineups || []);
+      } catch (err) {
+        console.error('Failed to load confirmed lineups:', err);
+      }
+    };
+    loadConfirmedLineups();
+  }, [state.matches]);
 
   // Categorize matches: past, next 5, and future (6+)
   const { upcomingMatches, futureMatches, pastMatches, matchesForBackend } = useMemo(() => {
@@ -125,37 +142,55 @@ export function MatchSelectionTab({
 
   // Handle override modal
   const openOverrideModal = (matchId: string, position: string, currentSelection: Record<string, MatchSelectionPlayer>, manualOverrides?: Record<string, string>) => {
-    // Get list of already selected players (to exclude from selection)
-    const selectedPlayers = Object.values(currentSelection)
-      .filter(p => p)
-      .map(p => p.name);
-
-    // Also include manually overridden players
-    const overriddenPlayers = manualOverrides ? Object.values(manualOverrides) : [];
-
-    // Don't exclude the current player in this position (they can be replaced)
-    const currentPlayer = manualOverrides?.[position] || currentSelection[position]?.name;
-    const excludedPlayers = [...new Set([...selectedPlayers, ...overriddenPlayers])].filter(p => p !== currentPlayer);
-
-    // Also add rejected players for this match (keyed by match ID)
+    // Only exclude rejected players (truly unavailable)
     const rejectedPlayers = state.rejectedPlayers[matchId] || [];
+
+    // Build map of players already in positions (for visual indicator)
+    // Include both auto-selected and manually overridden players
+    const playersInPositions: Record<string, string> = {}; // playerName -> position
+
+    // Add auto-selected players
+    for (const [pos, player] of Object.entries(currentSelection)) {
+      if (player && pos !== position) {
+        playersInPositions[player.name] = pos;
+      }
+    }
+
+    // Add/override with manually overridden players
+    if (manualOverrides) {
+      for (const [pos, playerName] of Object.entries(manualOverrides)) {
+        if (pos !== position) {
+          playersInPositions[playerName] = pos;
+        }
+      }
+    }
 
     setOverrideModal({
       isOpen: true,
       matchId,
       position,
-      excludedPlayers: [...excludedPlayers, ...rejectedPlayers]
+      excludedPlayers: rejectedPlayers,
+      playersInPositions
     });
   };
 
   const handleOverrideSelect = (playerName: string) => {
     const match = state.matches.find(m => m.id === overrideModal.matchId);
     if (match) {
-      const currentOverrides = match.manualOverrides || {};
-      onUpdateManualOverrides(match.id, {
-        ...currentOverrides,
-        [overrideModal.position]: playerName
-      });
+      const currentOverrides = { ...(match.manualOverrides || {}) };
+
+      // If this player is already overriding another position, remove that override
+      for (const [pos, name] of Object.entries(currentOverrides)) {
+        if (name === playerName && pos !== overrideModal.position) {
+          delete currentOverrides[pos];
+          break; // A player can only be in one position, so we can stop after finding them
+        }
+      }
+
+      // Add the new override
+      currentOverrides[overrideModal.position] = playerName;
+
+      onUpdateManualOverrides(match.id, currentOverrides);
     }
     setOverrideModal({ ...overrideModal, isOpen: false });
   };
@@ -176,6 +211,16 @@ export function MatchSelectionTab({
   // Handle confirm dialog
   const openConfirmDialog = (matchId: string, opponent: string, date: string, action: 'confirm' | 'undo') => {
     setConfirmDialog({ isOpen: true, matchId, opponent, date, action });
+  };
+
+  // Helper to reload confirmed lineups from storage
+  const reloadConfirmedLineups = async () => {
+    try {
+      const data = await api.getConfirmedLineups();
+      setConfirmedLineups(data.lineups || []);
+    } catch (err) {
+      console.error('Failed to reload confirmed lineups:', err);
+    }
   };
 
   const handleConfirmAction = async () => {
@@ -203,8 +248,14 @@ export function MatchSelectionTab({
 
       onConfirmMatch(confirmDialog.matchId);
     } else {
+      // Undo confirmation: remove from history and clear confirmed flag
+      await api.removeConfirmedLineup(confirmDialog.matchId);
       onUndoConfirmation(confirmDialog.matchId);
     }
+
+    // Refresh confirmed lineups state after confirm/unlock
+    await reloadConfirmedLineups();
+
     setConfirmDialog({ ...confirmDialog, isOpen: false });
   };
 
@@ -224,7 +275,61 @@ export function MatchSelectionTab({
     : [];
 
   // Filter plan items based on current date (these are lineup results from backend)
-  const upcomingPlanItems = sortedPlan.filter(item => item.date >= state.currentDate);
+  const backendPlanItems = sortedPlan.filter(item => item.date >= state.currentDate);
+
+  // Create plan items for confirmed matches from stored lineups
+  const confirmedPlanItems = useMemo(() => {
+    // Get confirmed matches that are upcoming (within first 5)
+    const upcomingConfirmedMatches = upcomingMatches
+      .filter(m => m.confirmed)
+      .slice(0, MAX_LINEUP_MATCHES);
+
+    return upcomingConfirmedMatches.map(match => {
+      // Find the saved lineup for this match
+      const savedLineup = confirmedLineups.find(l => l.matchId === match.id);
+
+      // Convert saved selection (player names only) to MatchSelectionPlayer objects
+      // Create a partial selection object
+      const selection: Partial<Record<string, MatchSelectionPlayer>> = {};
+      if (savedLineup?.selection) {
+        Object.entries(savedLineup.selection).forEach(([position, playerName]) => {
+          selection[position] = {
+            name: playerName,
+            rating: 0,      // Placeholder - stats hidden for confirmed
+            condition: 1,   // Placeholder
+            sharpness: 1,   // Placeholder
+            fatigue: 0,     // Placeholder
+            age: 0,         // Placeholder
+            status: []      // Empty statuses
+          };
+        });
+      }
+
+      return {
+        matchIndex: 0, // Not used for display
+        matchId: match.id,
+        date: match.date,
+        importance: match.importance,
+        selection: selection as MatchPlanItem['selection']
+      } as MatchPlanItem;
+    });
+  }, [upcomingMatches, confirmedLineups]);
+
+  // Merge backend results with confirmed lineups (avoid duplicates by matchId/date)
+  const upcomingPlanItems = useMemo(() => {
+    const backendDates = new Set(backendPlanItems.map(item => item.date));
+    const backendMatchIds = new Set(backendPlanItems.map(item => item.matchId));
+
+    // Add confirmed items that aren't already in backend results
+    const additionalConfirmed = confirmedPlanItems.filter(
+      item => !backendDates.has(item.date) && !backendMatchIds.has(item.matchId)
+    );
+
+    // Combine and sort by date
+    return [...backendPlanItems, ...additionalConfirmed].sort((a, b) =>
+      a.date.localeCompare(b.date)
+    );
+  }, [backendPlanItems, confirmedPlanItems]);
 
   // Find match data by date for display purposes
   const getMatchByDate = (date: string): Match | undefined => {
@@ -339,6 +444,7 @@ export function MatchSelectionTab({
         onSelect={handleOverrideSelect}
         position={overrideModal.position}
         excludedPlayers={overrideModal.excludedPlayers}
+        playersInPositions={overrideModal.playersInPositions}
         statusFile={state.files.status}
       />
 
@@ -541,24 +647,27 @@ function PlayerCard({ pos, player, isOverridden, isConfirmed, onReject, onOverri
 
       <div className="font-bold text-white truncate mb-1" title={player.name}>{player.name}</div>
 
-      <div className="flex gap-3 text-xs text-fm-light/70 mb-2">
-        <div className="flex items-center gap-1" title="Condition">
-          <Battery size={12} className={player.condition < 0.9 ? "text-fm-danger" : "text-fm-success"} />
-          {Math.round(player.condition * 100)}%
-        </div>
-        <div className="flex items-center gap-1" title="Match Sharpness">
-          <Activity size={12} className={player.sharpness < 0.8 ? "text-yellow-500" : "text-fm-success"} />
-          {Math.round(player.sharpness * 100)}%
-        </div>
-        {player.fatigue > 0 && (
-          <div className="flex items-center gap-1" title="Fatigue">
-            <Zap size={12} className={player.fatigue > 400 ? "text-fm-danger" : "text-fm-light"} />
-            {player.fatigue}
+      {/* Hide stats for confirmed lineups (we don't have live data for them) */}
+      {!isConfirmed && (
+        <div className="flex gap-3 text-xs text-fm-light/70 mb-2">
+          <div className="flex items-center gap-1" title="Condition">
+            <Battery size={12} className={player.condition < 0.9 ? "text-fm-danger" : "text-fm-success"} />
+            {Math.round(player.condition * 100)}%
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-1" title="Match Sharpness">
+            <Activity size={12} className={player.sharpness < 0.8 ? "text-yellow-500" : "text-fm-success"} />
+            {Math.round(player.sharpness * 100)}%
+          </div>
+          {player.fatigue > 0 && (
+            <div className="flex items-center gap-1" title="Fatigue">
+              <Zap size={12} className={player.fatigue > 400 ? "text-fm-danger" : "text-fm-light"} />
+              {player.fatigue}
+            </div>
+          )}
+        </div>
+      )}
 
-      {player.status && player.status.length > 0 && (
+      {!isConfirmed && player.status && player.status.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {player.status.map((s, i) => (
             <span key={i} className={`text-[10px] px-1 rounded border ${getStatusColor(s)}`}>

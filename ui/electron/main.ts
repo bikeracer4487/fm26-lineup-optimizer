@@ -242,6 +242,22 @@ function setupIpcHandlers() {
     }
   })
 
+  ipcMain.handle('remove-confirmed-lineup', async (event, matchId: string) => {
+    try {
+      if (!fs.existsSync(CONFIRMED_LINEUPS_FILE)) {
+        return { success: true } // Nothing to remove
+      }
+
+      const data = JSON.parse(fs.readFileSync(CONFIRMED_LINEUPS_FILE, 'utf-8'))
+      data.lineups = data.lineups.filter((l: any) => l.matchId !== matchId)
+      fs.writeFileSync(CONFIRMED_LINEUPS_FILE, JSON.stringify(data, null, 2), 'utf-8')
+      return { success: true }
+    } catch (error) {
+      console.error('Error removing confirmed lineup:', error)
+      return { success: false, error: String(error) }
+    }
+  })
+
   // 4. File Picker (Dialog) - if needed for selecting CSVs
   // ipcMain.handle('select-file', ...)
 }

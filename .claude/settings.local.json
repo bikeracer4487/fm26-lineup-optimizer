@@ -10,7 +10,8 @@
       "Bash(python:*)",
       "Bash(powershell -Command \"Get-Content ''C:\\GitHub\\fm26-lineup-optimizer\\players-current.csv'' | Select-Object -First 2\")",
       "Bash(powershell -Command \"cd ''C:\\GitHub\\fm26-lineup-optimizer\\ui''; npm run build\")",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(ls -la \"C:\\GitHub\\fm26-lineup-optimizer\\ui\\api\"\" 2>/dev/null || echo \"api directory may not exist or has different structure \")"
     ],
     "deny": [],
     "ask": []

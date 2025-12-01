@@ -1,5 +1,5 @@
 {
-  "currentDate": "2027-10-15",
+  "currentDate": "2027-11-14",
   "matches": [
     {
       "id": "d329a55a-7016-40c3-9d02-5ddedf1a4073",
@@ -339,7 +339,7 @@
       "opponent": "Stanway Rovers",
       "importance": "High",
       "confirmed": true,
-      "confirmedAt": "2025-11-30T18:23:04.134Z"
+      "confirmedAt": "2025-11-30T22:11:39.870Z"
     },
     {
       "id": "9fa2104a-470f-473a-a938-8b2830815ab2",
@@ -347,49 +347,89 @@
       "opponent": "Bracknell Town",
       "importance": "Medium",
       "confirmed": true,
-      "confirmedAt": "2025-11-30T18:51:32.546Z"
+      "confirmedAt": "2025-11-30T22:18:18.634Z"
     },
     {
       "id": "32e028c4-32e7-4384-a016-7323598298fe",
       "date": "2027-10-16",
       "opponent": "Truro City",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-11-30T22:36:05.925Z"
     },
     {
       "id": "9f1d3c3a-ae33-449c-9f0c-0f11d5af4214",
       "date": "2027-10-19",
       "opponent": "Chatham Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-11-30T22:42:13.587Z"
     },
     {
       "id": "4d83d5e5-a462-49e3-95b5-8a48611a1d89",
       "date": "2027-10-23",
       "opponent": "Havant & Waterlooville",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-11-30T22:55:54.710Z"
     },
     {
       "id": "2ca085ae-f6f6-4ffe-8169-295dc1993b80",
       "date": "2027-10-26",
       "opponent": "Dorking Wanderers",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "STC": "Mateusz Widz"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-01T00:30:06.358Z"
     },
     {
       "id": "e1e89d2b-0e05-47be-9f8c-2fd7d76f72dd",
       "date": "2027-10-30",
-      "opponent": "King's Lynn Town",
-      "importance": "High"
+      "opponent": "Scunthorpe Utd",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-01T01:04:50.820Z"
     },
     {
       "id": "1f2e9251-27d9-4a00-afb7-2bcaa9960697",
       "date": "2027-11-06",
       "opponent": "Braintree Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "DM(R)": "Allan Hall",
+        "AMR": "Korbyn Ednie",
+        "AMC": "Paul Stroud"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-01T02:56:50.002Z"
     },
     {
       "id": "e382dfe8-b23f-4d86-976e-214125df9888",
       "date": "2027-11-09",
       "opponent": "Dover Athletic",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "DM(R)": "Allan Hall",
+        "AMC": "Paul Stroud"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-01T03:37:20.079Z"
+    },
+    {
+      "id": "6717e8f0-2b4e-4fc9-ab63-b00a8dc4e34a",
+      "date": "2027-11-13",
+      "opponent": "Hereford",
+      "importance": "High",
+      "manualOverrides": {
+        "STC": "Scot Little",
+        "AMC": "Paul Stroud",
+        "AMR": "Korbyn Ednie",
+        "DM(R)": "Allan Hall"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-01T03:42:51.515Z"
     },
     {
       "id": "f2f59164-6adf-4f81-b124-7459eaf89a7d",
@@ -402,6 +442,12 @@
       "date": "2027-11-27",
       "opponent": "AFC Totton",
       "importance": "Medium"
+    },
+    {
+      "id": "a423047c-5afc-40c0-b227-ab6aa04377b6",
+      "date": "2027-12-04",
+      "opponent": "Alfreton Town",
+      "importance": "High"
     },
     {
       "id": "a6140927-5ad6-477e-a3d0-c7c8d8d1b223",
@@ -554,14 +600,10 @@
       "importance": "Medium"
     }
   ],
-  "rejectedPlayers": {
-    "9fa2104a-470f-473a-a938-8b2830815ab2": [
-      "Hisashi Roddy"
-    ]
-  },
+  "rejectedPlayers": {},
   "rejectedTraining": {},
   "files": {
     "status": "players-current.csv",
-    "abilities": "players-current.csv"
+    "abilities": "players.csv"
   }
 }
