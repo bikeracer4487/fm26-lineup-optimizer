@@ -200,7 +200,7 @@ function TrainingCard({ rec, onReject }: { rec: TrainingRecommendation, onReject
            <span className="block text-fm-light/40">Category</span>
            <span className="font-medium text-white flex items-center gap-1 truncate" title={rec.strategic_category}>
              {rec.category === 'Become Natural' ? <TrendingUp size={10} /> : <BookOpen size={10} />}
-             {isStrategic ? 'Strategic Conversion' : rec.category}
+             {rec.category}
            </span>
         </div>
         

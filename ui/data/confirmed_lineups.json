@@ -359,6 +359,106 @@
         "DM(R)": "Allan Hall",
         "DC1": "Zach Awe"
       }
+    },
+    {
+      "matchId": "f2f59164-6adf-4f81-b124-7459eaf89a7d",
+      "date": "2027-11-20",
+      "opponent": "Maidstone United",
+      "importance": "Medium",
+      "confirmedAt": "2025-12-01T04:21:23.198Z",
+      "selection": {
+        "GK": "Ashley Sarahs",
+        "DM(L)": "Aydin Webb",
+        "AML": "Daniel Willard",
+        "DR": "Hisashi Roddy",
+        "DC2": "Jayden Cumberbatch",
+        "AMR": "Mateusz Widz",
+        "AMC": "Mattia Mendolia",
+        "DM(R)": "Ollie Harrison",
+        "STC": "Paul Stroud",
+        "DC1": "Zach Awe",
+        "DL": "Mamadou Kanté"
+      }
+    },
+    {
+      "matchId": "15839cff-f235-4bbb-a50b-2465cf51edb9",
+      "date": "2027-11-27",
+      "opponent": "AFC Totton",
+      "importance": "Medium",
+      "confirmedAt": "2025-12-01T05:14:31.763Z",
+      "selection": {
+        "GK": "Ashley Sarahs",
+        "DM(L)": "Aydin Webb",
+        "AML": "Daniel Willard",
+        "DL": "Hisashi Roddy",
+        "DC2": "Jayden Cumberbatch",
+        "AMC": "Paul Stroud",
+        "DR": "Nesbert Ncube",
+        "DM(R)": "Allan Hall",
+        "STC": "Mateusz Widz",
+        "DC1": "Zach Awe",
+        "AMR": "Korbyn Ednie"
+      }
+    },
+    {
+      "matchId": "a423047c-5afc-40c0-b227-ab6aa04377b6",
+      "date": "2027-12-04",
+      "opponent": "Alfreton Town",
+      "importance": "High",
+      "confirmedAt": "2025-12-01T05:54:43.384Z",
+      "selection": {
+        "GK": "Ashley Sarahs",
+        "DM(L)": "Aydin Webb",
+        "AML": "Daniel Willard",
+        "DR": "Hisashi Roddy",
+        "DC2": "Jayden Cumberbatch",
+        "AMR": "Mateusz Widz",
+        "AMC": "Mattia Mendolia",
+        "DM(R)": "Ollie Harrison",
+        "STC": "Paul Stroud",
+        "DC1": "Zach Awe",
+        "DL": "Taye Weir"
+      }
+    },
+    {
+      "matchId": "a6140927-5ad6-477e-a3d0-c7c8d8d1b223",
+      "date": "2027-12-07",
+      "opponent": "Farnborough",
+      "importance": "Medium",
+      "confirmedAt": "2025-12-01T07:18:17.624Z",
+      "selection": {
+        "DM(L)": "Allan Hall",
+        "GK": "Ashley Sarahs",
+        "AML": "Aydin Webb",
+        "DL": "Jayden Cumberbatch",
+        "DR": "Hisashi Roddy",
+        "DC2": "Joseph James",
+        "AMR": "Korbyn Ednie",
+        "AMC": "Mattia Mendolia",
+        "DM(R)": "Ollie Harrison",
+        "STC": "Mateusz Widz",
+        "DC1": "Marley Rayment-Dawkins"
+      }
+    },
+    {
+      "matchId": "945d1e4f-c30e-4998-904c-4daacb9636d0",
+      "date": "2027-12-11",
+      "opponent": "Horsham",
+      "importance": "High",
+      "confirmedAt": "2025-12-01T07:23:17.734Z",
+      "selection": {
+        "GK": "Ashley Sarahs",
+        "DM(L)": "Aydin Webb",
+        "AML": "Daniel Willard",
+        "DL": "Gustavo Xavier",
+        "DR": "Hisashi Roddy",
+        "DC2": "Jayden Cumberbatch",
+        "AMR": "Mateusz Widz",
+        "AMC": "Mattia Mendolia",
+        "DM(R)": "Ollie Harrison",
+        "STC": "Paul Stroud",
+        "DC1": "Zach Awe"
+      }
     }
   ]
 }
