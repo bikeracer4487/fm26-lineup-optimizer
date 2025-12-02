@@ -4,8 +4,9 @@ import { FixtureTab } from './tabs/FixtureTab';
 import { MatchSelectionTab } from './tabs/MatchSelectionTab';
 import { TrainingTab } from './tabs/TrainingTab';
 import { RestTab } from './tabs/RestTab';
+import { PlayerRemovalTab } from './tabs/PlayerRemovalTab';
 import { Button, Input } from './components/UI';
-import { Calendar, Users, Dumbbell, Settings, ChevronLeft, ChevronRight, BatteryCharging } from 'lucide-react';
+import { Calendar, Users, Dumbbell, Settings, ChevronLeft, ChevronRight, BatteryCharging, UserMinus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
@@ -25,7 +26,7 @@ function App() {
     clearManualOverrides
   } = useAppState();
 
-  const [activeTab, setActiveTab] = useState<'fixtures' | 'selection' | 'training' | 'rest'>('fixtures');
+  const [activeTab, setActiveTab] = useState<'fixtures' | 'selection' | 'training' | 'rest' | 'removal'>('fixtures');
   const [showSettings, setShowSettings] = useState(false);
 
   const changeDate = (days: number) => {
@@ -101,11 +102,17 @@ function App() {
             icon={<Dumbbell size={20} />} 
             label="Position Training" 
           />
-          <SidebarItem 
-            active={activeTab === 'rest'} 
-            onClick={() => setActiveTab('rest')} 
-            icon={<BatteryCharging size={20} />} 
-            label="Rest & Rotation" 
+          <SidebarItem
+            active={activeTab === 'rest'}
+            onClick={() => setActiveTab('rest')}
+            icon={<BatteryCharging size={20} />}
+            label="Rest & Rotation"
+          />
+          <SidebarItem
+            active={activeTab === 'removal'}
+            onClick={() => setActiveTab('removal')}
+            icon={<UserMinus size={20} />}
+            label="Player Removal"
           />
         </nav>
 
@@ -186,6 +193,9 @@ function App() {
             )}
             {activeTab === 'rest' && (
               <RestTab state={state} />
+            )}
+            {activeTab === 'removal' && (
+              <PlayerRemovalTab state={state} />
             )}
           </motion.div>
         </AnimatePresence>

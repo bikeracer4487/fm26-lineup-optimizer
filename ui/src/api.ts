@@ -1,4 +1,4 @@
-import type { AppState, MatchPlanResponse, TrainingResponse, RestResponse, PlayerListItem, ConfirmedLineup, ConfirmedLineupsData } from './types';
+import type { AppState, MatchPlanResponse, TrainingResponse, RestResponse, PlayerRemovalResponse, PlayerListItem, ConfirmedLineup, ConfirmedLineupsData } from './types';
 
 // Type definition for window.ipcRenderer
 declare global {
@@ -37,6 +37,12 @@ export const api = {
     files: { status: string; abilities: string }
   ): Promise<RestResponse> => {
     return await window.ipcRenderer.invoke('run-rest-advisor', { files });
+  },
+
+  runPlayerRemovalAdvisor: async (
+    files: { status: string; abilities: string }
+  ): Promise<PlayerRemovalResponse> => {
+    return await window.ipcRenderer.invoke('run-player-removal-advisor', { files });
   },
 
   // Get player list for override modal
