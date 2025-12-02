@@ -90,6 +90,11 @@ function setupIpcHandlers() {
     return runPythonScript('api_rest_advisor.py', args)
   })
 
+  // 3b. Run Player Removal Advisor
+  ipcMain.handle('run-player-removal-advisor', async (event, args) => {
+    return runPythonScript('api_player_removal.py', args)
+  })
+
   // 4. App State Management
   const DATA_DIR = path.join(__dirname, '../data')
   const STATE_FILE = path.join(DATA_DIR, 'app_state.json')
