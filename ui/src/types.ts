@@ -138,3 +138,38 @@ export interface PlayerListItem {
 export interface ConfirmedLineupsData {
   lineups: ConfirmedLineup[];
 }
+
+// Player removal recommendation
+export interface PlayerRemovalRecommendation {
+  name: string;
+  age: number;
+  positions: string;
+  ca: number;
+  pa: number;
+  squad_avg_ca: number;
+  best_skill: number;
+  skill_position: string;
+  position_rank: number;
+  total_at_position: number;
+  contract_type: string;
+  wages_weekly: number;
+  months_remaining: number;
+  asking_price: number;
+  release_cost: number;
+  mutual_termination_cost: number;
+  loan_status: string;
+  priority: string; // "Critical", "High", "Medium", "Low"
+  priority_score: number;
+  reasons: string[];
+  recommended_action: string;
+  // Hidden attributes
+  consistency: number | null;
+  important_matches: number | null;
+  injury_proneness: number | null;
+}
+
+export interface PlayerRemovalResponse {
+  success: boolean;
+  recommendations?: PlayerRemovalRecommendation[];
+  error?: string;
+}
