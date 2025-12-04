@@ -1,18 +1,18 @@
-Player,Position,Priority,Strategic_Category,Current_Skill_Rating,Ability_Tier,Training_Score
-Freddie Hammond,D(R),High,Become Natural,16,Adequate,0.72
-Jude Horn,D(R),Medium,Improve Natural,20,Adequate,0.72
-Joseph James,D(C),High,Become Natural,16,Good,0.7191666666666666
+﻿Player,Position,Priority,Strategic_Category,Current_Skill_Rating,Ability_Tier,Training_Score
+Jack Kingdon,D(L),High,Become Natural,10,Excellent,0.7041666666666667
+Joseph James,D(R),Medium,Improve Natural,20,Adequate,0.7158333333333333
+Vashirn Rodney,D(C),High,Become Natural,16,Adequate,0.7649999999999999
 Johnson Opawole,D(C),Medium,Improve Natural,20,Adequate,0.7525
 Jayden Cumberbatch,D(L),High,Become Natural,16,Good,0.72
-Zach Awe,DM,High,Become Natural,16,Excellent,0.6625
-Jowan Purnell,DM,High,Become Natural,16,Adequate,0.51075
-Cris Suker,DM,High,Become Natural,16,Adequate,0.48375
-Allan Hall,DM,Medium,Improve Natural,20,Adequate,0.51075
-Benjamin Martin-Coward,DM,Medium,Improve Natural,18,Adequate,0.51075
-Gustavo Xavier,DM,Low,Learn Position,3,Excellent,0.7741666666666667
-Sean Costelloe,AM(R),High,Become Natural,13,Adequate,0.7066666666666667
-Fletcher Poole,AM(C),High,Become Natural,14,Adequate,0.6975
-Aston Daley,AM(R),Low,Learn Position,1,Good,0.6533333333333333
-Jamie McMurdo,AM(C),Low,Learn Position,1,Good,0.6858333333333333
-Aydin Webb,AM(L),High,Become Natural,16,Good,0.72
-Joshua Adepoju,ST,Medium,Improve Natural,20,Adequate,0.6258333333333334
+Taye Weir,D(L),Medium,Improve Natural,20,Adequate,0.73
+Marley Rayment-Dawkins,D(L),Medium,Improve Natural,20,Adequate,0.504
+Zach Awe,DM,High,Become Natural,16,Excellent,0.6
+Steve Johnson,DM,High,Become Natural,11,Good,0.504
+Lennon King,DM,Medium,Improve Natural,19,Adequate,0.7424999999999999
+Christopher Ojemen,AM(R),High,Become Natural,16,Adequate,0.73
+Nick Ralfe,AM(R),Medium,Improve Natural,20,Poor,0.6849999999999999
+Aston Daley,AM(R),Low,Learn Position,5,Good,0.6408333333333334
+Teddy Lawrence,AM(C),High,Become Natural,16,Adequate,0.6325
+Sean Costelloe,ST,High,Become Natural,15,Adequate,0.7033333333333334
+Aydin Webb,AM(L),High,Become Natural,16,Excellent,0.72
+Glen Gregory,ST,Medium,Improve Natural,20,Adequate,0.6749999999999999

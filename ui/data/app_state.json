@@ -1,5 +1,5 @@
 {
-  "currentDate": "2027-10-15",
+  "currentDate": "2028-04-14",
   "matches": [
     {
       "id": "d329a55a-7016-40c3-9d02-5ddedf1a4073",
@@ -443,7 +443,23 @@
       "id": "79bac723-6509-4791-a6a3-d2d7ff2b0dfe",
       "date": "2028-01-15",
       "opponent": "Horsham",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "DM(R)": "Zach Awe",
+        "DM(L)": "Gustavo Xavier",
+        "DR": "Joseph James",
+        "AML": "Aydin Webb"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-02T01:34:49.115Z"
+    },
+    {
+      "id": "5d539a2b-299d-459a-aa67-9e9b78163515",
+      "date": "2028-01-18",
+      "opponent": "Hemel Hempstead Town",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-02T01:59:23.963Z"
     },
     {
       "id": "678cbae8-14c3-4176-9c3d-cf1ef7330b32",
@@ -452,8 +468,14 @@
       "importance": "Medium"
     },
     {
-      "id": "bef8bb3b-40ed-423b-89a0-e68c9be63298",
+      "id": "d6c84744-6310-4653-b8ed-db8dba2b6bc7",
       "date": "2028-01-29",
+      "opponent": "South Shields",
+      "importance": "High"
+    },
+    {
+      "id": "bef8bb3b-40ed-423b-89a0-e68c9be63298",
+      "date": "2028-02-01",
       "opponent": "Chelmsford City",
       "importance": "Medium"
     },
@@ -467,37 +489,66 @@
       "id": "081c65d0-1b81-4b52-8eaf-2ac5ab012040",
       "date": "2028-02-12",
       "opponent": "Hornchurch",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-02T07:15:32.387Z"
+    },
+    {
+      "id": "b6fe7a12-09a9-4e18-a1eb-a1f3157137a7",
+      "date": "2028-02-15",
+      "opponent": "Billericay Town",
       "importance": "Medium"
     },
     {
       "id": "389fd219-1cd4-49b4-910c-6144e3dce8f3",
       "date": "2028-02-19",
       "opponent": "Aldershot Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-02T22:40:14.224Z"
     },
     {
       "id": "7904f4bd-0f5d-4cb9-8d8f-99ec5be42ae9",
       "date": "2028-02-22",
       "opponent": "Cheshunt",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-02T22:40:30.231Z"
     },
     {
-      "id": "b6fe7a12-09a9-4e18-a1eb-a1f3157137a7",
+      "id": "087e7f29-87f1-4de0-8ea8-919b146dfa61",
       "date": "2028-02-26",
-      "opponent": "Billericay Town",
-      "importance": "Medium"
+      "opponent": "Chester",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-02T23:58:23.622Z"
     },
     {
       "id": "db782867-514a-4e75-bc90-198f730be799",
       "date": "2028-03-04",
       "opponent": "Chatham Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "DR": "Nesbert Ncube",
+        "DC2": "Louie Procopi",
+        "DM(L)": "Zach Awe",
+        "DM(R)": "Allan Hall",
+        "AMR": "Korbyn Ednie",
+        "DL": "Hisashi Roddy"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-03T00:25:50.863Z"
     },
     {
       "id": "7cda4f0f-afd6-4578-8048-4d6d861517b9",
       "date": "2028-03-07",
       "opponent": "Truro City",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "DL": "Nesbert Ncube"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-03T00:49:35.717Z"
     },
     {
       "id": "12c1aa04-6bba-41fc-ae2d-8febd27a42d1",
@@ -506,16 +557,27 @@
       "importance": "Medium"
     },
     {
+      "id": "f767810e-babd-4dc6-8d13-bb2c0f73b47c",
+      "date": "2028-03-14",
+      "opponent": "Braintree Town",
+      "importance": "Medium",
+      "manualOverrides": {
+        "DL": "Nesbert Ncube"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-03T03:18:42.324Z"
+    },
+    {
       "id": "d6bf072c-192d-4fa6-9274-5b11c015ad33",
       "date": "2028-03-18",
       "opponent": "Dorking Wanderers",
       "importance": "Medium"
     },
     {
-      "id": "f767810e-babd-4dc6-8d13-bb2c0f73b47c",
+      "id": "5906b1fe-63eb-4d4b-9c96-d425d5a607b2",
       "date": "2028-03-25",
-      "opponent": "Braintree Town",
-      "importance": "Medium"
+      "opponent": "Torquay Utd",
+      "importance": "High"
     },
     {
       "id": "0b4e80ba-7204-4287-8773-84ec8bfb13c2",
@@ -552,10 +614,16 @@
       "date": "2028-04-22",
       "opponent": "Salisbury",
       "importance": "Medium"
+    },
+    {
+      "id": "dda79405-78bb-485b-bbba-dbba0bb3227c",
+      "date": "2028-05-14",
+      "opponent": "Tamworth",
+      "importance": "High"
     }
   ],
   "rejectedPlayers": {
-    "9fa2104a-470f-473a-a938-8b2830815ab2": [
+    "5906b1fe-63eb-4d4b-9c96-d425d5a607b2": [
       "Hisashi Roddy"
     ]
   },

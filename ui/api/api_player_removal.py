@@ -152,6 +152,11 @@ class PlayerRemovalAdvisor:
         wages_weekly = row.get('Wages_Numeric', 0)
         months_left = row.get('Months Left (Contract)', 0)
         contract_type = row.get('Contract Type', '')
+        loan_status = row.get('LoanStatus', 'Own')
+
+        # Loaned-in players: no termination cost (we don't own them)
+        if loan_status == 'LoanedIn':
+            return 0, 0
 
         # Non-contract (type 4) has no termination cost
         if str(contract_type) == '4' or months_left < 0:
@@ -189,10 +194,12 @@ class PlayerRemovalAdvisor:
         """
         Classify player removal priority based on research criteria.
 
-        Returns (priority, reasons, recommended_action)
+        Returns (priority, reasons, recommended_action, priority_score, is_loaned_in, development_headroom, headroom_percentage)
         """
         reasons = []
         ca = row.get('CA', 0)
+        pa = row.get('PA', 0)
+        age = row.get('Age', 30)  # Default to older if unknown
         wages = row.get('Wages_Numeric', 0)
         contract_type = row.get('Contract Type', '')
         months_left = row.get('Months Left (Contract)', 0)
@@ -207,10 +214,72 @@ class PlayerRemovalAdvisor:
         loyalty = row.get('Loyalty', 10)
         professional = row.get('Professional', 10)
 
+        # Calculate development headroom
+        development_headroom = (pa - ca) if (pa > 0 and ca > 0) else 0
+        headroom_percentage = (development_headroom / ca * 100) if ca > 0 else 0
+
+        # Check if loaned in
+        is_loaned_in = (loan_status == 'LoanedIn')
+
         # Calculate wage efficiency (CA per wage)
         wage_efficiency = ca / wages if wages > 0 else float('inf')
 
         priority_score = 0  # Higher = more need to remove
+
+        # ============================================
+        # LOAN PLAYERS: Use loan-specific logic
+        # ============================================
+        if is_loaned_in:
+            # Loan players get simplified scoring based on performance/utility
+            # Skip: termination cost, wage deadwood (not our wages), contract expiry
+
+            # Position depth analysis still applies
+            if total_players > 0:
+                position_percentile = position_rank / total_players
+                if position_percentile > 0.7:  # Bottom 30%
+                    priority_score += 30
+                    reasons.append(f"Bottom {int((1-position_percentile)*100)}% at position (rank #{position_rank})")
+
+            # Below squad average CA
+            if ca < squad_avg_ca * 0.85:
+                priority_score += 25
+                reasons.append(f"CA ({ca}) significantly below squad average ({squad_avg_ca:.0f})")
+            elif ca < squad_avg_ca:
+                priority_score += 10
+                reasons.append(f"CA ({ca}) below squad average ({squad_avg_ca:.0f})")
+
+            # Hidden attribute red flags still apply
+            if pd.notna(consistency) and consistency < 8:
+                priority_score += 20
+                reasons.append(f"Low consistency ({consistency}) - unreliable over season")
+
+            if pd.notna(important_matches) and important_matches < 8:
+                priority_score += 15
+                reasons.append(f"Low big match performance ({important_matches})")
+
+            if pd.notna(injury_proneness) and injury_proneness > 14:
+                priority_score += 25
+                reasons.append(f"High injury proneness ({injury_proneness}) - frequent disruptions")
+
+            # Loan-specific actions based on priority
+            if priority_score >= 50:
+                priority = "End Early"
+                action = "End loan early - not contributing"
+            elif priority_score >= 25:
+                priority = "Monitor"
+                action = "Do not extend/make permanent"
+            else:
+                priority = "Keep"
+                if ca >= squad_avg_ca and position_rank <= 3:
+                    action = "Consider making permanent"
+                else:
+                    action = "Keep until loan expires"
+
+            return priority, reasons, action, priority_score, is_loaned_in, development_headroom, headroom_percentage
+
+        # ============================================
+        # OWNED PLAYERS: Full scoring logic
+        # ============================================
 
         # 1. Non-Contract Players (Contract Type = 4)
         if str(contract_type) == '4':
@@ -265,10 +334,22 @@ class PlayerRemovalAdvisor:
             priority_score += 15
             reasons.append(f"Low professionalism ({professional}) - development risk")
 
-        # 7. Loaned in players deprioritized for keeping
-        if loan_status == 'LoanedIn':
+        # 7. U21 DEVELOPMENT PROTECTION (moderate - reduces but doesn't eliminate flags)
+        if age <= 21:
+            if headroom_percentage >= 30:  # PA is 30%+ higher than CA
+                priority_score -= 30  # Moderate protection
+                reasons.append(f"U21 prospect with high potential ({headroom_percentage:.0f}% room to grow)")
+            elif headroom_percentage >= 15:
+                priority_score -= 15
+                reasons.append(f"U21 with development potential ({headroom_percentage:.0f}% room to grow)")
+
+        # 8. Older players with no upside get slight priority increase
+        if age >= 30 and headroom_percentage < 5:
+            priority_score += 10
+            reasons.append(f"Veteran with limited development potential")
+        if age >= 32:
             priority_score += 5
-            reasons.append("Loaned in - not a permanent squad member")
+            reasons.append(f"Age {age} - approaching career end")
 
         # Determine priority category and recommended action
         if priority_score >= 80:
@@ -292,7 +373,7 @@ class PlayerRemovalAdvisor:
             priority = "Low"
             action = "Keep - squad member"
 
-        return priority, reasons, action, priority_score
+        return priority, reasons, action, priority_score, is_loaned_in, development_headroom, headroom_percentage
 
     def get_removal_recommendations(self):
         """
@@ -331,7 +412,7 @@ class PlayerRemovalAdvisor:
             release_cost, mutual_cost = self._calculate_termination_cost(row)
 
             # Classify removal priority
-            priority, reasons, action, priority_score = self._classify_removal_priority(
+            priority, reasons, action, priority_score, is_loaned_in, development_headroom, headroom_percentage = self._classify_removal_priority(
                 row, best_skill, position_rank, total_at_position,
                 squad_avg_ca, release_cost
             )
@@ -359,10 +440,14 @@ class PlayerRemovalAdvisor:
                 "release_cost": round(release_cost, 0),
                 "mutual_termination_cost": round(mutual_cost, 0),
                 "loan_status": loan_status,
+                "is_loaned_in": is_loaned_in,
                 "priority": priority,
                 "priority_score": priority_score,
                 "reasons": reasons,
                 "recommended_action": action,
+                # Development potential fields
+                "development_headroom": int(development_headroom),
+                "headroom_percentage": round(headroom_percentage, 1),
                 # Hidden attributes for display
                 "consistency": int(row.get('Consistency', 0)) if pd.notna(row.get('Consistency')) else None,
                 "important_matches": int(row.get('Important Matches', 0)) if pd.notna(row.get('Important Matches')) else None,

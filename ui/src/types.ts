@@ -158,10 +158,14 @@ export interface PlayerRemovalRecommendation {
   release_cost: number;
   mutual_termination_cost: number;
   loan_status: string;
-  priority: string; // "Critical", "High", "Medium", "Low"
+  is_loaned_in: boolean;
+  priority: string; // "Critical", "High", "Medium", "Low" for owned; "End Early", "Monitor", "Keep" for loans
   priority_score: number;
   reasons: string[];
   recommended_action: string;
+  // Development potential
+  development_headroom: number;
+  headroom_percentage: number;
   // Hidden attributes
   consistency: number | null;
   important_matches: number | null;

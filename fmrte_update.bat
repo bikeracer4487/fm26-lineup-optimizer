@@ -1,17 +1,20 @@
 @echo off
-REM Set working directory to the batch file's location (fixes admin mode)
-cd /d "%~dp0"
-
 REM ============================================================================
 REM FMRTE to Excel Automation - Import Player Data from FMRTE
 REM ============================================================================
-REM This batch file:
-REM 1. Connects to FMRTE (Football Manager Real Time Editor)
-REM 2. Copies data from Brixham, Brixham U21, and Brixham U18 tabs
-REM 3. Pastes all data into FM26 Players.xlsx (Paste Full sheet)
-REM 4. Automatically runs update_player_data.py to generate CSV files
-REM 5. Your player data is now ready for the team selector scripts!
+REM This batch file auto-elevates to Administrator if needed
 REM ============================================================================
+
+REM Check for admin rights and self-elevate if needed
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    echo Requesting Administrator privileges...
+    powershell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    exit /b
+)
+
+REM Set working directory to the batch file's location (fixes admin mode)
+cd /d "%~dp0"
 
 echo.
 echo ============================================================================
@@ -21,7 +24,6 @@ echo.
 echo IMPORTANT: Before running this script, make sure:
 echo   - FMRTE is open with Brixham squads loaded
 echo   - FM26 Players.xlsx is closed (not open in Excel)
-echo   - Run this batch file AS ADMINISTRATOR (right-click ^> Run as administrator)
 echo.
 pause
 
@@ -42,11 +44,9 @@ if %ERRORLEVEL% NEQ 0 (
     echo.
     echo Troubleshooting tips:
     echo   - Make sure FMRTE window is open and visible
-    echo   - RIGHT-CLICK this batch file and select "Run as administrator"
     echo   - Verify the window title contains "FMRTE"
     echo   - Ensure Python dependencies are installed: pip install -r requirements.txt
     echo   - Check that FM26 Players.xlsx exists and is not open in Excel
-    echo   - Try: python fmrte_to_excel.py --debug
     echo.
     pause
     exit /b 1

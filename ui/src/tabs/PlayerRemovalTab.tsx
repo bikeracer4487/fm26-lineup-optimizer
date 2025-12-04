@@ -37,12 +37,16 @@ export function PlayerRemovalTab({ state }: PlayerRemovalTabProps) {
     loadRecommendations();
   }, [state.files]);
 
-  // Filter by priority
-  const filteredRecs = filterPriority === 'all'
-    ? recommendations
-    : recommendations.filter(r => r.priority === filterPriority);
+  // Separate loaned players from owned players
+  const loanedPlayers = recommendations.filter(r => r.is_loaned_in);
+  const ownedPlayers = recommendations.filter(r => !r.is_loaned_in);
 
-  // Group by priority for display
+  // Filter by priority (for owned players only)
+  const filteredRecs = filterPriority === 'all'
+    ? ownedPlayers
+    : ownedPlayers.filter(r => r.priority === filterPriority);
+
+  // Group by priority for display (owned players only)
   const grouped = {
     Critical: filteredRecs.filter(r => r.priority === 'Critical'),
     High: filteredRecs.filter(r => r.priority === 'High'),
@@ -50,12 +54,15 @@ export function PlayerRemovalTab({ state }: PlayerRemovalTabProps) {
     Low: filteredRecs.filter(r => r.priority === 'Low'),
   };
 
-  // Stats summary
-  const criticalCount = recommendations.filter(r => r.priority === 'Critical').length;
-  const highCount = recommendations.filter(r => r.priority === 'High').length;
-  const totalWageSavings = recommendations
+  // Stats summary (owned players only)
+  const criticalCount = ownedPlayers.filter(r => r.priority === 'Critical').length;
+  const highCount = ownedPlayers.filter(r => r.priority === 'High').length;
+  const totalWageSavings = ownedPlayers
     .filter(r => r.priority === 'Critical' || r.priority === 'High')
     .reduce((sum, r) => sum + r.wages_weekly, 0);
+
+  // Count protected prospects (U21 with 15%+ headroom)
+  const protectedProspects = ownedPlayers.filter(r => r.age <= 21 && r.headroom_percentage >= 15).length;
 
   return (
     <div className="p-6 space-y-6">
@@ -75,7 +82,7 @@ export function PlayerRemovalTab({ state }: PlayerRemovalTabProps) {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         <div className="bg-fm-surface/50 border border-fm-danger/20 rounded-lg p-4">
           <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
             <AlertTriangle size={12} /> Critical
@@ -97,12 +104,19 @@ export function PlayerRemovalTab({ state }: PlayerRemovalTabProps) {
           <div className="text-2xl font-bold text-fm-teal">${totalWageSavings.toLocaleString()}</div>
           <div className="text-xs text-fm-light/50">per week (Critical + High)</div>
         </div>
-        <div className="bg-fm-surface/50 border border-white/10 rounded-lg p-4">
+        <div className="bg-fm-surface/50 border border-green-500/20 rounded-lg p-4">
           <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            <Users size={12} /> Squad Size
+            <Target size={12} /> Prospects
           </div>
-          <div className="text-2xl font-bold text-white">{recommendations.length}</div>
-          <div className="text-xs text-fm-light/50">players analyzed</div>
+          <div className="text-2xl font-bold text-green-400">{protectedProspects}</div>
+          <div className="text-xs text-fm-light/50">U21 with potential</div>
+        </div>
+        <div className="bg-fm-surface/50 border border-blue-500/20 rounded-lg p-4">
+          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
+            <Users size={12} /> Squad
+          </div>
+          <div className="text-2xl font-bold text-white">{ownedPlayers.length}</div>
+          <div className="text-xs text-fm-light/50">owned + {loanedPlayers.length} on loan</div>
         </div>
       </div>
 
@@ -113,7 +127,7 @@ export function PlayerRemovalTab({ state }: PlayerRemovalTabProps) {
           size="sm"
           onClick={() => setFilterPriority('all')}
         >
-          All ({recommendations.length})
+          All ({ownedPlayers.length})
         </Button>
         <Button
           variant={filterPriority === 'Critical' ? 'primary' : 'secondary'}
@@ -162,6 +176,26 @@ export function PlayerRemovalTab({ state }: PlayerRemovalTabProps) {
       )}
 
       <div className="space-y-8">
+        {/* LOAN REVIEW SECTION */}
+        {loanedPlayers.length > 0 && (
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-lg font-bold text-blue-400 flex items-center gap-2 uppercase tracking-wider">
+                <Users size={20} /> Loan Review ({loanedPlayers.length} Players)
+              </h3>
+              <p className="text-fm-light/50 text-sm mt-1">
+                Loaned-in players - evaluate performance and decide on future
+              </p>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {loanedPlayers.map((rec) => (
+                <LoanPlayerCard key={rec.name} rec={rec} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* OWNED PLAYERS SECTIONS */}
         {filterPriority === 'all' ? (
           <>
             {grouped.Critical.length > 0 && (
@@ -298,9 +332,10 @@ function PlayerRemovalCard({ rec }: { rec: PlayerRemovalRecommendation }) {
             <Badge className={getPriorityStyle(rec.priority)}>
               {rec.priority}
             </Badge>
-            {rec.loan_status === 'LoanedIn' && (
-              <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
-                Loan
+            {/* Prospect badge for U21 with development potential */}
+            {rec.age <= 21 && rec.headroom_percentage >= 15 && (
+              <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                Prospect
               </Badge>
             )}
           </div>
@@ -311,7 +346,7 @@ function PlayerRemovalCard({ rec }: { rec: PlayerRemovalRecommendation }) {
       </div>
 
       {/* Skill Comparison */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
+      <div className="grid grid-cols-4 gap-2 mb-3">
         <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
           <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
             <Target size={10} /> CA
@@ -321,6 +356,18 @@ function PlayerRemovalCard({ rec }: { rec: PlayerRemovalRecommendation }) {
           </div>
           <div className="text-[10px] text-fm-light/40">
             Avg: {rec.squad_avg_ca}
+          </div>
+        </div>
+
+        <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
+          <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
+            <TrendingDown size={10} /> PA
+          </div>
+          <div className={`text-lg font-mono font-bold ${rec.headroom_percentage >= 30 ? 'text-green-400' : rec.headroom_percentage >= 15 ? 'text-yellow-400' : 'text-fm-light/50'}`}>
+            {rec.pa}
+          </div>
+          <div className="text-[10px] text-fm-light/40">
+            {rec.headroom_percentage > 0 ? `+${rec.headroom_percentage.toFixed(0)}%` : 'Maxed'}
           </div>
         </div>
 
@@ -338,7 +385,7 @@ function PlayerRemovalCard({ rec }: { rec: PlayerRemovalRecommendation }) {
 
         <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
           <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            <TrendingDown size={10} /> Skill
+            <Target size={10} /> Skill
           </div>
           <div className="text-lg font-mono font-bold text-white">
             {rec.best_skill.toFixed(0)}
@@ -458,6 +505,149 @@ function PlayerRemovalCard({ rec }: { rec: PlayerRemovalRecommendation }) {
           {rec.reasons.map((reason, idx) => (
             <div key={idx} className="text-xs text-fm-light/70 flex items-start gap-2">
               <span className="text-fm-teal mt-0.5">→</span>
+              {reason}
+            </div>
+          ))}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+// Loan Player Card - simplified view for loaned-in players
+function LoanPlayerCard({ rec }: { rec: PlayerRemovalRecommendation }) {
+  const getLoanPriorityStyle = (priority: string) => {
+    switch (priority) {
+      case 'End Early':
+        return 'bg-fm-danger/20 text-fm-danger border-fm-danger/30';
+      case 'Monitor':
+        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+      case 'Keep':
+        return 'bg-fm-success/20 text-fm-success border-fm-success/30';
+      default:
+        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+    }
+  };
+
+  const getCAColor = (ca: number, avgCa: number) => {
+    if (ca >= avgCa * 1.1) return 'text-fm-success';
+    if (ca >= avgCa * 0.9) return 'text-white';
+    if (ca >= avgCa * 0.8) return 'text-yellow-400';
+    return 'text-fm-danger';
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-fm-surface p-4 rounded-lg border border-blue-500/20 hover:border-blue-500/40 transition-all group"
+    >
+      {/* Header */}
+      <div className="flex justify-between items-start mb-3">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="text-lg font-bold text-white">{rec.name}</div>
+            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+              On Loan
+            </Badge>
+            <Badge className={getLoanPriorityStyle(rec.priority)}>
+              {rec.priority}
+            </Badge>
+          </div>
+          <div className="text-sm text-fm-light/50 mt-1">
+            {rec.positions || 'Unknown'} | Age {rec.age}
+          </div>
+        </div>
+      </div>
+
+      {/* Skill Comparison - Simplified for loans */}
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
+          <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
+            <Target size={10} /> CA
+          </div>
+          <div className={`text-lg font-mono font-bold ${getCAColor(rec.ca, rec.squad_avg_ca)}`}>
+            {rec.ca}
+          </div>
+          <div className="text-[10px] text-fm-light/40">
+            Avg: {rec.squad_avg_ca}
+          </div>
+        </div>
+
+        <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
+          <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
+            <Users size={10} /> Position Rank
+          </div>
+          <div className={`text-lg font-mono font-bold ${rec.position_rank <= 2 ? 'text-fm-success' : rec.position_rank <= 4 ? 'text-yellow-400' : 'text-fm-danger'}`}>
+            #{rec.position_rank}
+          </div>
+          <div className="text-[10px] text-fm-light/40">
+            of {rec.total_at_position} at {rec.skill_position}
+          </div>
+        </div>
+
+        <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
+          <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
+            <Target size={10} /> Skill
+          </div>
+          <div className="text-lg font-mono font-bold text-white">
+            {rec.best_skill.toFixed(0)}
+          </div>
+          <div className="text-[10px] text-fm-light/40">
+            at {rec.skill_position}
+          </div>
+        </div>
+      </div>
+
+      {/* Hidden Attributes (if available) */}
+      {(rec.consistency !== null || rec.important_matches !== null || rec.injury_proneness !== null) && (
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {rec.consistency !== null && (
+            <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
+              <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1">
+                Consistency
+              </div>
+              <div className={`text-sm font-bold ${rec.consistency >= 12 ? 'text-fm-success' : rec.consistency >= 8 ? 'text-white' : 'text-fm-danger'}`}>
+                {rec.consistency}
+              </div>
+            </div>
+          )}
+          {rec.important_matches !== null && (
+            <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
+              <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1">
+                Big Matches
+              </div>
+              <div className={`text-sm font-bold ${rec.important_matches >= 12 ? 'text-fm-success' : rec.important_matches >= 8 ? 'text-white' : 'text-fm-danger'}`}>
+                {rec.important_matches}
+              </div>
+            </div>
+          )}
+          {rec.injury_proneness !== null && (
+            <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
+              <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1">
+                Injury Prone
+              </div>
+              <div className={`text-sm font-bold ${rec.injury_proneness <= 8 ? 'text-fm-success' : rec.injury_proneness <= 12 ? 'text-white' : 'text-fm-danger'}`}>
+                {rec.injury_proneness}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Recommended Action */}
+      <div className="mb-3">
+        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+          {rec.recommended_action}
+        </Badge>
+      </div>
+
+      {/* Reasons */}
+      {rec.reasons.length > 0 && (
+        <div className="pt-3 border-t border-white/5 space-y-1">
+          {rec.reasons.map((reason, idx) => (
+            <div key={idx} className="text-xs text-fm-light/70 flex items-start gap-2">
+              <span className="text-blue-400 mt-0.5">→</span>
               {reason}
             </div>
           ))}

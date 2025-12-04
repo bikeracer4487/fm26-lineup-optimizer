@@ -13,6 +13,17 @@ REM 4. Automatically runs update_player_data.py to generate CSV files
 REM 5. Your player data is now ready for the team selector scripts!
 REM ============================================================================
 
+REM Check for admin rights and self-elevate if needed
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    echo Requesting Administrator privileges...
+    powershell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    exit /b
+)
+
+REM Set working directory to the batch file's location (fixes admin mode)
+cd /d "%~dp0"
+
 echo.
 echo ============================================================================
 echo FM26 Lineup Optimizer - FMRTE Data Import
