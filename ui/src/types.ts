@@ -166,10 +166,19 @@ export interface PlayerRemovalRecommendation {
   // Development potential
   development_headroom: number;
   headroom_percentage: number;
-  // Hidden attributes
+  // Hidden attributes (existing)
   consistency: number | null;
   important_matches: number | null;
   injury_proneness: number | null;
+  // NEW: Additional hidden attributes and analysis from retention strategy research
+  required_growth_velocity: number | null; // CA/year needed to reach PA by age 24
+  position_role: string; // 'goalkeeper', 'defender', 'playmaker', 'attacker', 'general'
+  is_mentor_candidate: boolean; // Veterans with high Pro/Det suitable for mentoring
+  ambition: number | null;
+  controversy: number | null;
+  temperament: number | null;
+  determination: number | null;
+  professional: number | null;
 }
 
 export interface PlayerRemovalResponse {

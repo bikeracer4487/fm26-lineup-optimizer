@@ -1,5 +1,5 @@
 {
-  "currentDate": "2028-04-14",
+  "currentDate": "2028-12-20",
   "matches": [
     {
       "id": "d329a55a-7016-40c3-9d02-5ddedf1a4073",
@@ -620,11 +620,438 @@
       "date": "2028-05-14",
       "opponent": "Tamworth",
       "importance": "High"
+    },
+    {
+      "id": "a2af6308-cd07-464d-9253-2dd68ca718db",
+      "date": "2028-07-08",
+      "opponent": "Man City",
+      "importance": "Low"
+    },
+    {
+      "id": "a75e409b-9987-4f3a-9a67-f9d44bd2eab3",
+      "date": "2028-07-15",
+      "opponent": "Cardiff Met",
+      "importance": "Low"
+    },
+    {
+      "id": "c3899f42-035b-4341-b5e8-0a4df46b8719",
+      "date": "2028-07-22",
+      "opponent": "Real Madrid",
+      "importance": "Low"
+    },
+    {
+      "id": "1df22ec6-bca4-4285-a24e-ac339e2326d2",
+      "date": "2028-07-29",
+      "opponent": "Bayern Munchen",
+      "importance": "Low"
+    },
+    {
+      "id": "7fa9dd39-4a51-4202-8cb8-176ba1e724dc",
+      "date": "2028-08-05",
+      "opponent": "Maidenhead Utd",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-05T05:31:33.744Z"
+    },
+    {
+      "id": "20b7c442-209e-4b71-92c6-8e3b2f5c8e59",
+      "date": "2028-08-12",
+      "opponent": "Boston Utd",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-05T05:43:33.755Z"
+    },
+    {
+      "id": "ae59f455-b7a1-451d-a3a3-df0d15a242d8",
+      "date": "2028-08-19",
+      "opponent": "Rochdale",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-05T21:17:42.434Z"
+    },
+    {
+      "id": "70a7e8a1-31e0-427a-96b8-779ec1b10af9",
+      "date": "2028-08-26",
+      "opponent": "Eastbourne Borough",
+      "importance": "Medium"
+    },
+    {
+      "id": "7887570e-ba8f-4df0-a2bf-7d07b9da938f",
+      "date": "2028-09-02",
+      "opponent": "Boreham Wood",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-05T22:34:07.143Z"
+    },
+    {
+      "id": "33daf00d-e568-4047-a0dc-077f5a8e73f4",
+      "date": "2028-09-09",
+      "opponent": "South Shields",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-06T03:57:55.933Z"
+    },
+    {
+      "id": "40c094e6-d988-42d4-a1c6-3db0433f5c9b",
+      "date": "2028-09-12",
+      "opponent": "Woking",
+      "importance": "Medium",
+      "manualOverrides": {
+        "AML": "Scot Little",
+        "AMC": "Allan Hall"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-06T04:37:35.613Z"
+    },
+    {
+      "id": "b00fedd3-cfa9-41c9-b39a-6c7f12d150cf",
+      "date": "2028-09-16",
+      "opponent": "Halifax Town",
+      "importance": "Medium",
+      "manualOverrides": {
+        "AMC": "Allan Hall",
+        "DC2": "Jayden Cumberbatch",
+        "STC": "Gastón Ramírez"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-06T05:48:20.331Z"
+    },
+    {
+      "id": "37196ce7-9111-4553-8822-4a715ef2b10f",
+      "date": "2028-09-23",
+      "opponent": "Dag & Red",
+      "importance": "Medium",
+      "manualOverrides": {
+        "DC2": "Jayden Cumberbatch",
+        "AMC": "Allan Hall"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-06T06:03:02.048Z"
+    },
+    {
+      "id": "e492cf39-fe12-4a80-a885-f9309e0ed290",
+      "date": "2028-10-03",
+      "opponent": "Barnet",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-06T07:28:44.168Z"
+    },
+    {
+      "id": "911fc1b5-c6e5-4632-9df8-654b21c10389",
+      "date": "2028-10-07",
+      "opponent": "St. Neots Town",
+      "importance": "High",
+      "manualOverrides": {
+        "AMC": "Allan Hall",
+        "STC": "Korbyn Ednie"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-06T07:40:28.365Z"
+    },
+    {
+      "id": "b1283ae5-6820-41cc-9da5-0849cc8d7439",
+      "date": "2028-10-10",
+      "opponent": "Aldershot Town",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-06T17:05:41.441Z",
+      "manualOverrides": {
+        "AMC": "Allan Hall",
+        "STC": "Korbyn Ednie",
+        "AML": "Daniel Willard",
+        "AMR": "Mateusz Widz",
+        "DM(L)": "Aydin Webb",
+        "DM(R)": "Matt Worthington",
+        "DC2": "Jayden Cumberbatch",
+        "DC1": "Isaac Smith",
+        "DR": "Nesbert Ncube"
+      }
+    },
+    {
+      "id": "312da647-74f2-4636-92d6-7f30f05d305a",
+      "date": "2028-10-14",
+      "opponent": "Hartlepool",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-06T18:04:19.609Z"
+    },
+    {
+      "id": "c6fb1d07-714c-46b3-beb3-1232292aff84",
+      "date": "2028-10-21",
+      "opponent": "Northampton Town",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-06T18:23:50.875Z"
+    },
+    {
+      "id": "b59695a9-b6ca-425d-80e9-9083bf73aede",
+      "date": "2028-10-24",
+      "opponent": "Yeovil Town",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-06T18:39:16.482Z"
+    },
+    {
+      "id": "e080c557-70b9-458c-99c3-0d6abeeeb22b",
+      "date": "2028-10-28",
+      "opponent": "MK Dons",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-06T18:39:22.456Z"
+    },
+    {
+      "id": "4cf9b420-228b-4d23-af7f-15dcbf462ba7",
+      "date": "2028-10-31",
+      "opponent": "Chester",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-06T21:38:38.240Z"
+    },
+    {
+      "id": "505d7552-6483-4c6e-8450-0c4673a6adba",
+      "date": "2028-11-04",
+      "opponent": "Sutton United",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-06T23:11:42.605Z"
+    },
+    {
+      "id": "507a5c31-d242-4133-b3ee-ee4e3a0adeb8",
+      "date": "2028-11-07",
+      "opponent": "Accrington Stanley",
+      "importance": "Medium"
+    },
+    {
+      "id": "74a6bbc1-de98-42b4-812a-a58bbc420b32",
+      "date": "2028-11-11",
+      "opponent": "Solihull Moors",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-07T00:16:30.566Z"
+    },
+    {
+      "id": "287a8c74-e209-4290-a342-9baa58335c90",
+      "date": "2028-11-18",
+      "opponent": "Maldon & Tiptree",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-07T04:39:30.495Z"
+    },
+    {
+      "id": "abc1a42e-37b2-4d3f-8cc0-93c374a8aff8",
+      "date": "2028-11-21",
+      "opponent": "Gateshead",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-07T04:49:25.456Z"
+    },
+    {
+      "id": "228336a8-e5c0-457a-ac71-e12e3377041d",
+      "date": "2028-11-25",
+      "opponent": "Tamworth",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-07T05:36:54.089Z"
+    },
+    {
+      "id": "d6be260d-e3a8-40be-9fb3-52e0b9bf5342",
+      "date": "2028-12-02",
+      "opponent": "Crewe Alexandra",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-07T05:46:45.494Z"
+    },
+    {
+      "id": "b2aa8fb0-d04e-493c-8900-485160c6bd69",
+      "date": "2028-12-05",
+      "opponent": "Morecambe",
+      "importance": "Medium",
+      "manualOverrides": {
+        "DR": "Tom Dando",
+        "DC1": "Isaac Smith",
+        "DC2": "Dominic Iorfa",
+        "DM(R)": "Japa",
+        "DM(L)": "Matt Worthington",
+        "AMR": "Allan Hall",
+        "AMC": "Aydin Webb",
+        "AML": "Joe Powell",
+        "STC": "Korbyn Ednie"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-07T22:20:30.939Z"
+    },
+    {
+      "id": "4aa4235b-9934-4751-90dd-b1b83d5662bf",
+      "date": "2028-12-09",
+      "opponent": "Dorking Wanderers",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-07T22:43:41.295Z"
+    },
+    {
+      "id": "811e89a0-7aa8-4d1f-a785-eeb05441ce28",
+      "date": "2028-12-16",
+      "opponent": "Scunthorpe Utd",
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-08T03:04:29.127Z"
+    },
+    {
+      "id": "c69fb35d-b480-4acf-a1ef-51d3db1dde3b",
+      "date": "2028-12-19",
+      "opponent": "Boreham Wood",
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-08T03:08:52.918Z"
+    },
+    {
+      "id": "e0448001-0ce4-4acc-8e82-fbe6f1f1ecb2",
+      "date": "2028-12-23",
+      "opponent": "Boston Utd",
+      "importance": "Low"
+    },
+    {
+      "id": "b17065fe-29ff-4fe5-86d0-6c9805d7995b",
+      "date": "2028-12-26",
+      "opponent": "Maidenhead Utd",
+      "importance": "Low"
+    },
+    {
+      "id": "f21cb1c9-f243-4193-a29d-769d395d521c",
+      "date": "2028-12-29",
+      "opponent": "Rochdale",
+      "importance": "Low"
+    },
+    {
+      "id": "146fa3d5-73f2-43d9-80ac-ce9f39f3e6a6",
+      "date": "2029-01-01",
+      "opponent": "Eastbourne Borough",
+      "importance": "Low"
+    },
+    {
+      "id": "3ca61f06-0a86-41f3-b7b6-0490d0f34af5",
+      "date": "2029-01-06",
+      "opponent": "Oldham Athletic",
+      "importance": "High"
+    },
+    {
+      "id": "0b37eb7a-59ee-4a44-a2e4-6fe4749d7ead",
+      "date": "2029-01-09",
+      "opponent": "Swansea City",
+      "importance": "High"
+    },
+    {
+      "id": "63a12d27-b731-4c62-9e81-955cea9d1f59",
+      "date": "2029-01-13",
+      "opponent": "South Shields",
+      "importance": "Low"
+    },
+    {
+      "id": "7c0650ae-d5fd-468c-8c84-8677ab504b08",
+      "date": "2029-01-20",
+      "opponent": "Woking",
+      "importance": "Low"
+    },
+    {
+      "id": "07d47d76-31be-4f58-adbd-52bf4405c039",
+      "date": "2029-01-23",
+      "opponent": "Halifax Town",
+      "importance": "Low"
+    },
+    {
+      "id": "a6a94dc4-c4b2-41ef-8ea8-afc6c3ebfda1",
+      "date": "2029-01-27",
+      "opponent": "Dag & Red",
+      "importance": "Low"
+    },
+    {
+      "id": "d5dac74c-59ef-4679-9644-79196b17cc40",
+      "date": "2029-02-03",
+      "opponent": "Barnet",
+      "importance": "Low"
+    },
+    {
+      "id": "396231ba-eb8b-4973-b45f-af2ab2cbe5c1",
+      "date": "2029-02-10",
+      "opponent": "Aldershot Town",
+      "importance": "Low"
+    },
+    {
+      "id": "886acc68-817d-4593-b613-267549ff6f3d",
+      "date": "2029-02-17",
+      "opponent": "Hartlepool",
+      "importance": "Low"
+    },
+    {
+      "id": "eb0dd8f9-5bea-42c7-bc60-7cfefebf8bd8",
+      "date": "2029-02-20",
+      "opponent": "Northampton Town",
+      "importance": "Low"
+    },
+    {
+      "id": "87c9b0cb-4ec7-4341-bb47-b7ab0ce7487f",
+      "date": "2029-02-24",
+      "opponent": "Yeovil Town",
+      "importance": "Low"
+    },
+    {
+      "id": "c2676796-a305-4a15-bf8d-7e71e35b94c2",
+      "date": "2029-03-03",
+      "opponent": "Chester",
+      "importance": "Low"
+    },
+    {
+      "id": "0b426e55-87d3-41bc-b8aa-ed6018f094b5",
+      "date": "2029-03-06",
+      "opponent": "Sutton United",
+      "importance": "Low"
+    },
+    {
+      "id": "8d876eb9-1298-4d2a-b42e-81dab4de7fae",
+      "date": "2029-03-17",
+      "opponent": "Accrington Stanley",
+      "importance": "Low"
+    },
+    {
+      "id": "9b15b73c-d49a-47a1-b7b1-2826cbe85431",
+      "date": "2029-03-30",
+      "opponent": "Solihull Moors",
+      "importance": "Low"
+    },
+    {
+      "id": "01dd42df-b712-4cb6-abf1-c98620b2a924",
+      "date": "2029-04-02",
+      "opponent": "Maldon & Tiptree",
+      "importance": "Low"
+    },
+    {
+      "id": "60d91e22-b222-47d8-9a1b-2256d05579f9",
+      "date": "2029-04-06",
+      "opponent": "Tamworth",
+      "importance": "Low"
+    },
+    {
+      "id": "8107c46f-9941-4883-a8ac-dbcb35d38bf3",
+      "date": "2029-04-09",
+      "opponent": "Gateshead",
+      "importance": "Low"
+    },
+    {
+      "id": "e65d095f-8674-4947-8526-80633343cb12",
+      "date": "2029-04-14",
+      "opponent": "Morecambe",
+      "importance": "Low"
+    },
+    {
+      "id": "5dc3f350-7d7a-4e98-90a7-264053c020b1",
+      "date": "2029-04-23",
+      "opponent": "Scunthorpe Utd",
+      "importance": "Low"
     }
   ],
   "rejectedPlayers": {
-    "5906b1fe-63eb-4d4b-9c96-d425d5a607b2": [
-      "Hisashi Roddy"
+    "4aa4235b-9934-4751-90dd-b1b83d5662bf": [
+      "Dominic Iorfa"
     ]
   },
   "rejectedTraining": {},

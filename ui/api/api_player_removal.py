@@ -69,10 +69,12 @@ class PlayerRemovalAdvisor:
         """Load player data from CSV."""
         self.df = pd.read_csv(csv_filepath)
 
-        # Ensure numeric columns
+        # Ensure numeric columns (including new hidden attributes from retention strategy research)
         numeric_cols = ['CA', 'PA', 'Age', 'Consistency', 'Important Matches',
                        'Injury Proneness', 'Adaptability', 'Ambition', 'Loyalty',
-                       'Professional', 'GK', 'D(C)', 'D(R/L)', 'DM(L)', 'DM(R)',
+                       'Professional', 'Controversy', 'Temperament', 'Determination',
+                       'Natural Fitness', 'Pressure',  # Added for retention strategy analysis
+                       'GK', 'D(C)', 'D(R/L)', 'DM(L)', 'DM(R)',
                        'AM(L)', 'AM(C)', 'AM(R)', 'Striker', 'Months Left (Contract)']
 
         for col in numeric_cols:
@@ -189,7 +191,41 @@ class PlayerRemovalAdvisor:
 
         return 0, len(sorted_df)
 
-    def _classify_removal_priority(self, row, skill, position_rank, total_players,
+    def _get_position_role(self, skill_col):
+        """
+        Classify player's primary role for position-specific thresholds.
+        Based on retention strategy research which defines different standards by role.
+        """
+        if skill_col == 'GK':
+            return 'goalkeeper'
+        elif skill_col in ['D(C)', 'D(R/L)']:
+            return 'defender'
+        elif skill_col in ['DM(L)', 'DM(R)', 'AM(C)']:
+            return 'playmaker'
+        elif skill_col in ['AM(L)', 'AM(R)', 'Striker']:
+            return 'attacker'
+        return 'general'
+
+    def _calculate_growth_velocity(self, ca, pa, age):
+        """
+        Calculate Required Growth Velocity (RGV) to reach PA by peak age (24).
+        Research formula: RGV = (PA - CA) / (24 - Current Age)
+
+        If RGV > 15 CA/year and low professionalism, player is unlikely to reach PA.
+        These are "False Wonderkids" - valued highly by market but structurally
+        incapable of reaching their theoretical ceiling.
+        """
+        if age >= 24 or pa <= ca:
+            return 0  # Past peak or at ceiling
+
+        years_to_peak = 24 - age
+        if years_to_peak <= 0:
+            return 0
+
+        required_ca_per_year = (pa - ca) / years_to_peak
+        return required_ca_per_year
+
+    def _classify_removal_priority(self, row, skill, skill_col, position_rank, total_players,
                                    squad_avg_ca, release_cost):
         """
         Classify player removal priority based on research criteria.
@@ -206,13 +242,19 @@ class PlayerRemovalAdvisor:
         asking_price = row.get('Asking_Price_Numeric', 0)
         loan_status = row.get('LoanStatus', 'Own')
 
-        # Hidden attributes (from research - impact squad stability)
+        # Hidden attributes (from research - impact squad stability and development)
         consistency = row.get('Consistency', 10)
         important_matches = row.get('Important Matches', 10)
         injury_proneness = row.get('Injury Proneness', 10)
         ambition = row.get('Ambition', 10)
         loyalty = row.get('Loyalty', 10)
         professional = row.get('Professional', 10)
+        # New hidden attributes from retention strategy research
+        controversy = row.get('Controversy', 10)
+        temperament = row.get('Temperament', 10)
+        determination = row.get('Determination', 10)
+        natural_fitness = row.get('Natural Fitness', 10)
+        pressure = row.get('Pressure', 10)
 
         # Calculate development headroom
         development_headroom = (pa - ca) if (pa > 0 and ca > 0) else 0
@@ -223,6 +265,15 @@ class PlayerRemovalAdvisor:
 
         # Calculate wage efficiency (CA per wage)
         wage_efficiency = ca / wages if wages > 0 else float('inf')
+
+        # Calculate Required Growth Velocity (RGV) for young players
+        required_growth_velocity = self._calculate_growth_velocity(ca, pa, age)
+
+        # Get position role for position-specific thresholds
+        position_role = self._get_position_role(skill_col)
+
+        # Track if player is a mentor candidate
+        is_mentor_candidate = False
 
         priority_score = 0  # Higher = more need to remove
 
@@ -275,10 +326,29 @@ class PlayerRemovalAdvisor:
                 else:
                     action = "Keep until loan expires"
 
-            return priority, reasons, action, priority_score, is_loaned_in, development_headroom, headroom_percentage
+            # Return dictionary format for consistency
+            return {
+                'priority': priority,
+                'reasons': reasons,
+                'action': action,
+                'priority_score': priority_score,
+                'is_loaned_in': is_loaned_in,
+                'development_headroom': development_headroom,
+                'headroom_percentage': headroom_percentage,
+                # New fields (may not all apply to loans, but include for consistency)
+                'required_growth_velocity': required_growth_velocity,
+                'position_role': position_role,
+                'is_mentor_candidate': False,  # Loans can't be mentors
+                'ambition': int(ambition) if pd.notna(ambition) else None,
+                'controversy': int(controversy) if pd.notna(controversy) else None,
+                'temperament': int(temperament) if pd.notna(temperament) else None,
+                'determination': int(determination) if pd.notna(determination) else None,
+                'professional': int(professional) if pd.notna(professional) else None,
+            }
 
         # ============================================
         # OWNED PLAYERS: Full scoring logic
+        # Based on retention strategy research document
         # ============================================
 
         # 1. Non-Contract Players (Contract Type = 4)
@@ -292,6 +362,9 @@ class PlayerRemovalAdvisor:
             if position_percentile > 0.7:  # Bottom 30%
                 priority_score += 30
                 reasons.append(f"Bottom {int((1-position_percentile)*100)}% at position (rank #{position_rank})")
+            elif position_rank <= 2:  # Top 2 at position = STARTER, strong protection
+                priority_score -= 30
+                reasons.append(f"Key player: Ranked #{position_rank} at {skill_col} - starter/first backup")
 
         # 3. Below squad average CA
         if ca < squad_avg_ca * 0.85:
@@ -317,24 +390,124 @@ class PlayerRemovalAdvisor:
             priority_score += 15
             reasons.append(f"Contract expires in {months_left} months - consider selling")
 
-        # 6. Hidden attribute red flags (from research Table 1)
-        if pd.notna(consistency) and consistency < 8:
-            priority_score += 20
-            reasons.append(f"Low consistency ({consistency}) - unreliable over season")
+        # ============================================
+        # 6. HIDDEN ATTRIBUTE RED FLAGS (Research-based thresholds)
+        # ============================================
 
+        # Consistency: Research says < 9 = Sell Zone (adjusted from < 8)
+        if pd.notna(consistency) and consistency < 9:
+            if consistency < 8:
+                priority_score += 25
+                reasons.append(f"Critical: Low consistency ({consistency}) - unreliable performer")
+            else:
+                priority_score += 15
+                reasons.append(f"Low consistency ({consistency}) - variance risk")
+
+        # Big Match Performance (Important Matches): < 8 = Hard Sell
         if pd.notna(important_matches) and important_matches < 8:
-            priority_score += 15
-            reasons.append(f"Low big match performance ({important_matches})")
+            priority_score += 20
+            reasons.append(f"Low big match performance ({important_matches}) - chokes under pressure")
 
+        # Injury Proneness: > 14 = Hard Sell (matches research)
         if pd.notna(injury_proneness) and injury_proneness > 14:
             priority_score += 25
             reasons.append(f"High injury proneness ({injury_proneness}) - frequent disruptions")
 
-        if pd.notna(professional) and professional < 8:
-            priority_score += 15
-            reasons.append(f"Low professionalism ({professional}) - development risk")
+        # Professionalism: Research says < 10 = Hard Sell (adjusted from < 8)
+        if pd.notna(professional) and professional < 10:
+            if professional < 8:
+                priority_score += 25
+                reasons.append(f"Critical: Low professionalism ({professional}) - will not reach potential")
+            else:
+                priority_score += 15
+                reasons.append(f"Low professionalism ({professional}) - development/longevity risk")
 
-        # 7. U21 DEVELOPMENT PROTECTION (moderate - reduces but doesn't eliminate flags)
+        # NEW: Ambition < 6 = Hard Sell (unambitious, stunted development)
+        if pd.notna(ambition) and ambition < 6:
+            priority_score += 25
+            reasons.append(f"Low ambition ({ambition}) - lacks drive to improve")
+
+        # NEW: Controversy > 16 = Toxic (destabilizes squad dynamics)
+        if pd.notna(controversy) and controversy > 16:
+            priority_score += 25
+            reasons.append(f"High controversy ({controversy}) - destabilizes team dynamics")
+
+        # NEW: Temperament < 8 = Indiscipline risk
+        if pd.notna(temperament) and temperament < 8:
+            priority_score += 15
+            reasons.append(f"Low temperament ({temperament}) - prone to indiscipline")
+
+        # ============================================
+        # 7. POSITION-SPECIFIC RETENTION THRESHOLDS
+        # Research: Different positions have different critical traits
+        # ============================================
+
+        if position_role == 'goalkeeper' or position_role == 'defender':
+            # Defensive spine needs high consistency and pressure handling
+            if pd.notna(consistency) and consistency < 13:
+                priority_score += 15
+                reasons.append(f"Below defensive spine threshold (Consistency {consistency} < 13)")
+            if pd.notna(important_matches) and important_matches < 12:
+                priority_score += 10
+                reasons.append(f"Below defensive spine threshold (Big Matches {important_matches} < 12)")
+
+        elif position_role == 'playmaker':
+            # Playmakers need ambition and professionalism to unlock potential
+            if pd.notna(ambition) and ambition < 14:
+                priority_score += 10
+                reasons.append(f"Below playmaker threshold (Ambition {ambition} < 14)")
+            if pd.notna(professional) and professional < 14:
+                priority_score += 10
+                reasons.append(f"Below playmaker threshold (Pro {professional} < 14)")
+
+        elif position_role == 'attacker':
+            # Strikers need to handle pressure and have killer instinct
+            if pd.notna(important_matches) and important_matches < 14:
+                priority_score += 15
+                reasons.append(f"Below striker threshold (Big Matches {important_matches} < 14)")
+            if pd.notna(ambition) and ambition < 15:
+                priority_score += 10
+                reasons.append(f"Below striker threshold (Ambition {ambition} < 15)")
+
+        # ============================================
+        # 8. FALSE WONDERKID DETECTION (RGV Analysis)
+        # Research: If RGV > 15 CA/year and low professionalism, unlikely to reach PA
+        # NOTE: Only applies to YOUNG players (≤20) - the formula breaks down near age 24
+        # ============================================
+
+        if age <= 20 and required_growth_velocity > 15:
+            if professional < 14:  # Not Model Professional level
+                priority_score += 35
+                reasons.append(f"False Wonderkid: Needs {required_growth_velocity:.0f} CA/year to reach PA, unlikely with Pro {professional}")
+
+        # ============================================
+        # 9. DEVELOPMENT CHECKPOINT SYSTEM (18-21-24)
+        # Research-based age checkpoints for release/sell decisions
+        # ============================================
+
+        # Age 18 checkpoint: Release if Professionalism < 8
+        if age == 18 and pd.notna(professional) and professional < 8:
+            priority_score += 25
+            reasons.append("Age 18 checkpoint: Low professionalism - release candidate")
+
+        # Age 21 checkpoint (False Wonderkid window): Sell if large CA gap and low Pro
+        if 19 <= age <= 21:
+            ca_gap = pa - ca
+            if ca_gap > 50 and professional < 12:
+                priority_score += 30
+                reasons.append(f"Age 21 window: Large CA gap ({ca_gap}) with low Pro ({professional}) - sell while PA looks high")
+
+        # Age 24 checkpoint (Final verdict): Last chance to sell on potential
+        if 23 <= age <= 24:
+            if ca < squad_avg_ca and headroom_percentage < 10:
+                priority_score += 20
+                reasons.append("Age 24 checkpoint: Below average and near ceiling - last chance to sell on potential")
+
+        # ============================================
+        # 10. U21 DEVELOPMENT PROTECTION
+        # (moderate - reduces but doesn't eliminate flags)
+        # ============================================
+
         if age <= 21:
             if headroom_percentage >= 30:  # PA is 30%+ higher than CA
                 priority_score -= 30  # Moderate protection
@@ -343,11 +516,38 @@ class PlayerRemovalAdvisor:
                 priority_score -= 15
                 reasons.append(f"U21 with development potential ({headroom_percentage:.0f}% room to grow)")
 
-        # 8. Older players with no upside get slight priority increase
-        if age >= 30 and headroom_percentage < 5:
+        # ============================================
+        # 11. MENTOR RETENTION VALUE
+        # Research: Keep high-Pro veterans as mentors for youth development
+        # ============================================
+
+        if age >= 30 and pd.notna(professional) and professional >= 16:
+            # Check if truly valuable mentor (Model Citizen/Professional level)
+            if pd.notna(determination) and determination >= 15:
+                priority_score -= 40  # Strong protection
+                is_mentor_candidate = True
+                reasons.append(f"Mentor value: High Pro ({professional}) + Det ({determination}) - valuable for youth development")
+            else:
+                priority_score -= 20
+                is_mentor_candidate = True
+                reasons.append(f"Mentor value: High professionalism ({professional}) - consider keeping for mentoring")
+
+        # ============================================
+        # 12. PEAK VALUE DIVESTMENT WINDOWS & AGE PENALTIES
+        # Research: Sell physical-dependent players before decline
+        # ============================================
+
+        # Physical position decline warning (Age 29+ attackers with low Natural Fitness)
+        if age >= 29 and position_role == 'attacker':
+            if pd.notna(natural_fitness) and natural_fitness < 12:
+                priority_score += 20
+                reasons.append(f"Approaching decline: Physical attacker age {age} with low Natural Fitness ({natural_fitness})")
+
+        # General age penalties (reduced weight to avoid double-counting with mentor logic)
+        if age >= 30 and headroom_percentage < 5 and not is_mentor_candidate:
             priority_score += 10
             reasons.append(f"Veteran with limited development potential")
-        if age >= 32:
+        if age >= 32 and not is_mentor_candidate:
             priority_score += 5
             reasons.append(f"Age {age} - approaching career end")
 
@@ -373,7 +573,25 @@ class PlayerRemovalAdvisor:
             priority = "Low"
             action = "Keep - squad member"
 
-        return priority, reasons, action, priority_score, is_loaned_in, development_headroom, headroom_percentage
+        # Package all new fields for return
+        return {
+            'priority': priority,
+            'reasons': reasons,
+            'action': action,
+            'priority_score': priority_score,
+            'is_loaned_in': is_loaned_in,
+            'development_headroom': development_headroom,
+            'headroom_percentage': headroom_percentage,
+            # New fields from retention strategy research
+            'required_growth_velocity': required_growth_velocity,
+            'position_role': position_role,
+            'is_mentor_candidate': is_mentor_candidate,
+            'ambition': int(ambition) if pd.notna(ambition) else None,
+            'controversy': int(controversy) if pd.notna(controversy) else None,
+            'temperament': int(temperament) if pd.notna(temperament) else None,
+            'determination': int(determination) if pd.notna(determination) else None,
+            'professional': int(professional) if pd.notna(professional) else None,
+        }
 
     def get_removal_recommendations(self):
         """
@@ -411,9 +629,9 @@ class PlayerRemovalAdvisor:
             # Calculate termination costs
             release_cost, mutual_cost = self._calculate_termination_cost(row)
 
-            # Classify removal priority
-            priority, reasons, action, priority_score, is_loaned_in, development_headroom, headroom_percentage = self._classify_removal_priority(
-                row, best_skill, position_rank, total_at_position,
+            # Classify removal priority (now returns a dictionary)
+            result = self._classify_removal_priority(
+                row, best_skill, skill_col, position_rank, total_at_position,
                 squad_avg_ca, release_cost
             )
 
@@ -440,18 +658,27 @@ class PlayerRemovalAdvisor:
                 "release_cost": round(release_cost, 0),
                 "mutual_termination_cost": round(mutual_cost, 0),
                 "loan_status": loan_status,
-                "is_loaned_in": is_loaned_in,
-                "priority": priority,
-                "priority_score": priority_score,
-                "reasons": reasons,
-                "recommended_action": action,
+                "is_loaned_in": result['is_loaned_in'],
+                "priority": result['priority'],
+                "priority_score": result['priority_score'],
+                "reasons": result['reasons'],
+                "recommended_action": result['action'],
                 # Development potential fields
-                "development_headroom": int(development_headroom),
-                "headroom_percentage": round(headroom_percentage, 1),
-                # Hidden attributes for display
+                "development_headroom": int(result['development_headroom']),
+                "headroom_percentage": round(result['headroom_percentage'], 1),
+                # Hidden attributes for display (existing)
                 "consistency": int(row.get('Consistency', 0)) if pd.notna(row.get('Consistency')) else None,
                 "important_matches": int(row.get('Important Matches', 0)) if pd.notna(row.get('Important Matches')) else None,
                 "injury_proneness": int(row.get('Injury Proneness', 0)) if pd.notna(row.get('Injury Proneness')) else None,
+                # NEW: Additional hidden attributes and analysis from retention strategy
+                "required_growth_velocity": round(result['required_growth_velocity'], 1) if result['required_growth_velocity'] else None,
+                "position_role": result['position_role'],
+                "is_mentor_candidate": result['is_mentor_candidate'],
+                "ambition": result['ambition'],
+                "controversy": result['controversy'],
+                "temperament": result['temperament'],
+                "determination": result['determination'],
+                "professional": result['professional'],
             })
 
         # Sort by priority score descending (highest = most need to remove)

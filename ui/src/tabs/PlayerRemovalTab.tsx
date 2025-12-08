@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { AppState, PlayerRemovalRecommendation } from '../types';
 import { api } from '../api';
 import { Button, Badge } from '../components/UI';
-import { RefreshCw, UserMinus, AlertTriangle, TrendingDown, DollarSign, FileText, AlertCircle, Users, Clock, Target, Trash2 } from 'lucide-react';
+import { RefreshCw, UserMinus, AlertTriangle, TrendingDown, DollarSign, FileText, AlertCircle, Users, Clock, Target, Trash2, Star, Flame, Award, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface PlayerRemovalTabProps {
@@ -64,6 +64,17 @@ export function PlayerRemovalTab({ state }: PlayerRemovalTabProps) {
   // Count protected prospects (U21 with 15%+ headroom)
   const protectedProspects = ownedPlayers.filter(r => r.age <= 21 && r.headroom_percentage >= 15).length;
 
+  // NEW: Count mentor candidates (veterans with high Pro/Det)
+  const mentorCandidates = ownedPlayers.filter(r => r.is_mentor_candidate).length;
+
+  // NEW: Count false prospects (YOUNG players ≤20 with unrealistic RGV)
+  const falseProspects = ownedPlayers.filter(r =>
+    r.age <= 20 &&
+    r.required_growth_velocity !== null &&
+    r.required_growth_velocity > 15 &&
+    (r.professional === null || r.professional < 14)
+  ).length;
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -82,41 +93,55 @@ export function PlayerRemovalTab({ state }: PlayerRemovalTabProps) {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-5 gap-4">
-        <div className="bg-fm-surface/50 border border-fm-danger/20 rounded-lg p-4">
+      <div className="grid grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="bg-fm-surface/50 border border-fm-danger/20 rounded-lg p-3">
           <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
             <AlertTriangle size={12} /> Critical
           </div>
           <div className="text-2xl font-bold text-fm-danger">{criticalCount}</div>
-          <div className="text-xs text-fm-light/50">players to remove</div>
+          <div className="text-[10px] text-fm-light/50">players to remove</div>
         </div>
-        <div className="bg-fm-surface/50 border border-orange-500/20 rounded-lg p-4">
+        <div className="bg-fm-surface/50 border border-orange-500/20 rounded-lg p-3">
           <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            <TrendingDown size={12} /> High Priority
+            <TrendingDown size={12} /> High
           </div>
           <div className="text-2xl font-bold text-orange-400">{highCount}</div>
-          <div className="text-xs text-fm-light/50">consider moving on</div>
+          <div className="text-[10px] text-fm-light/50">consider selling</div>
         </div>
-        <div className="bg-fm-surface/50 border border-fm-teal/20 rounded-lg p-4">
+        <div className="bg-fm-surface/50 border border-fm-teal/20 rounded-lg p-3">
           <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            <DollarSign size={12} /> Potential Savings
+            <DollarSign size={12} /> Savings
           </div>
           <div className="text-2xl font-bold text-fm-teal">${totalWageSavings.toLocaleString()}</div>
-          <div className="text-xs text-fm-light/50">per week (Critical + High)</div>
+          <div className="text-[10px] text-fm-light/50">per week potential</div>
         </div>
-        <div className="bg-fm-surface/50 border border-green-500/20 rounded-lg p-4">
+        <div className="bg-fm-surface/50 border border-green-500/20 rounded-lg p-3">
           <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            <Target size={12} /> Prospects
+            <Star size={12} /> Prospects
           </div>
           <div className="text-2xl font-bold text-green-400">{protectedProspects}</div>
-          <div className="text-xs text-fm-light/50">U21 with potential</div>
+          <div className="text-[10px] text-fm-light/50">U21 protected</div>
         </div>
-        <div className="bg-fm-surface/50 border border-blue-500/20 rounded-lg p-4">
+        <div className="bg-fm-surface/50 border border-purple-500/20 rounded-lg p-3">
+          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
+            <Award size={12} /> Mentors
+          </div>
+          <div className="text-2xl font-bold text-purple-400">{mentorCandidates}</div>
+          <div className="text-[10px] text-fm-light/50">high Pro veterans</div>
+        </div>
+        <div className="bg-fm-surface/50 border border-amber-500/20 rounded-lg p-3">
+          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
+            <Flame size={12} /> False Prospects
+          </div>
+          <div className="text-2xl font-bold text-amber-400">{falseProspects}</div>
+          <div className="text-[10px] text-fm-light/50">unlikely to develop</div>
+        </div>
+        <div className="bg-fm-surface/50 border border-blue-500/20 rounded-lg p-3">
           <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
             <Users size={12} /> Squad
           </div>
           <div className="text-2xl font-bold text-white">{ownedPlayers.length}</div>
-          <div className="text-xs text-fm-light/50">owned + {loanedPlayers.length} on loan</div>
+          <div className="text-[10px] text-fm-light/50">+ {loanedPlayers.length} loans</div>
         </div>
       </div>
 
@@ -332,11 +357,27 @@ function PlayerRemovalCard({ rec }: { rec: PlayerRemovalRecommendation }) {
             <Badge className={getPriorityStyle(rec.priority)}>
               {rec.priority}
             </Badge>
-            {/* Prospect badge for U21 with development potential */}
-            {rec.age <= 21 && rec.headroom_percentage >= 15 && (
-              <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                Prospect
+            {/* Mentor badge for veterans with high Pro/Det */}
+            {rec.is_mentor_candidate && (
+              <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
+                <Award size={10} className="mr-1" /> Mentor
               </Badge>
+            )}
+            {/* False Prospect badge for YOUNG players (≤20) with unrealistic RGV */}
+            {rec.age <= 20 && rec.required_growth_velocity !== null && rec.required_growth_velocity > 15 && (rec.professional === null || rec.professional < 14) && (
+              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">
+                <Flame size={10} className="mr-1" /> False Prospect
+              </Badge>
+            )}
+            {/* Prospect badge for U21 with development potential */}
+            {rec.age <= 21 && rec.headroom_percentage >= 15 && !rec.is_mentor_candidate && !(rec.required_growth_velocity !== null && rec.required_growth_velocity > 15) && (
+              <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                <Star size={10} className="mr-1" /> Prospect
+              </Badge>
+            )}
+            {/* Position role indicator */}
+            {rec.position_role && rec.position_role !== 'general' && (
+              <span className="text-[10px] text-fm-light/40 uppercase">{rec.position_role}</span>
             )}
           </div>
           <div className="text-sm text-fm-light/50 mt-1">
@@ -456,15 +497,15 @@ function PlayerRemovalCard({ rec }: { rec: PlayerRemovalRecommendation }) {
         </div>
       </div>
 
-      {/* Hidden Attributes (if available) */}
+      {/* Hidden Attributes - Row 1 (Performance Stability) */}
       {(rec.consistency !== null || rec.important_matches !== null || rec.injury_proneness !== null) && (
-        <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="grid grid-cols-3 gap-2 mb-2">
           {rec.consistency !== null && (
             <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
               <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1">
                 Consistency
               </div>
-              <div className={`text-sm font-bold ${rec.consistency >= 12 ? 'text-fm-success' : rec.consistency >= 8 ? 'text-white' : 'text-fm-danger'}`}>
+              <div className={`text-sm font-bold ${rec.consistency >= 13 ? 'text-fm-success' : rec.consistency >= 9 ? 'text-white' : 'text-fm-danger'}`}>
                 {rec.consistency}
               </div>
             </div>
@@ -487,6 +528,80 @@ function PlayerRemovalCard({ rec }: { rec: PlayerRemovalRecommendation }) {
               <div className={`text-sm font-bold ${rec.injury_proneness <= 8 ? 'text-fm-success' : rec.injury_proneness <= 12 ? 'text-white' : 'text-fm-danger'}`}>
                 {rec.injury_proneness}
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Hidden Attributes - Row 2 (Development Potential) */}
+      {(rec.professional !== null || rec.ambition !== null || rec.determination !== null) && (
+        <div className="grid grid-cols-3 gap-2 mb-2">
+          {rec.professional !== null && (
+            <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
+              <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1">
+                Professional
+              </div>
+              <div className={`text-sm font-bold ${rec.professional >= 14 ? 'text-fm-success' : rec.professional >= 10 ? 'text-white' : 'text-fm-danger'}`}>
+                {rec.professional}
+              </div>
+            </div>
+          )}
+          {rec.ambition !== null && (
+            <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
+              <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1">
+                Ambition
+              </div>
+              <div className={`text-sm font-bold ${rec.ambition >= 14 ? 'text-fm-success' : rec.ambition >= 6 ? 'text-white' : 'text-fm-danger'}`}>
+                {rec.ambition}
+              </div>
+            </div>
+          )}
+          {rec.determination !== null && (
+            <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
+              <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1">
+                Determination
+              </div>
+              <div className={`text-sm font-bold ${rec.determination >= 15 ? 'text-fm-success' : rec.determination >= 10 ? 'text-white' : 'text-fm-danger'}`}>
+                {rec.determination}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Hidden Attributes - Row 3 (Behavioral & Growth) */}
+      {(rec.controversy !== null || rec.temperament !== null || (rec.age < 24 && rec.required_growth_velocity !== null && rec.required_growth_velocity > 0)) && (
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {rec.controversy !== null && (
+            <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
+              <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1">
+                Controversy
+              </div>
+              <div className={`text-sm font-bold ${rec.controversy <= 8 ? 'text-fm-success' : rec.controversy <= 12 ? 'text-white' : 'text-fm-danger'}`}>
+                {rec.controversy}
+              </div>
+            </div>
+          )}
+          {rec.temperament !== null && (
+            <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
+              <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1">
+                Temperament
+              </div>
+              <div className={`text-sm font-bold ${rec.temperament >= 14 ? 'text-fm-success' : rec.temperament >= 8 ? 'text-white' : 'text-fm-danger'}`}>
+                {rec.temperament}
+              </div>
+            </div>
+          )}
+          {/* RGV display for young players */}
+          {rec.age < 24 && rec.required_growth_velocity !== null && rec.required_growth_velocity > 0 && (
+            <div className="bg-fm-dark/30 p-2 rounded border border-white/5">
+              <div className="text-[10px] text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
+                <Zap size={10} /> Growth Rate
+              </div>
+              <div className={`text-sm font-bold ${rec.required_growth_velocity <= 10 ? 'text-fm-success' : rec.required_growth_velocity <= 15 ? 'text-yellow-400' : 'text-fm-danger'}`}>
+                {rec.required_growth_velocity.toFixed(1)}
+              </div>
+              <div className="text-[10px] text-fm-light/40">CA/yr needed</div>
             </div>
           )}
         </div>
