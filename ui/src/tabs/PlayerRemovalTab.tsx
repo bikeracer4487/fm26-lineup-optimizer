@@ -75,6 +75,10 @@ export function PlayerRemovalTab({ state }: PlayerRemovalTabProps) {
     (r.professional === null || r.professional < 14)
   ).length;
 
+  // NEW: Count players by hierarchy tier
+  const startingXICount = ownedPlayers.filter(r => r.hierarchy_tier === 1).length;
+  const secondXICount = ownedPlayers.filter(r => r.hierarchy_tier === 2).length;
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -93,7 +97,7 @@ export function PlayerRemovalTab({ state }: PlayerRemovalTabProps) {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-4 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-4 lg:grid-cols-9 gap-3">
         <div className="bg-fm-surface/50 border border-fm-danger/20 rounded-lg p-3">
           <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
             <AlertTriangle size={12} /> Critical
@@ -114,6 +118,20 @@ export function PlayerRemovalTab({ state }: PlayerRemovalTabProps) {
           </div>
           <div className="text-2xl font-bold text-fm-teal">${totalWageSavings.toLocaleString()}</div>
           <div className="text-[10px] text-fm-light/50">per week potential</div>
+        </div>
+        <div className="bg-fm-surface/50 border border-blue-500/20 rounded-lg p-3">
+          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
+            🏆 Starting XI
+          </div>
+          <div className="text-2xl font-bold text-blue-400">{startingXICount}</div>
+          <div className="text-[10px] text-fm-light/50">core players</div>
+        </div>
+        <div className="bg-fm-surface/50 border border-cyan-500/20 rounded-lg p-3">
+          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
+            📋 Second XI
+          </div>
+          <div className="text-2xl font-bold text-cyan-400">{secondXICount}</div>
+          <div className="text-[10px] text-fm-light/50">rotation depth</div>
         </div>
         <div className="bg-fm-surface/50 border border-green-500/20 rounded-lg p-3">
           <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
@@ -136,7 +154,7 @@ export function PlayerRemovalTab({ state }: PlayerRemovalTabProps) {
           <div className="text-2xl font-bold text-amber-400">{falseProspects}</div>
           <div className="text-[10px] text-fm-light/50">unlikely to develop</div>
         </div>
-        <div className="bg-fm-surface/50 border border-blue-500/20 rounded-lg p-3">
+        <div className="bg-fm-surface/50 border border-white/20 rounded-lg p-3">
           <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
             <Users size={12} /> Squad
           </div>
@@ -373,6 +391,17 @@ function PlayerRemovalCard({ rec }: { rec: PlayerRemovalRecommendation }) {
             {rec.age <= 21 && rec.headroom_percentage >= 15 && !rec.is_mentor_candidate && !(rec.required_growth_velocity !== null && rec.required_growth_velocity > 15) && (
               <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
                 <Star size={10} className="mr-1" /> Prospect
+              </Badge>
+            )}
+            {/* Hierarchy tier badge */}
+            {rec.hierarchy_tier === 1 && (
+              <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+                🏆 Starting XI
+              </Badge>
+            )}
+            {rec.hierarchy_tier === 2 && (
+              <Badge className="bg-cyan-500/20 text-cyan-400 border-cyan-500/30">
+                📋 Second XI
               </Badge>
             )}
             {/* Position role indicator */}

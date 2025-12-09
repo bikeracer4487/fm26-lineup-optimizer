@@ -86,7 +86,16 @@ def update_player_data():
         
         # Filter out empty rows (if any)
         df = df.dropna(how='all')
-        
+
+        # Remove duplicate player entries (keep first occurrence)
+        # This handles cases where data was accidentally pasted multiple times
+        if 'Name' in df.columns:
+            initial_count = len(df)
+            df = df.drop_duplicates(subset=['Name'], keep='first')
+            dup_count = initial_count - len(df)
+            if dup_count > 0:
+                print(f"Removed {dup_count} duplicate player entries.")
+
         # Rename 'Striker' (Familiarity) to avoid overwrite by calculated 'Striker' (Ability)
         if 'Striker' in df.columns:
             df.rename(columns={'Striker': 'Striker_Familiarity'}, inplace=True)

@@ -4,7 +4,10 @@
       "Bash(robocopy:*)",
       "Bash(powershell:*)",
       "Bash(python -m py_compile:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(python:*)",
+      "Bash(npx tsc:*)",
+      "Bash(sort:*)"
     ],
     "deny": [],
     "ask": []

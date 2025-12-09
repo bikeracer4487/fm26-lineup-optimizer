@@ -10,6 +10,7 @@ import re
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 import data_manager
+from fm_match_ready_selector import MatchReadySelector
 
 @contextlib.contextmanager
 def suppress_stdout():
@@ -92,6 +93,50 @@ class PlayerRemovalAdvisor:
             self.df['Asking_Price_Numeric'] = self.df['Asking Price'].apply(self._parse_currency)
         else:
             self.df['Asking_Price_Numeric'] = 0
+
+        # Initialize match selector for hierarchy-based analysis
+        # This provides Starting XI / Second XI rankings per position
+        try:
+            with suppress_stdout():
+                self.match_selector = MatchReadySelector(csv_filepath, csv_filepath)
+            self.player_hierarchy = self.match_selector._calculate_player_hierarchy()
+        except Exception as e:
+            print(f"Warning: Could not initialize hierarchy analysis: {e}")
+            self.match_selector = None
+            self.player_hierarchy = {}
+
+    def _get_best_hierarchy_tier(self, player_name):
+        """
+        Get the player's best (lowest) hierarchy tier across all positions.
+
+        The hierarchy system ranks players per position:
+        - Tier 1: Starting XI (best player at position)
+        - Tier 2: Second XI (second best at position)
+        - Tier 3: Backup (all others)
+
+        A player might be Tier 1 at one position but Tier 3 at another.
+        This method returns their BEST tier (lowest number = more important).
+
+        Returns:
+            tuple: (best_tier, positions_dict)
+                - best_tier: 1, 2, or 3 (lowest tier across all positions)
+                - positions_dict: {position: tier} for all positions where player has a tier
+        """
+        if not self.player_hierarchy:
+            return 3, {}
+
+        positions_dict = {}
+        best_tier = 3
+
+        for pos_name, tiers in self.player_hierarchy.items():
+            if tiers['starting'][0] == player_name:
+                positions_dict[pos_name] = 1
+                best_tier = min(best_tier, 1)
+            elif tiers['second'][0] == player_name:
+                positions_dict[pos_name] = 2
+                best_tier = min(best_tier, 2)
+
+        return best_tier, positions_dict
 
     def _parse_currency(self, val):
         """Convert currency string like '$1,234' to numeric 1234."""
@@ -226,12 +271,18 @@ class PlayerRemovalAdvisor:
         return required_ca_per_year
 
     def _classify_removal_priority(self, row, skill, skill_col, position_rank, total_players,
-                                   squad_avg_ca, release_cost):
+                                   squad_avg_ca, release_cost, hierarchy_tier=3, hierarchy_positions=None):
         """
         Classify player removal priority based on research criteria.
 
-        Returns (priority, reasons, recommended_action, priority_score, is_loaned_in, development_headroom, headroom_percentage)
+        Args:
+            hierarchy_tier: Player's best tier across all positions (1=Starting XI, 2=Second XI, 3=Backup)
+            hierarchy_positions: Dict of {position: tier} for positions where player is Tier 1 or 2
+
+        Returns dict with priority, reasons, action, scores, and metadata
         """
+        if hierarchy_positions is None:
+            hierarchy_positions = {}
         reasons = []
         ca = row.get('CA', 0)
         pa = row.get('PA', 0)
@@ -291,6 +342,19 @@ class PlayerRemovalAdvisor:
                     priority_score += 30
                     reasons.append(f"Bottom {int((1-position_percentile)*100)}% at position (rank #{position_rank})")
 
+            # Hierarchy-based analysis for loans
+            if hierarchy_tier == 1:
+                tier1_positions = [p for p, t in hierarchy_positions.items() if t == 1]
+                priority_score -= 30  # Moderate protection for loans
+                reasons.append(f"🏆 Starting XI quality at: {', '.join(tier1_positions)}")
+            elif hierarchy_tier == 2:
+                tier2_positions = [p for p, t in hierarchy_positions.items() if t == 2]
+                priority_score -= 15
+                reasons.append(f"📋 Second XI quality at: {', '.join(tier2_positions)}")
+            elif hierarchy_tier == 3 and not hierarchy_positions:
+                priority_score += 20
+                reasons.append("⚠️ Not competitive for Starting/Second XI")
+
             # Below squad average CA
             if ca < squad_avg_ca * 0.85:
                 priority_score += 25
@@ -335,6 +399,9 @@ class PlayerRemovalAdvisor:
                 'is_loaned_in': is_loaned_in,
                 'development_headroom': development_headroom,
                 'headroom_percentage': headroom_percentage,
+                # Hierarchy-based analysis
+                'hierarchy_tier': hierarchy_tier,
+                'hierarchy_positions': hierarchy_positions,
                 # New fields (may not all apply to loans, but include for consistency)
                 'required_growth_velocity': required_growth_velocity,
                 'position_role': position_role,
@@ -365,6 +432,24 @@ class PlayerRemovalAdvisor:
             elif position_rank <= 2:  # Top 2 at position = STARTER, strong protection
                 priority_score -= 30
                 reasons.append(f"Key player: Ranked #{position_rank} at {skill_col} - starter/first backup")
+
+        # 2b. HIERARCHY-BASED ANALYSIS (Starting XI / Second XI rankings)
+        # This uses optimal lineup selection to identify truly essential players
+        if hierarchy_tier == 1:
+            # Player is the BEST at some position - critical to keep
+            tier1_positions = [p for p, t in hierarchy_positions.items() if t == 1]
+            priority_score -= 40  # Strong protection
+            reasons.append(f"🏆 Starting XI player at: {', '.join(tier1_positions)}")
+        elif hierarchy_tier == 2:
+            # Player is second-best at some position - important backup
+            tier2_positions = [p for p, t in hierarchy_positions.items() if t == 2]
+            priority_score -= 20  # Moderate protection
+            reasons.append(f"📋 Second XI player at: {', '.join(tier2_positions)}")
+        elif hierarchy_tier == 3 and not hierarchy_positions:
+            # Player is NOT in Starting XI or Second XI at ANY position
+            # This is a deep backup with limited squad value
+            priority_score += 15
+            reasons.append("⚠️ Not in Starting XI or Second XI at any position")
 
         # 3. Below squad average CA
         if ca < squad_avg_ca * 0.85:
@@ -582,6 +667,9 @@ class PlayerRemovalAdvisor:
             'is_loaned_in': is_loaned_in,
             'development_headroom': development_headroom,
             'headroom_percentage': headroom_percentage,
+            # Hierarchy-based analysis
+            'hierarchy_tier': hierarchy_tier,
+            'hierarchy_positions': hierarchy_positions,
             # New fields from retention strategy research
             'required_growth_velocity': required_growth_velocity,
             'position_role': position_role,
@@ -629,10 +717,13 @@ class PlayerRemovalAdvisor:
             # Calculate termination costs
             release_cost, mutual_cost = self._calculate_termination_cost(row)
 
+            # Get hierarchy tier (Starting XI = 1, Second XI = 2, Backup = 3)
+            hierarchy_tier, hierarchy_positions = self._get_best_hierarchy_tier(name)
+
             # Classify removal priority (now returns a dictionary)
             result = self._classify_removal_priority(
                 row, best_skill, skill_col, position_rank, total_at_position,
-                squad_avg_ca, release_cost
+                squad_avg_ca, release_cost, hierarchy_tier, hierarchy_positions
             )
 
             # Format contract type display
@@ -679,6 +770,9 @@ class PlayerRemovalAdvisor:
                 "temperament": result['temperament'],
                 "determination": result['determination'],
                 "professional": result['professional'],
+                # Hierarchy-based analysis (Starting XI / Second XI rankings)
+                "hierarchy_tier": result['hierarchy_tier'],
+                "hierarchy_positions": result['hierarchy_positions'],
             })
 
         # Sort by priority score descending (highest = most need to remove)

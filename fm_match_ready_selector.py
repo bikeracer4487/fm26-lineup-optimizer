@@ -201,6 +201,9 @@ class MatchReadySelector:
         # Store selections for multiple matches
         self.match_selections = []
 
+        # Cache for player hierarchy (position-specific rankings)
+        self._player_hierarchy_cache = None
+
         # Load persistent match tracking from JSON file
         tracking_data = self._load_match_tracking()
         self.player_match_count = tracking_data.get('match_counts', {})
@@ -211,11 +214,103 @@ class MatchReadySelector:
             player_count = len([c for c in self.player_match_count.values() if c > 0])
             print(f"Loaded match tracking: Last match counted was {self.last_match_counted} ({player_count} players with active streaks)")
 
+    def _calculate_player_hierarchy(self) -> Dict[str, Dict[str, Tuple[str, float]]]:
+        """
+        Calculate Starting XI and Second XI for each position using pure ability.
+
+        Uses only raw position ratings with no penalties for fatigue, condition,
+        sharpness, rotation, or any other factors. This gives us the "theoretical best"
+        players at each position assuming everyone is at peak fitness.
+
+        Returns:
+            Dict mapping position_name -> {
+                'starting': (player_name, rating),
+                'second': (player_name, rating)
+            }
+        """
+        if self._player_hierarchy_cache is not None:
+            return self._player_hierarchy_cache
+
+        hierarchy = {}
+
+        for pos_info in self.formation:
+            if len(pos_info) == 3:
+                pos_name, skill_col, ability_col = pos_info
+            else:
+                pos_name, skill_col = pos_info
+                ability_col = None
+
+            # Get all non-injured players with their raw ability for this position
+            candidates = []
+            for idx, row in self.df.iterrows():
+                # Skip injured players from hierarchy (they can't play)
+                if row.get('Is Injured', False):
+                    continue
+
+                # Get raw ability rating for this position
+                if ability_col and ability_col in row.index:
+                    rating = row.get(ability_col, 0)
+                    if pd.notna(rating) and rating > 0:
+                        # Normalize to consistent scale
+                        rating = float(rating) / 10.0
+                    else:
+                        continue
+                else:
+                    # Fall back to skill rating if no ability data
+                    rating = row.get(skill_col, 0)
+                    if pd.isna(rating) or rating < 1:
+                        continue
+                    rating = float(rating)
+
+                candidates.append((row['Name'], rating))
+
+            # Sort by rating descending
+            candidates.sort(key=lambda x: x[1], reverse=True)
+
+            # Assign starting and second choice for this position
+            hierarchy[pos_name] = {
+                'starting': candidates[0] if len(candidates) > 0 else (None, 0),
+                'second': candidates[1] if len(candidates) > 1 else (None, 0)
+            }
+
+        self._player_hierarchy_cache = hierarchy
+        return hierarchy
+
+    def _get_position_tier(self, player_name: str, position_name: str) -> int:
+        """
+        Get player's tier for a specific position based on hierarchy.
+
+        Tiers:
+        - 1 = Starting XI (best player at this position)
+        - 2 = Second XI (second best player at this position)
+        - 3 = Backup (all other players)
+
+        Args:
+            player_name: Name of the player
+            position_name: Position to check (e.g., 'DC1', 'DM(L)')
+
+        Returns:
+            Integer tier (1, 2, or 3)
+        """
+        hierarchy = self._calculate_player_hierarchy()
+
+        if position_name not in hierarchy:
+            return 3
+
+        pos_hierarchy = hierarchy[position_name]
+        if pos_hierarchy['starting'][0] == player_name:
+            return 1
+        elif pos_hierarchy['second'][0] == player_name:
+            return 2
+        else:
+            return 3
+
     def calculate_effective_rating(self, row: pd.Series, skill_col: str, ability_col: Optional[str] = None,
                                    match_importance: str = 'Medium',
                                    prioritize_sharpness: bool = False,
                                    position_name: Optional[str] = None,
-                                   player_tier: Optional[str] = None) -> float:
+                                   player_tier: Optional[str] = None,
+                                   position_tier: int = 3) -> float:
         """
         Calculate effective rating considering familiarity, ability, and status factors.
 
@@ -227,6 +322,9 @@ class MatchReadySelector:
             prioritize_sharpness: Give minutes to low-sharpness players
             position_name: Position being evaluated (for training bonus)
             player_tier: Player's tier for Sharpness mode ('starting_xi', 'top_backup', 'squad', or None)
+            position_tier: Position-specific tier (1=Starting XI, 2=Second XI, 3=Backup)
+                          For Low/Medium matches, Tier 3+ players don't get rotation penalties
+                          or development bonuses - just actual performance-based penalties.
 
         Returns:
             Effective rating (lower is worse, can be negative)
@@ -256,8 +354,9 @@ class MatchReadySelector:
 
         effective_rating = base_rating
 
-        # 1. Apply positional familiarity penalty based on skill rating
-        familiarity_penalty = self._get_familiarity_penalty(skill_rating)
+        # 1. Apply positional familiarity penalty based on skill rating and Versatility
+        versatility = row.get('Versatility', 10)
+        familiarity_penalty = self._get_familiarity_penalty(skill_rating, versatility)
         effective_rating *= (1 - familiarity_penalty)
 
         # 2. Match sharpness factor (5000-10000 scale)
@@ -267,8 +366,12 @@ class MatchReadySelector:
 
             if prioritize_sharpness and sharpness_pct < 0.85:
                 # BOOST rating for low-sharpness players in unimportant matches
-                effective_rating *= 1.1
-            else:
+                # Only boost Tier 1-2 (Starting XI / Second XI) - we care about their sharpness
+                # Tier 3+ backups don't get boost - we don't care about building their sharpness
+                if position_tier <= 2:
+                    effective_rating *= 1.1
+                # For Tier 3+, fall through to apply standard penalty below
+            if not (prioritize_sharpness and sharpness_pct < 0.85 and position_tier <= 2):
                 # Standard penalty for low sharpness
                 if sharpness_pct < 0.60:
                     effective_rating *= 0.70
@@ -360,13 +463,19 @@ class MatchReadySelector:
         # ENHANCEMENT 4: Penalize players based on position-specific rotation needs
         # Research: Wing-backs/DMs need rotation after 2-3 matches, CBs can sustain 5+
         # NOTE: Penalties are skipped for high priority matches (proactive rotation should happen before)
+        # NOTE: For Low/Medium matches, only apply to Tier 1-2 (Starting XI / Second XI)
+        #       We care about rotating core players. Tier 3+ backups don't get rotation penalty -
+        #       we don't care about keeping them fresh, just use them when needed.
         player_name = row.get('Name', '')
         if player_name in self.player_match_count:
             consecutive_matches = self.player_match_count[player_name]
-            consecutive_penalty = self._get_consecutive_match_penalty(
-                consecutive_matches, position_name, match_importance
-            )
-            effective_rating *= consecutive_penalty
+            # Only apply rotation penalty to Tier 1-2 in Low/Medium matches
+            # For Tier 3+, skip rotation penalty - we don't care about rotating them
+            if position_tier <= 2 or match_importance == 'High':
+                consecutive_penalty = self._get_consecutive_match_penalty(
+                    consecutive_matches, position_name, match_importance
+                )
+                effective_rating *= consecutive_penalty
 
         # 6. Match importance modifier
         if match_importance == 'High':
@@ -378,7 +487,10 @@ class MatchReadySelector:
                 effective_rating *= 0.85
 
         # 7. Training bonus for low/medium importance matches
+        # NOTE: Only apply to Tier 1-2 (Starting XI / Second XI) - squad development feature
+        #       Tier 3+ backups don't get training bonuses - we don't care about their development
         if (match_importance in ['Low', 'Medium'] and
+            position_tier <= 2 and  # Only Tier 1-2 get training bonuses
             position_name and
             row['Name'] in self.training_recommendations):
 
@@ -421,8 +533,9 @@ class MatchReadySelector:
         # 8. Universalist/Versatility bonus (FM26 25+3 squad model)
         # Reward players who can cover multiple positions (Tier 3 strategic value)
         # SKIP for High priority matches - we want the BEST player at each position
-        # Versatility matters more for squad rotation in Low/Medium matches
-        if match_importance != 'High':
+        # NOTE: Only apply to Tier 1-2 - versatility is a squad planning feature
+        #       Tier 3+ backups don't get versatility bonuses
+        if match_importance != 'High' and position_tier <= 2:
             competent_positions = self._get_player_competent_positions(row)
             if competent_positions >= 3:
                 effective_rating *= 1.05  # 5% bonus for universalists (3+ positions)
@@ -432,29 +545,64 @@ class MatchReadySelector:
         # 9. Strategic pathway bonus (FM26 positional conversion research)
         # Reward players who fit strategic retraining pathways (winger→WB, aging AMC→DM)
         # SKIP for High priority matches - we want the BEST player at each position
-        # Pathway development matters more for squad planning in Low/Medium matches
-        if match_importance != 'High':
+        # NOTE: Only apply to Tier 1-2 - pathway development is a squad planning feature
+        #       Tier 3+ backups don't get pathway bonuses
+        if match_importance != 'High' and position_tier <= 2:
             pathway_bonus = self._get_strategic_pathway_bonus(row, position_name)
             effective_rating *= pathway_bonus
 
         return effective_rating
 
-    def _get_familiarity_penalty(self, rating: float) -> float:
-        """Get penalty percentage based on positional rating tier."""
-        if pd.isna(rating):
-            return 0.40
-        elif rating >= 18:  # Natural
-            return 0.00
-        elif rating >= 13:  # Accomplished
-            return 0.10
-        elif rating >= 10:  # Competent
-            return 0.15
-        elif rating >= 6:   # Unconvincing
-            return 0.20
-        elif rating >= 5:   # Awkward
-            return 0.35
-        else:               # Ineffectual
-            return 0.40
+    def _get_familiarity_penalty(self, skill_rating: float, versatility: float = 10) -> float:
+        """
+        Calculate penalty based on positional familiarity AND Versatility attribute.
+
+        Research-backed from docs/Research/positional-skill-ratings.md:
+        - Natural (18-20): 99-100% effectiveness → 0% penalty
+        - Accomplished (15-17): 99% → 1% penalty
+        - Competent (12-14): 85-95% → 10% penalty (middle)
+        - Unconvincing (9-11): 70-80% → 25% penalty (middle)
+        - Awkward (5-8): 50-60% → 45% penalty (middle)
+        - Makeshift (1-4): <40% → 65% penalty
+
+        Versatility modifier: High (15-20) reduces by up to 50%, Low (1-5) increases by up to 25%
+
+        Args:
+            skill_rating: Player's familiarity rating at this position (1-20)
+            versatility: Player's Versatility hidden attribute (1-20)
+
+        Returns:
+            Penalty as decimal (0.0 = no penalty, 0.65 = 65% reduction)
+        """
+        if pd.isna(skill_rating) or skill_rating < 1:
+            return 1.0  # Rating 0 or missing: Complete block
+
+        # Base penalty from research effectiveness data
+        if skill_rating >= 18:
+            base_penalty = 0.00  # Natural: 100%
+        elif skill_rating >= 15:
+            base_penalty = 0.01  # Accomplished: 99%
+        elif skill_rating >= 12:
+            base_penalty = 0.10  # Competent: 90%
+        elif skill_rating >= 9:
+            base_penalty = 0.25  # Unconvincing: 75%
+        elif skill_rating >= 5:
+            base_penalty = 0.45  # Awkward: 55%
+        else:
+            base_penalty = 0.65  # Makeshift (1-4): 35%
+
+        # Versatility modifier
+        # vers 20 → modifier 0.5 (50% penalty reduction)
+        # vers 10 → modifier 1.0 (no change)
+        # vers 1 → modifier 1.25 (25% penalty increase)
+        if pd.notna(versatility) and versatility > 0:
+            versatility_modifier = 1.0 - ((versatility - 10) / 20)
+            versatility_modifier = max(0.5, min(1.25, versatility_modifier))
+        else:
+            versatility_modifier = 1.0
+
+        adjusted_penalty = base_penalty * versatility_modifier
+        return min(adjusted_penalty, 0.80)  # Cap at 80% max penalty
 
     def _get_adjusted_fatigue_threshold(self, age: float, natural_fitness: float, stamina: float, injury_proneness: float = None) -> float:
         """
@@ -767,12 +915,14 @@ class MatchReadySelector:
                     ability_col = None
 
                 # Use High priority for theoretical best XI (no tier needed, no sharpness boost)
+                # position_tier doesn't matter for High priority - tier logic only applies to Low/Medium
                 effective_rating = self.calculate_effective_rating(
                     player, skill_col, ability_col,
                     match_importance='High',
                     prioritize_sharpness=False,
                     position_name=pos_name,
-                    player_tier=None
+                    player_tier=None,
+                    position_tier=3  # Default - irrelevant for High priority
                 )
 
                 if effective_rating > -999.0:
@@ -1006,8 +1156,13 @@ class MatchReadySelector:
                 # Get player tier for Sharpness mode (None for other modes)
                 tier = player_tiers.get(player['Name']) if player_tiers else None
 
+                # Get position-specific tier for Low/Medium matches (1=Starting, 2=Second, 3=Backup)
+                # This determines whether rotation penalties and development bonuses apply
+                position_tier = self._get_position_tier(player['Name'], pos_name)
+
                 effective_rating = self.calculate_effective_rating(
-                    player, skill_col, ability_col, match_importance, prioritize_sharpness, pos_name, tier
+                    player, skill_col, ability_col, match_importance, prioritize_sharpness, pos_name, tier,
+                    position_tier=position_tier
                 )
 
                 if effective_rating > -999.0:

@@ -130,13 +130,15 @@ class ApiMatchReadySelector(MatchReadySelector):
                                    match_importance: str = 'Medium',
                                    prioritize_sharpness: bool = False,
                                    position_name: str = None,
-                                   player_tier: str = None) -> float:
+                                   player_tier: str = None,
+                                   position_tier: int = 3) -> float:
         """
         Override to apply loan logic penalties.
         """
         # Call parent method
         effective_rating = super().calculate_effective_rating(
-            row, skill_col, ability_col, match_importance, prioritize_sharpness, position_name, player_tier
+            row, skill_col, ability_col, match_importance, prioritize_sharpness, position_name, player_tier,
+            position_tier=position_tier
         )
         
         if effective_rating <= -998.0:

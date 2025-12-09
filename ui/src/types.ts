@@ -179,6 +179,9 @@ export interface PlayerRemovalRecommendation {
   temperament: number | null;
   determination: number | null;
   professional: number | null;
+  // Hierarchy-based analysis (Starting XI / Second XI rankings)
+  hierarchy_tier: number; // 1 = Starting XI, 2 = Second XI, 3 = Backup
+  hierarchy_positions: Record<string, number>; // Position -> tier mapping for positions where player is Tier 1 or 2
 }
 
 export interface PlayerRemovalResponse {

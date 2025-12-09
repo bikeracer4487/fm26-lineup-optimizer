@@ -1,14 +1,15 @@
 ﻿Player,Position,Priority,Strategic_Category,Current_Skill_Rating,Ability_Tier,Training_Score
-Anas Dauda,D(R),Medium,Improve Natural,20,Poor,0.48375
-Callum Knight,D(C),Medium,Improve Natural,20,Poor,0.6749999999999999
+Tom Dando,D(R),Medium,Improve Natural,20,Adequate,0.6975
+Jess Blewitt,D(R),Medium,Improve Natural,20,Poor,0.49724999999999997
+Eddie Sampson,D(C),Medium,Improve Natural,20,Adequate,0.6749999999999999
 Jayden Cumberbatch,D(L),High,Become Natural,16,Adequate,0.72
-Isaac Smith,DM,High,Become Natural,14,Good,0.7741666666666667
-Japa,DM,High,Become Natural,16,Excellent,0.735
-Lennon King,DM,Medium,Improve Natural,19,Poor,0.7424999999999999
-Allan Hall,AM(C),High,Become Natural,16,Good,0.51075
-Mateusz Widz,ST,High,Become Natural,16,Excellent,0.8999999999999999
+Isaac Smith,DM,High,Become Natural,15,Good,0.7741666666666667
+Connor Austin,DM,Medium,Improve Natural,19,Inadequate,0.6749999999999999
 Mannie Barton,AM(R),High,Become Natural,16,Adequate,0.6441666666666667
-Rares Ciuera,AM(R),Medium,Improve Natural,20,Poor,0.8999999999999999
-Sean Costelloe,AM(C),Medium,Improve Natural,18,Poor,0.6908333333333334
-Aydin Webb,AM(L),High,Become Natural,16,Excellent,0.8833333333333333
+Paddy Masters,AM(R),Medium,Improve Natural,20,Inadequate,0.504
+Joe Powell,AM(C),High,Become Natural,16,Excellent,0.6391666666666667
+Elia Favicchio,AM(C),Medium,Improve Natural,20,Adequate,0.6575
+Aydin Webb,AM(L),High,Become Natural,16,Good,0.8699999999999999
+Mateusz Widz,ST,High,Become Natural,16,Excellent,0.8999999999999999
 Gastón Ramírez,ST,Medium,Improve Natural,20,Adequate,0.6749999999999999
+Scot Little,ST,Medium,Improve Natural,20,Adequate,0.6749999999999999

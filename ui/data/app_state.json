@@ -1,5 +1,5 @@
 {
-  "currentDate": "2028-12-20",
+  "currentDate": "2029-01-31",
   "matches": [
     {
       "id": "d329a55a-7016-40c3-9d02-5ddedf1a4073",
@@ -908,61 +908,98 @@
       "id": "e0448001-0ce4-4acc-8e82-fbe6f1f1ecb2",
       "date": "2028-12-23",
       "opponent": "Boston Utd",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-08T19:37:43.561Z"
     },
     {
       "id": "b17065fe-29ff-4fe5-86d0-6c9805d7995b",
       "date": "2028-12-26",
       "opponent": "Maidenhead Utd",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-08T21:24:36.218Z"
     },
     {
       "id": "f21cb1c9-f243-4193-a29d-769d395d521c",
       "date": "2028-12-29",
       "opponent": "Rochdale",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-08T21:28:10.385Z"
     },
     {
       "id": "146fa3d5-73f2-43d9-80ac-ce9f39f3e6a6",
       "date": "2029-01-01",
       "opponent": "Eastbourne Borough",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-08T23:09:43.992Z"
     },
     {
       "id": "3ca61f06-0a86-41f3-b7b6-0490d0f34af5",
       "date": "2029-01-06",
       "opponent": "Oldham Athletic",
-      "importance": "High"
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-09T03:04:03.515Z"
     },
     {
       "id": "0b37eb7a-59ee-4a44-a2e4-6fe4749d7ead",
       "date": "2029-01-09",
       "opponent": "Swansea City",
-      "importance": "High"
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-09T04:07:47.449Z"
     },
     {
       "id": "63a12d27-b731-4c62-9e81-955cea9d1f59",
       "date": "2029-01-13",
       "opponent": "South Shields",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-09T05:42:00.334Z"
     },
     {
       "id": "7c0650ae-d5fd-468c-8c84-8677ab504b08",
       "date": "2029-01-20",
       "opponent": "Woking",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-09T05:59:23.536Z"
     },
     {
       "id": "07d47d76-31be-4f58-adbd-52bf4405c039",
       "date": "2029-01-23",
       "opponent": "Halifax Town",
-      "importance": "Low"
+      "importance": "Low",
+      "manualOverrides": {
+        "DR": "Tom Dando",
+        "DC1": "Josh Campbell-Slowey",
+        "DC2": "Keegan Hughes",
+        "DM(R)": "Japa",
+        "DM(L)": "Matt Worthington",
+        "AMR": "Allan Hall",
+        "AMC": "Aydin Webb"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-09T13:32:43.703Z"
+    },
+    {
+      "id": "8ae8ada6-00aa-4c18-bd67-6e0f8fb85f1f",
+      "date": "2029-01-27",
+      "opponent": "Bury",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-09T13:36:13.927Z"
     },
     {
       "id": "a6a94dc4-c4b2-41ef-8ea8-afc6c3ebfda1",
-      "date": "2029-01-27",
+      "date": "2029-01-30",
       "opponent": "Dag & Red",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-09T19:50:46.356Z"
     },
     {
       "id": "d5dac74c-59ef-4679-9644-79196b17cc40",
@@ -972,8 +1009,20 @@
     },
     {
       "id": "396231ba-eb8b-4973-b45f-af2ab2cbe5c1",
-      "date": "2029-02-10",
+      "date": "2029-02-06",
       "opponent": "Aldershot Town",
+      "importance": "Low"
+    },
+    {
+      "id": "515cb70f-fed1-4a0b-b37b-4e7dab987e97",
+      "date": "2029-02-10",
+      "opponent": "Aston Villa",
+      "importance": "High"
+    },
+    {
+      "id": "cd4caa47-f06d-4729-90d8-2f1fe76897a8",
+      "date": "2029-02-13",
+      "opponent": "Yeovil Town",
       "importance": "Low"
     },
     {
@@ -992,7 +1041,7 @@
       "id": "87c9b0cb-4ec7-4341-bb47-b7ab0ce7487f",
       "date": "2029-02-24",
       "opponent": "Yeovil Town",
-      "importance": "Low"
+      "importance": "Medium"
     },
     {
       "id": "c2676796-a305-4a15-bf8d-7e71e35b94c2",
@@ -1049,11 +1098,7 @@
       "importance": "Low"
     }
   ],
-  "rejectedPlayers": {
-    "4aa4235b-9934-4751-90dd-b1b83d5662bf": [
-      "Dominic Iorfa"
-    ]
-  },
+  "rejectedPlayers": {},
   "rejectedTraining": {},
   "files": {
     "status": "players-current.csv",
