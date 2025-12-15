@@ -8,6 +8,17 @@ import pandas as pd
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 from typing import Dict, List, Tuple
+from unidecode import unidecode
+
+
+def normalize_name(name):
+    """Normalize player names for consistent string comparison.
+
+    Uses ASCII transliteration to handle accented characters (e.g., Jose -> Jose).
+    """
+    if not name:
+        return ''
+    return unidecode(str(name)).lower().strip()
 
 class OptimalTeamSelector:
     def __init__(self, filepath: str):
@@ -24,12 +35,15 @@ class OptimalTeamSelector:
             self.df = pd.read_excel(filepath)
         
         # Ensure numeric columns are properly typed
-        numeric_columns = ['Striker', 'AM(L)', 'AM(C)', 'AM(R)', 
+        numeric_columns = ['Striker', 'AM(L)', 'AM(C)', 'AM(R)',
                           'DM(L)', 'DM(R)', 'D(C)', 'D(R/L)', 'GK']
         for col in numeric_columns:
             if col in self.df.columns:
                 self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
-        
+
+        # Add normalized name column for Unicode-safe comparisons
+        self.df['Name_Normalized'] = self.df['Name'].apply(normalize_name)
+
         self.starting_xi = {}
     
     def select_optimal_xi(self, formation: List[Tuple[str, str]]) -> Dict[str, Tuple[str, float]]:
@@ -111,7 +125,7 @@ class OptimalTeamSelector:
                         # Get player's natural position
                         natural_pos = ""
                         if show_natural_position:
-                            player_row = self.df[self.df['Name'] == player]
+                            player_row = self.df[self.df['Name_Normalized'] == normalize_name(player)]
                             if not player_row.empty:
                                 natural_pos = f" [{player_row.iloc[0]['Best Position']}]"
                         
@@ -142,7 +156,7 @@ class OptimalTeamSelector:
         xi_data = []
         for position, (player, rating) in self.starting_xi.items():
             # Get additional player info
-            player_row = self.df[self.df['Name'] == player]
+            player_row = self.df[self.df['Name_Normalized'] == normalize_name(player)]
             if not player_row.empty:
                 age = player_row.iloc[0]['Age']
                 ca = player_row.iloc[0]['CA']

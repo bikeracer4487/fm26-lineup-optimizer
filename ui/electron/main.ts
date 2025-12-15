@@ -290,6 +290,11 @@ function runPythonScript(scriptName: string, args: any): Promise<any> {
     })
 
     pyProcess.on('close', (code) => {
+      // Always log stderr if there's any output (for debugging)
+      if (stderr) {
+        console.log(`[Python ${scriptName}] stderr:`, stderr)
+      }
+
       if (code !== 0) {
         console.error(`Python script error (${code}):`, stderr)
         resolve({ success: false, error: stderr || `Process exited with code ${code}` })

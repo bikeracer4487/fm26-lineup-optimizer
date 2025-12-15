@@ -1,5 +1,5 @@
 {
-  "currentDate": "2029-01-31",
+  "currentDate": "2029-08-28",
   "matches": [
     {
       "id": "d329a55a-7016-40c3-9d02-5ddedf1a4073",
@@ -1005,100 +1005,564 @@
       "id": "d5dac74c-59ef-4679-9644-79196b17cc40",
       "date": "2029-02-03",
       "opponent": "Barnet",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-09T21:45:07.438Z"
     },
     {
       "id": "396231ba-eb8b-4973-b45f-af2ab2cbe5c1",
       "date": "2029-02-06",
       "opponent": "Aldershot Town",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-10T01:09:06.124Z"
     },
     {
       "id": "515cb70f-fed1-4a0b-b37b-4e7dab987e97",
       "date": "2029-02-10",
       "opponent": "Aston Villa",
-      "importance": "High"
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-10T01:19:04.526Z"
     },
     {
       "id": "cd4caa47-f06d-4729-90d8-2f1fe76897a8",
       "date": "2029-02-13",
       "opponent": "Yeovil Town",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-10T02:29:20.314Z"
     },
     {
       "id": "886acc68-817d-4593-b613-267549ff6f3d",
       "date": "2029-02-17",
       "opponent": "Hartlepool",
-      "importance": "Low"
+      "importance": "Low",
+      "manualOverrides": {
+        "DR": "Nesbert Ncube",
+        "DC1": "Josh Campbell-Slowey",
+        "DC2": "Jayden Cumberbatch",
+        "DM(R)": "Mannie Barton",
+        "DM(L)": "Japa",
+        "AMR": "Allan Hall",
+        "AMC": "Korbyn Ednie",
+        "AML": "Daniel Willard",
+        "GK": "Ashley Sarahs"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-10T02:41:51.625Z"
     },
     {
       "id": "eb0dd8f9-5bea-42c7-bc60-7cfefebf8bd8",
       "date": "2029-02-20",
       "opponent": "Northampton Town",
-      "importance": "Low"
+      "importance": "Low",
+      "manualOverrides": {
+        "DM(R)": "Joe Powell",
+        "DM(L)": "Steve Johnson",
+        "AMR": "Matt Worthington",
+        "AMC": "Mannie Barton",
+        "DC2": "Jayden Cumberbatch"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-10T02:52:14.680Z"
     },
     {
       "id": "87c9b0cb-4ec7-4341-bb47-b7ab0ce7487f",
       "date": "2029-02-24",
       "opponent": "Yeovil Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-10T02:55:02.750Z"
     },
     {
       "id": "c2676796-a305-4a15-bf8d-7e71e35b94c2",
       "date": "2029-03-03",
       "opponent": "Chester",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-10T03:24:35.631Z"
     },
     {
       "id": "0b426e55-87d3-41bc-b8aa-ed6018f094b5",
       "date": "2029-03-06",
       "opponent": "Sutton United",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-10T03:42:27.063Z"
     },
     {
       "id": "8d876eb9-1298-4d2a-b42e-81dab4de7fae",
       "date": "2029-03-17",
       "opponent": "Accrington Stanley",
-      "importance": "Low"
+      "importance": "Low",
+      "manualOverrides": {
+        "DM(R)": "Joe Powell",
+        "DM(L)": "Matt Worthington",
+        "AMR": "Japa",
+        "AMC": "Korbyn Ednie",
+        "AML": "Aydin Webb"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-11T01:22:50.831Z"
+    },
+    {
+      "id": "d3a3f499-0560-468e-b352-305e39887d61",
+      "date": "2029-03-24",
+      "opponent": "Billericay Town",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-11T02:51:58.570Z"
     },
     {
       "id": "9b15b73c-d49a-47a1-b7b1-2826cbe85431",
       "date": "2029-03-30",
       "opponent": "Solihull Moors",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-11T03:43:58.914Z"
     },
     {
       "id": "01dd42df-b712-4cb6-abf1-c98620b2a924",
       "date": "2029-04-02",
       "opponent": "Maldon & Tiptree",
-      "importance": "Low"
+      "importance": "Low",
+      "manualOverrides": {
+        "DM(L)": "Allan Hall"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-11T14:06:18.935Z"
     },
     {
       "id": "60d91e22-b222-47d8-9a1b-2256d05579f9",
       "date": "2029-04-06",
       "opponent": "Tamworth",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-11T15:34:05.995Z"
     },
     {
       "id": "8107c46f-9941-4883-a8ac-dbcb35d38bf3",
       "date": "2029-04-09",
       "opponent": "Gateshead",
-      "importance": "Low"
+      "importance": "Low",
+      "manualOverrides": {
+        "DM(R)": "Joe Powell",
+        "DM(L)": "Matt Worthington",
+        "AMR": "Charlie Bell",
+        "AMC": "Aydin Webb",
+        "AML": "Japa"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-12T05:21:55.189Z"
     },
     {
       "id": "e65d095f-8674-4947-8526-80633343cb12",
       "date": "2029-04-14",
       "opponent": "Morecambe",
-      "importance": "Low"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-12T15:37:48.238Z"
     },
     {
       "id": "5dc3f350-7d7a-4e98-90a7-264053c020b1",
       "date": "2029-04-23",
       "opponent": "Scunthorpe Utd",
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-12T19:58:43.431Z"
+    },
+    {
+      "id": "fe9a064d-3c1d-4b23-8d2c-e3ab613d58e2",
+      "date": "2029-04-28",
+      "opponent": "Burnley",
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-12T20:25:05.350Z"
+    },
+    {
+      "id": "5dc7a8cf-ea09-458b-a3e8-689053c50540",
+      "date": "2029-05-13",
+      "opponent": "Telford United",
+      "importance": "High"
+    },
+    {
+      "id": "230339c4-d95a-4290-b018-5a998d1afbf8",
+      "date": "2029-07-07",
+      "opponent": "Go Ahead Eagles",
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-13T23:47:00.812Z"
+    },
+    {
+      "id": "16d42bdb-458f-4805-bd3f-361aac835d2e",
+      "date": "2029-07-14",
+      "opponent": "Man City",
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-14T01:30:41.663Z"
+    },
+    {
+      "id": "7389db7f-c665-4e23-bf75-ec248a47641b",
+      "date": "2029-07-18",
+      "opponent": "Real Madrid",
+      "importance": "Low",
+      "manualOverrides": {
+        "DL": "Jayden Cumberbatch",
+        "AML": "Aydin Webb"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-14T02:37:35.446Z"
+    },
+    {
+      "id": "599e989a-584b-47a3-af4b-22fa48beece4",
+      "date": "2029-07-21",
+      "opponent": "Paris Saint-Germain",
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-14T05:47:48.135Z"
+    },
+    {
+      "id": "e7fe9ad5-4c58-4c18-8ac5-09c5a2661fd0",
+      "date": "2029-07-28",
+      "opponent": "Leicester City",
+      "importance": "Low",
+      "manualOverrides": {
+        "GK": "Tegan Budd",
+        "DL": "Jayden Cumberbatch"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-14T06:18:51.752Z"
+    },
+    {
+      "id": "c60c6241-589d-4633-a00c-4117599484bf",
+      "date": "2029-08-04",
+      "opponent": "Harrogate Town",
+      "importance": "Low",
+      "manualOverrides": {
+        "GK": "Tegan Budd"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-14T06:34:43.541Z"
+    },
+    {
+      "id": "5c3dc8c2-809b-4328-b47c-1e733e48d0af",
+      "date": "2029-08-11",
+      "opponent": "Port Vale",
+      "importance": "Low",
+      "manualOverrides": {
+        "GK": "Tegan Budd"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-14T06:46:20.999Z"
+    },
+    {
+      "id": "89f41b86-1d77-40af-a2f9-b9a686a03cf0",
+      "date": "2029-08-14",
+      "opponent": "Millwall",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-14T21:40:35.820Z"
+    },
+    {
+      "id": "5f260096-940c-4027-b677-43250a7a2cf2",
+      "date": "2029-08-18",
+      "opponent": "Bradford City",
+      "importance": "Low",
+      "manualOverrides": {
+        "GK": "Tegan Budd",
+        "DL": "Jayden Cumberbatch",
+        "DM(R)": "Isaac Smith",
+        "AML": "Aydin Webb"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-14T22:51:17.506Z"
+    },
+    {
+      "id": "1c2140d7-d362-42d7-ae09-3767ab82b731",
+      "date": "2029-08-25",
+      "opponent": "Bristol Rovers",
+      "importance": "Low",
+      "manualOverrides": {
+        "AML": "Aydin Webb"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-15T01:14:42.052Z"
+    },
+    {
+      "id": "901fad62-8a0f-4502-9b04-eff7da73acf1",
+      "date": "2029-08-28",
+      "opponent": "Fulham",
+      "importance": "High"
+    },
+    {
+      "id": "ef543835-d45f-4fd8-b861-a1de515e1ae3",
+      "date": "2029-09-01",
+      "opponent": "Cambridge Utd",
+      "importance": "Low",
+      "manualOverrides": {
+        "DL": "Jayden Cumberbatch"
+      }
+    },
+    {
+      "id": "1f9c78b2-56ea-4175-932b-88fd6d5c7682",
+      "date": "2029-09-04",
+      "opponent": "Oxford Utd",
+      "importance": "High"
+    },
+    {
+      "id": "ddbec39c-de9e-482f-aac2-908fe589d830",
+      "date": "2029-09-08",
+      "opponent": "York City",
+      "importance": "Low"
+    },
+    {
+      "id": "e3a25115-f8db-45d4-93e5-8846f6f214ef",
+      "date": "2029-09-15",
+      "opponent": "Grimsby Town",
+      "importance": "Low"
+    },
+    {
+      "id": "e560d35e-5632-4164-ba30-4f00030b24c0",
+      "date": "2029-09-22",
+      "opponent": "Leyton Orient",
+      "importance": "Low"
+    },
+    {
+      "id": "99c137d5-f7b9-4762-8d2a-acdcba365acb",
+      "date": "2029-09-29",
+      "opponent": "Mansfield Town",
+      "importance": "Low"
+    },
+    {
+      "id": "b05a8b00-069d-4cbc-94ed-b2240b245e57",
+      "date": "2029-10-06",
+      "opponent": "Colchester Utd",
+      "importance": "Low"
+    },
+    {
+      "id": "4527030d-a048-4718-9045-168f91ffeb6d",
+      "date": "2029-10-13",
+      "opponent": "Exeter City",
+      "importance": "Low"
+    },
+    {
+      "id": "7e59bc6f-c9be-4e46-ac74-4fa2462e6d19",
+      "date": "2029-10-20",
+      "opponent": "Crewe Alexandra",
+      "importance": "Low"
+    },
+    {
+      "id": "aaf145af-5216-440b-88f0-52d2eb6b4173",
+      "date": "2029-10-23",
+      "opponent": "Crawley Town",
+      "importance": "Low"
+    },
+    {
+      "id": "42b3873b-e546-435a-9823-9ccdea389440",
+      "date": "2029-10-27",
+      "opponent": "Gillingham",
+      "importance": "Low"
+    },
+    {
+      "id": "c1924045-ac5d-4521-bed4-6928e97e3b0f",
+      "date": "2029-10-31",
+      "opponent": "Southend Utd",
+      "importance": "Low"
+    },
+    {
+      "id": "1a3ff112-0b3f-49d1-8074-e6fb86e71125",
+      "date": "2029-11-03",
+      "opponent": "Barrow",
+      "importance": "Low"
+    },
+    {
+      "id": "561e462b-cda3-4900-bf3b-db328ef61ff0",
+      "date": "2029-11-06",
+      "opponent": "Shrewsbury Town",
+      "importance": "Low"
+    },
+    {
+      "id": "8159ac62-1e1c-4024-ac7f-7efde0f77e94",
+      "date": "2029-11-10",
+      "opponent": "MK Dons",
+      "importance": "Low"
+    },
+    {
+      "id": "d32ca73a-1328-41f8-999c-63082f90d7dc",
+      "date": "2029-11-17",
+      "opponent": "Fleetwood Town",
+      "importance": "Low"
+    },
+    {
+      "id": "84149991-3e90-49dc-9b30-b85f84ec745f",
+      "date": "2029-11-24",
+      "opponent": "Chester",
+      "importance": "Low"
+    },
+    {
+      "id": "9cbffc9d-88fe-4822-a56f-d320958a50b7",
+      "date": "2029-11-27",
+      "opponent": "Stevenage",
+      "importance": "Low"
+    },
+    {
+      "id": "ec95a4d8-a623-4c26-b903-a23d72a41e8c",
+      "date": "2029-12-01",
+      "opponent": "Newport County",
+      "importance": "Low"
+    },
+    {
+      "id": "bdc2cec1-2e00-41a2-b2d4-1c09d15c7114",
+      "date": "2029-12-08",
+      "opponent": "Doncaster Rovers",
+      "importance": "Low"
+    },
+    {
+      "id": "950d6e9e-b2e0-4556-9e92-2884cd7ff671",
+      "date": "2029-12-15",
+      "opponent": "Chester",
+      "importance": "Low"
+    },
+    {
+      "id": "954874df-a551-410b-8c8b-fe89c44c863c",
+      "date": "2029-12-18",
+      "opponent": "Mansfield Town",
+      "importance": "Low"
+    },
+    {
+      "id": "d2338f9b-dae3-44f0-8924-982e065aabee",
+      "date": "2029-12-22",
+      "opponent": "Colchester Utd",
+      "importance": "Low"
+    },
+    {
+      "id": "e763cbb6-7a3a-4bff-9cc2-ca757f821078",
+      "date": "2029-12-26",
+      "opponent": "Crewe Alexandra",
+      "importance": "Low"
+    },
+    {
+      "id": "fe5d86c9-eef1-4419-9e28-0de53569b5b2",
+      "date": "2029-12-29",
+      "opponent": "Exeter City",
+      "importance": "Low"
+    },
+    {
+      "id": "43671504-5339-4ac2-9a45-8f632eb9b145",
+      "date": "2030-01-01",
+      "opponent": "Crawley Town",
+      "importance": "Low"
+    },
+    {
+      "id": "1bd36ffa-5433-4e93-ba54-ca2b741e73e3",
+      "date": "2030-01-05",
+      "opponent": "Gillingham",
+      "importance": "Low"
+    },
+    {
+      "id": "e4164da2-3955-42c0-ab3f-b4020b9d75a1",
+      "date": "2030-01-12",
+      "opponent": "Cambridge Utd",
+      "importance": "Low"
+    },
+    {
+      "id": "8ae4f878-e19e-4861-921b-ce94e388d094",
+      "date": "2030-01-19",
+      "opponent": "York City",
+      "importance": "Low"
+    },
+    {
+      "id": "21301f9d-f41b-47ae-8215-33cc759900b4",
+      "date": "2030-01-29",
+      "opponent": "Grimsby Town",
+      "importance": "Low"
+    },
+    {
+      "id": "33cf12e3-7891-4ff8-afe1-a51dd27058d3",
+      "date": "2030-02-02",
+      "opponent": "Leyton Orient",
+      "importance": "Low"
+    },
+    {
+      "id": "babbbc01-2084-427a-a287-773df43a3a29",
+      "date": "2030-02-16",
+      "opponent": "Southend Utd",
+      "importance": "Low"
+    },
+    {
+      "id": "805220d3-29e2-4ddd-b25a-02b0a529df66",
+      "date": "2030-02-26",
+      "opponent": "Barrow",
+      "importance": "Low"
+    },
+    {
+      "id": "bac26d4b-3fe2-4cb7-8c0e-b41259257aa8",
+      "date": "2030-03-02",
+      "opponent": "Shrewsbury Town",
+      "importance": "Low"
+    },
+    {
+      "id": "2d96b9aa-6357-4545-8088-7e2830c0c5b0",
+      "date": "2030-03-05",
+      "opponent": "MK Dons",
+      "importance": "Low"
+    },
+    {
+      "id": "2ff50cb0-83d7-4c00-ba16-e180bf42fdc6",
+      "date": "2030-03-12",
+      "opponent": "Port Vale",
+      "importance": "Low"
+    },
+    {
+      "id": "5ea81af9-b44b-441b-95b0-612083803b40",
+      "date": "2030-03-16",
+      "opponent": "Harrogate Town",
+      "importance": "Low"
+    },
+    {
+      "id": "f98c02bb-2117-4b29-b1cf-8f4ef02c0020",
+      "date": "2030-03-30",
+      "opponent": "Bristol Rovers",
+      "importance": "Low"
+    },
+    {
+      "id": "88b7a017-30cb-4f25-8b95-2b101483bfeb",
+      "date": "2030-04-13",
+      "opponent": "Bradford City",
+      "importance": "Low"
+    },
+    {
+      "id": "06743e63-57ba-43f6-88cd-e8c970aef7de",
+      "date": "2030-04-19",
+      "opponent": "Stevenage",
+      "importance": "Low"
+    },
+    {
+      "id": "02dbcaaa-3813-4b42-a4ae-5a0daeae586b",
+      "date": "2030-04-24",
+      "opponent": "Newport County",
+      "importance": "Low"
+    },
+    {
+      "id": "b3219994-10b7-4cda-b119-dd25dbf4ac96",
+      "date": "2030-04-27",
+      "opponent": "Fleetwood Town",
+      "importance": "Low"
+    },
+    {
+      "id": "50f29df3-f28a-49a7-96ef-dea338e0fef0",
+      "date": "2030-05-04",
+      "opponent": "Doncaster Rovers",
       "importance": "Low"
     }
   ],
-  "rejectedPlayers": {},
+  "rejectedPlayers": {
+    "ef543835-d45f-4fd8-b861-a1de515e1ae3": [
+      "anthony michael",
+      "jose carlos"
+    ]
+  },
   "rejectedTraining": {},
   "files": {
     "status": "players-current.csv",

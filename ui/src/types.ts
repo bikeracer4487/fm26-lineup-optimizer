@@ -29,6 +29,7 @@ export interface AppState {
 
 export interface MatchSelectionPlayer {
   name: string;
+  nameNormalized?: string;  // ASCII-normalized name for rejection matching (from backend)
   rating: number;
   condition: number;
   fatigue: number;

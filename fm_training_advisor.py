@@ -11,6 +11,17 @@ import sys
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Optional
+from unidecode import unidecode
+
+
+def normalize_name(name):
+    """Normalize player names for consistent string comparison.
+
+    Uses ASCII transliteration to handle accented characters (e.g., Jose -> Jose).
+    """
+    if not name:
+        return ''
+    return unidecode(str(name)).lower().strip()
 
 
 class TrainingAdvisor:
@@ -113,6 +124,9 @@ class TrainingAdvisor:
         for col in numeric_columns:
             if col in self.df.columns:
                 self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
+
+        # Add normalized name column for Unicode-safe comparisons
+        self.df['Name_Normalized'] = self.df['Name'].apply(normalize_name)
 
         # Create DM_avg for abilities if we have them
         if 'DM(L)_ability' in self.df.columns and 'DM(R)_ability' in self.df.columns:
@@ -226,6 +240,22 @@ class TrainingAdvisor:
 
         # Legacy simple count (for backward compatibility in some methods)
         self.formation_needs = {pos: data['total_target'] for pos, data in self.formation_depth_targets.items()}
+
+        # Similarity groups for position retraining analysis
+        # Strategic pathways based on lineup-depth-strategy.md
+        self.similarity_groups = {
+            'D(R)': ['Defender Right', 'Defender Left', 'Defender Center'],
+            'D(L)': ['Defender Left', 'Defender Right', 'Defender Center'],
+            'D(C)': ['Defender Center', 'Defender Right', 'Defender Left', 'Defensive Midfielder'],
+            'DM': ['Defensive Midfielder', 'Defender Center', 'Attacking Mid. Center',
+                   'Attacking Mid. Left', 'Attacking Mid. Right', 'Striker'],
+            'AM(R)': ['Attacking Mid. Right', 'Attacking Mid. Left', 'Attacking Mid. Center', 'Striker'],
+            'AM(L)': ['Attacking Mid. Left', 'Attacking Mid. Right', 'Attacking Mid. Center', 'Striker'],
+            'AM(C)': ['Attacking Mid. Center', 'Attacking Mid. Left', 'Attacking Mid. Right',
+                      'Striker', 'Defensive Midfielder'],
+            'ST': ['Striker', 'Attacking Mid. Center', 'Attacking Mid. Right', 'Attacking Mid. Left'],
+            'GK': []
+        }
 
         # Note: Role ability ratings are on 0-200 scale
         # Quality will be determined relative to squad distribution (percentiles)
@@ -1204,8 +1234,8 @@ class TrainingAdvisor:
                 print(f"  {'NO PLAYERS AVAILABLE':50} - CRITICAL GAP!")
             else:
                 for i, (name, skill_rating, ability_rating, skill_tier, ability_tier, loan_status) in enumerate(players_data[:6], 1):
-                    # Get player row for injury analysis
-                    player_row = self.df[self.df['Name'] == name].iloc[0]
+                    # Get player row for injury analysis (use Name_Normalized for Unicode-safe comparison)
+                    player_row = self.df[self.df['Name_Normalized'] == normalize_name(name)].iloc[0]
                     injury_analysis = self.analyze_injury_risk(player_row)
 
                     # Status indicator

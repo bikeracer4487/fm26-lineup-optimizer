@@ -9,7 +9,7 @@ from datetime import datetime
 # Add root directory to sys.path to allow importing from root scripts
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
-from fm_match_ready_selector import MatchReadySelector
+from fm_match_ready_selector import MatchReadySelector, normalize_name
 import data_manager
 
 @contextlib.contextmanager
@@ -218,8 +218,8 @@ class ApiMatchReadySelector(MatchReadySelector):
 
             # Apply manual overrides - replace calculated selections with manual choices
             for pos, player_name in match_overrides.items():
-                # Find player data for the overridden player
-                player_row = self.df[self.df['Name'] == player_name]
+                # Find player data for the overridden player (use Name_Normalized for Unicode-safe comparison)
+                player_row = self.df[self.df['Name_Normalized'] == normalize_name(player_name)]
                 if not player_row.empty:
                     player_data = player_row.iloc[0].to_dict()
                     # Use a dummy rating for manual selections (we don't recalculate)
@@ -231,9 +231,10 @@ class ApiMatchReadySelector(MatchReadySelector):
                 # Normalize Condition to 0-1.0 range for UI display
                 raw_condition = player_data.get('Condition', 100)
                 normalized_condition = raw_condition / 10000.0 if raw_condition > 100 else raw_condition / 100.0
-                
+
                 selection_formatted[pos] = {
                     "name": name,
+                    "nameNormalized": normalize_name(name),  # For frontend to use when storing rejections
                     "rating": rating,
                     "condition": normalized_condition,
                     "fatigue": player_data.get('Fatigue', 0),

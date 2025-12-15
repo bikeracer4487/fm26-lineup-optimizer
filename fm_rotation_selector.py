@@ -8,6 +8,17 @@ import pandas as pd
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 from typing import Dict, List, Tuple
+from unidecode import unidecode
+
+
+def normalize_name(name):
+    """Normalize player names for consistent string comparison.
+
+    Uses ASCII transliteration to handle accented characters (e.g., Jose -> Jose).
+    """
+    if not name:
+        return ''
+    return unidecode(str(name)).lower().strip()
 
 class RotationSelector:
     def __init__(self, filepath: str):
@@ -24,12 +35,15 @@ class RotationSelector:
             self.df = pd.read_excel(filepath)
         
         # Ensure numeric columns are properly typed
-        numeric_columns = ['Striker', 'AM(L)', 'AM(C)', 'AM(R)', 
+        numeric_columns = ['Striker', 'AM(L)', 'AM(C)', 'AM(R)',
                           'DM(L)', 'DM(R)', 'D(C)', 'D(R/L)', 'GK']
         for col in numeric_columns:
             if col in self.df.columns:
                 self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
-        
+
+        # Add normalized name column for Unicode-safe comparisons
+        self.df['Name_Normalized'] = self.df['Name'].apply(normalize_name)
+
         self.first_xi = {}
         self.rotation_xi = {}
     
@@ -149,7 +163,7 @@ class RotationSelector:
                     if player:
                         natural_pos = ""
                         if show_natural_position:
-                            player_row = self.df[self.df['Name'] == player]
+                            player_row = self.df[self.df['Name_Normalized'] == normalize_name(player)]
                             if not player_row.empty:
                                 natural_pos = f" [{player_row.iloc[0]['Best Position']}]"
                         first_player = f"{player:20s}{natural_pos:10s}"
@@ -163,7 +177,7 @@ class RotationSelector:
                     if player:
                         natural_pos = ""
                         if show_natural_position:
-                            player_row = self.df[self.df['Name'] == player]
+                            player_row = self.df[self.df['Name_Normalized'] == normalize_name(player)]
                             if not player_row.empty:
                                 natural_pos = f" [{player_row.iloc[0]['Best Position']}]"
                         rotation_player = f"{player:20s}{natural_pos:10s}"
@@ -194,7 +208,7 @@ class RotationSelector:
         def create_squad_data(squad_dict):
             data = []
             for position, (player, rating) in squad_dict.items():
-                player_row = self.df[self.df['Name'] == player]
+                player_row = self.df[self.df['Name_Normalized'] == normalize_name(player)]
                 if not player_row.empty:
                     age = player_row.iloc[0]['Age']
                     ca = player_row.iloc[0]['CA']

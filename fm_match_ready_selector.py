@@ -14,6 +14,23 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional
+from unidecode import unidecode
+
+# Minimum positional familiarity required to be considered for a position
+# 12 = "Competent" level (10% familiarity penalty)
+# Players below this threshold will not be selected regardless of other bonuses
+MIN_POSITION_FAMILIARITY = 12
+
+
+def normalize_name(name):
+    """Normalize player names for consistent string comparison.
+
+    Uses ASCII transliteration to handle accented characters (e.g., Jose -> Jose).
+    This eliminates all Unicode encoding ambiguity between CSV files and UI input.
+    """
+    if not name:
+        return ''
+    return unidecode(str(name)).lower().strip()
 
 
 class MatchReadySelector:
@@ -129,33 +146,40 @@ class MatchReadySelector:
             'Attacking Mid. Left', 'Striker'
         ]
 
-        # Add role ability columns if they exist
-        ability_columns = ['Striker', 'AM(L)', 'AM(C)', 'AM(R)', 'DM(L)', 'DM(R)',
-                          'D(C)', 'D(R/L)', 'GK']
-        for col in ability_columns:
+        # Add role ability columns if they exist (check both original and suffixed names)
+        ability_columns_base = ['Striker', 'AM(L)', 'AM(C)', 'AM(R)', 'DM(L)', 'DM(R)',
+                               'D(C)', 'D(R/L)', 'GK']
+        for col in ability_columns_base:
             if col in self.df.columns:
                 numeric_columns.append(col)
+            if f'{col}_ability' in self.df.columns:
+                numeric_columns.append(f'{col}_ability')
+            if f'{col}_skill' in self.df.columns:
+                numeric_columns.append(f'{col}_skill')
 
         for col in numeric_columns:
             if col in self.df.columns:
                 self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
+
+        # Add normalized name column for efficient Unicode-safe comparisons
+        self.df['Name_Normalized'] = self.df['Name'].apply(normalize_name)
 
         # Formation for 4-2-3-1
         # Format: (pos_name, skill_rating_column, ability_rating_column or None)
         # Note: DM(L) and DM(R) use separate ability columns since they have different tactical roles
         if self.has_abilities:
             self.formation = [
-                ('GK', 'GoalKeeper', 'GK'),
-                ('DL', 'Defender Left', 'D(R/L)'),
-                ('DC1', 'Defender Center', 'D(C)'),
-                ('DC2', 'Defender Center', 'D(C)'),
-                ('DR', 'Defender Right', 'D(R/L)'),
-                ('DM(L)', 'Defensive Midfielder', 'DM(L)'),
-                ('DM(R)', 'Defensive Midfielder', 'DM(R)'),
-                ('AML', 'Attacking Mid. Left', 'AM(L)'),
-                ('AMC', 'Attacking Mid. Center', 'AM(C)'),
-                ('AMR', 'Attacking Mid. Right', 'AM(R)'),
-                ('STC', 'Striker_skill', 'Striker_ability')  # Name collision handled
+                ('GK', 'GoalKeeper', 'GK_ability'),
+                ('DL', 'Defender Left', 'D(R/L)_ability'),
+                ('DC1', 'Defender Center', 'D(C)_ability'),
+                ('DC2', 'Defender Center', 'D(C)_ability'),
+                ('DR', 'Defender Right', 'D(R/L)_ability'),
+                ('DM(L)', 'Defensive Midfielder', 'DM(L)_ability'),
+                ('DM(R)', 'Defensive Midfielder', 'DM(R)_ability'),
+                ('AML', 'Attacking Mid. Left', 'AM(L)_ability'),
+                ('AMC', 'Attacking Mid. Center', 'AM(C)_ability'),
+                ('AMR', 'Attacking Mid. Right', 'AM(R)_ability'),
+                ('STC', 'Striker_Familiarity', 'Striker_ability')
             ]
         else:
             self.formation = [
@@ -214,13 +238,52 @@ class MatchReadySelector:
             player_count = len([c for c in self.player_match_count.values() if c > 0])
             print(f"Loaded match tracking: Last match counted was {self.last_match_counted} ({player_count} players with active streaks)")
 
+    def _calculate_pure_ability_rating(self, row: pd.Series, skill_col: str,
+                                        ability_col: Optional[str] = None) -> float:
+        """
+        Calculate pure ability rating without any modifiers.
+
+        Used for hierarchy calculation - assumes peak fitness/condition.
+        Only uses ability rating (or skill as fallback), no penalties.
+
+        Args:
+            row: Player data row
+            skill_col: Positional skill rating column (1-20 familiarity)
+            ability_col: Role ability rating column (0-200 quality)
+
+        Returns:
+            Pure ability rating, or -999.0 if player cannot play this position
+        """
+        # Skip injured players
+        if row.get('Is Injured', False):
+            return -999.0
+
+        # Get skill rating (familiarity) - required for position eligibility
+        skill_rating = row.get(skill_col, 0)
+        if pd.isna(skill_rating) or skill_rating < 1:
+            return -999.0  # Cannot play this position at all
+
+        # Get ability rating if available
+        if ability_col and ability_col in row.index:
+            ability_rating = row.get(ability_col, 0)
+            if pd.notna(ability_rating) and ability_rating > 0:
+                return float(ability_rating)  # Use raw ability rating
+
+        # Fallback: scale familiarity to approximate ability range
+        # Familiarity 20 (natural) ~= ability 100, familiarity 1 ~= ability 60
+        return 60.0 + (float(skill_rating) - 1) * (40.0 / 19.0)
+
     def _calculate_player_hierarchy(self) -> Dict[str, Dict[str, Tuple[str, float]]]:
         """
         Calculate Starting XI and Second XI for each position using pure ability.
 
-        Uses only raw position ratings with no penalties for fatigue, condition,
-        sharpness, rotation, or any other factors. This gives us the "theoretical best"
-        players at each position assuming everyone is at peak fitness.
+        Uses Hungarian algorithm to ensure player exclusivity:
+        - First run: Select optimal First XI (11 unique players)
+        - Second run: Exclude First XI, select optimal Second XI (11 different players)
+
+        This gives us the "theoretical best" lineup assuming everyone is at peak
+        fitness with no penalties for fatigue, condition, sharpness, rotation,
+        training, or any other factors.
 
         Returns:
             Dict mapping position_name -> {
@@ -231,50 +294,88 @@ class MatchReadySelector:
         if self._player_hierarchy_cache is not None:
             return self._player_hierarchy_cache
 
-        hierarchy = {}
+        # Get available (non-injured) players
+        available_df = self.df[self.df['Is Injured'] != True].copy()
+        available_df = available_df.reset_index(drop=True)
 
-        for pos_info in self.formation:
-            if len(pos_info) == 3:
-                pos_name, skill_col, ability_col = pos_info
-            else:
-                pos_name, skill_col = pos_info
-                ability_col = None
+        n_players = len(available_df)
+        n_positions = len(self.formation)
 
-            # Get all non-injured players with their raw ability for this position
-            candidates = []
-            for idx, row in self.df.iterrows():
-                # Skip injured players from hierarchy (they can't play)
-                if row.get('Is Injured', False):
-                    continue
+        # === FIRST XI SELECTION ===
+        # Create cost matrix for pure ability ratings
+        cost_matrix = np.full((n_players, n_positions), 999.0)
 
-                # Get raw ability rating for this position
-                if ability_col and ability_col in row.index:
-                    rating = row.get(ability_col, 0)
-                    if pd.notna(rating) and rating > 0:
-                        # Normalize to consistent scale
-                        rating = float(rating) / 10.0
-                    else:
-                        continue
+        for i in range(n_players):
+            player = available_df.iloc[i]
+
+            for j, pos_info in enumerate(self.formation):
+                if len(pos_info) == 3:
+                    pos_name, skill_col, ability_col = pos_info
                 else:
-                    # Fall back to skill rating if no ability data
-                    rating = row.get(skill_col, 0)
-                    if pd.isna(rating) or rating < 1:
-                        continue
-                    rating = float(rating)
+                    pos_name, skill_col = pos_info
+                    ability_col = None
 
-                candidates.append((row['Name'], rating))
+                # Calculate pure ability rating (no modifiers)
+                rating = self._calculate_pure_ability_rating(player, skill_col, ability_col)
 
-            # Sort by rating descending
-            candidates.sort(key=lambda x: x[1], reverse=True)
+                if rating > -999.0:
+                    cost_matrix[i, j] = -rating  # Negative for minimization
 
-            # Assign starting and second choice for this position
+        # Run Hungarian algorithm for First XI
+        row_ind_first, col_ind_first = linear_sum_assignment(cost_matrix)
+
+        # Build First XI selection
+        first_xi = {}  # position -> (player_name, rating)
+        first_xi_player_indices = set()
+
+        for i, j in zip(row_ind_first, col_ind_first):
+            if cost_matrix[i, j] < 900:  # Valid assignment
+                pos_name = self.formation[j][0]
+                player_name = available_df.iloc[i]['Name']
+                rating = -cost_matrix[i, j]
+                first_xi[pos_name] = (player_name, rating)
+                first_xi_player_indices.add(i)
+
+        # === SECOND XI SELECTION ===
+        # Exclude First XI players from cost matrix
+        cost_matrix_second = cost_matrix.copy()
+        for i in first_xi_player_indices:
+            cost_matrix_second[i, :] = 999.0  # Make First XI players unavailable
+
+        # Run Hungarian algorithm for Second XI
+        row_ind_second, col_ind_second = linear_sum_assignment(cost_matrix_second)
+
+        # Build Second XI selection
+        second_xi = {}  # position -> (player_name, rating)
+
+        for i, j in zip(row_ind_second, col_ind_second):
+            if cost_matrix_second[i, j] < 900:  # Valid assignment
+                pos_name = self.formation[j][0]
+                player_name = available_df.iloc[i]['Name']
+                rating = -cost_matrix_second[i, j]
+                second_xi[pos_name] = (player_name, rating)
+
+        # === BUILD HIERARCHY STRUCTURE ===
+        hierarchy = {}
+        for pos_info in self.formation:
+            pos_name = pos_info[0]
             hierarchy[pos_name] = {
-                'starting': candidates[0] if len(candidates) > 0 else (None, 0),
-                'second': candidates[1] if len(candidates) > 1 else (None, 0)
+                'starting': first_xi.get(pos_name, (None, 0)),
+                'second': second_xi.get(pos_name, (None, 0))
             }
 
         self._player_hierarchy_cache = hierarchy
         return hierarchy
+
+    def _get_first_xi_players(self) -> set:
+        """Get set of player names in the First XI."""
+        hierarchy = self._calculate_player_hierarchy()
+        return {data['starting'][0] for data in hierarchy.values() if data['starting'][0]}
+
+    def _get_second_xi_players(self) -> set:
+        """Get set of player names in the Second XI."""
+        hierarchy = self._calculate_player_hierarchy()
+        return {data['second'][0] for data in hierarchy.values() if data['second'][0]}
 
     def _get_position_tier(self, player_name: str, position_name: str) -> int:
         """
@@ -338,6 +439,11 @@ class MatchReadySelector:
         if pd.isna(skill_rating) or skill_rating < 1:
             return -999.0
 
+        # Apply heavy penalty for players below minimum familiarity threshold in Low/Medium matches
+        # This discourages selecting players who can't play the position, but allows it as last resort
+        below_familiarity_threshold = (match_importance in ['Low', 'Medium'] and
+                                       skill_rating < MIN_POSITION_FAMILIARITY)
+
         # Get role ability rating (quality 0-200) if available
         if ability_col and ability_col in row.index:
             ability_rating = row.get(ability_col, 0)
@@ -359,29 +465,67 @@ class MatchReadySelector:
         familiarity_penalty = self._get_familiarity_penalty(skill_rating, versatility)
         effective_rating *= (1 - familiarity_penalty)
 
-        # 2. Match sharpness factor (5000-10000 scale)
+        # 2. Match sharpness factor (0-10000 scale in database)
+        # Based on FM26 Research (match-sharpness.md):
+        # - 91%+ = Full Capacity (no penalties)
+        # - 81-90% = Match Ready (negligible impact)
+        # - 60-80% = Lacking Sharpness (moderate penalty, needs minutes)
+        # - <60% = Severe Rust (severe penalty, high injury risk)
         match_sharpness = row.get('Match Sharpness', 10000)
         if pd.notna(match_sharpness):
             sharpness_pct = match_sharpness / 10000
 
-            if prioritize_sharpness and sharpness_pct < 0.85:
-                # BOOST rating for low-sharpness players in unimportant matches
-                # Only boost Tier 1-2 (Starting XI / Second XI) - we care about their sharpness
-                # Tier 3+ backups don't get boost - we don't care about building their sharpness
-                if position_tier <= 2:
-                    effective_rating *= 1.1
-                # For Tier 3+, fall through to apply standard penalty below
-            if not (prioritize_sharpness and sharpness_pct < 0.85 and position_tier <= 2):
-                # Standard penalty for low sharpness
+            # === LOW PRIORITY MATCHES: Prioritize sharpness development ===
+            if match_importance == 'Low' and position_tier <= 2:
+                # HEAVILY boost Second XI players who need sharpness
                 if sharpness_pct < 0.60:
-                    effective_rating *= 0.70
-                elif sharpness_pct < 0.75:
+                    # SEVERE RUST - critical need, but risky to play
+                    effective_rating *= 1.30  # Boost but not too much (injury risk)
+                elif sharpness_pct < 0.80:
+                    # LACKING SHARPNESS - urgent need for minutes
+                    effective_rating *= 1.40  # Strong boost - these players NEED to play
+                elif sharpness_pct < 0.91:
+                    # MATCH READY but not Full Capacity - should get minutes
+                    effective_rating *= 1.20  # Moderate boost
+                elif sharpness_pct >= 1.0:
+                    # MAX SHARPNESS (100%) - they don't need minutes, rest them
+                    effective_rating *= 0.70  # Significant penalty to rest sharp players
+
+            # === MEDIUM PRIORITY MATCHES: Balance effectiveness with development ===
+            elif match_importance == 'Medium' and position_tier <= 2:
+                if sharpness_pct < 0.60:
+                    # SEVERE RUST - still risky, moderate penalty
                     effective_rating *= 0.85
-                elif sharpness_pct < 0.85:
+                elif sharpness_pct < 0.80:
+                    # LACKING SHARPNESS - small boost to give them minutes
+                    effective_rating *= 1.10
+                elif sharpness_pct < 0.91:
+                    # MATCH READY - slight boost
+                    effective_rating *= 1.05
+                elif sharpness_pct >= 1.0:
+                    # MAX SHARPNESS - slight penalty to rotate
                     effective_rating *= 0.95
 
-            # SHARPNESS PRIORITY MODE: Maximize sharpness development for key players
-            # Apply tier-based boosts/penalties to prioritize players who need sharpness
+            # === HIGH PRIORITY MATCHES: Pure effectiveness, realistic penalties only ===
+            elif match_importance == 'High':
+                # No boosting - only apply realistic penalties for rusty players
+                if sharpness_pct < 0.60:
+                    effective_rating *= 0.70  # Severe penalty - player is rusty
+                elif sharpness_pct < 0.80:
+                    effective_rating *= 0.85  # Moderate penalty - lacking sharpness
+                elif sharpness_pct < 0.91:
+                    effective_rating *= 0.95  # Minor penalty - not at full capacity
+
+            # === TIER 3+ PLAYERS (Squad depth) - Only apply penalties, no boosts ===
+            elif position_tier > 2:
+                if sharpness_pct < 0.60:
+                    effective_rating *= 0.70
+                elif sharpness_pct < 0.80:
+                    effective_rating *= 0.85
+                elif sharpness_pct < 0.91:
+                    effective_rating *= 0.95
+
+            # === SHARPNESS PRIORITY MODE: Maximize sharpness development ===
             if match_importance == 'Sharpness' and player_tier is not None:
                 sharpness_need = self._calculate_sharpness_need_score(
                     sharpness_pct,
@@ -391,19 +535,19 @@ class MatchReadySelector:
                 # Convert need score to rating multiplier
                 # Higher need = higher boost, low/no need = penalty
                 if sharpness_need >= 1000:
-                    effective_rating *= 1.50  # LOW sharpness Starting XI - highest priority
-                elif sharpness_need >= 800:
-                    effective_rating *= 1.20  # MEDIUM sharpness Starting XI
+                    effective_rating *= 1.50  # LACKING sharpness - highest priority
+                elif sharpness_need >= 900:
+                    effective_rating *= 1.40  # LACKING sharpness backup
+                elif sharpness_need >= 700:
+                    effective_rating *= 1.25  # MATCH READY Starting XI
                 elif sharpness_need >= 600:
-                    effective_rating *= 1.30  # LOW sharpness Backup
-                elif sharpness_need >= 400:
-                    effective_rating *= 1.10  # MEDIUM sharpness Backup
+                    effective_rating *= 1.15  # MATCH READY Backup
                 elif sharpness_need >= 200:
-                    effective_rating *= 0.70  # HIGH sharpness Starting XI - low priority
+                    effective_rating *= 0.60  # FULL CAPACITY - low priority
                 elif sharpness_need >= 100:
-                    effective_rating *= 0.60  # HIGH sharpness Backup
+                    effective_rating *= 0.50  # FULL CAPACITY backup - very low priority
                 else:
-                    effective_rating *= 0.30  # MAX sharpness (100%) - avoid unless necessary
+                    effective_rating *= 0.25  # MAX sharpness (100%) - avoid
 
         # 3. Physical condition factor (percentage)
         # Research: "NEVER field players below 85% condition"
@@ -550,6 +694,12 @@ class MatchReadySelector:
         if match_importance != 'High' and position_tier <= 2:
             pathway_bonus = self._get_strategic_pathway_bonus(row, position_name)
             effective_rating *= pathway_bonus
+
+        # Apply heavy penalty for players below minimum familiarity threshold
+        # This is applied LAST so it heavily discourages but doesn't completely exclude
+        # (allows selection as last resort if no better options exist)
+        if below_familiarity_threshold:
+            effective_rating *= 0.30  # 70% penalty for "Unconvincing" or worse players
 
         return effective_rating
 
@@ -854,30 +1004,38 @@ class MatchReadySelector:
         Used by Sharpness priority mode to prioritize players who need match minutes
         to build sharpness over those already at maximum.
 
+        Based on FM26 Research (match-sharpness.md):
+        - 91%+ = Full Capacity (no penalties, no need for minutes)
+        - 81-90% = Match Ready (negligible impact, should maintain)
+        - 60-80% = Lacking Sharpness (moderate penalty, needs minutes urgently)
+        - <60% = Severe Rust (severe penalty, critical need but high injury risk)
+
         Priority Order (based on returned score):
-        1. Starting XI with LOW sharpness (<75%): 1000+ points
-        2. Starting XI with MEDIUM sharpness (75-85%): 800+ points
-        3. Backups with LOW sharpness (<75%): 600+ points
-        4. Backups with MEDIUM sharpness (75-85%): 400+ points
-        5. Starting XI with HIGH sharpness (85-99%): 200 points
-        6. Backups with HIGH sharpness (85-99%): 100 points
-        7. MAX sharpness (100%): 0 points (avoid)
+        1. Starting XI with LACKING sharpness (<80%): 1000+ points
+        2. Backups with LACKING sharpness (<80%): 900+ points
+        3. Starting XI with MATCH READY sharpness (80-90%): 700+ points
+        4. Backups with MATCH READY sharpness (80-90%): 600+ points
+        5. Starting XI at FULL CAPACITY but not max (91-99%): 200 points
+        6. Backups at FULL CAPACITY but not max (91-99%): 100 points
+        7. MAX sharpness (100%): 0 points (avoid - they don't need minutes)
 
         Args:
             sharpness_pct: Match sharpness as 0-1 scale (1.0 = 100%)
             is_starting_xi: True if player is in theoretical best XI
 
         Returns:
-            Score 0-1050 (higher = needs more sharpness development)
+            Score 0-1100 (higher = needs more sharpness development)
         """
-        if sharpness_pct >= 1.0:  # MAX (100%) - avoid
+        if sharpness_pct >= 1.0:  # MAX (100%) - avoid, they don't need minutes
             return 0
-        elif sharpness_pct >= 0.85:  # HIGH (85-99%)
+        elif sharpness_pct >= 0.91:  # FULL CAPACITY (91-99%) - low priority
             tier_score = 200 if is_starting_xi else 100
-        elif sharpness_pct >= 0.75:  # MEDIUM (75-85%)
-            tier_score = 800 if is_starting_xi else 400
-        else:  # LOW (<75%)
-            tier_score = 1000 if is_starting_xi else 600
+        elif sharpness_pct >= 0.80:  # MATCH READY (80-90%) - moderate priority
+            tier_score = 700 if is_starting_xi else 600
+        elif sharpness_pct >= 0.60:  # LACKING SHARPNESS (60-79%) - high priority
+            tier_score = 1000 if is_starting_xi else 900
+        else:  # SEVERE RUST (<60%) - critical need (but injury risk)
+            tier_score = 1100 if is_starting_xi else 1000
 
         # Fine-grained: lower sharpness = higher need (0-50 bonus)
         fine_score = (1.0 - sharpness_pct) * 50
@@ -944,11 +1102,12 @@ class MatchReadySelector:
         """
         Identify which players are 'starting_xi', 'top_backup', or 'squad'.
 
-        Used by Sharpness priority mode to determine player tiers for
-        sharpness need scoring.
+        Uses pre-calculated hierarchy for Starting XI (guaranteed 11 unique players
+        via Hungarian algorithm), then identifies top 6 non-starters by CA as
+        top backups.
 
         Tiers:
-        - 'starting_xi': Players who would be selected in a High priority match
+        - 'starting_xi': Players in the optimal First XI (11 unique players)
         - 'top_backup': Top 6 non-starting players by CA (Current Ability)
         - 'squad': All other players
 
@@ -958,14 +1117,14 @@ class MatchReadySelector:
         Returns:
             Dict mapping player name to tier string
         """
-        # Run preliminary High priority selection to identify theoretical best XI
-        best_xi_names = self._get_theoretical_best_xi_names(available_df)
+        # Get First XI from hierarchy (guaranteed 11 unique players via Hungarian algorithm)
+        first_xi_names = self._get_first_xi_players()
 
         # Get top 6 non-starters by CA (Current Ability)
         backup_candidates = []
         for idx, row in available_df.iterrows():
             name = row['Name']
-            if name not in best_xi_names:
+            if name not in first_xi_names:
                 ca = row.get('CA', 0)
                 if pd.notna(ca) and ca > 0:
                     backup_candidates.append((name, ca))
@@ -978,7 +1137,7 @@ class MatchReadySelector:
         tiers = {}
         for idx, row in available_df.iterrows():
             name = row['Name']
-            if name in best_xi_names:
+            if name in first_xi_names:
                 tiers[name] = 'starting_xi'
             elif name in top_backup_names:
                 tiers[name] = 'top_backup'
@@ -1106,9 +1265,25 @@ class MatchReadySelector:
 
         # Filter out unavailable players BEFORE creating cost matrix
         # Remove: injured and rested players (banned players may be eligible for other competitions)
+        # Use normalized names (ASCII transliteration) to handle accented characters (e.g., Jose Carlos)
+        normalized_rested = [normalize_name(p) for p in rested_players]
+
+        # DEBUG: Print rejection filtering details
+        import sys
+        if rested_players:
+            print(f"[DEBUG REJECTION] Raw rested_players: {rested_players}", file=sys.stderr)
+            print(f"[DEBUG REJECTION] Normalized rested: {normalized_rested}", file=sys.stderr)
+            # Check if José Carlos is in the data
+            jose_rows = self.df[self.df['Name'].str.contains('Carlos', case=False, na=False)]
+            if not jose_rows.empty:
+                for _, row in jose_rows.iterrows():
+                    print(f"[DEBUG REJECTION] Found player: Name='{row['Name']}', Name_Normalized='{row['Name_Normalized']}'", file=sys.stderr)
+                    is_match = row['Name_Normalized'] in normalized_rested
+                    print(f"[DEBUG REJECTION] Is '{row['Name_Normalized']}' in {normalized_rested}? {is_match}", file=sys.stderr)
+
         unavailable_mask = (
             (self.df['Is Injured'] == True) |
-            (self.df['Name'].isin(rested_players))
+            (self.df['Name_Normalized'].isin(normalized_rested))
         )
         available_df = self.df[~unavailable_mask].copy()
         available_df = available_df.reset_index(drop=False)  # Keep original index in 'index' column
@@ -1442,7 +1617,7 @@ class MatchReadySelector:
         Returns:
             Threshold where rotation penalties start (lower = needs more frequent rest)
         """
-        player = self.df[self.df['Name'] == player_name]
+        player = self.df[self.df['Name_Normalized'] == normalize_name(player_name)]
         if player.empty:
             return 4  # Default threshold
 
@@ -1570,7 +1745,7 @@ class MatchReadySelector:
         print("  ⭐ Peak form (high condition, low fatigue, sharp)")
         print("  💤 High fatigue (≥400, needs rest)")
         print("  ❤️  Low condition (<80%, injury risk)")
-        print("  🔄 Needs match sharpness (<80%)")
+        print("  🔄 Needs match sharpness (<80% = Lacking Sharpness per FM26 research)")
         print("  ⚠️  Age 32+ (higher injury/fatigue risk)")
         print("  ⚡ 3+ consecutive matches (rotation needed)")
         print("  🏃 Low Stamina (<10, tires faster)")
@@ -1843,7 +2018,7 @@ class MatchReadySelector:
         if unused_players:
             print(f"\nPlayers not selected (consider for reserves/friendlies for sharpness):")
             for player in sorted(unused_players):
-                player_data = self.df[self.df['Name'] == player].iloc[0]
+                player_data = self.df[self.df['Name_Normalized'] == normalize_name(player)].iloc[0]
                 sharpness = player_data.get('Match Sharpness', 10000) / 10000
                 print(f"  {player:25} - Sharpness: {sharpness:3.0%}")
 

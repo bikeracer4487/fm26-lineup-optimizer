@@ -208,6 +208,9 @@ function runPythonScript(scriptName, args) {
       stderr += data.toString();
     });
     pyProcess.on("close", (code) => {
+      if (stderr) {
+        console.log(`[Python ${scriptName}] stderr:`, stderr);
+      }
       if (code !== 0) {
         console.error(`Python script error (${code}):`, stderr);
         resolve({ success: false, error: stderr || `Process exited with code ${code}` });

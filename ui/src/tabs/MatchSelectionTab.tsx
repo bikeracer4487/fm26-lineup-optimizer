@@ -10,6 +10,12 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 // Maximum number of matches to calculate lineups for
 const MAX_LINEUP_MATCHES = 5;
 
+// Helper to normalize player names for comparison (handles Unicode accents)
+const normalizePlayerName = (name: string): string => {
+  // Remove accents by decomposing and stripping combining characters
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+};
+
 interface MatchSelectionTabProps {
   state: AppState;
   onRejectPlayer: (matchIndex: string, players: string[]) => void;
@@ -133,10 +139,17 @@ export function MatchSelectionTab({
     }
   }, [state.matches, state.rejectedPlayers, state.files, state.currentDate]);
 
-  const handleReject = (matchId: string, playerName: string) => {
+  const handleReject = (matchId: string, playerName: string, nameNormalized?: string) => {
     const currentRejected = state.rejectedPlayers[matchId] || [];
-    if (!currentRejected.includes(playerName)) {
-      onRejectPlayer(matchId, [...currentRejected, playerName]);
+    // Use the backend-provided normalized name if available, otherwise fall back to frontend normalization
+    const normalizedName = nameNormalized || normalizePlayerName(playerName);
+    const alreadyRejected = currentRejected.some(
+      r => normalizePlayerName(r) === normalizedName
+    );
+    if (!alreadyRejected) {
+      // Store the normalized name to ensure consistent matching with backend
+      // This prevents encoding mismatches between app_state.json and CSV data
+      onRejectPlayer(matchId, [...currentRejected, normalizedName]);
     }
   };
 
@@ -375,7 +388,7 @@ export function MatchSelectionTab({
                   key={item.matchId || item.matchIndex}
                   item={item}
                   match={match}
-                  onReject={(name) => handleReject(item.matchId, name)}
+                  onReject={(name, nameNormalized) => handleReject(item.matchId, name, nameNormalized)}
                   onOverride={(pos) => match && openOverrideModal(match.id, pos, item.selection, match.manualOverrides)}
                   onClearOverride={(pos) => match && handleClearOverride(match.id, pos)}
                   onConfirm={() => match && openConfirmDialog(match.id, match.opponent, match.date, 'confirm')}
@@ -469,7 +482,7 @@ export function MatchSelectionTab({
 interface MatchCardProps {
   item: MatchPlanItem;
   match?: Match;
-  onReject: (name: string) => void;
+  onReject: (name: string, nameNormalized?: string) => void;
   onOverride: (position: string) => void;
   onClearOverride: (position: string) => void;
   onConfirm: () => void;
@@ -580,7 +593,7 @@ function MatchCard({ item, match, onReject, onOverride, onClearOverride, onConfi
               player={player}
               isOverridden={overridden}
               isConfirmed={isConfirmed}
-              onReject={() => onReject(player.name)}
+              onReject={() => onReject(player.name, player.nameNormalized)}
               onOverride={() => onOverride(pos)}
               onClearOverride={() => onClearOverride(pos)}
             />
