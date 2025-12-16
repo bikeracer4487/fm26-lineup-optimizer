@@ -133,3 +133,5 @@ rotation_xi.csv
 # Windows reserved device names (cannot be deleted on Windows)
 nul
 NUL
+
+.DS_Store
