@@ -190,3 +190,27 @@ export interface PlayerRemovalResponse {
   recommendations?: PlayerRemovalRecommendation[];
   error?: string;
 }
+
+// Rotation selector types (First XI / Second XI)
+export interface RotationPlayer {
+  name: string;
+  rating: number;
+  age: number;
+  ca: number;
+  pa: number;
+  condition: number;      // 0-100
+  fatigue: number;        // raw value
+  sharpness: number;      // 0-100
+  naturalPosition: string;
+}
+
+export interface RotationResponse {
+  success: boolean;
+  firstXI?: Record<string, RotationPlayer>;
+  secondXI?: Record<string, RotationPlayer>;
+  teamRatings?: {
+    firstXIAverage: number;
+    secondXIAverage: number;
+  };
+  error?: string;
+}

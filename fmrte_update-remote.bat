@@ -9,8 +9,7 @@ REM This batch file:
 REM 1. Connects to FMRTE (Football Manager Real Time Editor)
 REM 2. Copies data from Brixham, Brixham U21, and Brixham U18 tabs
 REM 3. Pastes all data into FM26 Players.xlsx (Paste Full sheet)
-REM 4. Automatically runs update_player_data.py to generate CSV files
-REM 5. Your player data is now ready for the team selector scripts!
+REM 4. Your player data is now ready for the team selector scripts!
 REM ============================================================================
 
 REM Check for admin rights and self-elevate if needed
@@ -59,6 +58,8 @@ if %ERRORLEVEL% NEQ 0 (
     echo   - Check that FM26 Players.xlsx exists and is not open in Excel
     echo   - Try: python fmrte_to_excel.py --debug
     echo.
+    REM Bring console window to foreground
+    powershell -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('Microsoft.VisualBasic'); [Microsoft.VisualBasic.Interaction]::AppActivate('%~n0')" >nul 2>&1
     pause
     exit /b 1
 )
@@ -72,4 +73,3 @@ echo Next steps:
 echo   - Run update_players_match.bat to select match-ready team
 echo   - Run update_players_training.bat for training team selection
 echo.
-pause

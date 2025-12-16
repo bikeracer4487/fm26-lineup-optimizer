@@ -241,10 +241,13 @@ class MatchReadySelector:
     def _calculate_pure_ability_rating(self, row: pd.Series, skill_col: str,
                                         ability_col: Optional[str] = None) -> float:
         """
-        Calculate pure ability rating without any modifiers.
+        Calculate pure ability rating with familiarity penalty under ideal conditions.
 
-        Used for hierarchy calculation - assumes peak fitness/condition.
-        Only uses ability rating (or skill as fallback), no penalties.
+        Used for hierarchy calculation (Starting XI / Second XI rankings).
+        Assumes peak fitness/condition but applies familiarity penalty.
+
+        NOTE: Injured players ARE included - this is for squad planning under ideal
+        conditions, not match-day selection. Injuries are temporary.
 
         Args:
             row: Player data row
@@ -252,30 +255,42 @@ class MatchReadySelector:
             ability_col: Role ability rating column (0-200 quality)
 
         Returns:
-            Pure ability rating, or -999.0 if player cannot play this position
+            Effective ability rating (with familiarity penalty), or -999.0 if cannot play
         """
-        # Skip injured players
-        if row.get('Is Injured', False):
-            return -999.0
-
         # Get skill rating (familiarity) - required for position eligibility
         skill_rating = row.get(skill_col, 0)
         if pd.isna(skill_rating) or skill_rating < 1:
             return -999.0  # Cannot play this position at all
 
-        # Get ability rating if available
+        # Check if below minimum familiarity threshold (12 = Competent)
+        below_threshold = skill_rating < MIN_POSITION_FAMILIARITY
+
+        # Get ability rating if available (keep full scale ~50-200)
         if ability_col and ability_col in row.index:
             ability_rating = row.get(ability_col, 0)
             if pd.notna(ability_rating) and ability_rating > 0:
-                return float(ability_rating)  # Use raw ability rating
+                base_rating = float(ability_rating)
+            else:
+                # Fallback: scale familiarity to approximate ability range
+                base_rating = float(skill_rating) * 5.0
+        else:
+            # Fallback: scale familiarity to approximate ability range
+            base_rating = float(skill_rating) * 5.0
 
-        # Fallback: scale familiarity to approximate ability range
-        # Familiarity 20 (natural) ~= ability 100, familiarity 1 ~= ability 60
-        return 60.0 + (float(skill_rating) - 1) * (40.0 / 19.0)
+        # Apply familiarity penalty based on skill rating and Versatility
+        versatility = row.get('Versatility', 10)
+        familiarity_penalty = self._get_familiarity_penalty(skill_rating, versatility)
+        effective_rating = base_rating * (1 - familiarity_penalty)
+
+        # Apply heavy penalty for players below minimum familiarity threshold
+        if below_threshold:
+            effective_rating *= 0.30  # 70% penalty
+
+        return effective_rating
 
     def _calculate_player_hierarchy(self) -> Dict[str, Dict[str, Tuple[str, float]]]:
         """
-        Calculate Starting XI and Second XI for each position using pure ability.
+        Calculate Starting XI and Second XI for each position under ideal conditions.
 
         Uses Hungarian algorithm to ensure player exclusivity:
         - First run: Select optimal First XI (11 unique players)
@@ -284,6 +299,9 @@ class MatchReadySelector:
         This gives us the "theoretical best" lineup assuming everyone is at peak
         fitness with no penalties for fatigue, condition, sharpness, rotation,
         training, or any other factors.
+
+        NOTE: Injured players ARE included - this is for squad planning under ideal
+        conditions, not match-day selection. Injuries are temporary.
 
         Returns:
             Dict mapping position_name -> {
@@ -294,8 +312,8 @@ class MatchReadySelector:
         if self._player_hierarchy_cache is not None:
             return self._player_hierarchy_cache
 
-        # Get available (non-injured) players
-        available_df = self.df[self.df['Is Injured'] != True].copy()
+        # Include ALL players (including injured) - this is for squad planning
+        available_df = self.df.copy()
         available_df = available_df.reset_index(drop=True)
 
         n_players = len(available_df)

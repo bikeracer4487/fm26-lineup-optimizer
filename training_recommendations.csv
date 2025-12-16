@@ -1,5 +1,7 @@
 ﻿Player,Position,Priority,Strategic_Category,Current_Skill_Rating,Ability_Tier,Training_Score
-Miracle Adewole,AM(R),Medium,Improve Natural,20,Adequate,0.6408333333333334
+Miracle Adewole,D(R),Medium,Improve Natural | Winger→WB Pipeline,20,Poor,0.5908333333333333
+Baillie Talmash,D(R),Medium,Improve Natural | Winger→WB Pipeline,20,Adequate,0.5358333333333333
+Cole Deeming,D(C),High,Become Natural,13,Good,0.7016666666666665
 Eddie Sampson,D(C),Medium,Improve Natural,20,Adequate,0.6749999999999999
 Jayden Cumberbatch,D(L),High,Become Natural,16,Adequate,0.72
 Arron Bowman,D(L),Medium,Improve Natural,20,Poor,0.51075
@@ -7,6 +9,6 @@ Isaac Smith,DM,High,Become Natural,16,Good,0.7341666666666666
 Jay Brown,DM,Medium,Improve Natural,20,Poor,0.72
 Mannie Barton,AM(R),High,Become Natural,16,Adequate,0.6441666666666667
 Tony Clarke,AM(C),High,Become Natural,16,Adequate,0.6749999999999999
-Chinedu Agu,AM(C),Medium,Improve Natural,20,Adequate,0.6849999999999999
+Chinedu Agu,AM(C),Medium,Improve Natural,20,Poor,0.6849999999999999
 Aydin Webb,AM(L),High,Become Natural,16,Excellent,0.8533333333333333
-Rhys Thomas,AM(L),Medium,Improve Natural,20,Inadequate,0.6975
+Elia Favicchio,AM(L),Medium,Improve Natural,18,Adequate,0.645

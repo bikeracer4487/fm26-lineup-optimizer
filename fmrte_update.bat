@@ -48,6 +48,8 @@ if %ERRORLEVEL% NEQ 0 (
     echo   - Ensure Python dependencies are installed: pip install -r requirements.txt
     echo   - Check that FM26 Players.xlsx exists and is not open in Excel
     echo.
+    REM Bring console window to foreground
+    powershell -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('Microsoft.VisualBasic'); [Microsoft.VisualBasic.Interaction]::AppActivate('%~n0')" >nul 2>&1
     pause
     exit /b 1
 )
@@ -61,4 +63,3 @@ echo Next steps:
 echo   - Run update_players_match.bat to select match-ready team
 echo   - Run update_players_training.bat for training team selection
 echo.
-pause

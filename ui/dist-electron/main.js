@@ -63,6 +63,9 @@ function setupIpcHandlers() {
   ipcMain.handle("run-player-removal-advisor", async (event, args) => {
     return runPythonScript("api_player_removal.py", args);
   });
+  ipcMain.handle("run-rotation-selector", async (event, args) => {
+    return runPythonScript("api_rotation_selector.py", args);
+  });
   const DATA_DIR = path.join(__dirname$1, "../data");
   const STATE_FILE = path.join(DATA_DIR, "app_state.json");
   ipcMain.handle("get-app-state", async () => {

@@ -5,8 +5,10 @@ import { MatchSelectionTab } from './tabs/MatchSelectionTab';
 import { TrainingTab } from './tabs/TrainingTab';
 import { RestTab } from './tabs/RestTab';
 import { PlayerRemovalTab } from './tabs/PlayerRemovalTab';
+import { FirstXITab } from './tabs/FirstXITab';
+import { SecondXITab } from './tabs/SecondXITab';
 import { Button, Input } from './components/UI';
-import { Calendar, Users, Dumbbell, Settings, ChevronLeft, ChevronRight, BatteryCharging, UserMinus } from 'lucide-react';
+import { Calendar, Users, Dumbbell, Settings, ChevronLeft, ChevronRight, BatteryCharging, UserMinus, Star, UsersRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
@@ -26,7 +28,7 @@ function App() {
     clearManualOverrides
   } = useAppState();
 
-  const [activeTab, setActiveTab] = useState<'fixtures' | 'selection' | 'training' | 'rest' | 'removal'>('fixtures');
+  const [activeTab, setActiveTab] = useState<'fixtures' | 'selection' | 'training' | 'rest' | 'removal' | 'firstXI' | 'secondXI'>('fixtures');
   const [showSettings, setShowSettings] = useState(false);
 
   const changeDate = (days: number) => {
@@ -114,6 +116,18 @@ function App() {
             icon={<UserMinus size={20} />}
             label="Player Removal"
           />
+          <SidebarItem
+            active={activeTab === 'firstXI'}
+            onClick={() => setActiveTab('firstXI')}
+            icon={<Star size={20} />}
+            label="First XI"
+          />
+          <SidebarItem
+            active={activeTab === 'secondXI'}
+            onClick={() => setActiveTab('secondXI')}
+            icon={<UsersRound size={20} />}
+            label="Second XI"
+          />
         </nav>
 
         <div className="p-4 mt-auto border-t border-white/5">
@@ -196,6 +210,12 @@ function App() {
             )}
             {activeTab === 'removal' && (
               <PlayerRemovalTab state={state} />
+            )}
+            {activeTab === 'firstXI' && (
+              <FirstXITab state={state} />
+            )}
+            {activeTab === 'secondXI' && (
+              <SecondXITab state={state} />
             )}
           </motion.div>
         </AnimatePresence>

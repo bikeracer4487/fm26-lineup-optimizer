@@ -95,6 +95,11 @@ function setupIpcHandlers() {
     return runPythonScript('api_player_removal.py', args)
   })
 
+  // 3c. Run Rotation Selector (First XI / Second XI)
+  ipcMain.handle('run-rotation-selector', async (event, args) => {
+    return runPythonScript('api_rotation_selector.py', args)
+  })
+
   // 4. App State Management
   const DATA_DIR = path.join(__dirname, '../data')
   const STATE_FILE = path.join(DATA_DIR, 'app_state.json')
