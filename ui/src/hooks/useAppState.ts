@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { AppState, Match } from '../types';
+import type { AppState, Match, TacticConfig } from '../types';
 import { api } from '../api';
 
 const DEFAULT_STATE: AppState = {
@@ -10,6 +10,11 @@ const DEFAULT_STATE: AppState = {
   files: {
     status: 'players-current.csv',
     abilities: 'players-current.csv'
+  },
+  tacticConfig: {
+    ipPositions: {},
+    oopPositions: {},
+    mapping: {}
   }
 };
 
@@ -23,7 +28,8 @@ export function useAppState() {
       try {
         const loaded = await api.getAppState();
         if (loaded) {
-          setState(loaded);
+          // Merge with default state to ensure new fields (like tacticConfig) exist if loading old state
+          setState({ ...DEFAULT_STATE, ...loaded });
         }
       } catch (e) {
         console.error("Failed to load app state", e);
@@ -92,6 +98,10 @@ export function useAppState() {
 
   const updateFiles = (files: { status: string, abilities: string }) => {
     save({ ...state, files });
+  };
+
+  const updateTacticConfig = (config: TacticConfig) => {
+    save({ ...state, tacticConfig: config });
   };
 
   // Confirm a match lineup (locks it from recalculation)
@@ -163,6 +173,7 @@ export function useAppState() {
     updateRejectedTraining,
     resetRejectedTraining,
     updateFiles,
+    updateTacticConfig,
     confirmMatch,
     undoConfirmation,
     updateManualOverrides,

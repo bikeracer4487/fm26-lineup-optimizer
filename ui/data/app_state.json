@@ -1639,5 +1639,46 @@
   "files": {
     "status": "players-current.csv",
     "abilities": "players-current.csv"
+  },
+  "tacticConfig": {
+    "ipPositions": {
+      "ST_C": "Channel Forward",
+      "AM_L": "Inside Forward",
+      "AM_C": "Attacking Midfielder",
+      "AM_R": "Inside Forward",
+      "DM_L": "Defensive Midfielder",
+      "DM_R": "Defensive Midfielder",
+      "D_CL": "Ball-Playing Centre-Back",
+      "D_CR": "Ball-Playing Centre-Back",
+      "D_L": "Wing Back",
+      "D_R": "Wing Back",
+      "GK": "Goalkeeper"
+    },
+    "oopPositions": {
+      "ST_C": "Centre Forward",
+      "AM_C": "Attacking Midfielder",
+      "M_R": "Wide Midfielder",
+      "M_L": "Wide Midfielder",
+      "DM_L": "Defensive Midfielder",
+      "DM_R": "Defensive Midfielder",
+      "D_CL": "Centre-Back",
+      "D_CR": "Centre-Back",
+      "D_L": "Pressing Full-Back",
+      "D_R": "Pressing Full-Back",
+      "GK": "Sweeper Keeper"
+    },
+    "mapping": {
+      "GK": "GK",
+      "ST_C": "ST_C",
+      "AM_L": "M_L",
+      "AM_C": "AM_C",
+      "AM_R": "M_R",
+      "DM_L": "DM_L",
+      "DM_R": "DM_R",
+      "D_CL": "D_CL",
+      "D_CR": "D_CR",
+      "D_L": "D_L",
+      "D_R": "D_R"
+    }
   }
 }

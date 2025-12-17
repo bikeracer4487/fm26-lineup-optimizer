@@ -3,92 +3,43 @@ import json
 import os
 import sys
 import numpy as np
+import rating_calculator
 
 # Constants for file paths
 EXCEL_FILE = 'FM26 Players.xlsx'
-WEIGHTS_FILE = 'attribute_weights.json'
 OUTPUT_CSV = 'players-current.csv'
 
-def load_weights():
-    """Load attribute weights from JSON file."""
-    if not os.path.exists(WEIGHTS_FILE):
-        raise FileNotFoundError(f"{WEIGHTS_FILE} not found. Please run extract_weights.py first.")
-    
-    with open(WEIGHTS_FILE, 'r') as f:
-        return json.load(f)
-
-def calculate_position_skill(row, weights, pos_name):
+def calculate_generic_position_rating(row, pos_key):
     """
-    Calculate skill rating for a specific position using the formula:
-    Average(InPossessionScore, OutPossessionScore) * 10
-    
-    Where Score = Sum(Attr * Weight) / Sum(Weights)
+    Calculate a generic rating (0-200) for a position using base weights.
+    This serves as a baseline skill for the CSV.
     """
-    pos_weights = weights.get(pos_name)
-    if not pos_weights:
-        return 0.0
-        
-    scores = []
-    for phase in ['In', 'Out']:
-        phase_weights = pos_weights.get(phase, {})
-        if not phase_weights:
-            continue
-            
-        total_weight = sum(phase_weights.values())
-        if total_weight == 0:
-            continue
-            
-        weighted_sum = 0
-        for attr, weight in phase_weights.items():
-            # Get attribute value from row
-            # Handle potential missing values
-            val = row.get(attr, 0)
-            if pd.isna(val):
-                val = 0
-            elif isinstance(val, str):
-                # Handle "-" or other non-numeric
-                try:
-                    val = float(val)
-                except:
-                    val = 0
-            
-            weighted_sum += val * weight
-            
-        scores.append(weighted_sum / total_weight)
+    # Convert row to dict for rating_calculator
+    # Ensure keys match (rating_calculator expects 'Acceleration' etc)
+    # The Excel columns match standard attributes (Title Case)
+    attrs = row.to_dict()
     
-    if not scores:
-        return 0.0
-        
-    # Average of In and Out scores, multiplied by 10 (to get 0-200 scale)
-    final_score = (sum(scores) / len(scores)) * 10
-    return final_score
+    # Use the base position score from FM Arena weights (0-100)
+    score_100 = rating_calculator.calculate_position_score(attrs, pos_key)
+    
+    # Scale to 0-200
+    return score_100 * 2
 
 def update_player_data():
     """
-    Read 'Paste Full' from Excel, calculate skills, handle loans, and save to CSV.
+    Read 'Paste Full' from Excel, calculate generic skills, handle loans, and save to CSV.
     """
     print(f"Updating player data from {EXCEL_FILE}...")
     
-    # 1. Load Weights
-    try:
-        weights = load_weights()
-    except Exception as e:
-        print(f"Error loading weights: {e}")
-        # Attempt to run extract_weights.py if json missing? 
-        # For now, assume it exists or fail.
-        return False
-
-    # 2. Read Excel
+    # 1. Read Excel
     try:
         # Read 'Paste Full'
-        # We assume row 0 is header
         df = pd.read_excel(EXCEL_FILE, sheet_name='Paste Full')
         
-        # Filter out empty rows (if any)
+        # Filter out empty rows
         df = df.dropna(how='all')
 
-        # Remove duplicate player entries (keep first occurrence)
-        # This handles cases where data was accidentally pasted multiple times
+        # Remove duplicate player entries
         if 'Name' in df.columns:
             initial_count = len(df)
             df = df.drop_duplicates(subset=['Name'], keep='first')
@@ -99,37 +50,84 @@ def update_player_data():
         # Rename 'Striker' (Familiarity) to avoid overwrite by calculated 'Striker' (Ability)
         if 'Striker' in df.columns:
             df.rename(columns={'Striker': 'Striker_Familiarity'}, inplace=True)
+            
+        # Rename other familiarity columns to standard format if they exist
+        # This preserves them while allowing us to calculate new 'Ability' columns
+        fam_map = {
+            'GoalKeeper': 'GK_Familiarity',
+            'Defender Right': 'D(R)_Familiarity',
+            'Defender Center': 'D(C)_Familiarity',
+            'Defender Left': 'D(L)_Familiarity',
+            'Defensive Midfielder': 'DM_Familiarity',
+            'Attacking Mid. Right': 'AM(R)_Familiarity',
+            'Attacking Mid. Center': 'AM(C)_Familiarity',
+            'Attacking Mid. Left': 'AM(L)_Familiarity',
+            # New columns from user
+            'Midfielder Center': 'M(C)_Familiarity',
+            'Midfielder Left': 'M(L)_Familiarity',
+            'Midfielder Right': 'M(R)_Familiarity',
+            'Wingback Left': 'WB(L)_Familiarity',
+            'Wingback Right': 'WB(R)_Familiarity',
+        }
+        
+        # Check for fuzzy matches if exact match not found
+        current_cols = list(df.columns)
+        rename_dict = {}
+        
+        for excel_name, csv_name in fam_map.items():
+            if excel_name in current_cols:
+                rename_dict[excel_name] = csv_name
+            else:
+                # Simple fuzzy check (case insensitive, ignore spaces)
+                norm_excel = excel_name.lower().replace(' ', '').replace('.', '')
+                found = False
+                for col in current_cols:
+                    norm_col = str(col).lower().replace(' ', '').replace('.', '')
+                    if norm_col == norm_excel:
+                        rename_dict[col] = csv_name
+                        found = True
+                        break
+                if not found:
+                    print(f"Warning: Column '{excel_name}' not found in Excel (Familiarity data)")
+
+        if rename_dict:
+            print(f"Renaming familiarity columns: {list(rename_dict.keys())} -> ...")
+            df.rename(columns=rename_dict, inplace=True)
         
     except Exception as e:
         print(f"Error reading Excel file: {e}")
         return False
 
-    # 3. Calculate Skills
-    print("Calculating skill ratings...")
+    # 2. Calculate Generic Skills (0-200)
+    print("Calculating generic skill ratings...")
     
-    # Mapping of Output Column Name -> Weights Key
-    # Output columns match those expected by fm_team_selector_optimal (e.g. GK, D(C))
-    # Weights keys match those in attribute_weights.json
-    
+    # Mapping of Output Column Name -> Position Key (for weighting)
+    # These will be the "Ability" columns
     skill_map = {
         'GK': 'GK',
-        'D(R/L)': 'D(R/L)',
+        'D(R)': 'D(R)',
+        'D(L)': 'D(L)',
+        'D(R/L)': 'D(L/R)', # Legacy/Combined
         'D(C)': 'D(C)',
-        'DM(L)': 'DM(L)',
-        'DM(R)': 'DM(R)',
+        'DM(L)': 'DM', # Use generic DM weights
+        'DM(R)': 'DM',
+        'WB(L)': 'WB(L)',
+        'WB(R)': 'WB(R)',
+        'M(C)': 'M(C)',
+        'M(L)': 'M(L)',
+        'M(R)': 'M(R)',
         'AM(L)': 'AM(L)',
         'AM(C)': 'AM(C)',
         'AM(R)': 'AM(R)',
-        'Striker': 'Striker'
+        'Striker': 'ST'
     }
     
-    for col_name, weight_key in skill_map.items():
-        df[col_name] = df.apply(lambda row: calculate_position_skill(row, weights, weight_key), axis=1)
+    for col_name, pos_key in skill_map.items():
+        df[col_name] = df.apply(lambda row: calculate_generic_position_rating(row, pos_key), axis=1)
         
-    # 4. Handle Loan Logic
+    # 3. Handle Loan Logic
     print("Processing loan status...")
     
-    # Ensure Club column exists (it's usually index 86 "Club")
     if 'Club' not in df.columns:
         print("Warning: 'Club' column not found in DataFrame. Assuming no loans.")
         df['LoanStatus'] = 'Own'
@@ -138,23 +136,20 @@ def update_player_data():
             if pd.isna(club) or str(club).strip() == '':
                 return 'Own'
             elif str(club).strip() == 'Brixham':
-                # Club "Brixham" means loaned TO Brixham (Loaned In)
                 return 'LoanedIn'
             else:
-                # Any other club means loaned TO that club (Loaned Out)
                 return 'LoanedOut'
                 
         df['LoanStatus'] = df['Club'].apply(get_loan_status)
         
-    # Filter out LoanedOut players (Unavailable)
-    # User: "unavailable for match selection or training" -> Remove from dataset
+    # Filter out LoanedOut players
     initial_count = len(df)
     df = df[df['LoanStatus'] != 'LoanedOut']
     removed_count = initial_count - len(df)
     if removed_count > 0:
         print(f"Removed {removed_count} players loaned out to other clubs.")
 
-    # 5. Save to CSV
+    # 4. Save to CSV
     print(f"Saving to {OUTPUT_CSV}...")
     try:
         df.to_csv(OUTPUT_CSV, index=False, encoding='utf-8-sig')
@@ -166,4 +161,3 @@ def update_player_data():
 
 if __name__ == "__main__":
     update_player_data()
-

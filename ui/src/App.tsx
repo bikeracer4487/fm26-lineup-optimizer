@@ -7,8 +7,9 @@ import { RestTab } from './tabs/RestTab';
 import { PlayerRemovalTab } from './tabs/PlayerRemovalTab';
 import { FirstXITab } from './tabs/FirstXITab';
 import { SecondXITab } from './tabs/SecondXITab';
+import { TacticsTab } from './tabs/TacticsTab'; // New import
 import { Button, Input } from './components/UI';
-import { Calendar, Users, Dumbbell, Settings, ChevronLeft, ChevronRight, BatteryCharging, UserMinus, Star, UsersRound } from 'lucide-react';
+import { Calendar, Users, Dumbbell, Settings, ChevronLeft, ChevronRight, BatteryCharging, UserMinus, Star, UsersRound, ClipboardList } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
@@ -28,7 +29,7 @@ function App() {
     clearManualOverrides
   } = useAppState();
 
-  const [activeTab, setActiveTab] = useState<'fixtures' | 'selection' | 'training' | 'rest' | 'removal' | 'firstXI' | 'secondXI'>('fixtures');
+  const [activeTab, setActiveTab] = useState<'fixtures' | 'tactics' | 'selection' | 'training' | 'rest' | 'removal' | 'firstXI' | 'secondXI'>('fixtures');
   const [showSettings, setShowSettings] = useState(false);
 
   const changeDate = (days: number) => {
@@ -85,12 +86,18 @@ function App() {
            </div>
         </div>
 
-        <nav className="flex-1 px-2 space-y-1">
+        <nav className="flex-1 px-2 space-y-1 overflow-y-auto">
           <SidebarItem 
             active={activeTab === 'fixtures'} 
             onClick={() => setActiveTab('fixtures')} 
             icon={<Calendar size={20} />} 
             label="Fixture List" 
+          />
+          <SidebarItem
+            active={activeTab === 'tactics'}
+            onClick={() => setActiveTab('tactics')}
+            icon={<ClipboardList size={20} />}
+            label="Tactics Config"
           />
           <SidebarItem 
             active={activeTab === 'selection'} 
@@ -187,6 +194,9 @@ function App() {
                 currentDate={state.currentDate}
               />
             )}
+            {activeTab === 'tactics' && (
+              <TacticsTab />
+            )}
             {activeTab === 'selection' && (
               <MatchSelectionTab
                 state={state}
@@ -235,7 +245,7 @@ function SidebarItem({ active, onClick, icon, label }: { active: boolean, onClic
       }`}
     >
       {icon}
-      <span>{label}</span>
+      <span className="truncate">{label}</span>
     </button>
   );
 }

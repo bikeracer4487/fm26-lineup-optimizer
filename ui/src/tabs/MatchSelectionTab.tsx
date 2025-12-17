@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import type { AppState, MatchPlanItem, MatchSelectionPlayer, Match, ConfirmedLineup } from '../types';
+import type { AppState, MatchPlanItem, MatchSelectionPlayer, Match, ConfirmedLineup, TacticConfig } from '../types';
 import { api } from '../api';
 import { Button, Badge } from '../components/UI';
 import { RefreshCw, UserX, AlertTriangle, Activity, Battery, Zap, ChevronDown, ChevronRight, Calendar, Edit3, RotateCcw, CheckCircle, Lock, Unlock } from 'lucide-react';
@@ -14,6 +14,15 @@ const MAX_LINEUP_MATCHES = 5;
 const normalizePlayerName = (name: string): string => {
   // Remove accents by decomposing and stripping combining characters
   return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+};
+
+const SLOT_NAMES: Record<string, string> = {
+  'GK': 'GK',
+  'D_L': 'D(L)', 'D_CL': 'D(C) Left', 'D_C': 'D(C) Center', 'D_CR': 'D(C) Right', 'D_R': 'D(R)',
+  'WB_L': 'WB(L)', 'DM_L': 'DM Left', 'DM_C': 'DM Center', 'DM_R': 'DM Right', 'WB_R': 'WB(R)',
+  'M_L': 'M(L)', 'M_CL': 'M(C) Left', 'M_C': 'M(C) Center', 'M_CR': 'M(C) Right', 'M_R': 'M(R)',
+  'AM_L': 'AM(L)', 'AM_CL': 'AM(C) Left', 'AM_C': 'AM(C) Center', 'AM_CR': 'AM(C) Right', 'AM_R': 'AM(R)',
+  'ST_L': 'ST Left', 'ST_C': 'ST Center', 'ST_R': 'ST Right'
 };
 
 interface MatchSelectionTabProps {
@@ -116,7 +125,8 @@ export function MatchSelectionTab({
       const response = await api.runMatchSelector(
         unconfirmedMatches,
         state.rejectedPlayers,
-        state.files
+        state.files,
+        state.tacticConfig // Pass tactic config
       );
 
       if (response.success && response.plan) {
@@ -137,7 +147,7 @@ export function MatchSelectionTab({
       const timer = setTimeout(generatePlan, 100);
       return () => clearTimeout(timer);
     }
-  }, [state.matches, state.rejectedPlayers, state.files, state.currentDate]);
+  }, [state.matches, state.rejectedPlayers, state.files, state.currentDate, state.tacticConfig]);
 
   const handleReject = (matchId: string, playerName: string, nameNormalized?: string) => {
     const currentRejected = state.rejectedPlayers[matchId] || [];
@@ -388,6 +398,7 @@ export function MatchSelectionTab({
                   key={item.matchId || item.matchIndex}
                   item={item}
                   match={match}
+                  tacticConfig={state.tacticConfig}
                   onReject={(name, nameNormalized) => handleReject(item.matchId, name, nameNormalized)}
                   onOverride={(pos) => match && openOverrideModal(match.id, pos, item.selection, match.manualOverrides)}
                   onClearOverride={(pos) => match && handleClearOverride(match.id, pos)}
@@ -430,6 +441,7 @@ export function MatchSelectionTab({
               className="flex items-center gap-2 text-fm-light/50 hover:text-white transition-colors text-sm font-bold uppercase tracking-wider mb-4 w-full text-left"
             >
               {showPast ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              <Calendar size={16} />
               Past Matches Archive ({pastMatches.length})
             </button>
 
@@ -482,6 +494,7 @@ export function MatchSelectionTab({
 interface MatchCardProps {
   item: MatchPlanItem;
   match?: Match;
+  tacticConfig?: TacticConfig;
   onReject: (name: string, nameNormalized?: string) => void;
   onOverride: (position: string) => void;
   onClearOverride: (position: string) => void;
@@ -490,14 +503,46 @@ interface MatchCardProps {
   onClearAllOverrides: () => void;
 }
 
-function MatchCard({ item, match, onReject, onOverride, onClearOverride, onConfirm, onUndoConfirm, onClearAllOverrides }: MatchCardProps) {
-  const positions = [
+function MatchCard({ item, match, tacticConfig, onReject, onOverride, onClearOverride, onConfirm, onUndoConfirm, onClearAllOverrides }: MatchCardProps) {
+  const defaultPositions = [
     'GK',
     'DR', 'DC1', 'DC2', 'DL',
     'DM(R)', 'DM(L)',
     'AMR', 'AMC', 'AML',
     'STC'
   ];
+
+  // Determine positions to display
+  let positions: string[] = defaultPositions;
+  
+  // If we have dynamic selection keys (from tacticConfig), use them
+  if (tacticConfig && Object.keys(item.selection).length > 0) {
+    // Sort logic: GK -> D -> WB/DM -> M -> AM -> ST
+    // Within that: R -> C -> L (or L->C->R based on preference, FM uses R->L usually on tactic screen? No, formation view is typically L to R visually)
+    // Actually visual grid is L to R.
+    // Let's sort based on slot ID.
+    // Priority:
+    const sortPriority: Record<string, number> = {
+        'GK': 0,
+        'D_L': 10, 'D_CL': 11, 'D_C': 12, 'D_CR': 13, 'D_R': 14,
+        'WB_L': 20, 'DM_L': 21, 'DM_C': 22, 'DM_R': 23, 'WB_R': 24,
+        'M_L': 30, 'M_CL': 31, 'M_C': 32, 'M_CR': 33, 'M_R': 34,
+        'AM_L': 40, 'AM_CL': 41, 'AM_C': 42, 'AM_CR': 43, 'AM_R': 44,
+        'ST_L': 50, 'ST_C': 51, 'ST_R': 52
+    };
+    
+    const availableKeys = Object.keys(item.selection);
+    // Filter out keys that look like default ones if we are in tactic mode?
+    // Actually the backend returns whatever it used.
+    // If tactic was used, keys are D_L etc.
+    
+    // Check if keys match tactic slots
+    const isDynamic = availableKeys.some(k => k.includes('_'));
+    
+    if (isDynamic) {
+        positions = availableKeys.sort((a, b) => (sortPriority[a] || 99) - (sortPriority[b] || 99));
+    }
+  }
 
   const opponent = match?.opponent || 'Unknown';
   const isConfirmed = match?.confirmed || false;
@@ -509,6 +554,30 @@ function MatchCard({ item, match, onReject, onOverride, onClearOverride, onConfi
 
   // Check if position has manual override
   const isOverridden = (pos: string) => pos in manualOverrides;
+  
+  // Helper for display label
+  const getDisplayLabel = (slot: string) => {
+      if (!tacticConfig) return slot;
+      // Get base label
+      let label = SLOT_NAMES[slot] || slot;
+      
+      // Check for mixed IP/OOP
+      // IP Pos is derived from Slot ID usually.
+      // OOP Pos is from mapping.
+      const oopSlot = tacticConfig.mapping[slot];
+      if (oopSlot && oopSlot !== slot) {
+          const oopLabel = SLOT_NAMES[oopSlot] || oopSlot;
+          // Simplify labels for combined view?
+          // e.g. AM(L) / M(L)
+          // Strip "Left", "Center" etc if redundant
+          const shortIp = label.split(' ')[0];
+          const shortOop = oopLabel.split(' ')[0];
+          if (shortIp !== shortOop) {
+              return `${shortIp} / ${shortOop}`;
+          }
+      }
+      return label;
+  };
 
   return (
     <motion.div
@@ -589,7 +658,7 @@ function MatchCard({ item, match, onReject, onOverride, onClearOverride, onConfi
           return (
             <PlayerCard
               key={pos}
-              pos={pos}
+              pos={getDisplayLabel(pos)}
               player={player}
               isOverridden={overridden}
               isConfirmed={isConfirmed}
@@ -638,7 +707,7 @@ function PlayerCard({ pos, player, isOverridden, isConfirmed, onReject, onOverri
     }`}>
       <div className="flex justify-between items-start mb-2">
         <div className="flex items-center gap-1">
-          <span className="text-xs font-bold text-fm-teal bg-fm-teal/10 px-1.5 py-0.5 rounded">{pos}</span>
+          <span className="text-xs font-bold text-fm-teal bg-fm-teal/10 px-1.5 py-0.5 rounded truncate max-w-[120px]" title={pos}>{pos}</span>
           {isOverridden && (
             <span className="text-[10px] font-bold text-yellow-500 bg-yellow-500/10 px-1 py-0.5 rounded">
               MANUAL

@@ -1,4 +1,4 @@
-import type { AppState, MatchPlanResponse, TrainingResponse, RestResponse, PlayerRemovalResponse, RotationResponse, PlayerListItem, ConfirmedLineup, ConfirmedLineupsData } from './types';
+import type { AppState, MatchPlanResponse, TrainingResponse, RestResponse, PlayerRemovalResponse, RotationResponse, PlayerListItem, ConfirmedLineup, ConfirmedLineupsData, TacticConfig } from './types';
 
 // Type definition for window.ipcRenderer
 declare global {
@@ -21,9 +21,10 @@ export const api = {
   runMatchSelector: async (
     matches: any[],
     rejected: Record<string, string[]>,
-    files: { status: string; abilities: string }
+    files: { status: string; abilities: string },
+    tacticConfig?: TacticConfig
   ): Promise<MatchPlanResponse> => {
-    return await window.ipcRenderer.invoke('run-match-selector', { matches, rejected, files });
+    return await window.ipcRenderer.invoke('run-match-selector', { matches, rejected, files, tacticConfig });
   },
 
   runTrainingAdvisor: async (

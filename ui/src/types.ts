@@ -16,6 +16,17 @@ export interface Match {
   manualOverrides?: Record<string, string>;
 }
 
+export interface TacticPosition {
+  role: string | null; // e.g. "Ball-Playing Defender" or null if empty
+  position: string | null; // e.g. "D(C)" derived from slot or selected? (Roles are tied to positions)
+}
+
+export interface TacticConfig {
+  ipPositions: Record<string, string | null>; // SlotID -> Role Name
+  oopPositions: Record<string, string | null>; // SlotID -> Role Name
+  mapping: Record<string, string | null>; // IP_SlotID -> OOP_SlotID
+}
+
 export interface AppState {
   currentDate: string;
   matches: Match[];
@@ -25,6 +36,7 @@ export interface AppState {
     status: string;
     abilities: string;
   };
+  tacticConfig: TacticConfig;
 }
 
 export interface MatchSelectionPlayer {
@@ -211,6 +223,7 @@ export interface RotationResponse {
   teamRatings?: {
     firstXIAverage: number;
     secondXIAverage: number;
+    // Potentially add more detailed stats here
   };
   error?: string;
 }

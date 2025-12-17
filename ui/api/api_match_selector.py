@@ -11,6 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'
 
 from fm_match_ready_selector import MatchReadySelector, normalize_name
 import data_manager
+import rating_calculator
 
 @contextlib.contextmanager
 def suppress_stdout():
@@ -88,6 +89,7 @@ class ApiMatchReadySelector(MatchReadySelector):
         except Exception as e:
             # If anything goes wrong, return empty dict (no historical data)
             return {}
+            
     def __init__(self, status_filepath, abilities_filepath=None, training_filepath=None):
         # Automatically look for training recommendations in root if not provided
         if not training_filepath:
@@ -160,7 +162,7 @@ class ApiMatchReadySelector(MatchReadySelector):
             
         return effective_rating
             
-    def generate_plan(self, matches_data, rejected_players_map, manual_overrides_map=None):
+    def generate_plan(self, matches_data, rejected_players_map, manual_overrides_map=None, tactic_config=None):
         """
         Generate a match plan using the core logic from MatchReadySelector.
 
@@ -168,17 +170,187 @@ class ApiMatchReadySelector(MatchReadySelector):
             matches_data: List of dicts {id, date, importance, opponent, manualOverrides}
             rejected_players_map: Dict of match_id (str) -> list of player names (manual rejections)
             manual_overrides_map: Dict of match_id (str) -> dict of position -> player name
-
-        Returns:
-            List of match plan items suitable for the UI
+            tactic_config: Dict with ipPositions, oopPositions, mapping
         """
+        
+        # ---------------------------------------------------------------------
+        # TACTICS CONFIGURATION LOGIC
+        # ---------------------------------------------------------------------
+        if tactic_config:
+            # 1. Parse config
+            ip_positions = tactic_config.get('ipPositions', {})
+            oop_positions = tactic_config.get('oopPositions', {})
+            mapping = tactic_config.get('mapping', {})
+            
+            # 2. Identify active slots (those with an IP role selected)
+            active_slots = [slot for slot, role in ip_positions.items() if role]
+            
+            # 3. Build new formation list and calculate ratings
+            new_formation = []
+            
+            # Map for visual display names (standardized)
+            slot_display_names = {
+                'GK': 'GK',
+                'D_L': 'D(L)', 'D_CL': 'D(C)L', 'D_C': 'D(C)', 'D_CR': 'D(C)R', 'D_R': 'D(R)',
+                'WB_L': 'WB(L)', 'DM_L': 'DM(L)', 'DM_C': 'DM(C)', 'DM_R': 'DM(R)', 'WB_R': 'WB(R)',
+                'M_L': 'M(L)', 'M_CL': 'M(C)L', 'M_C': 'M(C)', 'M_CR': 'M(C)R', 'M_R': 'M(R)',
+                'AM_L': 'AM(L)', 'AM_CL': 'AM(C)L', 'AM_C': 'AM(C)', 'AM_CR': 'AM(C)R', 'AM_R': 'AM(R)',
+                'ST_L': 'ST(L)', 'ST_C': 'ST(C)', 'ST_R': 'ST(R)'
+            }
+            
+            for slot in active_slots:
+                ip_role = ip_positions.get(slot)
+                oop_slot = mapping.get(slot, slot) # Default to self if not mapped
+                oop_role = oop_positions.get(oop_slot)
+                
+                if ip_role and oop_role:
+                    # Calculate position keys for rating_calculator
+                    # Extract base position from slot (e.g. D_L -> D(L))
+                    # Or use SLOT_TO_DATA_KEY logic from frontend
+                    # Helper to map slot to position key
+                    def get_pos_key(s):
+                        if s == 'GK': return 'GK'
+                        if s.startswith('D_'): 
+                            if 'L' in s: return 'D(L)'
+                            if 'R' in s: return 'D(R)'
+                            return 'D(C)'
+                        if s.startswith('WB_'): return s.replace('_', '(').replace('L', 'L)').replace('R', 'R)')
+                        if s.startswith('DM_'): return 'DM'
+                        if s.startswith('M_'):
+                            if 'L' in s: return 'M(L)'
+                            if 'R' in s: return 'M(R)'
+                            return 'M(C)'
+                        if s.startswith('AM_'):
+                            if 'L' in s: return 'AM(L)'
+                            if 'R' in s: return 'AM(R)'
+                            return 'AM(C)'
+                        if s.startswith('ST_'): return 'ST'
+                        return 'Unknown'
+
+                    ip_pos_key = get_pos_key(slot)
+                    oop_pos_key = get_pos_key(oop_slot)
+                    
+                    # Column name for this specific slot rating
+                    rating_col = f"Rating_{slot}"
+                    
+                    # Calculate for all players
+                    # Use apply with rows converted to dict
+                    # Note: doing this in loop might be slow, but safe
+                    # Vectorizing would be better but requires complex attribute mapping
+                    self.df[rating_col] = self.df.apply(
+                        lambda row: rating_calculator.calculate_combined_rating(
+                            row.to_dict(), 
+                            ip_pos_key, ip_role, 
+                            oop_pos_key, oop_role
+                        ), axis=1
+                    )
+                    
+                    # Add to formation
+                    # Display name: Use IP pos (e.g. D(L)) or combined if different?
+                    # The frontend expects keys like 'DL', 'GK' to map results.
+                    # We should use the SLOT ID as the key returned to frontend!
+                    # e.g. 'D_L'. The frontend can then map that to display.
+                    
+                    # Tuple: (PositionName, SkillCol, AbilityCol)
+                    # We use the calculated rating for both Skill and Ability
+                    # Skill applies familiarity penalty (if we had specific familiarity column?)
+                    # Wait, calculate_combined_rating uses ATTRIBUTES. It is "Ability".
+                    # "Skill" usually means Ability * Familiarity.
+                    # We need a Familiarity column for this slot.
+                    
+                    # Determine Familiarity Column from Excel data
+                    # e.g. 'D(L)_Familiarity'
+                    # We need to map slot -> Familiarity Column
+                    fam_col = None
+                    if slot == 'GK': fam_col = 'GK_Familiarity'
+                    elif slot == 'D_L': fam_col = 'D(L)_Familiarity'
+                    elif slot == 'D_R': fam_col = 'D(R)_Familiarity'
+                    elif 'D_' in slot: fam_col = 'D(C)_Familiarity' # Center defs
+                    elif 'WB_L' in slot: fam_col = 'WB(L)_Familiarity'
+                    elif 'WB_R' in slot: fam_col = 'WB(R)_Familiarity'
+                    elif 'DM_' in slot: fam_col = 'DM_Familiarity'
+                    elif 'M_L' in slot: fam_col = 'M(L)_Familiarity'
+                    elif 'M_R' in slot: fam_col = 'M(R)_Familiarity'
+                    elif 'M_' in slot: fam_col = 'M(C)_Familiarity'
+                    elif 'AM_L' in slot: fam_col = 'AM(L)_Familiarity'
+                    elif 'AM_R' in slot: fam_col = 'AM(R)_Familiarity'
+                    elif 'AM_' in slot: fam_col = 'AM(C)_Familiarity'
+                    elif 'ST_' in slot: fam_col = 'ST_Familiarity'
+                    
+                    if fam_col and fam_col not in self.df.columns:
+                        # Fallback if specific column missing
+                        fam_col = None
+                    
+                    # If we have familiarity, use it for "Skill" col (MatchReadySelector logic applies penalty to it?)
+                    # Actually MatchReadySelector.calculate_effective_rating uses skill_col.
+                    # If skill_col is 0-20 (Familiarity), it treats it as such?
+                    # Let's check calculate_effective_rating in fm_match_ready_selector.
+                    # It treats skill_col as "Current Ability / Rating".
+                    # It DOES NOT apply familiarity penalty automatically if we pass a Rating.
+                    # Wait, `fm_match_ready_selector.py` line 1356 calls `calculate_effective_rating`.
+                    # Inside that:
+                    # It uses `skill_val = row[skill_col]`.
+                    # Then applies penalties (condition, fatigue).
+                    # It does NOT apply position familiarity penalty logic explicitly unless `position_familiarity` logic is there.
+                    # Wait, `fm_match_ready_selector.py` usually assumes the input rating is ALREADY position-weighted?
+                    # The standard `GK` rating from `data_manager` uses `attribute_weights`.
+                    # It doesn't use familiarity.
+                    
+                    # BUT, `ip_oop_skill_simulation.md` says:
+                    # "Match engine applies separate positional penalties... 100% for Natural, 87% for Accomplished..."
+                    # We should apply this penalty!
+                    
+                    # If I use `Rating_D_L` (Attributes only), I get Potential Ability for that role.
+                    # I should MULTIPLY it by Familiarity Factor.
+                    
+                    # So: `Effective_Rating = Attribute_Rating * Familiarity_Factor`
+                    
+                    # I will calculate `Rating_D_L_Final` which includes familiarity.
+                    
+                    final_col = f"Final_{slot}"
+                    
+                    def apply_fam(row, raw_rating, f_col):
+                        if not f_col or f_col not in row: return raw_rating
+                        fam = row.get(f_col, 20) # Default to 20 if missing
+                        # Map 0-20 to factor
+                        # 20=1.0, 15=0.87, 10=0.75?
+                        # Rough approx: 20->1.0, 1->0.5?
+                        # Using: 1.0 - (20-fam)*0.02 ? (Linear)
+                        # Or simple table.
+                        try:
+                            f_val = float(fam)
+                        except:
+                            f_val = 20.0
+                            
+                        # FM26 approx: 20=1.0, 19=0.99, ... 10=0.8.
+                        if f_val >= 19: factor = 1.0
+                        elif f_val >= 15: factor = 0.95
+                        elif f_val >= 12: factor = 0.90
+                        elif f_val >= 10: factor = 0.85
+                        else: factor = 0.70
+                        
+                        return raw_rating * factor
+
+                    self.df[final_col] = self.df.apply(
+                        lambda row: apply_fam(row, row[rating_col], fam_col), axis=1
+                    )
+                    
+                    # Pass (SlotID, FinalCol, AttributeCol)
+                    # AttributeCol (Ability) is used for "potential" or "raw skill" display?
+                    # MatchReadySelector uses ability_col for sharpness prioritization (using raw ability).
+                    new_formation.append((slot, final_col, rating_col))
+            
+            # Apply new formation
+            self.formation = new_formation
+            
+        # ---------------------------------------------------------------------
+        
         results = []
 
         # Get the current date from the first match (or use empty string if no matches)
         current_date = matches_data[0].get('date', '') if matches_data else ''
 
         # Initialize player_match_count from confirmed lineups history
-        # This enables rotation penalties to account for matches played before this simulation
         self.player_match_count = self._load_consecutive_counts_from_history(current_date)
 
         # For rotation logic, we might need to auto-rest players
@@ -369,13 +541,15 @@ def main():
         
         matches = data.get('matches', [])
         rejected = data.get('rejected', {}) # { "0": ["Player A"], "1": [] }
+        tactic_config = data.get('tacticConfig', None)
         
-        plan = selector.generate_plan(matches, rejected)
+        plan = selector.generate_plan(matches, rejected, tactic_config=tactic_config)
         
         print(json.dumps({"success": True, "plan": plan}, cls=NumpyEncoder))
         
     except Exception as e:
-        print(json.dumps({"success": False, "error": str(e)}))
+        import traceback
+        print(json.dumps({"success": False, "error": f"{str(e)}: {traceback.format_exc()}"}))
 
 if __name__ == '__main__':
     main()
