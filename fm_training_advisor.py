@@ -72,6 +72,8 @@ class TrainingAdvisor:
 
             # Check if abilities file has the required role ability columns
             required_cols = ['Name', 'Striker', 'AM(L)', 'AM(C)', 'AM(R)',
+                           'M(L)', 'M(R)', 'M(C)',  # New midfield positions
+                           'WB(L)', 'WB(R)',  # Wingback positions
                            'DM(L)', 'DM(R)', 'D(C)', 'D(R/L)', 'GK']
             if all(col in self.abilities_df.columns for col in required_cols):
                 # Merge on player name with suffixes to distinguish
@@ -108,14 +110,20 @@ class TrainingAdvisor:
             'Technique', 'Dribbling', 'Flair', 'Vision', 'Passing', 'Decisions',
             'Off the Ball', 'Finishing',
             # Positional skill ratings (1-20 familiarity scale)
-            'GoalKeeper', 'Defender Right', 'Defender Center', 'Defender Left',
-            'Defensive Midfielder', 'Attacking Mid. Right', 'Attacking Mid. Center',
-            'Attacking Mid. Left', 'Striker'
+            # Note: data_manager.py renames these to *_Familiarity format
+            'GK_Familiarity', 'D(R)_Familiarity', 'D(C)_Familiarity', 'D(L)_Familiarity',
+            'DM_Familiarity', 'AM(R)_Familiarity', 'AM(C)_Familiarity',
+            'AM(L)_Familiarity', 'Striker_Familiarity',
+            # New FM26 positions
+            'M(C)_Familiarity', 'M(L)_Familiarity', 'M(R)_Familiarity',
+            'WB(L)_Familiarity', 'WB(R)_Familiarity'
         ]
 
         # Add role ability columns if they exist
         # Note: After merge, ability columns have '_ability' suffix (except when no conflict)
         ability_columns = ['Striker_ability', 'AM(L)_ability', 'AM(C)_ability', 'AM(R)_ability',
+                          'M(L)_ability', 'M(R)_ability', 'M(C)_ability',  # New midfield positions
+                          'WB(L)_ability', 'WB(R)_ability',  # Wingback positions
                           'DM(L)_ability', 'DM(R)_ability', 'D(C)_ability', 'D(R/L)_ability', 'GK_ability']
         for col in ability_columns:
             if col in self.df.columns:
@@ -133,32 +141,43 @@ class TrainingAdvisor:
             self.df['DM_avg'] = (self.df['DM(L)_ability'] + self.df['DM(R)_ability']) / 2
 
         # Position mappings
-        # Format: Position display name -> (skill rating column, ability rating column or None)
-        # Note: "Striker" appears in both files, so after merge it becomes "Striker_skill" and "Striker_ability"
+        # Format: Position display name -> (familiarity column, ability rating column or None)
+        # Note: data_manager.py renames familiarity columns (e.g., 'Midfielder Left' -> 'M(L)_Familiarity')
+        # We need to handle BOTH old and new column names for compatibility
         if self.has_abilities:
             self.position_mapping = {
-                'GK': ('GoalKeeper', 'GK_ability'),
-                'D(R)': ('Defender Right', 'D(R/L)_ability'),
-                'D(C)': ('Defender Center', 'D(C)_ability'),
-                'D(L)': ('Defender Left', 'D(R/L)_ability'),
-                'DM': ('Defensive Midfielder', 'DM_avg'),
-                'AM(R)': ('Attacking Mid. Right', 'AM(R)_ability'),
-                'AM(C)': ('Attacking Mid. Center', 'AM(C)_ability'),
-                'AM(L)': ('Attacking Mid. Left', 'AM(L)_ability'),
-                'ST': ('Striker_skill', 'Striker_ability')  # Different from others due to name collision
+                'GK': ('GK_Familiarity', 'GK_ability'),
+                'D(R)': ('D(R)_Familiarity', 'D(R/L)_ability'),
+                'D(C)': ('D(C)_Familiarity', 'D(C)_ability'),
+                'D(L)': ('D(L)_Familiarity', 'D(R/L)_ability'),
+                'WB(R)': ('WB(R)_Familiarity', 'WB(R)_ability'),
+                'WB(L)': ('WB(L)_Familiarity', 'WB(L)_ability'),
+                'DM': ('DM_Familiarity', 'DM_avg'),
+                'M(R)': ('M(R)_Familiarity', 'M(R)_ability'),
+                'M(C)': ('M(C)_Familiarity', 'M(C)_ability'),
+                'M(L)': ('M(L)_Familiarity', 'M(L)_ability'),
+                'AM(R)': ('AM(R)_Familiarity', 'AM(R)_ability'),
+                'AM(C)': ('AM(C)_Familiarity', 'AM(C)_ability'),
+                'AM(L)': ('AM(L)_Familiarity', 'AM(L)_ability'),
+                'ST': ('Striker_Familiarity', 'Striker_ability')
             }
         else:
-            # No abilities data - only skill ratings
+            # No abilities data - only familiarity ratings
             self.position_mapping = {
-                'GK': ('GoalKeeper', None),
-                'D(R)': ('Defender Right', None),
-                'D(C)': ('Defender Center', None),
-                'D(L)': ('Defender Left', None),
-                'DM': ('Defensive Midfielder', None),
-                'AM(R)': ('Attacking Mid. Right', None),
-                'AM(C)': ('Attacking Mid. Center', None),
-                'AM(L)': ('Attacking Mid. Left', None),
-                'ST': ('Striker', None)
+                'GK': ('GK_Familiarity', None),
+                'D(R)': ('D(R)_Familiarity', None),
+                'D(C)': ('D(C)_Familiarity', None),
+                'D(L)': ('D(L)_Familiarity', None),
+                'WB(R)': ('WB(R)_Familiarity', None),
+                'WB(L)': ('WB(L)_Familiarity', None),
+                'DM': ('DM_Familiarity', None),
+                'M(R)': ('M(R)_Familiarity', None),
+                'M(C)': ('M(C)_Familiarity', None),
+                'M(L)': ('M(L)_Familiarity', None),
+                'AM(R)': ('AM(R)_Familiarity', None),
+                'AM(C)': ('AM(C)_Familiarity', None),
+                'AM(L)': ('AM(L)_Familiarity', None),
+                'ST': ('Striker_Familiarity', None)
             }
 
         # FM26 4-2-3-1 Depth Targets based on "25+3" Squad Architecture Model
@@ -198,6 +217,20 @@ class TrainingAdvisor:
                 'high_attrition': True,  # Wing-backs are highest attrition zone
                 'notes': 'Pressing WB role extremely demanding - need depth + tactical variety'
             },
+            'WB(R)': {
+                'tier1': 1,      # Starting RWB
+                'tier2': 1,      # Rotation
+                'total_target': 2,
+                'high_attrition': True,  # Wing-backs are highest attrition zone
+                'notes': 'Specialist wingback role - high pressing demands in FM26 Unity engine'
+            },
+            'WB(L)': {
+                'tier1': 1,      # Starting LWB
+                'tier2': 1,      # Rotation
+                'total_target': 2,
+                'high_attrition': True,  # Wing-backs are highest attrition zone
+                'notes': 'Specialist wingback role - high pressing demands in FM26 Unity engine'
+            },
             'DM': {
                 'tier1': 2,      # Starting pivot partnership
                 'tier2': 2,      # Rotation DMs
@@ -205,6 +238,27 @@ class TrainingAdvisor:
                 'total_target': 5,
                 'high_attrition': True,  # High-collision zone with frequent injuries
                 'notes': 'Pressing DM reaches critical fatigue by 65min - Condition Floor must be respected'
+            },
+            'M(R)': {
+                'tier1': 1,      # Starting right midfielder
+                'tier2': 1,      # Rotation
+                'total_target': 2,
+                'high_attrition': False,
+                'notes': 'Box-to-box or wide midfielder role - moderate fatigue demands'
+            },
+            'M(C)': {
+                'tier1': 2,      # Starting central midfield pair
+                'tier2': 1,      # Rotation
+                'total_target': 3,
+                'high_attrition': False,
+                'notes': 'Central midfield engine room - versatility valuable for tactical flexibility'
+            },
+            'M(L)': {
+                'tier1': 1,      # Starting left midfielder
+                'tier2': 1,      # Rotation
+                'total_target': 2,
+                'high_attrition': False,
+                'notes': 'Box-to-box or wide midfielder role - moderate fatigue demands'
             },
             'AM(R)': {
                 'tier1': 1,      # Starting right winger
@@ -243,17 +297,23 @@ class TrainingAdvisor:
 
         # Similarity groups for position retraining analysis
         # Strategic pathways based on lineup-depth-strategy.md
+        # Uses the new _Familiarity column names from data_manager.py
         self.similarity_groups = {
-            'D(R)': ['Defender Right', 'Defender Left', 'Defender Center'],
-            'D(L)': ['Defender Left', 'Defender Right', 'Defender Center'],
-            'D(C)': ['Defender Center', 'Defender Right', 'Defender Left', 'Defensive Midfielder'],
-            'DM': ['Defensive Midfielder', 'Defender Center', 'Attacking Mid. Center',
-                   'Attacking Mid. Left', 'Attacking Mid. Right', 'Striker'],
-            'AM(R)': ['Attacking Mid. Right', 'Attacking Mid. Left', 'Attacking Mid. Center', 'Striker'],
-            'AM(L)': ['Attacking Mid. Left', 'Attacking Mid. Right', 'Attacking Mid. Center', 'Striker'],
-            'AM(C)': ['Attacking Mid. Center', 'Attacking Mid. Left', 'Attacking Mid. Right',
-                      'Striker', 'Defensive Midfielder'],
-            'ST': ['Striker', 'Attacking Mid. Center', 'Attacking Mid. Right', 'Attacking Mid. Left'],
+            'D(R)': ['D(R)_Familiarity', 'D(L)_Familiarity', 'D(C)_Familiarity', 'WB(R)_Familiarity'],
+            'D(L)': ['D(L)_Familiarity', 'D(R)_Familiarity', 'D(C)_Familiarity', 'WB(L)_Familiarity'],
+            'D(C)': ['D(C)_Familiarity', 'D(R)_Familiarity', 'D(L)_Familiarity', 'DM_Familiarity'],
+            'WB(R)': ['WB(R)_Familiarity', 'D(R)_Familiarity', 'M(R)_Familiarity', 'AM(R)_Familiarity'],
+            'WB(L)': ['WB(L)_Familiarity', 'D(L)_Familiarity', 'M(L)_Familiarity', 'AM(L)_Familiarity'],
+            'DM': ['DM_Familiarity', 'D(C)_Familiarity', 'M(C)_Familiarity', 'AM(C)_Familiarity',
+                   'AM(L)_Familiarity', 'AM(R)_Familiarity', 'Striker_Familiarity'],
+            'M(R)': ['M(R)_Familiarity', 'AM(R)_Familiarity', 'DM_Familiarity', 'WB(R)_Familiarity'],
+            'M(C)': ['M(C)_Familiarity', 'DM_Familiarity', 'AM(C)_Familiarity'],
+            'M(L)': ['M(L)_Familiarity', 'AM(L)_Familiarity', 'DM_Familiarity', 'WB(L)_Familiarity'],
+            'AM(R)': ['AM(R)_Familiarity', 'AM(L)_Familiarity', 'AM(C)_Familiarity', 'M(R)_Familiarity', 'Striker_Familiarity'],
+            'AM(L)': ['AM(L)_Familiarity', 'AM(R)_Familiarity', 'AM(C)_Familiarity', 'M(L)_Familiarity', 'Striker_Familiarity'],
+            'AM(C)': ['AM(C)_Familiarity', 'AM(L)_Familiarity', 'AM(R)_Familiarity',
+                      'Striker_Familiarity', 'DM_Familiarity', 'M(C)_Familiarity'],
+            'ST': ['Striker_Familiarity', 'AM(C)_Familiarity', 'AM(R)_Familiarity', 'AM(L)_Familiarity'],
             'GK': []
         }
 
@@ -546,7 +606,7 @@ class TrainingAdvisor:
             technical_strikers = []
 
             for idx, row in self.df.iterrows():
-                st_skill = row.get('Striker', 0)
+                st_skill = row.get('Striker_Familiarity', 0)
                 if pd.notna(st_skill) and st_skill >= 10:  # At least Competent
                     name = row['Name']
                     pace = row.get('Pace', 10)
@@ -589,7 +649,7 @@ class TrainingAdvisor:
             progressors = []
 
             for idx, row in self.df.iterrows():
-                dm_skill = row.get('Defensive Midfielder', 0)
+                dm_skill = row.get('DM_Familiarity', 0)
                 if pd.notna(dm_skill) and dm_skill >= 10:  # At least Competent
                     name = row['Name']
                     tackling = row.get('Tackling', 10)
@@ -656,10 +716,11 @@ class TrainingAdvisor:
             is_potential_universalist = (versatility >= 13 and total_coverage >= 2)
 
             # Special check: CB who can also play DM/FB (critical need)
-            cb_skill = row.get('Defender Center', 0)
-            dm_skill = row.get('Defensive Midfielder', 0)
-            fb_right_skill = row.get('Defender Right', 0)
-            fb_left_skill = row.get('Defender Left', 0)
+            # Uses new _Familiarity column names from data_manager.py
+            cb_skill = row.get('D(C)_Familiarity', 0)
+            dm_skill = row.get('DM_Familiarity', 0)
+            fb_right_skill = row.get('D(R)_Familiarity', 0)
+            fb_left_skill = row.get('D(L)_Familiarity', 0)
 
             is_cb_universalist = (
                 pd.notna(cb_skill) and cb_skill >= 13 and
@@ -710,9 +771,10 @@ class TrainingAdvisor:
         # "31-year-old No. 10 who can no longer press in advanced strata... train as Deep Lying Playmaker"
         if age >= 28 and target_pos == 'DM':
             # Check if player is a playmaker (natural in AMC positions)
-            amc_skill = row.get('Attacking Mid. Center', 0)
-            aml_skill = row.get('Attacking Mid. Left', 0)
-            amr_skill = row.get('Attacking Mid. Right', 0)
+            # Uses new _Familiarity column names from data_manager.py
+            amc_skill = row.get('AM(C)_Familiarity', 0)
+            aml_skill = row.get('AM(L)_Familiarity', 0)
+            amr_skill = row.get('AM(R)_Familiarity', 0)
 
             is_playmaker = (amc_skill >= 15 or aml_skill >= 15 or amr_skill >= 15)
 
@@ -738,8 +800,9 @@ class TrainingAdvisor:
         # STRATEGIC CASE: Young winger → Wing-Back conversion (strategy doc line 173-178)
         # "Young winger with acceptable Work Rate (12+)" is IDEAL candidate
         if age < 26 and target_pos in ['D(R)', 'D(L)']:
-            amr_skill = row.get('Attacking Mid. Right', 0)
-            aml_skill = row.get('Attacking Mid. Left', 0)
+            # Uses new _Familiarity column names from data_manager.py
+            amr_skill = row.get('AM(R)_Familiarity', 0)
+            aml_skill = row.get('AM(L)_Familiarity', 0)
 
             is_winger = (amr_skill >= 13 or aml_skill >= 13)
             work_rate = row.get('Work Rate', 10)
@@ -876,9 +939,9 @@ class TrainingAdvisor:
 
                         # CRITICAL: Attack/Defense Separation for Established Players (16+)
                         # Bug fix: Natural strikers shouldn't train as defenders and vice versa
-                        # Define position categories
-                        attack_position_cols = ['Striker', 'Attacking Mid. Left', 'Attacking Mid. Center', 'Attacking Mid. Right']
-                        defense_position_cols = ['Defender Left', 'Defender Center', 'Defender Right']
+                        # Define position categories (using new _Familiarity column names)
+                        attack_position_cols = ['Striker_Familiarity', 'AM(L)_Familiarity', 'AM(C)_Familiarity', 'AM(R)_Familiarity']
+                        defense_position_cols = ['D(L)_Familiarity', 'D(C)_Familiarity', 'D(R)_Familiarity']
 
                         # Get player's highest familiarity in attack and defense
                         player_attack_skills = [row.get(col, 0) for col in attack_position_cols]
@@ -901,7 +964,31 @@ class TrainingAdvisor:
                         if max_defense_skill >= 16 and target_is_attack:
                             continue  # Skip: Accomplished+ at defense positions, don't recommend pure attack
 
-                        # Note: DM is neither attack nor defense, so never blocked (acts as bridge position)
+                        # SPECIAL CASE: DM is a "bridge" position but we should still protect elite attackers
+                        # Only recommend attackers → DM if they meet "aging playmaker" criteria
+                        if pos_name == 'DM' and max_attack_skill >= 16:
+                            # Player is accomplished+ at attacking positions
+                            # Only allow if they're 28+ AND have elite mentals AND declining pace
+                            age = row.get('Age', 0)
+                            vision = row.get('Vision', 0)
+                            passing = row.get('Passing', 0)
+                            decisions = row.get('Decisions', 0)
+                            pace = row.get('Pace', 20)
+                            acceleration = row.get('Acceleration', 20)
+
+                            has_elite_mentals = (
+                                pd.notna(vision) and vision >= 14 and
+                                pd.notna(passing) and passing >= 14 and
+                                pd.notna(decisions) and decisions >= 13
+                            )
+                            has_pace_decline = (
+                                (pd.notna(pace) and pace <= 12) or
+                                (pd.notna(acceleration) and acceleration <= 12)
+                            )
+                            is_aging = pd.notna(age) and age >= 28
+
+                            if not (is_aging and has_elite_mentals and has_pace_decline):
+                                continue  # Skip: Elite attackers shouldn't train as DM unless aging playmaker
 
                         # PROTECTION: Don't recommend Natural players for unrelated positions
                         # Bug fix: Natural DM (18+) shouldn't be recommended to train as GK/ST/etc.
@@ -913,7 +1000,10 @@ class TrainingAdvisor:
                             if pd.notna(best_pos_skill) and best_pos_skill >= 18:  # Natural at current position
                                 # Check if target position is in similarity group of best position
                                 similar_to_best = self.similarity_groups.get(best_position, [])
-                                if pos_name != best_position and pos_name not in similar_to_best:
+                                # Convert pos_name to familiarity column format for comparison
+                                # similarity_groups values are column names like 'D(L)_Familiarity'
+                                target_col_name = self.position_mapping.get(pos_name, (None, None))[0]
+                                if pos_name != best_position and target_col_name not in similar_to_best:
                                     # Unrelated position - only allow if player already somewhat familiar
                                     if skill_rating < 8:
                                         continue  # Skip unrelated positions for Natural specialists
@@ -968,7 +1058,11 @@ class TrainingAdvisor:
                     priority_score = 2
                 else:  # learn_position
                     # These are longer-term investments
-                    needed = min(1, gap_info['total_shortage'])
+                    # Use training_potential (good ability players who need to learn position)
+                    # OR total_shortage (if we're short on competent players)
+                    training_potential = gap_info.get('training_potential', 0)
+                    total_shortage = gap_info.get('total_shortage', 0)
+                    needed = min(2, max(training_potential, total_shortage))
                     priority = 'Low'
                     priority_score = 1
 
@@ -1022,6 +1116,47 @@ class TrainingAdvisor:
                 current_positions.append((pos_name, skill_rating))
 
         return current_positions
+
+    def _get_position_skill(self, row: pd.Series, position: str) -> float:
+        """
+        Get a player's familiarity rating at a given position.
+
+        Args:
+            row: Player data row
+            position: Position name (e.g., 'AM(C)', 'DM', 'ST')
+
+        Returns:
+            Familiarity rating (1-20 scale) or 0 if not found
+        """
+        # Use position_mapping to get the familiarity column name
+        if position in self.position_mapping:
+            skill_col, _ = self.position_mapping[position]
+            return row.get(skill_col, 0)
+
+        # Handle some common position aliases from 'Best Position' column
+        position_aliases = {
+            'S': 'ST',
+            'AM': 'AM(C)',
+            'AMC': 'AM(C)',
+            'AML': 'AM(L)',
+            'AMR': 'AM(R)',
+            'MC': 'M(C)',
+            'ML': 'M(L)',
+            'MR': 'M(R)',
+            'DC': 'D(C)',
+            'DL': 'D(L)',
+            'DR': 'D(R)',
+            'WBL': 'WB(L)',
+            'WBR': 'WB(R)',
+        }
+
+        if position in position_aliases:
+            mapped_pos = position_aliases[position]
+            if mapped_pos in self.position_mapping:
+                skill_col, _ = self.position_mapping[mapped_pos]
+                return row.get(skill_col, 0)
+
+        return 0
 
     def _should_retrain(self, row: pd.Series, target_pos: str, target_skill: float, gaps: Dict) -> bool:
         """
@@ -1077,11 +1212,17 @@ class TrainingAdvisor:
 
         # Don't retrain if:
         # 1. Player is critical at current position
-        # 2. Target position has equal or less severe gap than current position
         if player_is_critical:
             return False
 
-        if target_severity <= current_max_severity:
+        # 2. Target position has less severe gap than current position
+        #    (but allow if both are 0 - player can cross-train when both positions are covered)
+        if target_severity < current_max_severity:
+            return False
+
+        # 3. If current position has a significant gap (severity > 0), don't pull player away
+        #    unless target has even higher need
+        if current_max_severity > 0 and target_severity <= current_max_severity:
             return False
 
         return True
@@ -1096,54 +1237,58 @@ class TrainingAdvisor:
         - Winger → Channel Forward (ST): Ideal for inside forwards lacking top speed
         - Full-Back → Wide CB: For 3-at-back hybrid formations
         """
+        # Uses the new _Familiarity column names from data_manager.py
         similarity_groups = {
             'D(R)': [
-                'Defender Right', 'Defender Left',
-                # NOTE: Winger → Wing-Back removed from similarity group
-                # Young wingers (< 16 familiarity) can still train via age exception (age < 24)
-                # Natural wingers (18+) blocked by attack/defense separation filter
-                'Defender Center'  # Wide CB role for hybrid systems
+                'D(R)_Familiarity', 'D(L)_Familiarity',
+                'D(C)_Familiarity'  # Wide CB role for hybrid systems
             ],
             'D(L)': [
-                'Defender Left', 'Defender Right',
-                # NOTE: Winger → Wing-Back removed from similarity group
-                # Young wingers (< 16 familiarity) can still train via age exception (age < 24)
-                # Natural wingers (18+) blocked by attack/defense separation filter
-                'Defender Center'  # Wide CB role for hybrid systems
+                'D(L)_Familiarity', 'D(R)_Familiarity',
+                'D(C)_Familiarity'  # Wide CB role for hybrid systems
             ],
             'D(C)': [
-                'Defender Center',
-                # STRATEGIC: Full-Back → Wide CB (line 94)
-                'Defender Right', 'Defender Left',  # Robust full-backs can retrain to CB
-                'Defensive Midfielder'  # DMs can drop to CB for universalist role
+                'D(C)_Familiarity',
+                'D(R)_Familiarity', 'D(L)_Familiarity',  # Robust full-backs can retrain to CB
+                'DM_Familiarity'  # DMs can drop to CB for universalist role
             ],
             'DM': [
-                'Defensive Midfielder',
-                'Defender Center',  # CBs can move up to DM (universalist coverage)
-                # STRATEGIC: Aging Playmaker → Deep DM (line 108-112)
-                'Attacking Mid. Center',  # 28+ AMCs with elite Vision/Passing, declining pace
-                'Attacking Mid. Left', 'Attacking Mid. Right',  # Wide playmakers can also transition
-                # STRATEGIC: Pressing Forward → Ball Winning DM (position-retraining-strategy.md)
-                'Striker'  # High work rate/aggression strikers ideal for pressing DM role
+                'DM_Familiarity',
+                'D(C)_Familiarity',  # CBs can move up to DM (universalist coverage)
+                'AM(C)_Familiarity',  # 28+ AMCs with elite Vision/Passing, declining pace
+                'AM(L)_Familiarity', 'AM(R)_Familiarity',  # Wide playmakers can also transition
+                'Striker_Familiarity'  # High work rate/aggression strikers ideal for pressing DM role
+            ],
+            'M(R)': [
+                'M(R)_Familiarity', 'AM(R)_Familiarity', 'DM_Familiarity', 'WB(R)_Familiarity'
+            ],
+            'M(C)': [
+                'M(C)_Familiarity', 'DM_Familiarity', 'AM(C)_Familiarity'
+            ],
+            'M(L)': [
+                'M(L)_Familiarity', 'AM(L)_Familiarity', 'DM_Familiarity', 'WB(L)_Familiarity'
             ],
             'AM(R)': [
-                'Attacking Mid. Right', 'Attacking Mid. Left', 'Attacking Mid. Center',
-                'Striker'  # Strikers can drop to winger role
+                'AM(R)_Familiarity', 'AM(L)_Familiarity', 'AM(C)_Familiarity',
+                'M(R)_Familiarity', 'Striker_Familiarity'
             ],
             'AM(L)': [
-                'Attacking Mid. Left', 'Attacking Mid. Right', 'Attacking Mid. Center',
-                'Striker'  # Strikers can drop to winger role
+                'AM(L)_Familiarity', 'AM(R)_Familiarity', 'AM(C)_Familiarity',
+                'M(L)_Familiarity', 'Striker_Familiarity'
             ],
             'AM(C)': [
-                'Attacking Mid. Center', 'Attacking Mid. Left', 'Attacking Mid. Right',
-                'Striker',  # Strikers can drop deep
-                'Defensive Midfielder'  # Deep playmakers can push forward
+                'AM(C)_Familiarity', 'AM(L)_Familiarity', 'AM(R)_Familiarity',
+                'Striker_Familiarity', 'DM_Familiarity', 'M(C)_Familiarity'
             ],
             'ST': [
-                'Striker',
-                'Attacking Mid. Center',
-                # STRATEGIC: Winger → Channel Forward (line 147-152)
-                'Attacking Mid. Right', 'Attacking Mid. Left'  # Inside forwards lacking pace make ideal Channel Forwards
+                'Striker_Familiarity', 'AM(C)_Familiarity',
+                'AM(R)_Familiarity', 'AM(L)_Familiarity'
+            ],
+            'WB(R)': [
+                'WB(R)_Familiarity', 'D(R)_Familiarity', 'M(R)_Familiarity'
+            ],
+            'WB(L)': [
+                'WB(L)_Familiarity', 'D(L)_Familiarity', 'M(L)_Familiarity'
             ],
             'GK': []  # GK is specialist position, no strategic retraining pathways
         }
@@ -1217,8 +1362,8 @@ class TrainingAdvisor:
 
         has_abilities = any(pd.notna(players[0][2]) for players in depth_analysis.values() if players)
 
-        # Analyze each position
-        for pos_name in ['GK', 'D(L)', 'D(C)', 'D(R)', 'DM', 'AM(L)', 'AM(C)', 'AM(R)', 'ST']:
+        # Analyze each position (including new FM26 positions)
+        for pos_name in ['GK', 'D(L)', 'D(C)', 'D(R)', 'WB(L)', 'WB(R)', 'DM', 'M(L)', 'M(C)', 'M(R)', 'AM(L)', 'AM(C)', 'AM(R)', 'ST']:
             players_data = depth_analysis.get(pos_name, [])
             target_info = self.formation_depth_targets.get(pos_name, {})
             total_target = target_info.get('total_target', 1)

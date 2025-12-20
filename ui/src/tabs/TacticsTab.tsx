@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppState } from '../hooks/useAppState';
 import { Button } from '../components/UI';
-import { Save, AlertTriangle, ArrowRight, Shield, Activity } from 'lucide-react';
+import { Save, AlertTriangle, ArrowRight, Shield, Activity, CheckCircle } from 'lucide-react';
 import rolesData from '../data/roles.json';
 import type { TacticConfig } from '../types';
 
@@ -56,7 +56,8 @@ const ROWS = [
 export function TacticsTab() {
   const { state, updateTacticConfig } = useAppState();
   const [activeSubTab, setActiveSubTab] = useState<'IP' | 'OOP' | 'Mapping'>('IP');
-  
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
   // Local state for editing
   const [config, setConfig] = useState<TacticConfig>(state.tacticConfig || {
     ipPositions: {},
@@ -135,6 +136,8 @@ export function TacticsTab() {
   const handleSave = () => {
     if (isValid) {
       updateTacticConfig(config);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
     }
   };
 
@@ -155,12 +158,22 @@ export function TacticsTab() {
           </p>
         </div>
         
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={handleReset}>Reset Changes</Button>
-          <Button 
-            disabled={!isValid} 
+        <div className="flex items-center gap-3">
+          {saveSuccess && (
+            <div className="text-fm-teal text-sm flex items-center gap-1.5 animate-fade-in">
+              <CheckCircle size={16} />
+              <span>Configuration saved!</span>
+            </div>
+          )}
+          <Button variant="secondary" size="sm" onClick={handleReset}>
+            Reset Changes
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={!isValid}
             onClick={handleSave}
-            className={isValid ? "bg-fm-teal text-fm-dark" : "opacity-50 cursor-not-allowed"}
+            className="flex items-center whitespace-nowrap"
           >
             <Save size={16} className="mr-2" />
             Save Configuration

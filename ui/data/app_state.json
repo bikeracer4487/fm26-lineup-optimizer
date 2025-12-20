@@ -1,5 +1,5 @@
 {
-  "currentDate": "2029-11-10",
+  "currentDate": "2030-02-09",
   "matches": [
     {
       "id": "d329a55a-7016-40c3-9d02-5ddedf1a4073",
@@ -1445,67 +1445,139 @@
       "id": "ced3724e-cb0b-4672-9873-fdbbde447c63",
       "date": "2029-11-13",
       "opponent": "Walsall",
-      "importance": "High"
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-17T06:25:12.899Z"
     },
     {
       "id": "d32ca73a-1328-41f8-999c-63082f90d7dc",
       "date": "2029-11-17",
       "opponent": "Fleetwood Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-17T07:28:47.157Z"
     },
     {
       "id": "b05a8b00-069d-4cbc-94ed-b2240b245e57",
       "date": "2029-11-21",
       "opponent": "Colchester Utd",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-17T07:31:14.638Z"
     },
     {
       "id": "84149991-3e90-49dc-9b30-b85f84ec745f",
       "date": "2029-11-24",
       "opponent": "Chester",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "AM_C": "Allan Hall",
+        "ST_C": "Gastón Ramírez",
+        "DM_R": "Luis Gardner",
+        "D_CL": "Cole Deeming",
+        "DM_L": "Aydin Webb"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-17T15:13:12.635Z"
     },
     {
       "id": "9cbffc9d-88fe-4822-a56f-d320958a50b7",
       "date": "2029-11-27",
       "opponent": "Stevenage",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "D_CL": "Eddie Sampson"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-17T15:17:22.905Z"
     },
     {
       "id": "ec95a4d8-a623-4c26-b903-a23d72a41e8c",
       "date": "2029-12-01",
       "opponent": "Newport County",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-17T19:11:59.866Z"
     },
     {
-      "id": "1a3ff112-0b3f-49d1-8074-e6fb86e71125",
-      "date": "2029-12-05",
-      "opponent": "Barrow",
-      "importance": "Medium"
+      "id": "0757418a-0016-4a78-a02a-01f565d9d258",
+      "date": "2029-12-04",
+      "opponent": "Crystal Palace U21s",
+      "importance": "High",
+      "manualOverrides": {
+        "D_R": "Nesbert Ncube",
+        "D_CR": "Josh Campbell-Slowey",
+        "D_L": "Dominic Iorfa",
+        "ST_C": "Korbyn Ednie",
+        "DM_L": "Matt Worthington"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-17T21:19:02.038Z"
     },
     {
       "id": "a93d0672-a72f-4263-aa89-84b848475c4b",
       "date": "2029-12-08",
       "opponent": "Morecambe",
-      "importance": "High"
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-17T23:17:17.805Z"
     },
     {
       "id": "bdc2cec1-2e00-41a2-b2d4-1c09d15c7114",
       "date": "2029-12-12",
       "opponent": "Doncaster Rovers",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "GK": "Ashley Sarahs",
+        "D_R": "Tom Dando",
+        "D_CR": "Cole Deeming",
+        "D_CL": "Ernie Weaver",
+        "D_L": "Jayden Cumberbatch",
+        "DM_R": "Matt Worthington",
+        "DM_L": "Isaac Smith",
+        "AM_R": "Miracle Adewole",
+        "AM_L": "Elia Favicchio"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-18T04:44:07.687Z"
     },
     {
       "id": "950d6e9e-b2e0-4556-9e92-2884cd7ff671",
       "date": "2029-12-15",
       "opponent": "Chester",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "GK": "Ashley Sarahs",
+        "D_R": "Tom Dando",
+        "D_CL": "George Johnston",
+        "D_L": "Jayden Cumberbatch",
+        "DM_R": "Matt Worthington",
+        "DM_L": "Isaac Smith",
+        "ST_C": "Mateusz Widz",
+        "AM_R": "Miracle Adewole",
+        "AM_L": "Elia Favicchio"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-18T05:50:42.770Z"
     },
     {
       "id": "954874df-a551-410b-8c8b-fe89c44c863c",
       "date": "2029-12-18",
       "opponent": "Mansfield Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "GK": "Ashley Sarahs",
+        "D_R": "Tom Dando",
+        "D_L": "Jayden Cumberbatch",
+        "AM_L": "Elia Favicchio",
+        "AM_R": "Miracle Adewole",
+        "AM_C": "Joe Powell",
+        "DM_L": "Matt Worthington",
+        "D_CL": "Cole Deeming",
+        "D_CR": "George Johnston"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-18T06:02:14.865Z"
     },
     {
       "id": "d2338f9b-dae3-44f0-8924-982e065aabee",
@@ -1523,47 +1595,131 @@
       "id": "fe5d86c9-eef1-4419-9e28-0de53569b5b2",
       "date": "2029-12-29",
       "opponent": "Exeter City",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "DM_R": "Isaac Smith",
+        "GK": "Ashley Sarahs",
+        "D_CL": "George Johnston",
+        "D_R": "Tom Dando"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-18T17:13:57.822Z"
     },
     {
       "id": "43671504-5339-4ac2-9a45-8f632eb9b145",
       "date": "2030-01-01",
       "opponent": "Crawley Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "AM_R": "Mannie Barton"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-18T20:24:34.060Z"
     },
     {
       "id": "1bd36ffa-5433-4e93-ba54-ca2b741e73e3",
       "date": "2030-01-05",
       "opponent": "Gillingham",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "AM_R": "Joe Powell"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-18T20:51:49.435Z"
+    },
+    {
+      "id": "87213429-3eb6-4e62-9421-fea5ac2d2ee0",
+      "date": "2030-01-09",
+      "opponent": "MK Dons",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-19T00:13:25.336Z"
+    },
+    {
+      "id": "086c1fd5-cbb3-46be-88e8-a79f2d146f7a",
+      "date": "2030-01-12",
+      "opponent": "Derby County",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-19T02:33:57.607Z"
     },
     {
       "id": "e4164da2-3955-42c0-ab3f-b4020b9d75a1",
-      "date": "2030-01-12",
+      "date": "2030-01-15",
       "opponent": "Cambridge Utd",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "GK": "Ashley Sarahs"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-19T03:22:58.605Z"
     },
     {
       "id": "8ae4f878-e19e-4861-921b-ce94e388d094",
       "date": "2030-01-19",
       "opponent": "York City",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "GK": "Ashley Sarahs"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-19T04:37:04.041Z"
     },
     {
       "id": "21301f9d-f41b-47ae-8215-33cc759900b4",
-      "date": "2030-01-29",
+      "date": "2030-01-23",
       "opponent": "Grimsby Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-19T04:52:45.592Z"
+    },
+    {
+      "id": "1a3ff112-0b3f-49d1-8074-e6fb86e71125",
+      "date": "2030-01-26",
+      "opponent": "Barrow",
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-19T17:00:49.599Z"
+    },
+    {
+      "id": "17897021-495e-4908-8053-4269a45dcdc8",
+      "date": "2030-01-29",
+      "opponent": "Wigan Athletic",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-19T17:15:35.124Z"
     },
     {
       "id": "33cf12e3-7891-4ff8-afe1-a51dd27058d3",
       "date": "2030-02-02",
       "opponent": "Leyton Orient",
+      "importance": "Medium",
+      "manualOverrides": {
+        "D_L": "Jayden Cumberbatch",
+        "D_R": "Zach Mitchell",
+        "DM_R": "Isaac Smith",
+        "D_CL": "Eddie Sampson",
+        "D_CR": "Luis Gardner",
+        "DM_L": "Dominic Iorfa"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-20T01:36:20.599Z"
+    },
+    {
+      "id": "cd556c6c-4447-49e7-9f3e-6ad658275a42",
+      "date": "2030-02-09",
+      "opponent": "Fleetwood Town",
       "importance": "Medium"
     },
     {
-      "id": "babbbc01-2084-427a-a287-773df43a3a29",
+      "id": "abedc863-6cf3-48fc-ba05-cfe11a944fd8",
       "date": "2030-02-16",
+      "opponent": "Tottenham Hotspur",
+      "importance": "High"
+    },
+    {
+      "id": "babbbc01-2084-427a-a287-773df43a3a29",
+      "date": "2030-02-23",
       "opponent": "Southend Utd",
       "importance": "Medium"
     },
@@ -1587,9 +1743,15 @@
     },
     {
       "id": "2ff50cb0-83d7-4c00-ba16-e180bf42fdc6",
-      "date": "2030-03-12",
+      "date": "2030-03-09",
       "opponent": "Port Vale",
       "importance": "Medium"
+    },
+    {
+      "id": "5058e8b9-70c5-4b7b-8d23-f6e71589074f",
+      "date": "2030-03-13",
+      "opponent": "Rotherham Utd",
+      "importance": "High"
     },
     {
       "id": "5ea81af9-b44b-441b-95b0-612083803b40",
@@ -1634,7 +1796,14 @@
       "importance": "Medium"
     }
   ],
-  "rejectedPlayers": {},
+  "rejectedPlayers": {
+    "17897021-495e-4908-8053-4269a45dcdc8": [
+      "zach mitchell"
+    ],
+    "33cf12e3-7891-4ff8-afe1-a51dd27058d3": [
+      "mateusz widz"
+    ]
+  },
   "rejectedTraining": {},
   "files": {
     "status": "players-current.csv",
@@ -1643,42 +1812,46 @@
   "tacticConfig": {
     "ipPositions": {
       "ST_C": "Channel Forward",
-      "AM_L": "Inside Forward",
       "AM_C": "Attacking Midfielder",
+      "AM_L": "Inside Forward",
       "AM_R": "Inside Forward",
       "DM_L": "Defensive Midfielder",
       "DM_R": "Defensive Midfielder",
       "D_CL": "Ball-Playing Centre-Back",
       "D_CR": "Ball-Playing Centre-Back",
-      "D_L": "Wing Back",
       "D_R": "Wing Back",
-      "GK": "Goalkeeper"
+      "D_L": "Wing Back",
+      "GK": "Goalkeeper",
+      "M_L": null,
+      "M_R": null
     },
     "oopPositions": {
       "ST_C": "Centre Forward",
       "AM_C": "Attacking Midfielder",
-      "M_R": "Wide Midfielder",
       "M_L": "Wide Midfielder",
+      "M_R": "Wide Midfielder",
       "DM_L": "Defensive Midfielder",
       "DM_R": "Defensive Midfielder",
       "D_CL": "Centre-Back",
       "D_CR": "Centre-Back",
-      "D_L": "Pressing Full-Back",
       "D_R": "Pressing Full-Back",
+      "D_L": "Pressing Full-Back",
       "GK": "Sweeper Keeper"
     },
     "mapping": {
       "GK": "GK",
       "ST_C": "ST_C",
-      "AM_L": "M_L",
       "AM_C": "AM_C",
+      "AM_L": "M_L",
       "AM_R": "M_R",
       "DM_L": "DM_L",
       "DM_R": "DM_R",
       "D_CL": "D_CL",
       "D_CR": "D_CR",
+      "D_R": "D_R",
       "D_L": "D_L",
-      "D_R": "D_R"
+      "M_L": "M_L",
+      "M_R": "M_R"
     }
   }
 }

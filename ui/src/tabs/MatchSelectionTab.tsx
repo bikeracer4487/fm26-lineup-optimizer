@@ -504,6 +504,7 @@ interface MatchCardProps {
 }
 
 function MatchCard({ item, match, tacticConfig, onReject, onOverride, onClearOverride, onConfirm, onUndoConfirm, onClearAllOverrides }: MatchCardProps) {
+  // Default positions ordered: GK at top, ST at bottom, R to L within rows (matching FM pitch view from behind goal)
   const defaultPositions = [
     'GK',
     'DR', 'DC1', 'DC2', 'DL',
@@ -514,34 +515,51 @@ function MatchCard({ item, match, tacticConfig, onReject, onOverride, onClearOve
 
   // Determine positions to display
   let positions: string[] = defaultPositions;
-  
-  // If we have dynamic selection keys (from tacticConfig), use them
-  if (tacticConfig && Object.keys(item.selection).length > 0) {
-    // Sort logic: GK -> D -> WB/DM -> M -> AM -> ST
-    // Within that: R -> C -> L (or L->C->R based on preference, FM uses R->L usually on tactic screen? No, formation view is typically L to R visually)
-    // Actually visual grid is L to R.
-    // Let's sort based on slot ID.
-    // Priority:
+
+  // If we have selection keys, sort them appropriately
+  if (Object.keys(item.selection).length > 0) {
+    // Sort logic: GK at top, ST at bottom (matching FM pitch view from behind goal)
+    // Within rows: R to L (matching FM pitch display from manager's perspective)
+    // Handles both tactic slot format (D_L) and legacy format (DL)
     const sortPriority: Record<string, number> = {
+        // Goalkeeper
         'GK': 0,
-        'D_L': 10, 'D_CL': 11, 'D_C': 12, 'D_CR': 13, 'D_R': 14,
-        'WB_L': 20, 'DM_L': 21, 'DM_C': 22, 'DM_R': 23, 'WB_R': 24,
-        'M_L': 30, 'M_CL': 31, 'M_C': 32, 'M_CR': 33, 'M_R': 34,
-        'AM_L': 40, 'AM_CL': 41, 'AM_C': 42, 'AM_CR': 43, 'AM_R': 44,
-        'ST_L': 50, 'ST_C': 51, 'ST_R': 52
+        // Defense (R to L)
+        'D_R': 10, 'DR': 10,
+        'D_CR': 11, 'DC2': 11,
+        'D_C': 12, 'DC': 12, 'DC1': 12,
+        'D_CL': 13,
+        'D_L': 14, 'DL': 14,
+        // Wing-backs and DMs (R to L)
+        'WB_R': 20,
+        'DM_R': 21, 'DM(R)': 21,
+        'DM_C': 22,
+        'DM_L': 23, 'DM(L)': 23,
+        'WB_L': 24,
+        // Midfield (R to L)
+        'M_R': 30, 'MR': 30,
+        'M_CR': 31,
+        'M_C': 32, 'MC': 32,
+        'M_CL': 33,
+        'M_L': 34, 'ML': 34,
+        // Attacking Midfield (R to L)
+        'AM_R': 40, 'AMR': 40,
+        'AM_CR': 41,
+        'AM_C': 42, 'AMC': 42,
+        'AM_CL': 43,
+        'AM_L': 44, 'AML': 44,
+        // Strikers (R to L)
+        'ST_R': 50,
+        'ST_C': 51, 'STC': 51, 'ST': 51,
+        'ST_L': 52
     };
-    
+
     const availableKeys = Object.keys(item.selection);
-    // Filter out keys that look like default ones if we are in tactic mode?
-    // Actually the backend returns whatever it used.
-    // If tactic was used, keys are D_L etc.
-    
-    // Check if keys match tactic slots
-    const isDynamic = availableKeys.some(k => k.includes('_'));
-    
-    if (isDynamic) {
-        positions = availableKeys.sort((a, b) => (sortPriority[a] || 99) - (sortPriority[b] || 99));
-    }
+    positions = [...availableKeys].sort((a, b) => {
+        const priorityA = sortPriority[a] ?? 99;
+        const priorityB = sortPriority[b] ?? 99;
+        return priorityA - priorityB;
+    });
   }
 
   const opponent = match?.opponent || 'Unknown';

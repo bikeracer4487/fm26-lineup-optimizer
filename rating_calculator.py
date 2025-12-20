@@ -242,18 +242,76 @@ THRESHOLDS = {
 
 
 # =============================================================================
+# ATTRIBUTE NAME MAPPING
+# Maps attribute names in roles.json to actual column names in player data CSV
+# Some FM tools (FMRTE) use different naming conventions
+# =============================================================================
+
+ATTRIBUTE_NAME_MAP = {
+    'Work Rate': 'Workrate',
+    'Jumping Reach': 'Jumping',
+    'Aerial Reach': 'Aerial Ability',
+    'Rushing Out (Tendency)': 'Rushing Out',
+}
+
+
+def get_attribute_value(player_attributes, attribute_name):
+    """
+    Get attribute value from player data, handling name mapping.
+
+    Args:
+        player_attributes: Dict of player data
+        attribute_name: Standard attribute name (from roles.json)
+
+    Returns:
+        Attribute value, or 10 (average) if not found
+    """
+    # First try the exact name
+    if attribute_name in player_attributes:
+        return player_attributes[attribute_name]
+
+    # Try mapped name
+    mapped_name = ATTRIBUTE_NAME_MAP.get(attribute_name)
+    if mapped_name and mapped_name in player_attributes:
+        return player_attributes[mapped_name]
+
+    # Fall back to average value
+    return 10
+
+
+# =============================================================================
 # CALCULATION FUNCTIONS
 # =============================================================================
 
 def normalize_attribute(value, min_val=1, max_val=20):
-    """Normalize attribute value to 0-1 scale."""
-    if value is None: value = 1
-    # Ensure value is numeric
-    try:
-        value = float(value)
-    except:
-        value = 1.0
-        
+    """
+    Normalize attribute value to 0-1 scale.
+
+    Handles common data issues:
+    - Dollar signs from FMRTE export (Balance column bug: "$14" instead of "14")
+    - Currency formatting
+    - Percentage signs
+    - None/empty values
+    """
+    if value is None:
+        value = 1
+
+    # Handle string values with formatting characters
+    if isinstance(value, str):
+        # Strip common formatting: $, £, €, %, commas
+        cleaned = value.replace('$', '').replace('£', '').replace('€', '')
+        cleaned = cleaned.replace('%', '').replace(',', '').strip()
+        try:
+            value = float(cleaned) if cleaned else 1.0
+        except ValueError:
+            value = 1.0
+    else:
+        # Ensure value is numeric
+        try:
+            value = float(value)
+        except (ValueError, TypeError):
+            value = 1.0
+
     return (value - min_val) / (max_val - min_val)
 
 
@@ -292,12 +350,12 @@ def calculate_position_score(player_attributes, position):
     
     weighted_sum = 0
     total_possible_weight = sum(weights.values())
-    
+
     for attribute, weight in weights.items():
-        player_value = player_attributes.get(attribute, 10)
+        player_value = get_attribute_value(player_attributes, attribute)
         normalized_value = normalize_attribute(player_value)
         weighted_sum += normalized_value * weight
-    
+
     if total_possible_weight > 0:
         return (weighted_sum / total_possible_weight) * 100
     return 0
@@ -309,76 +367,87 @@ def calculate_role_score(player_attributes, role_key_attrs, role_important_attrs
     """
     KEY_MULTIPLIER = 1.5
     IMPORTANT_MULTIPLIER = 1.2
-    
+
     all_role_attrs = set(role_key_attrs) | set(role_important_attrs)
-    
+
     if not all_role_attrs:
         return 50.0
-    
+
     weighted_sum = 0
     total_weight = 0
-    
+
     for attribute in all_role_attrs:
-        player_value = player_attributes.get(attribute, 10)
+        player_value = get_attribute_value(player_attributes, attribute)
         normalized_value = normalize_attribute(player_value)
-        
+
         if attribute in role_key_attrs:
             weight = KEY_MULTIPLIER
         elif attribute in role_important_attrs:
             weight = IMPORTANT_MULTIPLIER
         else:
             weight = 1.0
-        
+
         weighted_sum += normalized_value * weight
         total_weight += weight
-    
+
     return (weighted_sum / total_weight) * 100
 
 
-def calculate_consensus_bonus(player_attributes, position, role, 
+def calculate_consensus_bonus(player_attributes, position, role,
                                role_key_attrs, role_important_attrs):
     """
     Calculate bonus for consensus attributes not flagged in role.
     """
     bonus = 0
     flagged_attrs = set(role_key_attrs) | set(role_important_attrs)
-    
+
     consensus_attrs = CONSENSUS_BONUSES.get((position, role), {})
-    
+
     for attribute, bonus_weight in consensus_attrs.items():
         if attribute not in flagged_attrs:
-            player_value = player_attributes.get(attribute, 10)
+            player_value = get_attribute_value(player_attributes, attribute)
             normalized_value = normalize_attribute(player_value)
             bonus += normalized_value * bonus_weight
-    
+
     if 'Balance' not in flagged_attrs and position != 'GK':
-        player_balance = player_attributes.get('Balance', 10)
+        player_balance = get_attribute_value(player_attributes, 'Balance')
         normalized_balance = normalize_attribute(player_balance)
         bonus += normalized_balance * 0.01
-    
+
     return min(bonus * 100, 10)
 
 
 def apply_threshold_penalties(rating, player_attributes, role):
     """
     Apply penalties when attributes fall below minimum thresholds.
+
+    NOTE: Thresholds are tuned for elite players (top leagues). For lower-league
+    squads, the penalties can be too harsh. We now apply a softer penalty curve
+    and cap the total penalty at 20% (0.80 multiplier) instead of 50%.
     """
     thresholds = THRESHOLDS.get(role, {})
     penalty_multiplier = 1.0
-    
+
     for attribute, min_value in thresholds.items():
-        player_value = player_attributes.get(attribute, 10)
+        player_value = get_attribute_value(player_attributes, attribute)
         norm_val = 10
         try:
-            norm_val = float(player_value)
-        except:
-            pass
-            
+            # Handle string values with $ or other formatting
+            if isinstance(player_value, str):
+                cleaned = player_value.replace('$', '').replace(',', '').strip()
+                norm_val = float(cleaned) if cleaned else 10
+            else:
+                norm_val = float(player_value)
+        except (ValueError, TypeError):
+            norm_val = 10
+
         if norm_val < min_value:
             shortfall = min_value - norm_val
-            penalty_multiplier *= (1 - 0.05 * shortfall)
-    
-    return rating * max(penalty_multiplier, 0.5)
+            # Softer penalty: 2% per point below threshold (was 5%)
+            penalty_multiplier *= (1 - 0.02 * shortfall)
+
+    # Cap penalty at 20% reduction (was 50%)
+    return rating * max(penalty_multiplier, 0.80)
 
 
 def get_role_attributes(position, role, phase='IP'):
@@ -415,31 +484,139 @@ def get_role_attributes(position, role, phase='IP'):
     return role_data.get('key', []), role_data.get('important', [])
 
 
-def calculate_role_rating(player_attributes, position, role, phase='IP', 
-                          apply_thresholds=True):
+def get_ca_adjustment(ca_value, reference_ca=100):
+    """
+    Calculate CA-based adjustment to differentiate players with similar attributes.
+
+    Higher CA players generally have better hidden attributes (consistency,
+    important matches, etc.) that aren't captured in visible attributes.
+
+    Args:
+        ca_value: Player's Current Ability (0-200 scale)
+        reference_ca: Reference point for neutral adjustment (default 100)
+
+    Returns:
+        Multiplier (0.90 to 1.15) - higher CA = higher multiplier
+    """
+    if ca_value is None:
+        return 1.0
+
+    try:
+        ca = float(ca_value)
+    except (ValueError, TypeError):
+        return 1.0
+
+    # Calculate adjustment: +/- 0.5% per CA point difference from reference
+    # Example: CA 120 = +10% bonus, CA 80 = -10% penalty
+    adjustment = 1.0 + ((ca - reference_ca) * 0.005)
+
+    # Clamp to reasonable range (±15%)
+    return max(0.85, min(1.15, adjustment))
+
+
+def calculate_role_rating(player_attributes, position, role, phase='IP',
+                          apply_thresholds=True, apply_ca_adjustment=True):
     """
     Calculate a player's rating for a specific position/role (0-100 scale).
+
+    The rating combines:
+    - Position score (60%): Based on FM Arena match engine testing
+    - Role score (35%): Based on Key/Important attributes for the role
+    - Consensus bonus (5%): AI research convergence adjustments
+    - CA adjustment: Higher CA players get a boost (hidden attributes factor)
+    - Threshold penalties: For critical attributes below minimum levels
     """
     role_key, role_important = get_role_attributes(position, role, phase)
-    
+
     position_score = calculate_position_score(player_attributes, position)
     role_score = calculate_role_score(player_attributes, role_key, role_important)
     consensus_bonus = calculate_consensus_bonus(
         player_attributes, position, role, role_key, role_important
     )
-    
+
     final_rating = (position_score * 0.60) + (role_score * 0.35) + (consensus_bonus * 0.05)
-    
+
     if apply_thresholds:
         final_rating = apply_threshold_penalties(final_rating, player_attributes, role)
-    
+
+    # Apply CA adjustment - higher CA players should rate higher
+    if apply_ca_adjustment:
+        ca_value = player_attributes.get('CA')
+        ca_factor = get_ca_adjustment(ca_value)
+        final_rating *= ca_factor
+
     return round(final_rating, 1)
+
+
+def get_familiarity_column(position):
+    """
+    Map position key to familiarity column name in player data.
+
+    Args:
+        position: Position key like 'D(C)', 'AM(L)', 'ST'
+
+    Returns:
+        Column name like 'D(C)_Familiarity', 'Striker_Familiarity'
+    """
+    # Special cases where column name differs from position key
+    if position == 'ST':
+        return 'Striker_Familiarity'
+
+    # DM variants all use same column (no DM(L)/DM(R) familiarity in data)
+    if position.startswith('DM'):
+        return 'DM_Familiarity'
+
+    # Most positions follow pattern: Position_Familiarity
+    # e.g., D(C) -> D(C)_Familiarity, AM(L) -> AM(L)_Familiarity
+    return f'{position}_Familiarity'
+
+
+def get_familiarity_factor(familiarity_rating):
+    """
+    Calculate multiplier based on position familiarity (1-20 scale).
+
+    This is CRITICAL for ensuring players can't be selected for positions
+    they're unfamiliar with, regardless of their attributes.
+
+    FM26 Familiarity Tiers:
+    - Natural (18-20): No penalty
+    - Accomplished (13-17): Small penalty
+    - Competent (10-12): Moderate penalty
+    - Unconvincing (9): Significant penalty
+    - Awkward (5-8): Large penalty
+    - Ineffectual (1-4): Severe penalty - essentially unplayable
+    """
+    if familiarity_rating is None:
+        return 0.10  # Unknown = treat as Ineffectual
+
+    try:
+        fam = float(familiarity_rating)
+    except (ValueError, TypeError):
+        return 0.10
+
+    if fam >= 18:
+        return 1.00  # Natural - full rating
+    elif fam >= 15:
+        return 0.95  # High Accomplished
+    elif fam >= 13:
+        return 0.90  # Accomplished
+    elif fam >= 10:
+        return 0.80  # Competent
+    elif fam >= 8:
+        return 0.60  # Awkward (high)
+    elif fam >= 5:
+        return 0.35  # Awkward (low)
+    else:
+        return 0.10  # Ineffectual - essentially unusable
 
 
 def calculate_combined_rating(player_attributes, ip_pos, ip_role, oop_pos, oop_role):
     """
     Calculate combined weighted rating (0-200) for a tactic slot.
-    
+
+    IMPORTANT: Applies position familiarity penalties to ensure players
+    can't be selected for positions they're unfamiliar with.
+
     Weights:
     - Defensive OOP (GK, DC, DM, WB, FB): 50% IP / 50% OOP
     - Attacking OOP (ST, AM, M, Winger): 70% IP / 30% OOP
@@ -447,6 +624,20 @@ def calculate_combined_rating(player_attributes, ip_pos, ip_role, oop_pos, oop_r
     # Calculate individual phase ratings (0-100)
     ip_rating = calculate_role_rating(player_attributes, ip_pos, ip_role, 'IP')
     oop_rating = calculate_role_rating(player_attributes, oop_pos, oop_role, 'OOP')
+
+    # Get familiarity ratings and apply penalties
+    ip_fam_col = get_familiarity_column(ip_pos)
+    oop_fam_col = get_familiarity_column(oop_pos)
+
+    ip_familiarity = player_attributes.get(ip_fam_col)
+    oop_familiarity = player_attributes.get(oop_fam_col)
+
+    ip_fam_factor = get_familiarity_factor(ip_familiarity)
+    oop_fam_factor = get_familiarity_factor(oop_familiarity)
+
+    # Apply familiarity penalties to each phase rating
+    ip_rating *= ip_fam_factor
+    oop_rating *= oop_fam_factor
     
     # Determine weights based on OOP position
     defensive_oop_positions = ['GK', 'D(C)', 'D(L)', 'D(R)', 'D(L/R)', 'WB(L)', 'WB(R)', 'WB(L/R)', 'DM', 'DM(L)', 'DM(R)']

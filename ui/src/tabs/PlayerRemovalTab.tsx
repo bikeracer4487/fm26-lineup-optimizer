@@ -97,69 +97,76 @@ export function PlayerRemovalTab({ state }: PlayerRemovalTabProps) {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-4 lg:grid-cols-9 gap-3">
-        <div className="bg-fm-surface/50 border border-fm-danger/20 rounded-lg p-3">
-          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            <AlertTriangle size={12} /> Critical
+      <div className="space-y-3">
+        {/* Row 1: Priority & Core */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          <div className="bg-fm-surface/50 border border-fm-danger/20 rounded-lg p-3">
+            <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1 min-h-[20px]">
+              <AlertTriangle size={12} /> Critical
+            </div>
+            <div className="text-xl font-bold text-fm-danger truncate">{criticalCount}</div>
+            <div className="text-[10px] text-fm-light/50">players to remove</div>
           </div>
-          <div className="text-2xl font-bold text-fm-danger">{criticalCount}</div>
-          <div className="text-[10px] text-fm-light/50">players to remove</div>
+          <div className="bg-fm-surface/50 border border-orange-500/20 rounded-lg p-3">
+            <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1 min-h-[20px]">
+              <TrendingDown size={12} /> High
+            </div>
+            <div className="text-xl font-bold text-orange-400 truncate">{highCount}</div>
+            <div className="text-[10px] text-fm-light/50">consider selling</div>
+          </div>
+          <div className="bg-fm-surface/50 border border-fm-teal/20 rounded-lg p-3">
+            <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1 min-h-[20px]">
+              <DollarSign size={12} /> Savings
+            </div>
+            <div className="text-xl font-bold text-fm-teal truncate">${totalWageSavings.toLocaleString()}</div>
+            <div className="text-[10px] text-fm-light/50">per week potential</div>
+          </div>
+          <div className="bg-fm-surface/50 border border-blue-500/20 rounded-lg p-3">
+            <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1 min-h-[20px]">
+              🏆 Starting XI
+            </div>
+            <div className="text-xl font-bold text-blue-400 truncate">{startingXICount}</div>
+            <div className="text-[10px] text-fm-light/50">core players</div>
+          </div>
+          <div className="bg-fm-surface/50 border border-cyan-500/20 rounded-lg p-3">
+            <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1 min-h-[20px]">
+              📋 Second XI
+            </div>
+            <div className="text-xl font-bold text-cyan-400 truncate">{secondXICount}</div>
+            <div className="text-[10px] text-fm-light/50">rotation depth</div>
+          </div>
         </div>
-        <div className="bg-fm-surface/50 border border-orange-500/20 rounded-lg p-3">
-          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            <TrendingDown size={12} /> High
+
+        {/* Row 2: Squad Composition */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-fm-surface/50 border border-green-500/20 rounded-lg p-3">
+            <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1 min-h-[20px]">
+              <Star size={12} /> Prospects
+            </div>
+            <div className="text-xl font-bold text-green-400 truncate">{protectedProspects}</div>
+            <div className="text-[10px] text-fm-light/50">U21 protected</div>
           </div>
-          <div className="text-2xl font-bold text-orange-400">{highCount}</div>
-          <div className="text-[10px] text-fm-light/50">consider selling</div>
-        </div>
-        <div className="bg-fm-surface/50 border border-fm-teal/20 rounded-lg p-3">
-          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            <DollarSign size={12} /> Savings
+          <div className="bg-fm-surface/50 border border-purple-500/20 rounded-lg p-3">
+            <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1 min-h-[20px]">
+              <Award size={12} /> Mentors
+            </div>
+            <div className="text-xl font-bold text-purple-400 truncate">{mentorCandidates}</div>
+            <div className="text-[10px] text-fm-light/50">high Pro veterans</div>
           </div>
-          <div className="text-2xl font-bold text-fm-teal">${totalWageSavings.toLocaleString()}</div>
-          <div className="text-[10px] text-fm-light/50">per week potential</div>
-        </div>
-        <div className="bg-fm-surface/50 border border-blue-500/20 rounded-lg p-3">
-          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            🏆 Starting XI
+          <div className="bg-fm-surface/50 border border-amber-500/20 rounded-lg p-3">
+            <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1 min-h-[20px]">
+              <Flame size={12} /> False Prospects
+            </div>
+            <div className="text-xl font-bold text-amber-400 truncate">{falseProspects}</div>
+            <div className="text-[10px] text-fm-light/50">unlikely to develop</div>
           </div>
-          <div className="text-2xl font-bold text-blue-400">{startingXICount}</div>
-          <div className="text-[10px] text-fm-light/50">core players</div>
-        </div>
-        <div className="bg-fm-surface/50 border border-cyan-500/20 rounded-lg p-3">
-          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            📋 Second XI
+          <div className="bg-fm-surface/50 border border-white/20 rounded-lg p-3">
+            <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1 min-h-[20px]">
+              <Users size={12} /> Squad
+            </div>
+            <div className="text-xl font-bold text-white truncate">{ownedPlayers.length}</div>
+            <div className="text-[10px] text-fm-light/50">+ {loanedPlayers.length} loans</div>
           </div>
-          <div className="text-2xl font-bold text-cyan-400">{secondXICount}</div>
-          <div className="text-[10px] text-fm-light/50">rotation depth</div>
-        </div>
-        <div className="bg-fm-surface/50 border border-green-500/20 rounded-lg p-3">
-          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            <Star size={12} /> Prospects
-          </div>
-          <div className="text-2xl font-bold text-green-400">{protectedProspects}</div>
-          <div className="text-[10px] text-fm-light/50">U21 protected</div>
-        </div>
-        <div className="bg-fm-surface/50 border border-purple-500/20 rounded-lg p-3">
-          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            <Award size={12} /> Mentors
-          </div>
-          <div className="text-2xl font-bold text-purple-400">{mentorCandidates}</div>
-          <div className="text-[10px] text-fm-light/50">high Pro veterans</div>
-        </div>
-        <div className="bg-fm-surface/50 border border-amber-500/20 rounded-lg p-3">
-          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            <Flame size={12} /> False Prospects
-          </div>
-          <div className="text-2xl font-bold text-amber-400">{falseProspects}</div>
-          <div className="text-[10px] text-fm-light/50">unlikely to develop</div>
-        </div>
-        <div className="bg-fm-surface/50 border border-white/20 rounded-lg p-3">
-          <div className="text-xs text-fm-light/50 uppercase font-bold mb-1 flex items-center gap-1">
-            <Users size={12} /> Squad
-          </div>
-          <div className="text-2xl font-bold text-white">{ownedPlayers.length}</div>
-          <div className="text-[10px] text-fm-light/50">+ {loanedPlayers.length} loans</div>
         </div>
       </div>
 

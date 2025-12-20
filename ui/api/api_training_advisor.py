@@ -11,6 +11,108 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'
 from fm_training_advisor import TrainingAdvisor
 import data_manager
 
+
+def load_tactic_config():
+    """Load tactic configuration from app_state.json."""
+    app_state_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'app_state.json')
+    if os.path.exists(app_state_path):
+        with open(app_state_path, 'r', encoding='utf-8') as f:
+            app_state = json.load(f)
+            return app_state.get('tacticConfig', None)
+    return None
+
+
+def slot_to_position(slot_id):
+    """Map a slot ID to a training position name.
+
+    Slot IDs use underscore format (e.g., D_L, D_CL, AM_C, ST_C).
+    - Positions ending in _L are left positions (D_L, AM_L, M_L, WB_L)
+    - Positions ending in _R are right positions (D_R, AM_R, M_R, WB_R)
+    - Positions ending in _C, _CL, _CR are center positions
+
+    CRITICAL: Must use exact suffix matching, not 'L' in string,
+    because D_CL/D_CR contain 'L'/'R' but are center positions.
+    """
+    if slot_id == 'GK':
+        return 'GK'
+    elif slot_id.startswith('ST_'):
+        return 'ST'
+    elif slot_id.startswith('AM_'):
+        # AM_L = left, AM_R = right, AM_C/AM_CL/AM_CR = center
+        if slot_id == 'AM_L':
+            return 'AM(L)'
+        elif slot_id == 'AM_R':
+            return 'AM(R)'
+        else:
+            return 'AM(C)'
+    elif slot_id.startswith('M_'):
+        # M_L = left, M_R = right, M_C/M_CL/M_CR = center
+        if slot_id == 'M_L':
+            return 'M(L)'
+        elif slot_id == 'M_R':
+            return 'M(R)'
+        else:
+            return 'M(C)'
+    elif slot_id.startswith('DM_'):
+        return 'DM'
+    elif slot_id.startswith('WB_'):
+        # WB_L = left, WB_R = right
+        if slot_id == 'WB_L':
+            return 'WB(L)'
+        elif slot_id == 'WB_R':
+            return 'WB(R)'
+        else:
+            return 'WB(C)'  # Fallback for any center WB slot
+    elif slot_id.startswith('D_'):
+        # D_L = left fullback, D_R = right fullback
+        # D_C, D_CL, D_CR = center-backs
+        if slot_id == 'D_L':
+            return 'D(L)'
+        elif slot_id == 'D_R':
+            return 'D(R)'
+        else:
+            return 'D(C)'
+    return None
+
+
+def get_tactic_positions(tactic_config):
+    """
+    Extract the set of position types needed by the tactic.
+    Includes BOTH IP and OOP positions since players need training for both phases.
+
+    Args:
+        tactic_config: dict with ipPositions, oopPositions, mapping
+
+    Returns:
+        Set of position names like {'GK', 'D(L)', 'D(C)', 'DM', 'AM(L)', 'M(L)', 'ST'}
+    """
+    if not tactic_config:
+        return None  # Return None to indicate no filtering
+
+    ip_positions = tactic_config.get('ipPositions', {})
+    oop_positions = tactic_config.get('oopPositions', {})
+
+    if not ip_positions and not oop_positions:
+        return None
+
+    positions = set()
+
+    # Add IP positions
+    for slot_id, role in ip_positions.items():
+        if role:
+            pos = slot_to_position(slot_id)
+            if pos:
+                positions.add(pos)
+
+    # Add OOP positions (players also need to train for these!)
+    for slot_id, role in oop_positions.items():
+        if role:
+            pos = slot_to_position(slot_id)
+            if pos:
+                positions.add(pos)
+
+    return positions if positions else None
+
 @contextlib.contextmanager
 def suppress_stdout():
     """Context manager to suppress stdout during initialization of parent class."""
@@ -89,19 +191,29 @@ def main():
         abilities_file = 'players-current.csv'
         
         rejected_map = data.get('rejected', {}) # { "Player Name": "GK" } -> Rejected training for this position
-        
+
+        # Load tactic config to filter recommendations by positions actually in use
+        tactic_config = load_tactic_config()
+        tactic_positions = get_tactic_positions(tactic_config)
+
         # Initialize wrapper
         advisor = ApiTrainingAdvisor(status_file, abilities_file)
-        
+
         # Get recommendations using core logic
         recommendations = advisor.recommend_training()
-        
-        # Filter out rejected recommendations
+
+        # Filter out rejected recommendations AND positions not in tactic
         filtered_recs = []
         for rec in recommendations:
             player_rejected_pos = rejected_map.get(rec['player'])
-            if player_rejected_pos != rec['position']:
-                filtered_recs.append(rec)
+            if player_rejected_pos == rec['position']:
+                continue  # Skip rejected
+
+            # If tactic is configured, only include positions that are in the tactic
+            if tactic_positions is not None and rec['position'] not in tactic_positions:
+                continue  # Skip positions not in configured tactic
+
+            filtered_recs.append(rec)
                 
         # Enrich recommendations with strategic data
         universalists = advisor.identify_universalist_candidates()

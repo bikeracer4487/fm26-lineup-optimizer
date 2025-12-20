@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Match } from '../types';
 import { Button, Card, Input, Select } from '../components/UI';
-import { Trash2, Plus, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
+import { Trash2, Plus, Calendar, ChevronDown, ChevronRight, Check, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface FixtureTabProps {
@@ -16,8 +16,31 @@ export function FixtureTab({ matches, onUpdateMatches, currentDate }: FixtureTab
     opponent: '',
     importance: 'Medium'
   });
-  
+
   const [showPast, setShowPast] = useState(false);
+
+  // Date editing state - track which fixture is being edited and the pending date value
+  const [editingDateId, setEditingDateId] = useState<string | null>(null);
+  const [pendingDate, setPendingDate] = useState<string>('');
+
+  // Date editing handlers
+  const startDateEdit = (id: string, currentDate: string) => {
+    setEditingDateId(id);
+    setPendingDate(currentDate);
+  };
+
+  const confirmDateEdit = () => {
+    if (editingDateId && pendingDate) {
+      updateMatch(editingDateId, 'date', pendingDate);
+    }
+    setEditingDateId(null);
+    setPendingDate('');
+  };
+
+  const cancelDateEdit = () => {
+    setEditingDateId(null);
+    setPendingDate('');
+  };
 
   const addMatch = () => {
     if (!newMatch.date || !newMatch.opponent) return;
@@ -107,11 +130,17 @@ export function FixtureTab({ matches, onUpdateMatches, currentDate }: FixtureTab
         <h3 className="text-fm-light/50 text-sm font-bold uppercase tracking-wider">Upcoming Matches</h3>
         <AnimatePresence mode="popLayout">
           {upcomingMatches.map((match) => (
-            <MatchRow 
-                key={match.id} 
-                match={match} 
-                onUpdate={updateMatch} 
-                onRemove={removeMatch} 
+            <MatchRow
+                key={match.id}
+                match={match}
+                onUpdate={updateMatch}
+                onRemove={removeMatch}
+                isEditingDate={editingDateId === match.id}
+                pendingDate={pendingDate}
+                onStartDateEdit={startDateEdit}
+                onPendingDateChange={setPendingDate}
+                onConfirmDate={confirmDateEdit}
+                onCancelDate={cancelDateEdit}
             />
           ))}
         </AnimatePresence>
@@ -143,12 +172,18 @@ export function FixtureTab({ matches, onUpdateMatches, currentDate }: FixtureTab
                         className="space-y-3 overflow-hidden"
                     >
                         {pastMatches.map((match) => (
-                            <MatchRow 
-                                key={match.id} 
-                                match={match} 
-                                onUpdate={updateMatch} 
-                                onRemove={removeMatch} 
+                            <MatchRow
+                                key={match.id}
+                                match={match}
+                                onUpdate={updateMatch}
+                                onRemove={removeMatch}
                                 isPast
+                                isEditingDate={editingDateId === match.id}
+                                pendingDate={pendingDate}
+                                onStartDateEdit={startDateEdit}
+                                onPendingDateChange={setPendingDate}
+                                onConfirmDate={confirmDateEdit}
+                                onCancelDate={cancelDateEdit}
                             />
                         ))}
                     </motion.div>
@@ -160,7 +195,31 @@ export function FixtureTab({ matches, onUpdateMatches, currentDate }: FixtureTab
   );
 }
 
-function MatchRow({ match, onUpdate, onRemove, isPast }: { match: Match, onUpdate: any, onRemove: any, isPast?: boolean }) {
+interface MatchRowProps {
+    match: Match;
+    onUpdate: (id: string, field: keyof Match, value: string) => void;
+    onRemove: (id: string) => void;
+    isPast?: boolean;
+    isEditingDate: boolean;
+    pendingDate: string;
+    onStartDateEdit: (id: string, currentDate: string) => void;
+    onPendingDateChange: (date: string) => void;
+    onConfirmDate: () => void;
+    onCancelDate: () => void;
+}
+
+function MatchRow({
+    match,
+    onUpdate,
+    onRemove,
+    isPast,
+    isEditingDate,
+    pendingDate,
+    onStartDateEdit,
+    onPendingDateChange,
+    onConfirmDate,
+    onCancelDate
+}: MatchRowProps) {
     return (
         <motion.div
             layout
@@ -170,37 +229,65 @@ function MatchRow({ match, onUpdate, onRemove, isPast }: { match: Match, onUpdat
             transition={{ duration: 0.2 }}
         >
             <Card className={`flex items-center gap-4 p-3 hover:bg-white/5 transition-colors group ${isPast ? 'opacity-60 grayscale' : ''}`}>
-            <Input 
-                type="date" 
-                className="w-40 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal" 
-                value={match.date} 
-                onChange={e => onUpdate(match.id, 'date', e.target.value)}
-            />
-            <Input 
-                type="text" 
-                className="flex-1 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal font-medium text-lg" 
-                value={match.opponent} 
-                onChange={e => onUpdate(match.id, 'opponent', e.target.value)}
-            />
+                {/* Date input with confirm/cancel buttons when editing */}
+                <div className="flex items-center gap-1">
+                    <Input
+                        type="date"
+                        className={`w-40 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal ${isEditingDate ? 'bg-fm-dark/50 border-fm-teal' : ''}`}
+                        value={isEditingDate ? pendingDate : match.date}
+                        onFocus={() => !isEditingDate && onStartDateEdit(match.id, match.date)}
+                        onChange={e => isEditingDate ? onPendingDateChange(e.target.value) : onUpdate(match.id, 'date', e.target.value)}
+                    />
+                    {isEditingDate && (
+                        <>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={onConfirmDate}
+                                className="text-green-500 hover:bg-green-500/10 p-1"
+                            >
+                                <Check size={18} />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={onCancelDate}
+                                className="text-fm-danger hover:bg-fm-danger/10 p-1"
+                            >
+                                <X size={18} />
+                            </Button>
+                        </>
+                    )}
+                </div>
+
+                <Input
+                    type="text"
+                    className="flex-1 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal font-medium text-lg"
+                    value={match.opponent}
+                    onChange={e => onUpdate(match.id, 'opponent', e.target.value)}
+                />
                 <Select
-                className="w-32 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal text-sm"
-                value={match.importance}
-                onChange={e => onUpdate(match.id, 'importance', e.target.value)}
-            >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-                <option value="Sharpness">Sharpness</option>
-            </Select>
-            
-            <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => onRemove(match.id)}
-                className="opacity-0 group-hover:opacity-100 text-fm-danger hover:bg-fm-danger/10"
-            >
-                <Trash2 size={18} />
-            </Button>
+                    className="w-32 bg-transparent border-transparent focus:bg-fm-dark/50 focus:border-fm-teal text-sm"
+                    value={match.importance}
+                    onChange={e => onUpdate(match.id, 'importance', e.target.value)}
+                >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Sharpness">Sharpness</option>
+                </Select>
+
+                {/* Hide delete button when editing date to reduce clutter */}
+                {!isEditingDate && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRemove(match.id)}
+                        className="opacity-0 group-hover:opacity-100 text-fm-danger hover:bg-fm-danger/10"
+                    >
+                        <Trash2 size={18} />
+                    </Button>
+                )}
             </Card>
         </motion.div>
     );

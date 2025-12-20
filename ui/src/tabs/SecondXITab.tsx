@@ -9,14 +9,42 @@ interface SecondXITabProps {
   state: AppState;
 }
 
-// Formation display order (R > C > L)
-const FORMATION_GROUPS = {
-  'Goalkeeper': ['GK'],
-  'Defense': ['DR', 'DC1', 'DC2', 'DL'],
-  'Defensive Midfield': ['DM(R)', 'DM(L)'],
-  'Attacking Midfield': ['AMR', 'AMC', 'AML'],
-  'Attack': ['STC']
-};
+// Helper to categorize a position key into a group
+function getPositionGroup(pos: string): string {
+  // Handle arrow format (e.g., "AM(L)→M(L)")
+  const basePos = pos.includes('→') ? pos.split('→')[0] : pos;
+
+  if (basePos === 'GK') return 'Goalkeeper';
+  if (basePos.startsWith('D(') || basePos.startsWith('D ')) return 'Defense';
+  if (basePos.startsWith('WB(') || basePos.startsWith('WB')) return 'Wing-Backs';
+  if (basePos.startsWith('DM') || basePos === 'DM') return 'Defensive Midfield';
+  if (basePos.startsWith('M(') || basePos.startsWith('M ') || basePos === 'MC') return 'Midfield';
+  if (basePos.startsWith('AM(') || basePos.startsWith('AM') || basePos === 'AMC') return 'Attacking Midfield';
+  if (basePos.startsWith('ST') || basePos === 'ST') return 'Attack';
+  return 'Other';
+}
+
+// Sort order for groups (GK at top, ST at bottom - matching FM pitch view from behind goal)
+const GROUP_ORDER = [
+  'Goalkeeper',
+  'Defense',
+  'Defensive Midfield',
+  'Wing-Backs',
+  'Midfield',
+  'Attacking Midfield',
+  'Attack'
+];
+
+// Sort order within a group (R to L, matching FM's pitch display)
+function getHorizontalSort(pos: string): number {
+  const basePos = pos.includes('→') ? pos.split('→')[0] : pos;
+  if (basePos.includes('(R)') || basePos.endsWith(' Right')) return 0;
+  if (basePos.includes('(CR)')) return 1;
+  if (basePos.includes('(C)') || basePos.endsWith(' Center') || !basePos.includes('(')) return 2;
+  if (basePos.includes('(CL)')) return 3;
+  if (basePos.includes('(L)') || basePos.endsWith(' Left')) return 4;
+  return 2; // Default to center
+}
 
 export function SecondXITab({ state }: SecondXITabProps) {
   const [data, setData] = useState<RotationResponse | null>(null);
@@ -49,6 +77,23 @@ export function SecondXITab({ state }: SecondXITabProps) {
   const teamRating = data?.teamRatings?.secondXIAverage || 0;
   const firstXIRating = data?.teamRatings?.firstXIAverage || 0;
   const ratingDrop = firstXIRating > 0 ? firstXIRating - teamRating : 0;
+
+  // Dynamically group positions based on actual keys returned
+  const positionGroups: Record<string, { position: string; player: RotationPlayer }[]> = {};
+
+  Object.entries(secondXI).forEach(([position, player]) => {
+    if (!player) return;
+    const group = getPositionGroup(position);
+    if (!positionGroups[group]) {
+      positionGroups[group] = [];
+    }
+    positionGroups[group].push({ position, player });
+  });
+
+  // Sort positions within each group (L to R)
+  Object.values(positionGroups).forEach(group => {
+    group.sort((a, b) => getHorizontalSort(a.position) - getHorizontalSort(b.position));
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -109,12 +154,9 @@ export function SecondXITab({ state }: SecondXITabProps) {
 
       {/* Squad Display */}
       <div className="space-y-6">
-        {Object.entries(FORMATION_GROUPS).map(([groupName, positions]) => {
-          const groupPlayers = positions
-            .map(pos => ({ position: pos, player: secondXI[pos] }))
-            .filter(p => p.player);
-
-          if (groupPlayers.length === 0) return null;
+        {GROUP_ORDER.map(groupName => {
+          const groupPlayers = positionGroups[groupName];
+          if (!groupPlayers || groupPlayers.length === 0) return null;
 
           return (
             <PositionGroup
@@ -148,7 +190,7 @@ function PositionGroup({ title, players }: {
       </h3>
 
       {/* Header Row */}
-      <div className="hidden md:grid md:grid-cols-[80px_1fr_80px_100px_60px_80px_80px_80px] gap-2 px-4 text-xs text-fm-light/50 uppercase font-bold">
+      <div className="hidden md:grid md:grid-cols-[100px_1fr_80px_100px_60px_80px_80px_80px] gap-2 px-4 text-xs text-fm-light/50 uppercase font-bold">
         <div>Pos</div>
         <div>Player</div>
         <div className="text-center">Rating</div>
@@ -196,6 +238,9 @@ function PlayerRow({ position, player }: { position: string, player: RotationPla
     !position.includes(player.naturalPosition) &&
     player.naturalPosition !== position;
 
+  // Check if position has IP→OOP format (different phases)
+  const hasDualPosition = position.includes('→');
+
   return (
     <motion.div
       initial={{ opacity: 0, x: -10 }}
@@ -206,7 +251,7 @@ function PlayerRow({ position, player }: { position: string, player: RotationPla
       <div className="md:hidden space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 font-mono">
+            <Badge className={`${hasDualPosition ? 'bg-pink-500/20 text-pink-400 border-pink-500/30' : 'bg-purple-500/20 text-purple-400 border-purple-500/30'} font-mono text-xs`}>
               {position}
             </Badge>
             <div>
@@ -248,8 +293,8 @@ function PlayerRow({ position, player }: { position: string, player: RotationPla
       </div>
 
       {/* Desktop Layout */}
-      <div className="hidden md:grid md:grid-cols-[80px_1fr_80px_100px_60px_80px_80px_80px] gap-2 items-center">
-        <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 font-mono justify-center">
+      <div className="hidden md:grid md:grid-cols-[100px_1fr_80px_100px_60px_80px_80px_80px] gap-2 items-center">
+        <Badge className={`${hasDualPosition ? 'bg-pink-500/20 text-pink-400 border-pink-500/30' : 'bg-purple-500/20 text-purple-400 border-purple-500/30'} font-mono justify-center text-xs`}>
           {position}
         </Badge>
 

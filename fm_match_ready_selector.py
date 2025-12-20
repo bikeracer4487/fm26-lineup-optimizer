@@ -1309,6 +1309,14 @@ class MatchReadySelector:
         n_players = len(available_df)
         n_positions = len(self.formation)
 
+        # Validate formation is not empty
+        if n_positions == 0:
+            raise ValueError(
+                "Formation is empty - no positions configured. "
+                "Please configure tactics in the Tactics tab first, "
+                "or check that the tactic configuration has valid IP/OOP role assignments."
+            )
+
         if debug:
             injured = self.df[self.df['Is Injured'] == True]['Name'].tolist()
             print(f"\n[DEBUG] Injured players: {injured}")
