@@ -1265,6 +1265,7 @@ class MatchReadySelector:
     def select_match_xi(self, match_importance: str = 'Medium',
                        prioritize_sharpness: bool = False,
                        rested_players: List[str] = None,
+                       formation_override: List = None,
                        debug: bool = False) -> Dict:
         """
         Select optimal XI for a specific match.
@@ -1273,6 +1274,8 @@ class MatchReadySelector:
             match_importance: 'Low', 'Medium', 'High', or 'Sharpness'
             prioritize_sharpness: Give playing time to low-sharpness players
             rested_players: List of player names to rest (avoid selecting)
+            formation_override: Optional formation list to use instead of self.formation
+                               (used to exclude overridden positions during recalculation)
             debug: Enable detailed debug output
 
         Returns:
@@ -1280,6 +1283,9 @@ class MatchReadySelector:
         """
         if rested_players is None:
             rested_players = []
+
+        # Use overridden formation if provided, otherwise use default
+        formation_to_use = formation_override if formation_override else self.formation
 
         # Filter out unavailable players BEFORE creating cost matrix
         # Remove: injured and rested players (banned players may be eligible for other competitions)
@@ -1307,7 +1313,7 @@ class MatchReadySelector:
         available_df = available_df.reset_index(drop=False)  # Keep original index in 'index' column
 
         n_players = len(available_df)
-        n_positions = len(self.formation)
+        n_positions = len(formation_to_use)
 
         # Validate formation is not empty
         if n_positions == 0:
@@ -1346,7 +1352,7 @@ class MatchReadySelector:
         for i in range(n_players):
             player = available_df.iloc[i]
 
-            for j, pos_info in enumerate(self.formation):
+            for j, pos_info in enumerate(formation_to_use):
                 if len(pos_info) == 3:
                     pos_name, skill_col, ability_col = pos_info
                 else:
@@ -1410,7 +1416,7 @@ class MatchReadySelector:
             print(f"\n[DEBUG] Hungarian algorithm assignments:")
             for i, j in zip(row_ind, col_ind):
                 player = available_df.iloc[i]
-                pos_info = self.formation[j]
+                pos_info = formation_to_use[j]
                 pos_name = pos_info[0]
                 cost = cost_matrix[i, j]
                 eff_rating = -cost if cost > -998 else None
@@ -1422,7 +1428,7 @@ class MatchReadySelector:
         for i, j in zip(row_ind, col_ind):
             if cost_matrix[i, j] > -998:  # Valid assignment
                 player = available_df.iloc[i]
-                pos_info = self.formation[j]
+                pos_info = formation_to_use[j]
                 pos_name = pos_info[0]
                 effective_rating = -cost_matrix[i, j]
 

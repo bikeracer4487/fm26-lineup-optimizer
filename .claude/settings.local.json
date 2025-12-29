@@ -10,7 +10,10 @@
       "Bash(sort:*)",
       "Bash(venvScriptspip install unidecode)",
       "Bash(\"venv/Scripts/pip.exe\" install unidecode)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(dir /b \"C:\\\\GitHub\\\\fm26-lineup-optimizer\\\\*.py\")",
+      "Bash(dir /b \"C:\\\\GitHub\\\\fm26-lineup-optimizer\\\\ui\\\\api\\\\*.py\")",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []

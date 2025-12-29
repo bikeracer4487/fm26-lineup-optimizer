@@ -13,14 +13,254 @@ npm run dev
 ```
 
 The UI provides:
-- Visual fixture management with drag-and-drop
-- Automatic lineup generation (next 5 matches)
-- Manual player overrides with visual indicators
-- Lineup confirmation to lock selections
-- Historical tracking for rotation penalties
-- Training and rest recommendations
+- **Fixture Management:** Add, edit, and organize matches with importance levels
+- **Tactics Configuration:** IP/OOP formations with FM role mappings
+- **Automatic Lineup Generation:** Optimal XI for next 5 matches
+- **Manual Overrides:** Override algorithm selections with visual indicators
+- **Lineup Confirmation:** Lock selections to prevent recalculation
+- **Position Training:** Recommendations for squad versatility
+- **Fatigue Monitoring:** Rest and vacation recommendations
+- **Player Removal:** Identify players to sell, loan, or release
+- **Squad Depth:** View First XI and Second XI analysis
 
 See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.
+
+### UI Application Screens
+
+The application features 8 main screens accessible via the left sidebar navigation:
+
+---
+
+#### 1. Fixture List
+
+**Purpose:** Manage your season's upcoming and past matches.
+
+**Features:**
+- **Add Matches:** Create new fixtures with date, opponent name, and importance level
+- **Edit/Delete:** Modify or remove existing matches
+- **Importance Levels:** Assign priority to each match:
+  - **High:** Selects the absolute best XI (pure match effectiveness, no rotation)
+  - **Medium:** Balanced selection with some rotation and development considerations
+  - **Low:** Emphasizes rotation and player development
+  - **Sharpness:** Prioritizes players who need match time to build form
+- **Chronological View:** Upcoming matches sorted by date at top
+- **Past Matches Archive:** Collapsible section for completed fixtures
+
+---
+
+#### 2. Tactics Configuration
+
+**Purpose:** Configure your In-Possession (IP) and Out-of-Possession (OOP) formations and role mappings.
+
+**Features:**
+- **In-Possession Tab:** Visual pitch grid to set attacking formation and player roles
+- **Out-of-Possession Tab:** Separate defensive shape configuration
+- **Role Mapping Tab:** Define which IP positions transition to which OOP positions
+- **FM Role Database:** Select from authentic Football Manager roles for each position
+- **Validation:** Ensures exactly 11 players in both phases with GK present
+- **Save/Reset:** Persist configuration or revert to last saved state
+
+**Why Two Formations?** FM26's tactical system separates attacking and defensive shapes. A player might be an AMC in-possession but drop to DM out-of-possession.
+
+---
+
+#### 3. Match Selection
+
+**Purpose:** Auto-generate optimal lineups for upcoming matches with manual override capability.
+
+**Features:**
+
+**Automatic Lineup Generation:**
+- Generates lineups for next 5 upcoming matches using the Hungarian algorithm
+- Factors in: position ratings, condition, match sharpness, fatigue, and match importance
+- Recalculates automatically when fixtures or player data changes
+
+**Player Cards Display:**
+- Position, player name, and rating
+- Condition % (color-coded: red if <90%, green if healthy)
+- Match Sharpness % (blue if <80%, green if ready)
+- Fatigue level indicator
+- Status warnings (injury risk, vacation, low condition)
+
+**Manual Override System:**
+- Click edit icon on any player to open selection modal
+- Choose replacement from available players (excludes rejected players)
+- Override indicator shows when manual selection differs from algorithm
+- Clear individual overrides or all at once
+
+**Player Rejection:**
+- Click X icon to reject a player from the lineup
+- Rejected players excluded from auto-generation for that match
+- Reset Rejections button to clear all
+
+**Lineup Confirmation:**
+- Confirm button locks the lineup, preventing recalculation
+- Confirmed lineups show lock icon and persist across sessions
+- Unlock button allows future recalculation if needed
+
+**Match Sections:**
+- **Matches 1-5:** Full lineup calculations with all player stats
+- **Matches 6+:** Display "Lineup calculated when closer" (performance optimization)
+- **Past Matches:** Read-only archive of historical lineups
+
+---
+
+#### 4. Position Training
+
+**Purpose:** Identify which players should train at new positions to improve squad versatility and depth.
+
+**Features:**
+
+**Recommendation Tiers:**
+- **High Priority:** Critical skill gaps, core squad prospects
+- **Medium Priority:** Support role training, squad depth needs
+- **Low Priority:** Utility training, nice-to-have versatility
+
+**Training Card Information:**
+- Player name with badges (UTIL = versatile, VAR = fills tactical gap)
+- Target position to train (teal badge)
+- Estimated timeline (e.g., "2-4 seasons")
+- Potential ability tier and rating
+- Training category and score
+- Reason/explanation for the recommendation
+- Strategic pathway indicators (purple highlight for position retraining pipelines)
+
+**Interactions:**
+- Reject button to dismiss recommendations
+- Refresh to reload based on current player data
+- Reset Rejections to restore dismissed suggestions
+
+---
+
+#### 5. Rest & Rotation (Fatigue Management)
+
+**Purpose:** Monitor long-term player fatigue and provide rest recommendations.
+
+**Key Concept:** Unlike condition (recovers in 1-2 days), fatigue is a hidden long-term metric that accumulates over weeks. High fatigue severely impacts performance and injury risk. Vacation is the only effective reset.
+
+**Recommendation Tiers:**
+- **VACATION REQUIRED (Urgent):** Fatigue at/over threshold - send on holiday immediately
+- **Rest Needed (High):** At warning threshold - rotation or vacation needed
+- **Watch List (Medium):** Accumulating fatigue - monitor and consider rotation
+- **Monitoring (Low):** Early fatigue building - no action yet
+
+**Fatigue Card Details:**
+- Player name with status badge (Exhausted, Jaded, Accumulating, Building, etc.)
+- Fatigue progress bar (visual fill with warning threshold at ~80%)
+- Actual fatigue value and personal threshold
+- Recovery action recommendation
+- Days to recover estimate
+- Match sharpness and fatigue percentage displays
+- Reasons for the recommendation
+
+**Color Coding:**
+- Red: 100%+ or ≥100 fatigue (danger)
+- Orange: 80-99%
+- Yellow: 60-79%
+- Green: <60%
+
+---
+
+#### 6. Player Removal
+
+**Purpose:** Identify players to sell, loan, release, or terminate based on skill, age, contract, wages, and development potential.
+
+**Features:**
+
+**Summary Statistics:**
+- Critical/High priority player counts
+- Potential wage savings
+- Starting XI / Second XI counts
+- Protected prospects (U21 with 15%+ development headroom)
+- Mentor candidates (high professionalism veterans)
+- False prospects (young players with unrealistic growth requirements)
+- Loaned player count
+
+**Filter Bar:** Quick filter by priority level (All/Critical/High/Medium/Low)
+
+**Loan Review Section:**
+- Simplified cards for loaned-in players
+- Priority levels: "End Early", "Monitor", or "Keep"
+- Blue theme to distinguish from owned players
+
+**Owned Player Cards:**
+
+*Badges:*
+- Priority (Critical/High/Medium/Low)
+- Mentor, False Prospect, Prospect indicators
+- Squad hierarchy (Starting XI, Second XI)
+- Position role type
+
+*Skill Comparison Grid:*
+- CA vs squad average (color-coded)
+- PA with development headroom percentage
+- Position rank among squad
+- Best skill rating and position
+
+*Contract & Financial:*
+- Contract type and months remaining
+- Weekly wages and CA/$100 value metric
+- Transfer value and release/termination costs
+
+*Hidden Attributes (when available):*
+- Performance: Consistency, Big Matches, Injury Proneness
+- Development: Professionalism, Ambition, Determination
+- Required CA/year growth rate for young players
+
+*Recommended Action:* Suggested action with reasoning
+
+---
+
+#### 7. First XI
+
+**Purpose:** View the mathematically optimal starting XI based purely on position ratings.
+
+**Features:**
+- **Team Summary:** Average team rating and player count
+- **Position Groups:** Organized by line (GK, Defense, Midfield, Attack)
+- **Player Information:**
+  - Position badge (teal for IP, purple for IP→OOP dual positions)
+  - Player name with natural position
+  - Rating (bold, highlighted)
+  - CA/PA metrics
+  - Age
+  - Condition % (color-coded)
+  - Match Sharpness % (color-coded)
+  - Fatigue level (color-coded)
+- **Out-of-Position Indicators:** Yellow highlight when player not in natural position
+- **Responsive Layout:** Table view on desktop, card view on mobile
+
+---
+
+#### 8. Second XI
+
+**Purpose:** View the optimal rotation squad composed from players not in the First XI.
+
+**Features:**
+- Identical structure to First XI but with purple color scheme
+- Shows average team rating for rotation squad
+- Rating drop comparison vs First XI (in orange)
+- Useful for assessing squad depth and identifying weaknesses
+
+---
+
+### Navigation and Workflow
+
+**Typical User Journey:**
+1. **Fixture List** → Add upcoming matches with importance levels
+2. **Tactics Configuration** → Set up IP/OOP formations (one-time setup)
+3. **Match Selection** → Review auto-generated lineups, make manual adjustments, confirm
+4. **Position Training** → Identify players to develop for squad depth
+5. **Rest & Rotation** → Monitor fatigue, rest key players before important matches
+6. **Player Removal** → Identify deadwood to sell/release
+7. **First XI / Second XI** → Review squad depth and rotation options
+
+**Sidebar Features:**
+- Date picker with arrow navigation for game date
+- All 8 screens accessible via icon buttons
+- Data source path visibility toggle
+
+**Auto-Save:** All state persists automatically to `ui/data/app_state.json` and `ui/data/confirmed_lineups.json`.
 
 ---
 
@@ -68,16 +308,21 @@ This script is configured for the following 4-2-3-1 formation:
 
 ## Requirements
 
-- Python 3.6+
-- pandas
-- numpy
-- scipy (for optimal version)
-- openpyxl (for Excel files)
+- Python 3.8+
+- pandas (data manipulation)
+- numpy (numerical operations)
+- scipy (Hungarian algorithm for optimal selection)
+- openpyxl (Excel file support)
+- pywinauto (FMRTE automation - Windows only)
+- pyperclip (clipboard operations for FMRTE)
+- unidecode (character normalization)
 
 Install all requirements:
 ```bash
 pip install -r requirements.txt
 ```
+
+**Note:** pywinauto and pyperclip are only needed for FMRTE integration scripts.
 
 ## Quick Start
 
@@ -98,30 +343,66 @@ python compare_selections.py players-current.csv
 
 ## Input File Format
 
-Your spreadsheet should have the following columns:
+The `players-current.csv` file is automatically generated by `data_manager.py` from the Excel file. It includes:
 
+### Core Player Info
 - **Name**: Player name
-- **Best Position**: Player's natural position
+- **Positions**: Natural positions (e.g., "DM/M/AM C")
 - **Age**: Player's age
-- **CA**: Current Ability
-- **PA**: Potential Ability
-- **Striker**: Rating for Striker position
-- **AM(L)**: Rating for Attacking Midfielder Left
-- **AM(C)**: Rating for Attacking Midfielder Center
-- **AM(R)**: Rating for Attacking Midfielder Right
-- **DM(L)**: Rating for Defensive Midfielder Left
-- **DM(R)**: Rating for Defensive Midfielder Right
-- **D(C)**: Rating for Defender Center
-- **D(R/L)**: Rating for Full Back (Right/Left)
-- **GK**: Rating for Goalkeeper
-- **Chosen Role**: (Optional) Current assigned role
+- **CA**: Current Ability (0-200)
+- **PA**: Potential Ability (0-200)
+
+### Match Readiness
+- **Condition (%)**: Physical condition percentage
+- **Match Sharpness**: Match form (0-10000, displayed as %)
+- **Fatigue**: Accumulated fatigue level
+- **Is Injured**: Boolean injury status
+- **Banned**: Suspension status
+
+### Calculated Position Ratings (0-200 scale)
+- **GK**: Goalkeeper rating
+- **D(R)**, **D(L)**, **D(R/L)**, **D(C)**: Defender ratings
+- **DM(L)**, **DM(R)**: Defensive Midfielder ratings
+- **WB(L)**, **WB(R)**: Wing-Back ratings
+- **M(C)**, **M(L)**, **M(R)**: Central/Wide Midfielder ratings
+- **AM(L)**, **AM(C)**, **AM(R)**: Attacking Midfielder ratings
+- **Striker**: Striker rating
+
+### Position Familiarity (1-20)
+- **GK_Familiarity**, **D(R)_Familiarity**, etc.: Natural position comfort level
+
+### Hidden Attributes
+- **Consistency**, **Important Matches**, **Injury Proneness**: Performance hidden attributes
+- **Professionalism**, **Ambition**, **Determination**: Development hidden attributes
+- **Versatility**, **Adaptability**: Tactical hidden attributes
+
+### Contract Info
+- **Club**, **Contract Type**, **Wages**, **Months Left (Contract)**
+- **Asking Price**: Transfer value
+- **LoanStatus**: "Own", "LoanedIn", or "LoanedOut"
+
+**Data Pipeline:** Export from FMRTE → `FM26 Players.xlsx` → Run `data_manager.py` → `players-current.csv`
 
 ## How It Works
 
-1. **Greedy Selection Algorithm**: The script selects the best available player for each position based on their position-specific rating
-2. **No Duplicates**: Each player can only be selected once
-3. **DM Positions**: Uses `DM(L)` and `DM(R)` ratings separately for better player differentiation
-4. **Full Back Positions**: Uses D(R/L) rating for both DL and DR positions
+### Optimal Selector (Hungarian Algorithm)
+1. **Cost Matrix**: Creates a matrix of players × positions with negative ratings
+2. **Linear Sum Assignment**: Uses `scipy.optimize.linear_sum_assignment` to find the optimal assignment
+3. **Result**: Each player assigned to exactly one position, maximizing total team rating
+
+### Match-Ready Selector (Advanced)
+The UI and `fm_match_ready_selector.py` add additional factors:
+1. **Base Rating**: Position-specific skill rating
+2. **Condition Penalty**: Physical readiness affects selection
+3. **Fatigue Penalty**: Long-term fatigue impacts performance
+4. **Sharpness Penalty**: Match form/game time considered
+5. **Familiarity Penalty**: Out-of-position players penalized
+6. **Match Importance**: High priority matches use pure effectiveness; lower priority allows rotation
+
+### General Rules
+- **No Duplicates**: Each player can only be selected once
+- **DM Positions**: Uses `DM(L)` and `DM(R)` ratings separately for better player differentiation
+- **Full Back Positions**: Uses D(R/L) rating for both DL and DR positions
 
 ## Output
 
@@ -249,16 +530,43 @@ available_players['weighted_rating'] = (
 
 ## All Available Scripts
 
+### Selection Scripts
+
 | Script | Purpose | Use Case |
 |--------|---------|----------|
 | `fm_team_selector_optimal.py` | Optimal XI selection using ratings only | Finding the theoretical best lineup |
 | `fm_team_selector.py` | Greedy XI selection | Quick selections, prototyping |
 | `fm_rotation_selector.py` | Dual squad selection (First XI + Rotation XI) | Analyzing squad depth |
 | `compare_selections.py` | Compare greedy vs optimal approaches | Validation and benchmarking |
-| **`fm_training_advisor.py`** | **Training position recommendations** | **Improving squad depth** |
-| **`fm_match_ready_selector.py`** | **Match-day lineup with fitness factors** | **Weekly match planning** |
 
-**Bold** = Advanced features (see [ADVANCED_FEATURES.md](ADVANCED_FEATURES.md))
+### Advanced Features
+
+| Script | Purpose | Use Case |
+|--------|---------|----------|
+| `fm_match_ready_selector.py` | Match-day lineup with fitness/fatigue factors | Weekly match planning via UI |
+| `fm_training_advisor.py` | Training position recommendations | Improving squad depth via UI |
+
+See [ADVANCED_FEATURES.md](ADVANCED_FEATURES.md) for complete documentation.
+
+### Data Pipeline
+
+| Script | Purpose | Use Case |
+|--------|---------|----------|
+| `data_manager.py` | Excel to CSV conversion with calculated ratings | Refresh player data after FMRTE export |
+| `rating_calculator.py` | Position rating calculations (FM Arena weights) | Core dependency for data_manager |
+| `fmrte_to_excel.py` | Automated FMRTE data extraction (Windows) | Batch export from FMRTE to Excel |
+| `fmrte_to_excel-remote.py` | Remote version of FMRTE extraction | Alternative FMRTE workflow |
+| `extract_weights.py` | Extract position weights from FM Arena | Updating rating formulas |
+
+### UI API Scripts (ui/api/)
+
+| Script | Purpose |
+|--------|---------|
+| `api_match_selector.py` | Python backend for Match Selection screen |
+| `api_rotation_selector.py` | Python backend for First XI / Second XI screens |
+| `api_training_advisor.py` | Python backend for Position Training screen |
+| `api_rest_advisor.py` | Python backend for Rest & Rotation screen |
+| `api_player_removal.py` | Python backend for Player Removal screen |
 
 ## License
 

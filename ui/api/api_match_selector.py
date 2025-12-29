@@ -154,25 +154,60 @@ class ApiMatchReadySelector(MatchReadySelector):
 
             effective_rating = float(base_rating)
 
-            # Apply condition penalty (from parent logic)
-            # Condition stored as 0-10000, convert to percentage
+            # Apply condition penalty - research-based non-linear modifiers
+            # Source: docs/Research/physical-condition-claude.md
+            # Key thresholds: 100%=1.0, 90%=0.95, 85%=0.89, 80%=0.80, 70%=0.68
             condition = row.get('Condition', 10000)
             if pd.notna(condition):
                 cond_pct = condition / 10000 if condition > 100 else condition / 100
-                if cond_pct < 0.90:
-                    # Below 90% condition - apply penalty
-                    effective_rating *= (0.7 + 0.3 * cond_pct)  # 70-100% of rating
 
-            # Apply fatigue penalty (from parent logic)
+                # Research-based modifiers (non-linear, accelerating penalty below 80%)
+                if cond_pct >= 1.0:
+                    cond_modifier = 1.00
+                elif cond_pct >= 0.90:
+                    # Linear interpolation: 90-100% → 0.95-1.00
+                    cond_modifier = 0.95 + (cond_pct - 0.90) * 0.5
+                elif cond_pct >= 0.85:
+                    # Linear interpolation: 85-90% → 0.89-0.95
+                    cond_modifier = 0.89 + (cond_pct - 0.85) * 1.2
+                elif cond_pct >= 0.80:
+                    # Linear interpolation: 80-85% → 0.80-0.89
+                    cond_modifier = 0.80 + (cond_pct - 0.80) * 1.8
+                elif cond_pct >= 0.70:
+                    # Linear interpolation: 70-80% → 0.68-0.80
+                    cond_modifier = 0.68 + (cond_pct - 0.70) * 1.2
+                else:
+                    # Below 70% - severe degradation
+                    cond_modifier = 0.68 * (cond_pct / 0.70)
+
+                # Additional match importance scaling for players below 85% threshold
+                # Research: "85% condition minimum for starting players"
+                if cond_pct < 0.85:
+                    if match_importance == 'High':
+                        cond_modifier *= 0.30  # Near-prohibition: 30% of already-penalized rating
+                    elif match_importance == 'Medium':
+                        cond_modifier *= 0.70  # Heavy penalty: 70% of already-penalized rating
+
+                effective_rating *= cond_modifier
+
+            # Apply fatigue penalty - personalized thresholds per player
+            # Uses player attributes: age, natural fitness, stamina, injury proneness
             fatigue = row.get('Fatigue', 0)
             if pd.notna(fatigue) and fatigue > 0:
-                # Fatigue is raw value (0-500+), higher = worse
-                if fatigue > 300:
-                    effective_rating *= 0.85  # Severe fatigue
-                elif fatigue > 200:
-                    effective_rating *= 0.92  # High fatigue
-                elif fatigue > 100:
-                    effective_rating *= 0.97  # Moderate fatigue
+                age = row.get('Age', 25)
+                natural_fitness = row.get('Natural Fitness', 10)
+                stamina = row.get('Stamina', 10)
+                injury_proneness = row.get('Injury Proneness', None)
+
+                # Calculate personalized threshold (calls parent method)
+                threshold = self._get_adjusted_fatigue_threshold(age, natural_fitness, stamina, injury_proneness)
+
+                if fatigue >= threshold + 100:
+                    effective_rating *= 0.65  # Severe - well above threshold
+                elif fatigue >= threshold:
+                    effective_rating *= 0.85  # Moderate - at threshold
+                elif fatigue >= threshold - 50:
+                    effective_rating *= 0.95  # Minor - approaching threshold
 
             # Apply match sharpness factor
             match_sharpness = row.get('Match Sharpness', 10000)
@@ -361,11 +396,37 @@ class ApiMatchReadySelector(MatchReadySelector):
             overridden_players = list(match_overrides.values())
             current_rested = list(set(current_rested + overridden_players))
 
-            # Select XI using parent logic (excluding overridden players)
-            # select_match_xi returns: Dict[pos, (player_name, effective_rating, player_data)]
-            selection_raw = self.select_match_xi(importance, prioritize_sharpness, current_rested)
+            # Look-ahead: Rest First XI players who won't recover for upcoming High priority match
+            # Only applies to Low/Medium priority matches when next match is High
+            if importance in ['Low', 'Medium'] and i < len(matches_data) - 1:
+                next_match = matches_data[i + 1]
+                if next_match.get('importance') == 'High':
+                    # Get First XI player names from parent class
+                    first_xi_names = self._get_first_xi_players()
 
-            # Apply manual overrides - replace calculated selections with manual choices
+                    for player_name in first_xi_names:
+                        # Find player data
+                        player_row = self.df[self.df['Name_Normalized'] == normalize_name(player_name)]
+                        if not player_row.empty:
+                            player = player_row.iloc[0]
+                            if self._should_rest_for_upcoming_high_priority(player, i, matches_data, match):
+                                if player_name not in current_rested:
+                                    current_rested.append(player_name)
+
+            # Filter formation to exclude overridden positions
+            # This allows players who would be assigned to overridden positions
+            # to be reassigned to other equivalent positions (e.g., DC2 when DC1 is overridden)
+            overridden_positions = set(match_overrides.keys())
+            filtered_formation = [pos for pos in self.formation if pos[0] not in overridden_positions]
+
+            # Select XI using parent logic with filtered formation
+            # select_match_xi returns: Dict[pos, (player_name, effective_rating, player_data)]
+            selection_raw = self.select_match_xi(
+                importance, prioritize_sharpness, current_rested,
+                formation_override=filtered_formation if overridden_positions else None
+            )
+
+            # Apply manual overrides - merge into results after optimization
             for pos, player_name in match_overrides.items():
                 # Find player data for the overridden player (use Name_Normalized for Unicode-safe comparison)
                 player_row = self.df[self.df['Name_Normalized'] == normalize_name(player_name)]
@@ -474,8 +535,90 @@ class ApiMatchReadySelector(MatchReadySelector):
         # Loan Status
         if player.get('LoanStatus') == 'LoanedIn':
             flags.append("Loaned In")
-            
+
         return flags
+
+    def _should_rest_for_upcoming_high_priority(self, player, current_match_idx: int,
+                                                 matches_data: list, match: dict) -> bool:
+        """
+        Check if a First XI player should be rested to preserve condition for upcoming High match.
+
+        Based on research from docs/Research/physical-condition-claude.md:
+        - Post-match condition: ~75% (varies by Natural Fitness: 66-74%)
+        - Recovery: Day 2 = 83%, Day 3 = 90%, Day 5 = 95%
+        - Critical threshold: 85% condition minimum for starting players
+
+        Only applies to:
+        - Low/Medium priority current matches
+        - When next match is High priority
+        - First XI players (determined by caller)
+
+        Args:
+            player: Player row from DataFrame
+            current_match_idx: Index of current match in matches_data
+            matches_data: List of all matches
+            match: Current match dict with 'date' and 'importance'
+
+        Returns:
+            True if player should be rested, False otherwise
+        """
+        from datetime import datetime
+
+        # Only check if there's a next match
+        if current_match_idx >= len(matches_data) - 1:
+            return False
+
+        next_match = matches_data[current_match_idx + 1]
+
+        # Only apply for Low/Medium priority current matches
+        current_importance = match.get('importance', 'Medium')
+        if current_importance == 'High':
+            return False
+
+        # Only care if next match is High priority
+        if next_match.get('importance') != 'High':
+            return False
+
+        # Calculate days between matches
+        try:
+            current_date = datetime.strptime(match.get('date', ''), '%Y-%m-%d')
+            next_date = datetime.strptime(next_match.get('date', ''), '%Y-%m-%d')
+            days_between = (next_date - current_date).days
+        except (ValueError, TypeError):
+            return False  # Can't parse dates, don't rest
+
+        # If 3+ days between matches, player will recover to 90%+ (above 85% threshold)
+        if days_between >= 3:
+            return False
+
+        # Estimate post-match condition based on Natural Fitness
+        # Research: 20 NF = 74% post-match, low NF = 66% post-match
+        natural_fitness = player.get('Natural Fitness', 10)
+        if natural_fitness >= 18:
+            post_match_condition = 0.74
+        elif natural_fitness >= 14:
+            post_match_condition = 0.72
+        elif natural_fitness >= 10:
+            post_match_condition = 0.70
+        else:
+            post_match_condition = 0.66
+
+        # Project condition recovery based on days between matches
+        # Recovery table: Day 2 = 83%, Day 3 = 90%, Day 5 = 95%
+        if days_between >= 5:
+            projected_condition = 0.95
+        elif days_between >= 3:
+            projected_condition = 0.90
+        elif days_between >= 2:
+            projected_condition = 0.83
+        elif days_between == 1:
+            # One day recovery - very limited
+            projected_condition = post_match_condition + 0.05  # Rough estimate
+        else:
+            projected_condition = post_match_condition  # Same day or back-to-back
+
+        # If projected condition < 85% threshold, rest the player
+        return projected_condition < 0.85
 
 # --- Custom JSON Encoder to handle numpy types ---
 class NumpyEncoder(json.JSONEncoder):

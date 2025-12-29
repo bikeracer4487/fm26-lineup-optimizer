@@ -1,5 +1,5 @@
 {
-  "currentDate": "2030-02-09",
+  "currentDate": "2030-07-01",
   "matches": [
     {
       "id": "d329a55a-7016-40c3-9d02-5ddedf1a4073",
@@ -1709,99 +1709,367 @@
       "id": "cd556c6c-4447-49e7-9f3e-6ad658275a42",
       "date": "2030-02-09",
       "opponent": "Fleetwood Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-22T05:33:04.818Z"
     },
     {
       "id": "abedc863-6cf3-48fc-ba05-cfe11a944fd8",
       "date": "2030-02-16",
       "opponent": "Tottenham Hotspur",
-      "importance": "High"
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-22T21:08:05.850Z"
     },
     {
       "id": "babbbc01-2084-427a-a287-773df43a3a29",
       "date": "2030-02-23",
       "opponent": "Southend Utd",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "D_CL": "Cole Deeming",
+        "D_R": "Zach Mitchell",
+        "D_L": "Jayden Cumberbatch",
+        "DM_R": "Isaac Smith"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-23T04:51:39.863Z"
     },
     {
       "id": "805220d3-29e2-4ddd-b25a-02b0a529df66",
       "date": "2030-02-26",
       "opponent": "Barrow",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-23T05:09:12.504Z"
     },
     {
       "id": "bac26d4b-3fe2-4cb7-8c0e-b41259257aa8",
       "date": "2030-03-02",
       "opponent": "Shrewsbury Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-23T05:29:43.435Z"
     },
     {
       "id": "2d96b9aa-6357-4545-8088-7e2830c0c5b0",
       "date": "2030-03-05",
       "opponent": "MK Dons",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-23T06:12:00.820Z"
     },
     {
       "id": "2ff50cb0-83d7-4c00-ba16-e180bf42fdc6",
       "date": "2030-03-09",
       "opponent": "Port Vale",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-23T08:32:19.563Z"
     },
     {
       "id": "5058e8b9-70c5-4b7b-8d23-f6e71589074f",
       "date": "2030-03-13",
       "opponent": "Rotherham Utd",
-      "importance": "High"
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-23T08:34:49.816Z"
     },
     {
       "id": "5ea81af9-b44b-441b-95b0-612083803b40",
       "date": "2030-03-16",
       "opponent": "Harrogate Town",
-      "importance": "Medium"
+      "importance": "Medium",
+      "confirmed": true,
+      "confirmedAt": "2025-12-23T20:59:26.580Z"
     },
     {
       "id": "f98c02bb-2117-4b29-b1cf-8f4ef02c0020",
       "date": "2030-03-30",
       "opponent": "Bristol Rovers",
-      "importance": "Medium"
+      "importance": "Medium",
+      "manualOverrides": {
+        "GK": "Ashley Sarahs",
+        "D_R": "Tom Dando",
+        "D_CL": "George Johnston",
+        "D_L": "Cole Deeming",
+        "DM_R": "Luis Gardner",
+        "DM_L": "Isaac Smith",
+        "AM_R": "Tony Cowie",
+        "D_CR": "Jayden Cumberbatch",
+        "AM_C": "Allan Hall",
+        "AM_L": "Elia Favicchio"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-24T06:21:46.181Z"
+    },
+    {
+      "id": "3f6481a0-d621-4bd8-92ba-d33772cc46ae",
+      "date": "2030-04-07",
+      "opponent": "Leyton Orient",
+      "importance": "High",
+      "confirmed": true,
+      "confirmedAt": "2025-12-24T10:17:13.217Z"
     },
     {
       "id": "88b7a017-30cb-4f25-8b95-2b101483bfeb",
       "date": "2030-04-13",
       "opponent": "Bradford City",
-      "importance": "Medium"
+      "importance": "Low",
+      "manualOverrides": {
+        "D_L": "Jayden Cumberbatch",
+        "DM_R": "Isaac Smith",
+        "AM_L": "Allan Hall"
+      },
+      "confirmed": true,
+      "confirmedAt": "2025-12-25T05:38:53.467Z"
     },
     {
       "id": "06743e63-57ba-43f6-88cd-e8c970aef7de",
       "date": "2030-04-19",
       "opponent": "Stevenage",
-      "importance": "Medium"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-25T06:24:56.190Z"
     },
     {
       "id": "02dbcaaa-3813-4b42-a4ae-5a0daeae586b",
       "date": "2030-04-24",
       "opponent": "Newport County",
-      "importance": "Medium"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-25T06:39:38.889Z"
     },
     {
       "id": "b3219994-10b7-4cda-b119-dd25dbf4ac96",
       "date": "2030-04-27",
       "opponent": "Fleetwood Town",
-      "importance": "Medium"
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-26T04:23:56.613Z"
     },
     {
       "id": "50f29df3-f28a-49a7-96ef-dea338e0fef0",
       "date": "2030-05-04",
       "opponent": "Doncaster Rovers",
+      "importance": "Low",
+      "confirmed": true,
+      "confirmedAt": "2025-12-26T05:46:53.498Z"
+    },
+    {
+      "id": "30c321e5-5cbc-4fce-9e23-bf2475739a7e",
+      "date": "2030-07-06",
+      "opponent": "Stratford Town",
+      "importance": "Low"
+    },
+    {
+      "id": "c1a08cf5-f8b3-462b-aadf-ab9f29b01efb",
+      "date": "2030-07-13",
+      "opponent": "Real Madrid",
+      "importance": "Low"
+    },
+    {
+      "id": "bb9a5034-873c-448f-8a72-816ac47cb24e",
+      "date": "2030-07-20",
+      "opponent": "Bayern Munchen",
+      "importance": "Low"
+    },
+    {
+      "id": "92d76297-378c-458b-8db9-7ad4e32286e9",
+      "date": "2030-07-27",
+      "opponent": "Stoke City",
+      "importance": "Low"
+    },
+    {
+      "id": "5b54a10d-0658-4821-8093-5971bc66289c",
+      "date": "2030-08-03",
+      "opponent": "Wigan Athletic",
+      "importance": "Medium"
+    },
+    {
+      "id": "c5025db1-c63d-4e93-850f-36bd5314d5a8",
+      "date": "2030-08-10",
+      "opponent": "Reading",
+      "importance": "Medium"
+    },
+    {
+      "id": "a5a3c03f-2054-4d7b-91bd-3b03e1b373eb",
+      "date": "2030-08-13",
+      "opponent": "Exeter City",
+      "importance": "High"
+    },
+    {
+      "id": "0b64e878-1fb9-4133-a09b-273baab3dee4",
+      "date": "2030-08-17",
+      "opponent": "Peterborough Utd",
+      "importance": "Medium"
+    },
+    {
+      "id": "0418a243-53fa-446a-a557-0e7165ac13ea",
+      "date": "2030-08-24",
+      "opponent": "Crewe Alexandra",
+      "importance": "Medium"
+    },
+    {
+      "id": "812c790a-02a6-4d79-8796-c012e86e1ab0",
+      "date": "2030-08-31",
+      "opponent": "Preston North End",
+      "importance": "Medium"
+    },
+    {
+      "id": "f4f817a5-eabe-4631-94c1-4f7ee025bc8a",
+      "date": "2030-09-07",
+      "opponent": "Salford City",
+      "importance": "Medium"
+    },
+    {
+      "id": "0641fd9a-0251-44b7-ad84-68f2eebf5b0a",
+      "date": "2030-09-14",
+      "opponent": "Oxford Utd",
+      "importance": "Medium"
+    },
+    {
+      "id": "2e0fbcb3-3528-4fd1-8967-19fd6ac8e861",
+      "date": "2030-09-21",
+      "opponent": "Blackburn Rovers",
+      "importance": "Medium"
+    },
+    {
+      "id": "78e8e339-86a4-4e68-8f5f-8afa29c08404",
+      "date": "2030-09-28",
+      "opponent": "Barnsley",
+      "importance": "Medium"
+    },
+    {
+      "id": "d5f92373-ac4b-4ae2-aa56-e05ae4f82c27",
+      "date": "2030-10-05",
+      "opponent": "Leyton Orient",
+      "importance": "Medium"
+    },
+    {
+      "id": "2e6950ed-db15-44eb-8499-e259e8f321ca",
+      "date": "2030-10-12",
+      "opponent": "Swindon Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "c4198866-4976-4b7f-84be-97204a1c8dae",
+      "date": "2030-10-19",
+      "opponent": "Burton Albion",
+      "importance": "Medium"
+    },
+    {
+      "id": "bde9c88b-304d-4b1d-b4cc-b1865a1f17ce",
+      "date": "2030-10-23",
+      "opponent": "Chesterfield",
+      "importance": "Medium"
+    },
+    {
+      "id": "e29e9c06-7fb0-43c6-966d-c018bf9a1952",
+      "date": "2030-10-26",
+      "opponent": "Wycombe Wanderers",
+      "importance": "Medium"
+    },
+    {
+      "id": "4360eafd-608f-4cf7-874f-1e4303f69020",
+      "date": "2030-10-29",
+      "opponent": "Walsall",
+      "importance": "Medium"
+    },
+    {
+      "id": "3f4dd097-aa43-48eb-8762-2ded81b6d809",
+      "date": "2030-11-02",
+      "opponent": "Millwall",
+      "importance": "Medium"
+    },
+    {
+      "id": "ff69713b-50a9-4cd9-ae13-f8cb4f09c239",
+      "date": "2030-11-05",
+      "opponent": "Sheffield Wednesday",
+      "importance": "Medium"
+    },
+    {
+      "id": "e731bed5-4e94-4067-8289-faee40d4967b",
+      "date": "2030-11-09",
+      "opponent": "Rotherham Utd",
+      "importance": "Medium"
+    },
+    {
+      "id": "d1a961c1-aae4-4bb0-b0aa-a946ffd37a61",
+      "date": "2030-11-16",
+      "opponent": "Bolton Wanderers",
+      "importance": "Medium"
+    },
+    {
+      "id": "ce2b48f2-2487-49e3-96fb-3087cc3fb041",
+      "date": "2030-11-23",
+      "opponent": "Lincoln City",
+      "importance": "Medium"
+    },
+    {
+      "id": "c69c63db-1b5f-4706-8993-543ea33ba8ea",
+      "date": "2030-11-27",
+      "opponent": "MK Dons",
+      "importance": "Medium"
+    },
+    {
+      "id": "4a8ef8cc-3408-467c-9a6f-2e7d33dbd8f4",
+      "date": "2030-11-30",
+      "opponent": "Stockport County",
+      "importance": "Medium"
+    },
+    {
+      "id": "ba904fd7-b004-4ee4-95e2-f4f18135fc5b",
+      "date": "2030-12-04",
+      "opponent": "Blackpool",
+      "importance": "Medium"
+    },
+    {
+      "id": "9e6d2a73-f3d0-46b0-8a13-1e040a39e51c",
+      "date": "2030-12-07",
+      "opponent": "Lincoln City",
+      "importance": "Medium"
+    },
+    {
+      "id": "45fa5bc9-eb43-414c-8e7c-249e5913e099",
+      "date": "2030-12-14",
+      "opponent": "Barnsley",
+      "importance": "Medium"
+    },
+    {
+      "id": "7b8a18e9-e56a-457f-a961-e66e937a0d88",
+      "date": "2030-12-18",
+      "opponent": "Leyton Orient",
+      "importance": "Medium"
+    },
+    {
+      "id": "7f854d2c-d954-46f2-b1f3-5eff84ce3d38",
+      "date": "2030-12-21",
+      "opponent": "Burton Albion",
+      "importance": "Medium"
+    },
+    {
+      "id": "58f79092-34cc-41bf-bcde-27e5f03c5cb3",
+      "date": "2030-12-26",
+      "opponent": "Swindon Town",
+      "importance": "Medium"
+    },
+    {
+      "id": "cc2c796e-0e75-4260-9a00-ca3dedba3a15",
+      "date": "2030-12-29",
+      "opponent": "Chesterfield",
       "importance": "Medium"
     }
   ],
   "rejectedPlayers": {
-    "17897021-495e-4908-8053-4269a45dcdc8": [
+    "5058e8b9-70c5-4b7b-8d23-f6e71589074f": [
       "zach mitchell"
     ],
-    "33cf12e3-7891-4ff8-afe1-a51dd27058d3": [
+    "f98c02bb-2117-4b29-b1cf-8f4ef02c0020": [
       "mateusz widz"
+    ],
+    "3f6481a0-d621-4bd8-92ba-d33772cc46ae": [
+      "zach mitchell"
     ]
   },
   "rejectedTraining": {},
