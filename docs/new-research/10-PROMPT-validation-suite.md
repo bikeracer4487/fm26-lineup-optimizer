@@ -51,6 +51,39 @@ $$GSS = BPS \times \Phi(C) \times \Psi(S) \times \Theta(F) \times \Omega(J)$$
 
 **Test**: Player at 270+ mins in 14-day window should trigger jadedness warnings
 
+## CRITICAL: Findings from Hungarian Matrix Research (Step 4)
+
+### Two-Stage Algorithm Tests
+1. **Stage 1 (Starting XI)**: Verify optimal 11 selected using Peak Utility
+2. **Stage 2 (Bench)**: Verify bench uses Coverage Utility (versatility rewarded)
+
+**Test**: Versatile player (4+ positions) should be selected for bench over specialist with higher CA
+
+### Safe Big M Validation
+- Forbidden assignments should use Big M = 10^6 (not infinity)
+- **Test**: Verify solver doesn't crash with forbidden slots
+
+### Multi-Objective Scalarization Tests
+| Scenario | Expected Behavior |
+|----------|-------------------|
+| Cup Final (w1=1.0) | Best XI regardless of fatigue |
+| Dead Rubber (w2=0.5) | Youth players prioritized |
+| League Grind (w3=0.3) | Rotation triggered for tired players |
+
+### Condition Cliff Heuristic Tests
+| Condition | Expected Multiplier |
+|-----------|---------------------|
+| 96% | 1.00 (Peak) |
+| 92% | 0.95 (Startable) |
+| 82% | 0.80 (Risk) |
+| 72% | Big M (Forbidden) |
+
+### Switching Cost Tests
+**Test**: Player changing position from previous match should incur penalty
+
+### Lagrangian Relaxation Tests
+**Test**: "Min 4 Club-Grown" quota should be satisfied via iterative subsidy
+
 ## Research Objective
 
 **Goal**: Design a comprehensive validation test suite that:

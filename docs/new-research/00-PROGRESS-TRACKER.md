@@ -4,13 +4,13 @@
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| Phase 1: Core Algorithm Correction | In Progress | 3/4 |
+| Phase 1: Core Algorithm Correction | **COMPLETE** | 4/4 |
 | Phase 2: Multi-Match Planning | Not Started | 0/2 |
 | Phase 3: Supporting Systems | Not Started | 0/3 |
 | Phase 4: Validation & Calibration | Not Started | 0/2 |
 | Phase 5: Implementation | Not Started | 0/1 |
 
-**Overall Progress**: 3/12 steps complete
+**Overall Progress**: 4/12 steps complete (Phase 1 COMPLETE)
 
 ---
 
@@ -152,21 +152,55 @@ $$C_{t+1} = C_t + (10000 - C_t) \cdot \beta \cdot (A_{nat})^\gamma \cdot (1 - \m
 ---
 
 #### Step 4: Hungarian Matrix Architecture
-- **Status**: NOT STARTED
+- **Status**: COMPLETE
 - **Priority**: High
 - **Prompt File**: `04-PROMPT-hungarian-matrix.md`
-- **Result File**: TBD
+- **Result File**: `04-RESULTS-hungarian-matrix.md`
 - **Dependencies**: Steps 2, 3
 - **Goal**: Finalize cost matrix structure with REST slots
 
 **Checklist**:
-- [ ] Prompt document created
-- [ ] Research executed
-- [ ] Results uploaded
-- [ ] Results reviewed
-- [ ] REST slot behavior confirmed
-- [ ] Constraint encoding finalized
-- [ ] Step marked complete
+- [x] Prompt document created
+- [x] Research executed
+- [x] Results uploaded
+- [x] Results reviewed
+- [x] REST slot behavior confirmed
+- [x] Constraint encoding finalized
+- [x] Step marked complete
+
+**Key Findings - Hungarian Matrix Architecture**:
+
+**Two-Stage Algorithm**:
+1. **Stage 1 (Starting XI)**: 11 × M matrix using Peak Utility
+2. **Stage 2 (Bench)**: K × (M-S) using Coverage Utility (rewards versatility)
+
+**Disjoint Set Handling**:
+- Split GK (1 × N_GK) and Outfield (10 × N_Outfield) for stability
+
+**Safe Big M = 10^6** (not infinity - causes SciPy errors)
+
+**Condition Cliff Heuristic**:
+| Condition | Multiplier | Status |
+|-----------|------------|--------|
+| ≥ 95% | 1.00 | Peak |
+| 90-94% | 0.95 | Startable |
+| 80-89% | 0.80 | Risk |
+| < 80% | 0.50 | Danger |
+| < 75% | Big M | Forbidden |
+
+**Multi-Objective Scalarization**:
+$$C_{total} = w_1 C_{perf} + w_2 C_{dev} + w_3 C_{fatigue}$$
+
+| Scenario | w1 (Perf) | w2 (Dev) | w3 (Rest) |
+|----------|-----------|----------|-----------|
+| Cup Final | 1.0 | 0.0 | 0.0 |
+| League Grind | 0.6 | 0.1 | 0.3 |
+| Dead Rubber | 0.2 | 0.5 | 0.3 |
+
+**Additional Features**:
+- Switching costs (penalty for position change from previous match)
+- Lagrangian relaxation for registration quotas
+- Quantize utilities to 2 decimal places for deterministic tie-breaking
 
 ---
 
@@ -338,7 +372,7 @@ $$C_{t+1} = C_t + (10000 - C_t) \cdot \beta \cdot (A_{nat})^\gamma \cdot (1 - \m
 | 1 | Yes | Yes | `01-RESULTS-fm26-mechanics.md` | Yes | Yes |
 | 2 | Yes | Yes | `02-RESULTS-unified-scoring.md` | Yes | Yes |
 | 3 | Yes | Yes | `03-RESULTS-state-propagation.md` | Yes | Yes |
-| 4 | Yes | No | - | No | No |
+| 4 | Yes | Yes | `04-RESULTS-hungarian-matrix.md` | Yes | Yes |
 | 5 | Yes | No | - | No | No |
 | 6 | Yes | No | - | No | No |
 | 7 | Yes | No | - | No | No |
@@ -393,6 +427,8 @@ These documents represent prior research that will be consolidated:
 | 2025-12-29 | - | Prompts 07, 10, 11 updated | Added linear familiarity, 91% thresholds, corrected calibration params |
 | 2025-12-29 | 3 | Step 3 COMPLETE | Positional drag coefficients, 14-day/270-min rule, sharpness cliff model |
 | 2025-12-29 | - | Prompts 04-06, 10-11 updated | Added R_pos coefficients, 14-day window, sharpness cliff tests |
+| 2025-12-29 | 4 | Step 4 COMPLETE - PHASE 1 DONE | Two-stage algorithm, Big M=10^6, multi-objective scalarization |
+| 2025-12-29 | - | Prompts 05, 10, 11 updated | Added scenario weights, switching costs, bench selection tests |
 
 ---
 

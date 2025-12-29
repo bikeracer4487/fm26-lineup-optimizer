@@ -59,6 +59,28 @@ Step 2 research has FINALIZED the multiplier formulas. The calibration task is n
 **REST Slots**:
 - α, β, γ, δ coefficients: 4 × 4 = 16 values
 
+**Multi-Objective Scalarization Weights (NEW from Step 4)**:
+| Scenario | w1 (Perf) | w2 (Dev) | w3 (Rest) | Calibration Range |
+|----------|-----------|----------|-----------|-------------------|
+| Cup Final | 1.0 | 0.0 | 0.0 | FIXED |
+| League Grind | 0.6 | 0.1 | 0.3 | w1: 0.5-0.7, w3: 0.2-0.4 |
+| Dead Rubber | 0.2 | 0.5 | 0.3 | w2: 0.4-0.6 |
+| Youth Cup | 0.3 | 0.7 | 0.0 | w2: 0.6-0.8 |
+
+**Switching Costs (NEW from Step 4)**:
+- Position change penalty: Calibrate range 0.02-0.10 (% utility loss)
+
+**Condition Cliff Heuristic (Step 4)**:
+| Condition | Multiplier | Calibration Range |
+|-----------|------------|-------------------|
+| ≥ 95% | 1.00 | FIXED |
+| 90-94% | 0.95 | 0.93-0.97 |
+| 80-89% | 0.80 | 0.75-0.85 |
+| < 80% | 0.50 | 0.40-0.60 |
+| < 75% | Big M | Threshold: 72-78% |
+
+**Safe Big M**: 10^6 (FIXED - numerical stability requirement)
+
 **Total**: ~50+ parameters
 
 ## Research Objective

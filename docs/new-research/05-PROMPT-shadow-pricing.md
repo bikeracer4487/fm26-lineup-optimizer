@@ -42,6 +42,26 @@ Shadow pricing must account for positional drag coefficients:
 - Multiplier: **2.5x** jadedness accumulation when exceeded
 - Shadow pricing should heavily penalize players approaching 270 mins in 14-day window
 
+## CRITICAL: Findings from Hungarian Matrix Research (Step 4)
+
+### Multi-Objective Scalarization
+The cost matrix uses weighted objectives:
+$$C_{total} = w_1 C_{perf} + w_2 C_{dev} + w_3 C_{fatigue}$$
+
+**Scenario-Based Weights**:
+| Scenario | w1 (Perf) | w2 (Dev) | w3 (Rest) |
+|----------|-----------|----------|-----------|
+| Cup Final | 1.0 | 0.0 | 0.0 |
+| League Grind | 0.6 | 0.1 | 0.3 |
+| Dead Rubber | 0.2 | 0.5 | 0.3 |
+
+**Implication for Shadow Pricing**: Shadow costs should vary by match scenario. In "Cup Final" mode, shadow cost is minimized (play best XI regardless). In "League Grind" mode, shadow cost is weighted by C_fatigue component.
+
+### Two-Stage Algorithm Context
+- Stage 1 solves Starting XI
+- Stage 2 solves Bench using **Coverage Utility** (versatility over raw ability)
+- Shadow pricing primarily affects Stage 1 decisions
+
 ### Current Formula (from FM26 #1)
 
 ```
