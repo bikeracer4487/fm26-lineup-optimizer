@@ -31,6 +31,22 @@ Step 2 research has FINALIZED the multiplier formulas. The calibration task is n
 - Fresh: 1.0, Match Fit: 0.9, Tired: 0.7, Jaded: 0.4
 - May want to calibrate the 270-minute threshold
 
+**Positional Drag Coefficients (NEW from Step 3)**:
+| Position | R_pos | Calibration Range |
+|----------|-------|-------------------|
+| GK | 0.2 | 0.1 - 0.3 |
+| CB | 0.95 | 0.8 - 1.1 |
+| DM | 1.15 | 1.0 - 1.3 |
+| CM (B2B) | 1.45 | 1.3 - 1.6 |
+| AMC | 1.35 | 1.2 - 1.5 |
+| Winger | 1.40 | 1.25 - 1.55 |
+| Fullback/WB | **1.65** | 1.5 - 1.8 |
+
+**Sharpness Decay Model (Step 3)**:
+- Cliff threshold: Day 7 (calibrate range: 5-9 days)
+- Pre-cliff decay: 1-2%/day
+- Post-cliff decay: 5-8%/day
+
 **Shadow Pricing**:
 - γ (discount factor): 1 value
 - λ_shadow (weight): 1 value
