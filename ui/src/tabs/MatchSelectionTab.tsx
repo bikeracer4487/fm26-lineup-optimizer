@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import type { AppState, MatchPlanItem, MatchSelectionPlayer, Match, ConfirmedLineup, TacticConfig } from '../types';
 import { api } from '../api';
 import { Button, Badge } from '../components/UI';
-import { RefreshCw, UserX, AlertTriangle, Activity, Battery, Zap, ChevronDown, ChevronRight, Calendar, Edit3, RotateCcw, CheckCircle, Lock, Unlock } from 'lucide-react';
+import { RefreshCw, UserX, AlertTriangle, Activity, Battery, Zap, ChevronDown, ChevronRight, Calendar, Edit3, RotateCcw, CheckCircle, Lock, Unlock, TrendingUp } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { PlayerSelectModal } from '../components/PlayerSelectModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -780,6 +780,16 @@ function PlayerCard({ pos, player, isOverridden, isConfirmed, onReject, onOverri
             <div className="flex items-center gap-1" title="Fatigue">
               <Zap size={12} className={player.fatigue > 400 ? "text-fm-danger" : "text-fm-light"} />
               {player.fatigue}
+            </div>
+          )}
+          {/* Shadow Cost indicator - shows opportunity cost from RHC planning */}
+          {player.shadowCost !== undefined && player.shadowCost > 50 && (
+            <div
+              className="flex items-center gap-1"
+              title={`Shadow Cost: ${Math.round(player.shadowCost)} - Higher values mean player is valuable for upcoming important matches`}
+            >
+              <TrendingUp size={12} className={player.shadowCost > 150 ? "text-purple-400" : "text-purple-300"} />
+              <span className="text-purple-300">{Math.round(player.shadowCost)}</span>
             </div>
           )}
         </div>

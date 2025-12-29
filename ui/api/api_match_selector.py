@@ -5,6 +5,7 @@ import contextlib
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from copy import deepcopy
 
 # Add root directory to sys.path to allow importing from root scripts
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
@@ -12,6 +13,35 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'
 from fm_match_ready_selector import MatchReadySelector, normalize_name
 import data_manager
 import rating_calculator
+
+# Import new OR framework modules
+from scoring_parameters import (
+    get_context_parameters,
+    get_importance_weight,
+    ScoringContext
+)
+from ui.api.scoring_model import (
+    calculate_match_utility,
+    calculate_harmonic_mean,
+    MultiplierBreakdown
+)
+from ui.api.state_simulation import (
+    PlayerState,
+    extract_player_state,
+    simulate_match_impact,
+    simulate_rest_recovery,
+    project_condition_at_match
+)
+from ui.api.shadow_pricing import (
+    calculate_shadow_costs,
+    get_adjusted_utility,
+    identify_players_to_preserve
+)
+from ui.api.explainability import (
+    generate_selection_reason,
+    generate_match_summary,
+    SelectionExplanation
+)
 
 @contextlib.contextmanager
 def suppress_stdout():
@@ -356,7 +386,7 @@ class ApiMatchReadySelector(MatchReadySelector):
         # else: no tactic_config provided, use default formation from parent class
 
         # ---------------------------------------------------------------------
-        
+
         results = []
 
         # Get the current date from the first match (or use empty string if no matches)
@@ -371,6 +401,21 @@ class ApiMatchReadySelector(MatchReadySelector):
         # Default empty dict for manual overrides
         if manual_overrides_map is None:
             manual_overrides_map = {}
+
+        # ---------------------------------------------------------------------
+        # RHC SHADOW PRICING: Calculate shadow costs for all players
+        # This enables proactive rotation by quantifying the "opportunity cost"
+        # of using a player now vs. saving them for a future important match
+        # ---------------------------------------------------------------------
+        training_intensity = 'Medium'
+        if tactic_config:
+            training_intensity = tactic_config.get('trainingIntensity', 'Medium')
+
+        shadow_costs = self._calculate_shadow_costs_for_plan(matches_data, training_intensity)
+
+        # Identify players with highest shadow costs (most valuable to preserve)
+        # Used for informational purposes in explanations
+        players_to_preserve = identify_players_to_preserve(shadow_costs, 0, top_n=5)
 
         for i, match in enumerate(matches_data):
             # Get unique match ID for rejection/override lookups
@@ -435,6 +480,12 @@ class ApiMatchReadySelector(MatchReadySelector):
                     # Use a dummy rating for manual selections (we don't recalculate)
                     selection_raw[pos] = (player_name, 0.0, player_data)
             
+            # Get scoring context for this match (used for explanations)
+            scoring_context = get_context_parameters(importance, training_intensity)
+
+            # Find next High importance match for explanation context
+            next_high_match, next_high_idx = self._find_next_high_importance_match(matches_data, i)
+
             # Transform to UI format
             selection_formatted = {}
             for pos, (name, rating, player_data) in selection_raw.items():
@@ -442,11 +493,17 @@ class ApiMatchReadySelector(MatchReadySelector):
                 raw_condition = player_data.get('Condition', 100)
                 normalized_condition = raw_condition / 10000.0 if raw_condition > 100 else raw_condition / 100.0
 
+                # Get player's shadow cost for this match
+                player_shadow_cost = 0.0
+                if name in shadow_costs and i < len(shadow_costs[name]):
+                    player_shadow_cost = shadow_costs[name][i]
+
                 selection_formatted[pos] = {
                     "name": name,
                     "nameNormalized": normalize_name(name),  # For frontend to use when storing rejections
                     "rating": rating,
                     "condition": normalized_condition,
+                    "shadowCost": round(player_shadow_cost, 1),  # Include shadow cost for UI
                     "fatigue": player_data.get('Fatigue', 0),
                     "sharpness": player_data.get('Match Sharpness', 10000) / 10000,
                     "age": player_data.get('Age', 25),
@@ -619,6 +676,135 @@ class ApiMatchReadySelector(MatchReadySelector):
 
         # If projected condition < 85% threshold, rest the player
         return projected_condition < 0.85
+
+    def _calculate_shadow_costs_for_plan(
+        self,
+        matches_data: list,
+        training_intensity: str = 'Medium'
+    ) -> dict:
+        """
+        Calculate shadow costs for all players across the match horizon.
+
+        Shadow costs represent the "opportunity cost" of using a player now
+        vs. saving them for a future high-importance match.
+
+        Uses the formula from research:
+        Cost_shadow(p, k) = Sum_{m=k+1}^{4} (
+            (Imp_m / Imp_avg) * (Utility(p,m) / DeltaDays_{k,m}) * IsKeyPlayer(p)
+        )
+
+        Args:
+            matches_data: List of match dicts
+            training_intensity: Club's training intensity setting
+
+        Returns:
+            Dict of player_name -> [shadow_cost_at_match_0, ...]
+        """
+        players = self.df.to_dict('records')
+
+        # Build player ratings dict (use CA as proxy for general utility)
+        player_ratings = {}
+        for player in players:
+            name = player.get('Name', '')
+            # Use CA as general utility proxy for shadow pricing
+            player_ratings[name] = {'general': player.get('CA', 100)}
+
+        return calculate_shadow_costs(
+            players,
+            matches_data,
+            player_ratings,
+            training_intensity
+        )
+
+    def _get_harmonic_mean_rating(
+        self,
+        player_data: dict,
+        ip_rating: float,
+        oop_rating: float
+    ) -> float:
+        """
+        Calculate the Harmonic Mean of IP and OOP ratings.
+
+        B_{i,s} = 2 * R_IP * R_OOP / (R_IP + R_OOP)
+
+        This penalizes imbalance - a player with {180, 20} scores 36,
+        while a balanced {100, 100} scores 100.
+
+        Args:
+            player_data: Player data dict (for potential attribute adjustments)
+            ip_rating: In-Possession role rating (0-200)
+            oop_rating: Out-of-Possession role rating (0-200)
+
+        Returns:
+            Harmonic mean rating (0-200)
+        """
+        return calculate_harmonic_mean(ip_rating, oop_rating)
+
+    def _generate_explanation_for_player(
+        self,
+        player_data: dict,
+        position: str,
+        context: ScoringContext,
+        multipliers: dict,
+        is_selected: bool,
+        shadow_cost: float = 0.0,
+        next_high_match: dict = None,
+        projected_condition: float = None
+    ) -> dict:
+        """
+        Generate explanation for a player selection decision.
+
+        Args:
+            player_data: Player data dict
+            position: Position considered
+            context: Scoring context
+            multipliers: Dict of multiplier values
+            is_selected: Whether player was selected
+            shadow_cost: Shadow pricing cost
+            next_high_match: Next high importance match info
+            projected_condition: Projected condition for next match
+
+        Returns:
+            Dict with explanation fields for UI display
+        """
+        explanation = generate_selection_reason(
+            player_data,
+            position,
+            context,
+            multipliers,
+            is_selected,
+            shadow_cost,
+            next_high_match,
+            projected_condition
+        )
+
+        return {
+            'reason': explanation.primary_reason,
+            'secondaryReasons': explanation.secondary_reasons,
+            'warnings': explanation.warnings,
+            'multipliers': explanation.multiplier_breakdown,
+            'projectedCondition': explanation.projected_condition
+        }
+
+    def _find_next_high_importance_match(
+        self,
+        matches_data: list,
+        current_idx: int
+    ) -> tuple:
+        """
+        Find the next High importance match after current index.
+
+        Args:
+            matches_data: List of match dicts
+            current_idx: Current match index
+
+        Returns:
+            Tuple of (match_dict, match_index) or (None, None)
+        """
+        for i in range(current_idx + 1, len(matches_data)):
+            if matches_data[i].get('importance') == 'High':
+                return matches_data[i], i
+        return None, None
 
 # --- Custom JSON Encoder to handle numpy types ---
 class NumpyEncoder(json.JSONEncoder):

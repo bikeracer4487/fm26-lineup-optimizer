@@ -26,6 +26,75 @@ This is a Football Manager 2026 lineup optimization tool that uses advanced algo
 - Hungarian Algorithm (Munkres Assignment) for optimal player-position matching
 - Greedy selection as a faster alternative
 - Squad depth analysis for rotation planning
+- **Receding Horizon Control (RHC)** with Shadow Pricing for 5-match optimization
+
+## Operational Research Framework (New)
+
+The project now implements an advanced OR framework based on research documented in `docs/new-research/FM26 #1 - System spec + decision model (foundation).md`.
+
+### Multiplicative Match Utility Score
+
+Player utility is calculated using a multiplicative model:
+
+```
+U_{i,s} = B_{i,s} * Φ(C_i) * Ψ(Sh_i) * Θ(Fam_{i,s}) * Λ(F_i)
+```
+
+Where:
+- **B_{i,s}**: Base Effective Rating (Harmonic Mean of IP and OOP roles)
+- **Φ**: Condition Multiplier (Physiology)
+- **Ψ**: Sharpness Multiplier (Form)
+- **Θ**: Familiarity Multiplier (Tactical)
+- **Λ**: Fatigue/Jadedness Multiplier (Long-term health)
+
+### Harmonic Mean for IP/OOP
+
+Instead of a simple weighted average, the system uses **Harmonic Mean** to penalize imbalanced players:
+
+```
+B_{i,s} = 2 * R_IP * R_OOP / (R_IP + R_OOP)
+```
+
+This ensures a player who excels at attacking (180) but is terrible at defending (20) scores only 36, not 100.
+
+### Context-Dependent Parameters
+
+Parameters vary by match importance:
+
+| Parameter | High | Medium | Low | Sharpness |
+|-----------|------|--------|-----|-----------|
+| Safety Threshold | 80% | 91% | 94% | 85% |
+| Decay Slope | 0.005 | 0.015 | 0.05 | 0.01 |
+| Familiarity Min | 15/20 | 12/20 | 5/20 | 10/20 |
+| Jadedness Penalty | 0.9 | 0.6 | 0.1 | 0.5 |
+
+### Shadow Pricing for 5-Match Planning
+
+The RHC optimizer calculates "shadow costs" representing the opportunity cost of using a player now vs. saving them for a future important match:
+
+```
+Cost_shadow(p, k) = Σ (Imp_m/Imp_avg * Utility(p,m)/ΔDays * IsKeyPlayer(p))
+```
+
+High shadow cost means the player is valuable for an upcoming high-importance match.
+
+### Training Intensity Setting
+
+A new Training Intensity setting (Low/Medium/High) in the Tactics tab adjusts recovery rate projections:
+- **Low**: +20% recovery rate (light training)
+- **Medium**: Standard recovery
+- **High**: -20% recovery rate (double intensity training)
+
+### New Files (OR Framework)
+
+| File | Purpose |
+|------|---------|
+| `scoring_parameters.py` | Context-dependent parameters by match importance |
+| `ui/api/scoring_model.py` | Multiplicative utility function with Harmonic Mean |
+| `ui/api/state_simulation.py` | Condition/Sharpness/Recovery projection |
+| `ui/api/shadow_pricing.py` | Shadow cost calculation for RHC |
+| `ui/api/explainability.py` | Reason string generation |
+| `tests/test_validation_scenarios.py` | Validation test suite |
 
 ## Repository Structure
 

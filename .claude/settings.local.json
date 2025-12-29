@@ -13,7 +13,8 @@
       "Bash(cat:*)",
       "Bash(dir /b \"C:\\\\GitHub\\\\fm26-lineup-optimizer\\\\*.py\")",
       "Bash(dir /b \"C:\\\\GitHub\\\\fm26-lineup-optimizer\\\\ui\\\\api\\\\*.py\")",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(pip install:*)"
     ],
     "deny": [],
     "ask": []

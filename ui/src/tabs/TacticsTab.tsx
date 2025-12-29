@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAppState } from '../hooks/useAppState';
 import { Button } from '../components/UI';
-import { Save, AlertTriangle, ArrowRight, Shield, Activity, CheckCircle } from 'lucide-react';
+import { Save, AlertTriangle, ArrowRight, Shield, Activity, CheckCircle, Dumbbell } from 'lucide-react';
 import rolesData from '../data/roles.json';
-import type { TacticConfig } from '../types';
+import type { TacticConfig, TrainingIntensity } from '../types';
 
 // Map visual grid slots to data keys in roles.json
 // Note: JSON keys might have spaces e.g. "M (L/R)"
@@ -62,7 +62,8 @@ export function TacticsTab() {
   const [config, setConfig] = useState<TacticConfig>(state.tacticConfig || {
     ipPositions: {},
     oopPositions: {},
-    mapping: {}
+    mapping: {},
+    trainingIntensity: 'Medium'
   });
 
   // Sync with global state on load (if not dirty? or always reset on mount?)
@@ -90,6 +91,13 @@ export function TacticsTab() {
     setConfig(prev => ({
       ...prev,
       mapping: { ...prev.mapping, [ipSlot]: oopSlot }
+    }));
+  };
+
+  const handleTrainingIntensityChange = (intensity: TrainingIntensity) => {
+    setConfig(prev => ({
+      ...prev,
+      trainingIntensity: intensity
     }));
   };
 
@@ -152,10 +160,41 @@ export function TacticsTab() {
       <div className="flex justify-between items-start mb-6">
         <div>
           <h2 className="text-2xl font-bold text-white mb-2">Tactics Configuration</h2>
-          <p className="text-fm-light/70 text-sm max-w-2xl">
-            Configure your In-Possession and Out-of-Possession formations. 
+          <p className="text-fm-light/70 text-sm max-w-2xl mb-3">
+            Configure your In-Possession and Out-of-Possession formations.
             Use the Mapping tab to link player roles between phases.
           </p>
+          {/* Training Intensity Setting */}
+          <div className="flex items-center gap-3 text-sm">
+            <div className="flex items-center gap-1.5 text-fm-light/70">
+              <Dumbbell size={14} />
+              <span>Training Intensity:</span>
+            </div>
+            <div className="flex gap-1">
+              {(['Low', 'Medium', 'High'] as TrainingIntensity[]).map(level => (
+                <button
+                  key={level}
+                  onClick={() => handleTrainingIntensityChange(level)}
+                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                    config.trainingIntensity === level
+                      ? level === 'Low'
+                        ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                        : level === 'Medium'
+                        ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                        : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                      : 'bg-white/5 text-white/50 border border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+            <span className="text-[10px] text-fm-light/40 ml-1">
+              {config.trainingIntensity === 'Low' && '(+20% recovery)'}
+              {config.trainingIntensity === 'Medium' && '(standard recovery)'}
+              {config.trainingIntensity === 'High' && '(-20% recovery)'}
+            </span>
+          </div>
         </div>
         
         <div className="flex items-center gap-3">

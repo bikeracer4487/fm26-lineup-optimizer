@@ -21,10 +21,14 @@ export interface TacticPosition {
   position: string | null; // e.g. "D(C)" derived from slot or selected? (Roles are tied to positions)
 }
 
+// Training intensity levels for recovery rate adjustment
+export type TrainingIntensity = 'Low' | 'Medium' | 'High';
+
 export interface TacticConfig {
   ipPositions: Record<string, string | null>; // SlotID -> Role Name
   oopPositions: Record<string, string | null>; // SlotID -> Role Name
   mapping: Record<string, string | null>; // IP_SlotID -> OOP_SlotID
+  trainingIntensity?: TrainingIntensity; // Club's training intensity setting (affects recovery projection)
 }
 
 export interface AppState {
@@ -48,6 +52,9 @@ export interface MatchSelectionPlayer {
   sharpness: number;
   age: number;
   status: string[];
+  // New OR framework fields
+  shadowCost?: number;  // Opportunity cost of using player (from shadow pricing)
+  reason?: string;      // Primary reason for selection/exclusion
 }
 
 export interface MatchSelection {
