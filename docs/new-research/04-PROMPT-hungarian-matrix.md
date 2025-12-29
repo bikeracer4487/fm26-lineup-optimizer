@@ -28,6 +28,23 @@ $$GSS = BPS \times \Phi(C) \times \Psi(S) \times \Theta(F) \times \Omega(J)$$
 
 The cost matrix must correctly encode these multipliers and rules.
 
+## CRITICAL: Findings from State Propagation Research (Step 3)
+
+### Positional Drag Coefficients (R_pos)
+REST slot utility must account for position-specific fatigue rates:
+
+| Position | R_pos | REST Priority |
+|----------|-------|---------------|
+| GK | 0.2 | Very Low (rarely needs rest) |
+| CB | 0.9-1.0 | Low (can play consecutive) |
+| DM | 1.15 | Moderate |
+| CM (B2B) | 1.45 | High |
+| AMC | 1.35 | High |
+| Winger | 1.40 | High |
+| **Fullback/WB** | **1.65** | **Critical (100% rotation recommended)** |
+
+**Implication for REST Slots**: Players in high-drag positions (WB, CM) should have HIGHER REST utility than players in low-drag positions (CB, GK) when calculating whether to assign to REST vs playing slot.
+
 ### Current Conflicts
 
 **REST Slot Design**:

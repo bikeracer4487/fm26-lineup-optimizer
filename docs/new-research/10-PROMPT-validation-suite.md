@@ -29,6 +29,28 @@ $$GSS = BPS \times \Phi(C) \times \Psi(S) \times \Theta(F) \times \Omega(J)$$
 - **Familiarity**: $\Theta(f) = 0.7 + 0.3f$ (LINEAR)
 - **Fatigue**: $\Omega(J) = \{1.0, 0.9, 0.7, 0.4\}$ (step function)
 
+## CRITICAL: Findings from State Propagation Research (Step 3)
+
+### Positional Drag Coefficients to Validate
+| Position | R_pos | Test Focus |
+|----------|-------|------------|
+| GK | 0.2 | Should rarely trigger fatigue issues |
+| CB | 0.9-1.0 | Can play consecutive without issues |
+| Fullback/WB | **1.65** | Should trigger rotation in congested fixtures |
+
+### Sharpness "Seven-Day Cliff" Model
+- Day 0-3: No decay
+- Day 4-6: ~1-2%/day
+- Day 7+: **5-8%/day** (cliff)
+
+**Test**: Player resting 10 days should show severe sharpness decay (40-50% drop from peak)
+
+### 270-Minute Rule (REFINED)
+- Window: **14 days** (not 10)
+- Multiplier: **2.5x** jadedness when exceeded
+
+**Test**: Player at 270+ mins in 14-day window should trigger jadedness warnings
+
 ## Research Objective
 
 **Goal**: Design a comprehensive validation test suite that:

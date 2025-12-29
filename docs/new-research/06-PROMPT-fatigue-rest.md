@@ -60,13 +60,36 @@ The unified scoring model uses a DISCRETE step function for jadedness/fatigue:
 
 $$\Omega(J) = \begin{cases} 1.0 & \text{Fresh} \\ 0.9 & \text{Match Fit} \\ 0.7 & \text{Tired} \\ 0.4 & \text{Jaded/Needs Rest} \end{cases}$$
 
-### The 270-Minute Rule (Hidden Fatigue)
-**CRITICAL**: If a player has played >270 minutes in the last 10 days, apply a 0.85 penalty factor REGARDLESS of the UI status. This preemptive heuristic accounts for the lag between actual physiological fatigue and the UI notification.
+### The 270-Minute Rule (Hidden Fatigue) - REFINED from Step 3
+**CRITICAL UPDATE**: Step 3 research refined the 270-minute rule:
+- Window: **14 days** (not 10 days)
+- Effect: **2.5x jadedness accumulation** when exceeded
+- Apply 0.85 penalty factor REGARDLESS of the UI status
+
+$$\frac{dJ}{dt} = \begin{cases} k_{base} & \text{if } \sum \text{mins}_{14d} < 270 \\ k_{base} \times 2.5 & \text{if } \sum \text{mins}_{14d} \ge 270 \end{cases}$$
+
+This explains why playing a player for a 4th consecutive 90-minute match imparts "Jadedness Debt" that may take 3 weeks to recover.
 
 ### Thresholds Integration
 - Players < 91% condition should NOT start (condition multiplier Φ drops too low)
 - The step function for Ω means state transitions are DISCRETE not continuous
 - Rest policy should aim to keep players at "Fresh" or "Match Fit" (Ω ≥ 0.9)
+
+### Positional Drag Coefficients (Step 3) - REST PRIORITY
+| Position | R_pos | REST Policy |
+|----------|-------|-------------|
+| GK | 0.2 | Almost never needs rest |
+| CB | 0.9-1.0 | Can play consecutive games |
+| DM | 1.15 | Moderate rotation |
+| CM (B2B) | 1.45 | Regular rotation needed |
+| **Fullback/WB** | **1.65** | **100% rotation recommended** |
+
+### Sharpness "Seven-Day Cliff" (Step 3)
+- Day 0-3 post-match: No decay (peak maintained)
+- Day 4-6: ~1-2%/day linear decay
+- Day 7+: **5-8%/day** (cliff - severe decay)
+
+**Implication**: Schedule friendlies during international breaks to prevent non-internationals from falling off the cliff.
 
 ## The Fatigue Model
 

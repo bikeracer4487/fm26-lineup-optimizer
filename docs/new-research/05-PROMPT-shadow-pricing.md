@@ -20,6 +20,28 @@ $$GSS = BPS \times \Phi(C) \times \Psi(S) \times \Theta(F) \times \Omega(J)$$
 **Implication for Shadow Pricing**:
 Shadow cost should consider the multiplicative impact of condition/fatigue on future utility. A player at 88% condition has Φ ≈ 0.50, halving their effective utility. This should heavily influence the decision to rest them now.
 
+## CRITICAL: Findings from State Propagation Research (Step 3)
+
+### Position-Specific Shadow Costs
+Shadow pricing must account for positional drag coefficients:
+
+| Position | R_pos | Shadow Cost Modifier |
+|----------|-------|---------------------|
+| GK | 0.2 | Very low (minimal preservation needed) |
+| CB | 0.9-1.0 | Low |
+| DM | 1.15 | Moderate |
+| CM (B2B) | 1.45 | High |
+| **Fullback/WB** | **1.65** | **Very High (preserve for important matches)** |
+
+**Implication**: A wingback playing today loses MORE condition than a CB. Shadow cost should be HIGHER for high-drain positions because:
+1. They need more recovery time
+2. They're more likely to be unavailable for the next important match
+
+### 270-Minute Rule (REFINED from Step 3)
+- Window: **14 days** (not 10 days as previously stated)
+- Multiplier: **2.5x** jadedness accumulation when exceeded
+- Shadow pricing should heavily penalize players approaching 270 mins in 14-day window
+
 ### Current Formula (from FM26 #1)
 
 ```

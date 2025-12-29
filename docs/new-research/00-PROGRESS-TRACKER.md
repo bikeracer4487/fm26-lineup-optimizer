@@ -4,13 +4,13 @@
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| Phase 1: Core Algorithm Correction | In Progress | 2/4 |
+| Phase 1: Core Algorithm Correction | In Progress | 3/4 |
 | Phase 2: Multi-Match Planning | Not Started | 0/2 |
 | Phase 3: Supporting Systems | Not Started | 0/3 |
 | Phase 4: Validation & Calibration | Not Started | 0/2 |
 | Phase 5: Implementation | Not Started | 0/1 |
 
-**Overall Progress**: 2/12 steps complete
+**Overall Progress**: 3/12 steps complete
 
 ---
 
@@ -94,20 +94,58 @@ GSS = BPS × Φ(C) × Ψ(S) × Θ(F) × Ω(J)
 ---
 
 #### Step 3: State Propagation Calibration
-- **Status**: NOT STARTED
+- **Status**: COMPLETE
 - **Priority**: Critical
 - **Prompt File**: `03-PROMPT-state-propagation.md`
-- **Result File**: TBD
+- **Result File**: `03-RESULTS-state-propagation.md`
 - **Dependencies**: Step 1
 - **Goal**: Accurate condition/sharpness/fatigue simulation
 
 **Checklist**:
-- [ ] Prompt document created
-- [ ] Research executed
-- [ ] Results uploaded
-- [ ] Results reviewed
-- [ ] Propagation equations validated
-- [ ] Step marked complete
+- [x] Prompt document created
+- [x] Research executed
+- [x] Results uploaded
+- [x] Results reviewed
+- [x] Propagation equations validated
+- [x] Step marked complete
+
+**Key Findings - State Propagation Equations**:
+
+**Player State Vector**:
+$$\mathbf{P}_t = [C_t, M_t, J_t, I_t]$$ (Condition, Sharpness, Jadedness, Injury Risk)
+
+**Match Day Condition Decay**:
+$$\frac{dC}{dt} = - \left[ \alpha \cdot I_{tac}(t) \cdot R_{pos} \cdot \frac{A_{wrk}}{A_{sta}} \cdot \phi(100 - C_t) \right]$$
+
+**Positional Drag Coefficients (R_pos)** - MAJOR FINDING:
+| Position | R_pos | Implication |
+|----------|-------|-------------|
+| GK | 0.2 | Almost no drain |
+| CB | 0.9-1.0 | Can play consecutive |
+| DM | 1.15 | Moderate |
+| CM (B2B) | 1.45 | High - rotate |
+| AMC | 1.35 | High |
+| Winger | 1.40 | High |
+| **Fullback/WB** | **1.65** | **Highest - 100% rotation needed** |
+
+**Recovery Equation**:
+$$C_{t+1} = C_t + (10000 - C_t) \cdot \beta \cdot (A_{nat})^\gamma \cdot (1 - \mathcal{J}(J_t))$$
+- Natural Fitness has increasing returns (γ > 1)
+- Jadedness throttles recovery
+
+**270-Minute Rule REFINED**:
+- Window: **14 days** (not 10)
+- Multiplier: **2.5x** jadedness accumulation when exceeded
+
+**Sharpness "Seven-Day Cliff"**:
+- Day 0-3: No decay
+- Day 4-6: ~1-2%/day
+- Day 7+: **5-8%/day** (cliff)
+
+**Operational Heuristics**:
+- "Stamina wins the match, Natural Fitness wins the season"
+- 60/30 Rule: Sub high-drain positions at 60' for 30-min sub play
+- CBs can play consecutive; Fullbacks need 100% rotation
 
 **Current Code**: `ui/api/state_simulation.py`
 
@@ -299,7 +337,7 @@ GSS = BPS × Φ(C) × Ψ(S) × Θ(F) × Ω(J)
 |------|----------------|---------------|-------------|----------|-----------|
 | 1 | Yes | Yes | `01-RESULTS-fm26-mechanics.md` | Yes | Yes |
 | 2 | Yes | Yes | `02-RESULTS-unified-scoring.md` | Yes | Yes |
-| 3 | Yes | No | - | No | No |
+| 3 | Yes | Yes | `03-RESULTS-state-propagation.md` | Yes | Yes |
 | 4 | Yes | No | - | No | No |
 | 5 | Yes | No | - | No | No |
 | 6 | Yes | No | - | No | No |
@@ -353,6 +391,8 @@ These documents represent prior research that will be consolidated:
 | 2025-12-29 | 2 | Step 2 COMPLETE | GSS model finalized: k=25 condition, k=15 sharpness, linear familiarity |
 | 2025-12-29 | - | Prompts 03-06 updated | Added Step 2 findings (GSS formula, 270-min rule, step function) |
 | 2025-12-29 | - | Prompts 07, 10, 11 updated | Added linear familiarity, 91% thresholds, corrected calibration params |
+| 2025-12-29 | 3 | Step 3 COMPLETE | Positional drag coefficients, 14-day/270-min rule, sharpness cliff model |
+| 2025-12-29 | - | Prompts 04-06, 10-11 updated | Added R_pos coefficients, 14-day window, sharpness cliff tests |
 
 ---
 
