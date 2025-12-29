@@ -8,22 +8,29 @@ The core insight: Using a player today has an "opportunity cost" if they're
 needed for a more important future match. Shadow pricing quantifies this cost
 to enable proactive rotation planning.
 
-Shadow Cost Formula:
+Simple Shadow Cost Formula (from FM26 #2 spec Section E):
     Cost_shadow(p, k) = Sum_{m=k+1}^{4} (
-        (Imp_m / Imp_avg) * (Utility(p,m) / DeltaDays_{k,m}) * IsKeyPlayer(p)
+        gamma^(m-k) * Imp_m * (Utility_rest(p,m) - Utility_play(p,m))
     )
 
 Where:
+- gamma: Discount factor (0.85 by default)
 - Imp_m: Importance weight of future match m
-- Imp_avg: Average importance across all matches
-- Utility(p,m): Player's utility for match m
-- DeltaDays: Days between current match k and future match m
-- IsKeyPlayer: 1.0 for key players, 0.5 for others
+- Utility_rest(p,m): Projected utility if player rests at match k
+- Utility_play(p,m): Projected utility if player plays at match k
 
-Reference: docs/new-research/FM26 #1 - System spec + decision model (foundation).md
+Updated Importance Weights (from FM26 #2 spec):
+- High: 1.5
+- Medium: 1.0
+- Low: 0.6
+- Sharpness: 0.8
+
+References:
+- docs/new-research/FM26 #1 - System spec + decision model (foundation).md
+- docs/new-research/FM26 #2 - Lineup Optimizer - Complete Mathematical Specification.md
 """
 
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime
 import sys
 import os
@@ -35,9 +42,14 @@ from scoring_parameters import (
     get_importance_weight,
     get_context_parameters,
     KEY_PLAYER_CA_THRESHOLD,
+    SHADOW_DISCOUNT_FACTOR,
+    IMPORTANCE_WEIGHTS,
 )
 from ui.api.scoring_model import calculate_match_utility
-from ui.api.state_simulation import PlayerState, simulate_match_impact, simulate_rest_recovery
+from ui.api.state_simulation import (
+    PlayerState, extract_player_state,
+    simulate_match_impact, simulate_rest_recovery
+)
 
 
 def calculate_shadow_costs(
@@ -328,3 +340,159 @@ def should_rest_player_for_shadow(
         return True, f"High future value (shadow cost ratio: {ratio:.2f})"
 
     return False, ""
+
+
+def compute_shadow_costs_simple(
+    players: List[Dict[str, Any]],
+    matches: List[Dict[str, Any]],
+    compute_utility_func: Optional[callable] = None,
+    training_intensity: str = 'Medium',
+    gamma: float = SHADOW_DISCOUNT_FACTOR
+) -> Dict[str, List[float]]:
+    """
+    Simple shadow pricing based on future match importance (FM26 #2 spec).
+
+    This is the recommended O(n x k) approach from the mathematical specification.
+
+    Formula:
+        Cost_shadow(p, k) = Sum_{m=k+1}^{horizon} (
+            gamma^(m-k) * Imp_m * (Utility_rest(p,m) - Utility_play(p,m))
+        )
+
+    Args:
+        players: List of player data dicts
+        matches: List of match dicts with 'date', 'importance', 'opponent'
+        compute_utility_func: Optional function(player_data, context) -> utility
+                             If None, uses best_rating as proxy
+        training_intensity: Club's training intensity
+        gamma: Discount factor for future matches (default: 0.85)
+
+    Returns:
+        Dict mapping player_name -> [shadow_cost_at_match_0, ...]
+    """
+    shadow: Dict[str, List[float]] = {}
+
+    if not matches:
+        return shadow
+
+    horizon = len(matches)
+
+    # Parse match dates
+    match_dates = []
+    for m in matches:
+        try:
+            date_str = m.get('date', '')
+            match_dates.append(datetime.strptime(date_str, '%Y-%m-%d'))
+        except (ValueError, TypeError):
+            match_dates.append(datetime.now())
+
+    for player_data in players:
+        player_name = player_data.get('Name', '')
+        player_ca = player_data.get('CA', 100)
+
+        # Key player multiplier
+        is_key_player = 1.0 if player_ca >= KEY_PLAYER_CA_THRESHOLD else 0.5
+
+        costs = []
+
+        for k in range(horizon):
+            future_value = 0.0
+
+            for j in range(k + 1, horizon):
+                future_match = matches[j]
+                importance_raw = future_match.get('importance', 'Medium')
+                imp_weight = get_importance_weight(importance_raw)
+
+                # Days between current match k and future match j
+                delta_days = max(1, (match_dates[j] - match_dates[k]).days)
+
+                # Get context for future match
+                future_context = get_context_parameters(importance_raw, training_intensity)
+
+                if compute_utility_func is not None:
+                    # Use provided utility function
+                    # Project states if player plays vs rests at match k
+                    state = extract_player_state(player_data)
+
+                    # State if player plays at match k
+                    state_if_play = simulate_match_impact(state, minutes_played=90)
+                    state_if_play = simulate_rest_recovery(state_if_play, delta_days, future_context)
+
+                    # State if player rests at match k
+                    state_if_rest = simulate_rest_recovery(state, delta_days, future_context)
+
+                    # Convert states back to player data for utility calculation
+                    player_if_play = player_data.copy()
+                    player_if_play['Condition'] = state_if_play.condition
+                    player_if_play['Match Sharpness'] = state_if_play.sharpness
+                    player_if_play['Fatigue'] = state_if_play.fatigue
+
+                    player_if_rest = player_data.copy()
+                    player_if_rest['Condition'] = state_if_rest.condition
+                    player_if_rest['Match Sharpness'] = state_if_rest.sharpness
+                    player_if_rest['Fatigue'] = state_if_rest.fatigue
+
+                    util_if_play = compute_utility_func(player_if_play, future_context)
+                    util_if_rest = compute_utility_func(player_if_rest, future_context)
+
+                    utility_diff = util_if_rest - util_if_play
+                else:
+                    # Fallback: Use simple heuristic based on recovery time
+                    # More rest = better condition = higher utility
+                    recovery_bonus = min(15, delta_days * 3)  # Up to 15% recovery bonus
+                    utility_diff = recovery_bonus * (player_ca / 150)  # Scale by ability
+
+                # Apply discount and importance weighting
+                discount = gamma ** (j - k)
+                future_value += discount * imp_weight * utility_diff * is_key_player
+
+            # Shadow cost is non-negative (opportunity cost can't be negative)
+            costs.append(max(0, future_value))
+
+        shadow[player_name] = costs
+
+    return shadow
+
+
+def compute_shadow_cost_for_match(
+    player_data: Dict[str, Any],
+    current_match_idx: int,
+    matches: List[Dict[str, Any]],
+    compute_utility_func: Optional[callable] = None,
+    training_intensity: str = 'Medium',
+    gamma: float = SHADOW_DISCOUNT_FACTOR
+) -> float:
+    """
+    Compute shadow cost for a single player at a single match.
+
+    Useful for on-demand calculation without computing the full matrix.
+
+    Args:
+        player_data: Player's full data dict
+        current_match_idx: Index of current match (k)
+        matches: List of all matches
+        compute_utility_func: Optional utility function
+        training_intensity: Club's training intensity
+        gamma: Discount factor
+
+    Returns:
+        Shadow cost value (>= 0)
+    """
+    if current_match_idx >= len(matches):
+        return 0.0
+
+    # Compute shadow costs for this single player
+    shadow = compute_shadow_costs_simple(
+        players=[player_data],
+        matches=matches,
+        compute_utility_func=compute_utility_func,
+        training_intensity=training_intensity,
+        gamma=gamma
+    )
+
+    player_name = player_data.get('Name', '')
+    costs = shadow.get(player_name, [])
+
+    if current_match_idx < len(costs):
+        return costs[current_match_idx]
+    return 0.0

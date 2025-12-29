@@ -4,17 +4,16 @@ FM26 Scoring Parameters
 
 Context-dependent parameters for the Match Utility Score based on match importance.
 
-Reference: docs/new-research/FM26 #1 - System spec + decision model (foundation).md
-Section 3.4: Recommended Parameter Values
+References:
+- docs/new-research/FM26 #1 - System spec + decision model (foundation).md
+- docs/new-research/FM26 #2 - Lineup Optimizer - Complete Mathematical Specification.md
 
-Parameter Table:
-| Parameter            | High | Medium | Low  | Sharpness |
-|----------------------|------|--------|------|-----------|
-| Safety Threshold     | 80%  | 91%    | 94%  | 85%       |
-| Decay Slope (alpha)  | 0.005| 0.015  | 0.05 | 0.01      |
-| Familiarity Min      | 15   | 12     | 5    | 10        |
-| Jadedness Penalty    | 0.9  | 0.6    | 0.1  | 0.5       |
-| Sharpness Mode       | std  | std    | std  | build     |
+The mathematical specification defines bounded sigmoid multipliers for smooth transitions:
+    Multiplier(x) = α + (1 - α) × σ(k × (x - T))
+    where σ(z) = 1 / (1 + e^(-z))
+
+All multipliers map to range [α_floor, 1.0] where α_floor > 0 ensures emergency utility
+is never zero.
 """
 
 from dataclasses import dataclass
@@ -139,13 +138,17 @@ def get_context_parameters(
 # =============================================================================
 # IMPORTANCE WEIGHTS (for Shadow Pricing calculations)
 # =============================================================================
+# Updated per Mathematical Specification (FM26 #2) Section E
 
 IMPORTANCE_WEIGHTS = {
-    'High': 3.0,      # High priority matches worth 3x
-    'Medium': 1.5,    # Medium priority matches worth 1.5x
-    'Low': 0.5,       # Low priority matches worth 0.5x
-    'Sharpness': 0.3  # Sharpness/development matches worth 0.3x
+    'High': 1.5,      # High priority matches
+    'Medium': 1.0,    # Medium priority matches (baseline)
+    'Low': 0.6,       # Low priority matches
+    'Sharpness': 0.8  # Sharpness/development matches
 }
+
+# Shadow pricing discount factor (gamma)
+SHADOW_DISCOUNT_FACTOR = 0.85  # Future matches discounted by 15% per match
 
 
 def get_importance_weight(importance: ImportanceLevel) -> float:
@@ -240,3 +243,263 @@ def get_rotation_threshold(position: str) -> int:
         Maximum consecutive matches (3-6)
     """
     return POSITION_ROTATION_THRESHOLDS.get(position, 4)
+
+
+# =============================================================================
+# BOUNDED SIGMOID MULTIPLIER PARAMETERS
+# =============================================================================
+# Reference: FM26 #2 Mathematical Specification - Sections A, B, C
+#
+# All multipliers use bounded sigmoid: α + (1 - α) × σ(k × (x - T))
+# where α = floor (minimum multiplier), T = threshold, k = steepness
+
+# -----------------------------------------------------------------------------
+# A. FAMILIARITY MULTIPLIER (Θ) PARAMETERS
+# -----------------------------------------------------------------------------
+# Transforms FM's 1-20 familiarity rating into utility multiplier
+# Higher steepness (k) = sharper transition at threshold
+
+FAMILIARITY_SIGMOID_PARAMS = {
+    'High': {
+        'alpha': 0.30,      # Floor: 30% utility even for awkward positions
+        'threshold': 12,    # Transition point (Competent level)
+        'steepness': 0.55   # Strict: demands accomplished familiarity
+    },
+    'Medium': {
+        'alpha': 0.40,
+        'threshold': 10,
+        'steepness': 0.45   # Balanced: competent is acceptable
+    },
+    'Low': {
+        'alpha': 0.50,
+        'threshold': 7,
+        'steepness': 0.35   # Tolerant: experimentation allowed
+    },
+    'Sharpness': {
+        'alpha': 0.25,
+        'threshold': 14,
+        'steepness': 0.70   # Development focus: needs confident players
+    }
+}
+
+# -----------------------------------------------------------------------------
+# B. FATIGUE MULTIPLIER (Λ) PARAMETERS
+# -----------------------------------------------------------------------------
+# Uses player-relative thresholds: Λ = α + (1-α) × (1 - σ(k × (F/T - r)))
+# where F = fatigue, T = player threshold, r = ratio where penalties begin
+# Key insight: High importance INCREASES α (allows fatigued players to push through)
+
+FATIGUE_SIGMOID_PARAMS = {
+    'High': {
+        'alpha': 0.50,      # Push-through: 50% floor for crucial matches
+        'ratio': 0.85,      # Penalties begin at 85% of threshold
+        'steepness': 5.0    # Moderate transition
+    },
+    'Medium': {
+        'alpha': 0.25,
+        'ratio': 0.75,
+        'steepness': 6.0    # Standard fatigue sensitivity
+    },
+    'Low': {
+        'alpha': 0.15,
+        'ratio': 0.65,
+        'steepness': 8.0    # Aggressive rest for rotation matches
+    },
+    'Sharpness': {
+        'alpha': 0.20,
+        'ratio': 0.70,
+        'steepness': 7.0    # Fresh only: low fatigue for sharpness building
+    }
+}
+
+# -----------------------------------------------------------------------------
+# C. CONDITION MULTIPLIER (Φ) PARAMETERS
+# -----------------------------------------------------------------------------
+# Φ = α + (1-α) × σ(k × (C - T_safe))
+# High importance tolerates LOWER condition (must field best XI)
+# Low importance demands HIGH condition (preserve players)
+
+CONDITION_SIGMOID_PARAMS = {
+    'High': {
+        'alpha': 0.40,      # Floor: 40% for crucial matches
+        'threshold': 75,    # Must field best XI even if tired
+        'slope': 0.12       # Steeper curve
+    },
+    'Medium': {
+        'alpha': 0.35,
+        'threshold': 82,
+        'slope': 0.10       # Standard balance
+    },
+    'Low': {
+        'alpha': 0.30,
+        'threshold': 88,
+        'slope': 0.08       # Only fully fit should play
+    },
+    'Sharpness': {
+        'alpha': 0.35,
+        'threshold': 80,
+        'slope': 0.15       # Need condition for effective sharpness building
+    }
+}
+
+# -----------------------------------------------------------------------------
+# D. SHARPNESS MULTIPLIER (Ψ) PARAMETERS
+# -----------------------------------------------------------------------------
+# Standard form: Ψ = 0.40 + 0.60 × (Sh/100)^0.8
+# This power curve matches FM's internal sharpness-to-performance mapping
+
+SHARPNESS_CURVE_PARAMS = {
+    'floor': 0.40,          # Minimum 40% utility at 0% sharpness
+    'ceiling_range': 0.60,  # Additional 60% available from sharpness
+    'exponent': 0.8         # Power curve exponent (diminishing returns)
+}
+
+
+# =============================================================================
+# FIXTURE DENSITY ADJUSTMENTS
+# =============================================================================
+# Reduces utility for players who would have insufficient recovery before next match
+
+FIXTURE_DENSITY_FACTORS = {
+    5: 1.00,    # 5+ days rest: full utility
+    4: 0.95,    # 4 days: 95%
+    3: 0.90,    # 3 days: 90%
+    2: 0.85,    # 2 days: 85%
+    1: 0.80,    # 1 day: 80%
+    0: 0.75     # Same day (unlikely): 75%
+}
+
+
+def get_fixture_density_factor(days_to_next_match: int) -> float:
+    """
+    Get condition adjustment factor based on fixture density.
+
+    Args:
+        days_to_next_match: Days until next match
+
+    Returns:
+        Multiplier (0.75 to 1.00)
+    """
+    if days_to_next_match >= 5:
+        return 1.00
+    return FIXTURE_DENSITY_FACTORS.get(days_to_next_match, 0.85)
+
+
+# =============================================================================
+# POSITION-SPECIFIC DRAIN RATES
+# =============================================================================
+# Reference: FM26 #2 Section D - State Propagation Equations
+# Condition drain per 90 minutes by position (affected by stamina)
+
+POSITION_DRAIN_RATES = {
+    # Goalkeepers - minimal physical exertion
+    'GK': 15,
+
+    # Center-backs and Defensive Midfielders - moderate
+    'D(C)': 25,
+    'DM': 25, 'DM(L)': 25, 'DM(R)': 25,
+
+    # Full-backs and Midfielders - high workload
+    'D(L)': 30, 'D(R)': 30, 'D(R/L)': 30,
+    'WB(L)': 30, 'WB(R)': 30,
+    'M(L)': 30, 'M(R)': 30, 'M(C)': 30,
+    'CM': 30,
+    'AM(L)': 30, 'AM(R)': 30, 'AM(C)': 30,
+
+    # Wingers and Strikers - highest intensity
+    'W': 35, 'W(L)': 35, 'W(R)': 35,
+    'ST': 35, 'ST(C)': 35, 'ST(L)': 35, 'ST(R)': 35,
+    'Striker': 35
+}
+
+
+def get_position_drain_rate(position: str) -> float:
+    """
+    Get condition drain rate for a position (per 90 minutes played).
+
+    Args:
+        position: Position key (e.g., 'GK', 'D(C)', 'Striker')
+
+    Returns:
+        Drain rate (15-35)
+    """
+    return POSITION_DRAIN_RATES.get(position, 25)  # Default to moderate
+
+
+# =============================================================================
+# STABILITY MECHANISM PARAMETERS
+# =============================================================================
+# Reference: FM26 #2 Section F - Polyvalent Stability
+
+@dataclass
+class StabilityConfig:
+    """Configuration for assignment stability mechanisms."""
+
+    # User-configurable slider: 0 = pure optimal, 1 = maximum stability
+    inertia_weight: float = 0.5
+
+    # Base penalty for switching positions (~15% utility penalty)
+    base_switch_cost: float = 0.15
+
+    # Bonus for staying in same position (~5% utility bonus)
+    continuity_bonus: float = 0.05
+
+    # Multiplier for anchor strength (3+ consecutive matches in same position)
+    anchor_multiplier: float = 2.0
+
+    # Minimum consecutive matches to establish anchor
+    anchor_threshold: int = 3
+
+
+# Default stability configuration
+DEFAULT_STABILITY_CONFIG = StabilityConfig()
+
+
+# =============================================================================
+# SHARPNESS PROPAGATION PARAMETERS
+# =============================================================================
+# Reference: FM26 #2 Section D - Sharpness update
+
+SHARPNESS_GAIN_RATE = 1500      # Per full competitive match (on 0-10000 scale)
+SHARPNESS_DECAY_RATE = 100      # Per day without match
+
+MATCH_TYPE_SHARPNESS_FACTORS = {
+    'competitive': 1.0,
+    'friendly': 0.7,
+    'reserve': 0.5
+}
+
+
+# =============================================================================
+# FATIGUE PROPAGATION PARAMETERS
+# =============================================================================
+# Reference: FM26 #2 Section D - Fatigue update
+
+FATIGUE_GAIN_PER_90 = 20        # Base fatigue gain per full match
+FATIGUE_RECOVERY_PER_DAY = 10   # Base recovery per rest day
+VACATION_BONUS_MULTIPLIER = 5.0  # Additional recovery during vacation
+
+INTENSITY_FACTORS = {
+    'normal': 1.0,
+    'high_press': 1.3,
+    'rotation': 0.8
+}
+
+
+# =============================================================================
+# HELPER FUNCTIONS FOR SIGMOID PARAMETERS
+# =============================================================================
+
+def get_familiarity_params(importance: ImportanceLevel) -> dict:
+    """Get familiarity sigmoid parameters for given importance level."""
+    return FAMILIARITY_SIGMOID_PARAMS.get(importance, FAMILIARITY_SIGMOID_PARAMS['Medium'])
+
+
+def get_fatigue_params(importance: ImportanceLevel) -> dict:
+    """Get fatigue sigmoid parameters for given importance level."""
+    return FATIGUE_SIGMOID_PARAMS.get(importance, FATIGUE_SIGMOID_PARAMS['Medium'])
+
+
+def get_condition_params(importance: ImportanceLevel) -> dict:
+    """Get condition sigmoid parameters for given importance level."""
+    return CONDITION_SIGMOID_PARAMS.get(importance, CONDITION_SIGMOID_PARAMS['Medium'])

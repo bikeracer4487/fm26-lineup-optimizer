@@ -57,16 +57,63 @@ B_{i,s} = 2 * R_IP * R_OOP / (R_IP + R_OOP)
 
 This ensures a player who excels at attacking (180) but is terrible at defending (20) scores only 36, not 100.
 
-### Context-Dependent Parameters
+### Bounded Sigmoid Multiplier Functions (FM26 #2 Spec)
 
-Parameters vary by match importance:
+All multipliers now use bounded sigmoid functions for smooth, continuous behavior:
 
-| Parameter | High | Medium | Low | Sharpness |
-|-----------|------|--------|-----|-----------|
-| Safety Threshold | 80% | 91% | 94% | 85% |
-| Decay Slope | 0.005 | 0.015 | 0.05 | 0.01 |
-| Familiarity Min | 15/20 | 12/20 | 5/20 | 10/20 |
-| Jadedness Penalty | 0.9 | 0.6 | 0.1 | 0.5 |
+```
+Multiplier(x) = α + (1 - α) × σ(k × (x - T))
+```
+
+Where `σ(z) = 1 / (1 + e^(-z))` is the standard sigmoid function.
+
+#### Condition Multiplier Φ(C) Parameters
+
+| Importance | α (floor) | T (threshold) | k (slope) |
+|------------|-----------|---------------|-----------|
+| High       | 0.40      | 75%           | 0.12      |
+| Medium     | 0.35      | 82%           | 0.10      |
+| Low        | 0.30      | 88%           | 0.08      |
+| Sharpness  | 0.35      | 80%           | 0.15      |
+
+#### Familiarity Multiplier Θ(Fam) Parameters
+
+| Importance | α (floor) | T (threshold) | k (steepness) |
+|------------|-----------|---------------|---------------|
+| High       | 0.30      | 12            | 0.55          |
+| Medium     | 0.40      | 10            | 0.45          |
+| Low        | 0.50      | 7             | 0.35          |
+| Sharpness  | 0.25      | 14            | 0.70          |
+
+#### Fatigue Multiplier Λ(F) Parameters (Player-Relative)
+
+```
+Λ(F, T) = α + (1 - α) × (1 - σ(k × (F/T - r)))
+```
+
+| Importance | α (collapse) | r (ratio) | k (steepness) |
+|------------|--------------|-----------|---------------|
+| High       | 0.50         | 0.85      | 5.0           |
+| Medium     | 0.25         | 0.75      | 6.0           |
+| Low        | 0.15         | 0.65      | 8.0           |
+| Sharpness  | 0.20         | 0.70      | 7.0           |
+
+#### Sharpness Multiplier Ψ(Sh) - Power Curve
+
+```
+Ψ = 0.40 + 0.60 × (Sh/100)^0.8
+```
+
+This matches FM's in-game sharpness curve with floor of 40% at 0% sharpness.
+
+### Importance Weights
+
+| Importance | Weight |
+|------------|--------|
+| High       | 1.5    |
+| Medium     | 1.0    |
+| Low        | 0.6    |
+| Sharpness  | 0.8    |
 
 ### Shadow Pricing for 5-Match Planning
 
@@ -85,16 +132,91 @@ A new Training Intensity setting (Low/Medium/High) in the Tactics tab adjusts re
 - **Medium**: Standard recovery
 - **High**: -20% recovery rate (double intensity training)
 
+### State Propagation Equations (FM26 #2 Spec)
+
+Player state evolves according to these equations:
+
+#### Condition Propagation
+```
+C_{k+1} = min(100, C_k - ΔC_match + ΔC_recovery)
+
+ΔC_match = (minutes / 90) × drain_rate × (1 - stamina/200)
+ΔC_recovery = days × recovery_rate × (natural_fitness/100)
+```
+
+**Position-Specific Drain Rates:**
+| Position Type | Drain Rate |
+|---------------|------------|
+| GK            | 15         |
+| CB, DM        | 25         |
+| FB, CM, AM    | 30         |
+| Winger, ST    | 35         |
+
+#### Sharpness Propagation (Internal 0-10000 Scale)
+```
+Sh_{k+1} = Sh_k + ΔSh_gain - ΔSh_decay
+
+ΔSh_gain = (minutes / 90) × 1500 × match_type_factor × (1 + NF/400)
+ΔSh_decay = days_without_match × 100 × (1 - NF/200)
+```
+
+**Match Type Factors:**
+- Competitive: 1.0
+- Friendly: 0.7
+- Reserve: 0.5
+
+#### Fatigue Propagation
+```
+F_{k+1} = max(0, F_k + ΔF_match - ΔF_recovery)
+
+ΔF_match = (minutes / 90) × 20 × intensity_factor × age_modifier × position_mult
+ΔF_recovery = days × 10 × (1 + NF/100) × training_modifier
+```
+
+### Polyvalent Stability Mechanisms (FM26 #2 Spec)
+
+Prevents oscillating position assignments for versatile players using two mechanisms:
+
+#### 1. Assignment Inertia Penalty
+```
+Stability_cost(player, slot) =
+  - inertia_weight × continuity_bonus    (if same position as previous)
+  + inertia_weight × base_switch_cost    (if different position)
+```
+
+**Default Parameters:**
+- `inertia_weight`: 0.5 (configurable via Stability slider, 0-1)
+- `continuity_bonus`: 0.05 (5% bonus for staying)
+- `base_switch_cost`: 0.15 (15% penalty for switching)
+
+#### 2. Soft-Lock Anchoring
+After 3+ consecutive matches in the same position, a player becomes "anchored" with elevated switching costs:
+```
+Anchor_cost = anchor_multiplier × base_switch_cost
+```
+
+**Default Parameters:**
+- `anchor_threshold`: 3 consecutive matches
+- `anchor_multiplier`: 2.0 (doubles switching penalty)
+
+### Stability Slider (New UI Feature)
+
+A Stability slider in the Tactics tab controls `inertia_weight`:
+- **0.0**: Pure optimization (no stability preference)
+- **0.5**: Balanced (default - moderate stability)
+- **1.0**: Maximum stability (strongly prefers consistent assignments)
+
 ### New Files (OR Framework)
 
 | File | Purpose |
 |------|---------|
-| `scoring_parameters.py` | Context-dependent parameters by match importance |
-| `ui/api/scoring_model.py` | Multiplicative utility function with Harmonic Mean |
-| `ui/api/state_simulation.py` | Condition/Sharpness/Recovery projection |
-| `ui/api/shadow_pricing.py` | Shadow cost calculation for RHC |
+| `scoring_parameters.py` | Sigmoid parameter tables, importance weights, stability config |
+| `ui/api/scoring_model.py` | Bounded sigmoid multipliers with Harmonic Mean |
+| `ui/api/state_simulation.py` | Position-specific drain rates, state propagation |
+| `ui/api/shadow_pricing.py` | Shadow cost calculation with utility projection |
+| `ui/api/stability.py` | Polyvalent stability (inertia + anchoring) |
 | `ui/api/explainability.py` | Reason string generation |
-| `tests/test_validation_scenarios.py` | Validation test suite |
+| `tests/test_validation_scenarios.py` | Validation test suite with sigmoid tests |
 
 ## Repository Structure
 

@@ -2120,6 +2120,7 @@
       "D_L": "D_L",
       "M_L": "M_L",
       "M_R": "M_R"
-    }
+    },
+    "trainingIntensity": "High"
   }
 }

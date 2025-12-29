@@ -1266,7 +1266,10 @@ class MatchReadySelector:
                        prioritize_sharpness: bool = False,
                        rested_players: List[str] = None,
                        formation_override: List = None,
-                       debug: bool = False) -> Dict:
+                       debug: bool = False,
+                       stability_costs: 'np.ndarray' = None,
+                       player_name_to_idx: Dict[str, int] = None,
+                       slot_id_to_idx: Dict[str, int] = None) -> Dict:
         """
         Select optimal XI for a specific match.
 
@@ -1277,6 +1280,10 @@ class MatchReadySelector:
             formation_override: Optional formation list to use instead of self.formation
                                (used to exclude overridden positions during recalculation)
             debug: Enable detailed debug output
+            stability_costs: Optional stability cost matrix from polyvalent stability mechanism
+                            [n_players × n_slots] - added to cost matrix to penalize position switches
+            player_name_to_idx: Optional mapping of player name -> row index in stability_costs
+            slot_id_to_idx: Optional mapping of slot_id -> column index in stability_costs
 
         Returns:
             Dictionary mapping position to (player_name, effective_rating, player_data)
@@ -1408,6 +1415,36 @@ class MatchReadySelector:
 
                 if len(valid_ratings) < 5:
                     print(f"  (Only {len(valid_ratings)} valid candidates found)")
+
+        # Apply stability costs if provided (polyvalent stability mechanism)
+        # This adds switching penalties and continuity bonuses to prevent oscillating assignments
+        if stability_costs is not None and player_name_to_idx is not None and slot_id_to_idx is not None:
+            for i in range(n_players):
+                player = available_df.iloc[i]
+                player_name = player['Name']
+
+                # Look up this player in the stability cost matrix
+                stab_i = player_name_to_idx.get(player_name)
+                if stab_i is None:
+                    continue  # Player not in stability matrix (new player)
+
+                for j, pos_info in enumerate(formation_to_use):
+                    pos_name = pos_info[0]
+
+                    # Look up this position in the stability cost matrix
+                    stab_j = slot_id_to_idx.get(pos_name)
+                    if stab_j is None:
+                        continue  # Position not in stability matrix
+
+                    # Only apply stability cost if the base assignment is valid
+                    if cost_matrix[i, j] > -998:
+                        stab_cost = stability_costs[stab_i, stab_j]
+                        # Stability costs are typically small (0.05-0.15) relative to ratings
+                        # Scale by a factor to make them meaningful against 100+ ratings
+                        cost_matrix[i, j] += stab_cost * 10  # Scale stability impact
+
+            if debug:
+                print(f"\n[DEBUG] Stability costs applied to cost matrix")
 
         # Solve assignment problem
         row_ind, col_ind = linear_sum_assignment(cost_matrix)

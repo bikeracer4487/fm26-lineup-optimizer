@@ -42,6 +42,14 @@ from ui.api.explainability import (
     generate_match_summary,
     SelectionExplanation
 )
+from ui.api.stability import (
+    AssignmentHistory,
+    AssignmentManager,
+    compute_stability_costs,
+    get_combined_stability_costs,
+    StabilityConfig
+)
+from scoring_parameters import DEFAULT_STABILITY_CONFIG
 
 @contextlib.contextmanager
 def suppress_stdout():
@@ -119,6 +127,47 @@ class ApiMatchReadySelector(MatchReadySelector):
         except Exception as e:
             # If anything goes wrong, return empty dict (no historical data)
             return {}
+
+    def _load_assignment_history_from_lineups(self, current_date: str) -> None:
+        """
+        Load confirmed lineups and populate assignment history for stability calculations.
+
+        This enables the polyvalent stability mechanism which prevents oscillating
+        assignments for versatile players.
+
+        Args:
+            current_date: The simulation start date (YYYY-MM-DD). Only load lineups before this date.
+        """
+        if not os.path.exists(CONFIRMED_LINEUPS_PATH):
+            return
+
+        try:
+            with open(CONFIRMED_LINEUPS_PATH, 'r') as f:
+                data = json.load(f)
+
+            lineups = data.get('lineups', [])
+
+            # Filter to lineups before current_date, sorted by date (ascending)
+            past_lineups = sorted(
+                [l for l in lineups if l.get('date', '') < current_date],
+                key=lambda x: x.get('date', '')
+            )
+
+            # Load into assignment history (most recent first for stability calculation)
+            for lineup in reversed(past_lineups):
+                match_id = lineup.get('matchId', lineup.get('date', ''))
+                selection = lineup.get('selection', {})
+
+                # Record each player's position assignment
+                for slot_id, player_name in selection.items():
+                    if player_name:
+                        self.assignment_manager.history.add_assignment(
+                            match_id, player_name, slot_id
+                        )
+
+        except Exception as e:
+            # If anything goes wrong, continue without history
+            pass
             
     def __init__(self, status_filepath, abilities_filepath=None, training_filepath=None):
         # Automatically look for training recommendations in root if not provided
@@ -157,6 +206,9 @@ class ApiMatchReadySelector(MatchReadySelector):
                 else:
                     new_formation.append(pos)
             self.formation = new_formation
+
+        # Initialize stability tracking for polyvalent player management
+        self.assignment_manager = AssignmentManager(config=DEFAULT_STABILITY_CONFIG)
             
     def calculate_effective_rating(self, row: pd.Series, skill_col: str, ability_col: str = None,
                                    match_importance: str = 'Medium',
@@ -395,6 +447,21 @@ class ApiMatchReadySelector(MatchReadySelector):
         # Initialize player_match_count from confirmed lineups history
         self.player_match_count = self._load_consecutive_counts_from_history(current_date)
 
+        # Load assignment history for stability calculations (polyvalent player management)
+        self._load_assignment_history_from_lineups(current_date)
+
+        # Configure stability settings from tactic config
+        if tactic_config:
+            inertia_weight = tactic_config.get('stabilityWeight', 0.5)
+            # Update stability config with user preference
+            self.assignment_manager.config = StabilityConfig(
+                inertia_weight=inertia_weight,
+                base_switch_cost=DEFAULT_STABILITY_CONFIG.base_switch_cost,
+                continuity_bonus=DEFAULT_STABILITY_CONFIG.continuity_bonus,
+                anchor_multiplier=DEFAULT_STABILITY_CONFIG.anchor_multiplier,
+                anchor_threshold=DEFAULT_STABILITY_CONFIG.anchor_threshold
+            )
+
         # For rotation logic, we might need to auto-rest players
         auto_rested_players = []
 
@@ -464,11 +531,31 @@ class ApiMatchReadySelector(MatchReadySelector):
             overridden_positions = set(match_overrides.keys())
             filtered_formation = [pos for pos in self.formation if pos[0] not in overridden_positions]
 
-            # Select XI using parent logic with filtered formation
+            # Compute stability costs for polyvalent player management
+            # This prevents oscillating assignments for versatile players
+            formation_to_use = filtered_formation if overridden_positions else self.formation
+            player_names = self.df['Name'].tolist()
+            slot_ids = [pos[0] for pos in formation_to_use]
+
+            prev_assignment = self.assignment_manager.get_previous_assignment_map()
+            stability_cost_matrix = get_combined_stability_costs(
+                player_names, slot_ids, prev_assignment,
+                self.assignment_manager.history,
+                self.assignment_manager.config
+            )
+
+            # Create index mappings for the cost matrix
+            player_name_to_idx = {name: i for i, name in enumerate(player_names)}
+            slot_id_to_idx = {slot: j for j, slot in enumerate(slot_ids)}
+
+            # Select XI using parent logic with filtered formation and stability costs
             # select_match_xi returns: Dict[pos, (player_name, effective_rating, player_data)]
             selection_raw = self.select_match_xi(
                 importance, prioritize_sharpness, current_rested,
-                formation_override=filtered_formation if overridden_positions else None
+                formation_override=filtered_formation if overridden_positions else None,
+                stability_costs=stability_cost_matrix,
+                player_name_to_idx=player_name_to_idx,
+                slot_id_to_idx=slot_id_to_idx
             )
 
             # Apply manual overrides - merge into results after optimization
@@ -517,9 +604,14 @@ class ApiMatchReadySelector(MatchReadySelector):
                 "importance": importance,
                 "selection": selection_formatted
             })
-            
+
             # Update consecutive counts (logic from parent class)
             self._update_consecutive_match_counts(selection_raw)
+
+            # Record assignments for stability tracking (polyvalent player management)
+            # This updates the assignment history for the next iteration's stability costs
+            assignment_lineup = {pos: name for pos, (name, _, _) in selection_raw.items()}
+            self.assignment_manager.record_match_assignments(match_id, assignment_lineup)
             
             # MATCH ROTATION LOGIC
             # Check if we should rest players for the NEXT match

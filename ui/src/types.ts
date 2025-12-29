@@ -29,6 +29,7 @@ export interface TacticConfig {
   oopPositions: Record<string, string | null>; // SlotID -> Role Name
   mapping: Record<string, string | null>; // IP_SlotID -> OOP_SlotID
   trainingIntensity?: TrainingIntensity; // Club's training intensity setting (affects recovery projection)
+  stabilityWeight?: number; // Lineup stability preference (0-1): 0=pure optimization, 1=max stability
 }
 
 export interface AppState {

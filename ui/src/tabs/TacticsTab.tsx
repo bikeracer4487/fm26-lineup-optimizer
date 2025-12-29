@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppState } from '../hooks/useAppState';
 import { Button } from '../components/UI';
-import { Save, AlertTriangle, ArrowRight, Shield, Activity, CheckCircle, Dumbbell } from 'lucide-react';
+import { Save, AlertTriangle, ArrowRight, Shield, Activity, CheckCircle, Dumbbell, Sliders } from 'lucide-react';
 import rolesData from '../data/roles.json';
 import type { TacticConfig, TrainingIntensity } from '../types';
 
@@ -63,7 +63,8 @@ export function TacticsTab() {
     ipPositions: {},
     oopPositions: {},
     mapping: {},
-    trainingIntensity: 'Medium'
+    trainingIntensity: 'Medium',
+    stabilityWeight: 0.5
   });
 
   // Sync with global state on load (if not dirty? or always reset on mount?)
@@ -98,6 +99,13 @@ export function TacticsTab() {
     setConfig(prev => ({
       ...prev,
       trainingIntensity: intensity
+    }));
+  };
+
+  const handleStabilityWeightChange = (weight: number) => {
+    setConfig(prev => ({
+      ...prev,
+      stabilityWeight: weight
     }));
   };
 
@@ -193,6 +201,27 @@ export function TacticsTab() {
               {config.trainingIntensity === 'Low' && '(+20% recovery)'}
               {config.trainingIntensity === 'Medium' && '(standard recovery)'}
               {config.trainingIntensity === 'High' && '(-20% recovery)'}
+            </span>
+          </div>
+          {/* Stability Weight Slider */}
+          <div className="flex items-center gap-3 text-sm mt-2">
+            <div className="flex items-center gap-1.5 text-fm-light/70">
+              <Sliders size={14} />
+              <span>Lineup Stability:</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={(config.stabilityWeight ?? 0.5) * 100}
+              onChange={(e) => handleStabilityWeightChange(parseInt(e.target.value) / 100)}
+              className="w-32 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-fm-teal"
+            />
+            <span className="text-xs text-white/70 w-10">{Math.round((config.stabilityWeight ?? 0.5) * 100)}%</span>
+            <span className="text-[10px] text-fm-light/40 ml-1">
+              {(config.stabilityWeight ?? 0.5) < 0.3 && '(pure optimization)'}
+              {(config.stabilityWeight ?? 0.5) >= 0.3 && (config.stabilityWeight ?? 0.5) < 0.7 && '(balanced)'}
+              {(config.stabilityWeight ?? 0.5) >= 0.7 && '(max stability)'}
             </span>
           </div>
         </div>

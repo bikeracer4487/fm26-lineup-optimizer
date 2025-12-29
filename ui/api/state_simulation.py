@@ -8,11 +8,18 @@ Used by the Receding Horizon Control (RHC) optimizer to project:
 - Sharpness gain from matches and decay from rest
 - Fatigue accumulation and jadedness risk
 
-Reference: docs/new-research/FM26 #1 - System spec + decision model (foundation).md
+References:
+- docs/new-research/FM26 #1 - System spec + decision model (foundation).md
+- docs/new-research/FM26 #2 - Lineup Optimizer - Complete Mathematical Specification.md
+
+State Propagation Equations (from FM26 #2 Section D):
+- Condition: C_{k+1} = min(100, C_k - ΔC_match + ΔC_recovery)
+- Sharpness: Sh_{k+1} = Sh_k + ΔSh_gain - ΔSh_decay
+- Fatigue: F_{k+1} = max(0, F_k + ΔF_match - ΔF_recovery)
 """
 
 from dataclasses import dataclass
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Literal
 from copy import deepcopy
 from datetime import datetime, timedelta
 import sys
@@ -25,12 +32,22 @@ from scoring_parameters import (
     ScoringContext,
     get_context_parameters,
     get_position_fatigue_multiplier,
+    get_position_drain_rate,
     BASE_CONDITION_LOSS,
     BASE_CONDITION_RECOVERY,
     BASE_SHARPNESS_GAIN,
     BASE_SHARPNESS_DECAY,
     FATIGUE_THRESHOLD,
+    SHARPNESS_GAIN_RATE,
+    SHARPNESS_DECAY_RATE,
+    MATCH_TYPE_SHARPNESS_FACTORS,
+    FATIGUE_GAIN_PER_90,
+    FATIGUE_RECOVERY_PER_DAY,
+    INTENSITY_FACTORS,
 )
+
+# Type for match types
+MatchType = Literal['competitive', 'friendly', 'reserve']
 
 
 @dataclass
@@ -106,21 +123,34 @@ def simulate_match_impact(
     state: PlayerState,
     minutes_played: int,
     position: str = 'M(C)',
-    context: Optional[ScoringContext] = None
+    context: Optional[ScoringContext] = None,
+    match_type: MatchType = 'competitive',
+    intensity: str = 'normal'
 ) -> PlayerState:
     """
     Simulate the impact of playing a match on player state.
 
-    Research-based formulas:
-    - Condition loss: ~15% per 90 mins, modified by stamina
-    - Sharpness gain: ~5% per 90 mins, capped at 100%
-    - Fatigue accumulation: Based on position and physical attributes
+    Formulas from FM26 #2 Section D:
+
+    Condition Update:
+        ΔC_match = (minutes / 90) × drain_rate × (1 - stamina/200)
+        where drain_rate is position-specific (GK: 15, CB/DM: 25, FB/CM: 30, W/ST: 35)
+
+    Sharpness Update (on 0-10000 internal scale, displayed as 0-100%):
+        ΔSh_gain = (minutes / 90) × gain_rate × match_type_factor × (1 + NF/400)
+        where gain_rate = 1500 per full competitive match
+
+    Fatigue Update:
+        ΔF_match = (minutes / 90) × fatigue_gain × intensity_factor
+        where fatigue_gain = 20 per 90 mins (base)
 
     Args:
         state: Current player state
         minutes_played: Minutes played in the match (0-90+)
-        position: Position played (affects fatigue)
+        position: Position played (affects drain rate and fatigue)
         context: Scoring context for training intensity modifier
+        match_type: 'competitive', 'friendly', or 'reserve'
+        intensity: 'normal', 'high_press', or 'rotation'
 
     Returns:
         New PlayerState after match impact
@@ -133,25 +163,28 @@ def simulate_match_impact(
     # Normalize minutes to 90-minute basis
     minutes_ratio = minutes_played / 90.0
 
-    # --- Condition Loss ---
-    # Base loss modified by stamina (low stamina = more loss)
-    stamina_modifier = 1.0 + (10 - state.stamina) * 0.05  # -25% to +50%
-    condition_loss = BASE_CONDITION_LOSS * minutes_ratio * stamina_modifier
-
-    # Apply position fatigue multiplier
-    position_mult = get_position_fatigue_multiplier(position)
-    condition_loss *= position_mult
+    # --- Condition Loss (FM26 #2 formula) ---
+    # ΔC_match = (minutes / 90) × drain_rate × (1 - stamina/200)
+    drain_rate = get_position_drain_rate(position)
+    stamina_modifier = 1.0 - (state.stamina / 200.0)  # Range: 0.5 to 0.95
+    condition_loss = minutes_ratio * drain_rate * stamina_modifier
 
     new_state.condition = max(0, state.condition - condition_loss)
 
-    # --- Sharpness Gain ---
-    # Players gain sharpness from match time
-    sharpness_gain = BASE_SHARPNESS_GAIN * minutes_ratio
-    new_state.sharpness = min(100, state.sharpness + sharpness_gain)
+    # --- Sharpness Gain (FM26 #2 formula) ---
+    # ΔSh_gain = (minutes / 90) × gain_rate × match_type_factor × (1 + NF/400)
+    match_type_factor = MATCH_TYPE_SHARPNESS_FACTORS.get(match_type, 1.0)
+    nf_sharpness_modifier = 1.0 + (state.natural_fitness / 400.0)  # Range: 1.025 to 1.05
 
-    # --- Fatigue Accumulation ---
-    # Base fatigue per 90 mins
-    base_fatigue_gain = 100 * minutes_ratio
+    # Convert 0-100 scale to 0-10000 for calculation, then back
+    current_sharpness_internal = state.sharpness * 100  # 0-10000
+    sharpness_gain_internal = minutes_ratio * SHARPNESS_GAIN_RATE * match_type_factor * nf_sharpness_modifier
+    new_sharpness_internal = min(10000, current_sharpness_internal + sharpness_gain_internal)
+    new_state.sharpness = new_sharpness_internal / 100  # Back to 0-100
+
+    # --- Fatigue Accumulation (FM26 #2 formula) ---
+    # ΔF_match = (minutes / 90) × fatigue_gain × intensity_factor
+    intensity_factor = INTENSITY_FACTORS.get(intensity, 1.0)
 
     # Age modifier (older and very young players accumulate faster)
     if state.age >= 32:
@@ -166,7 +199,10 @@ def simulate_match_impact(
     # Natural fitness modifier (high NF = less fatigue)
     nf_modifier = 1.0 - (state.natural_fitness - 10) * 0.03  # +30% to -30%
 
-    fatigue_gain = base_fatigue_gain * age_modifier * nf_modifier * position_mult
+    # Position multiplier for fatigue
+    position_mult = get_position_fatigue_multiplier(position)
+
+    fatigue_gain = minutes_ratio * FATIGUE_GAIN_PER_90 * intensity_factor * age_modifier * nf_modifier * position_mult
     new_state.fatigue += fatigue_gain
 
     # --- Recent Minutes ---
@@ -188,10 +224,19 @@ def simulate_rest_recovery(
     """
     Simulate player recovery during rest days between matches.
 
-    Research-based formulas:
-    - Condition recovery: ~5% per day, modified by Natural Fitness
-    - Sharpness decay: ~2% per week without playing
-    - Fatigue reduction: Gradual reduction with rest
+    Formulas from FM26 #2 Section D:
+
+    Condition Recovery:
+        ΔC_recovery = days × recovery_rate × (natural_fitness/100)
+        where recovery_rate = 12-18 per day (higher for higher NF)
+
+    Sharpness Decay (on 0-10000 internal scale):
+        ΔSh_decay = days_since_match × decay_rate × (1 - natural_fitness/200)
+        where decay_rate = 100 per day without match
+
+    Fatigue Recovery:
+        ΔF_recovery = days × recovery_rate × (1 + natural_fitness/100)
+        where recovery_rate = 10 per rest day (base)
 
     Args:
         state: Current player state
@@ -206,25 +251,32 @@ def simulate_rest_recovery(
     if rest_days <= 0:
         return new_state
 
-    # --- Condition Recovery ---
-    # Natural Fitness affects recovery rate (0.8x to 1.2x)
-    nf_modifier = 0.8 + (state.natural_fitness / 20) * 0.4
+    # --- Condition Recovery (FM26 #2 formula) ---
+    # ΔC_recovery = days × recovery_rate × (natural_fitness/100)
+    # recovery_rate scales with NF: base 12 + (NF-10) * 0.6 → range 9-18
+    base_recovery_rate = 12 + (state.natural_fitness - 10) * 0.6
+    nf_recovery_modifier = state.natural_fitness / 100.0  # 0.1 to 0.2
 
     # Training intensity modifier from context
     training_modifier = context.recovery_modifier if context else 1.0
 
-    condition_recovery = BASE_CONDITION_RECOVERY * rest_days * nf_modifier * training_modifier
+    condition_recovery = rest_days * base_recovery_rate * (0.5 + nf_recovery_modifier) * training_modifier
     new_state.condition = min(100, state.condition + condition_recovery)
 
-    # --- Sharpness Decay ---
-    # Players lose sharpness when not playing
-    sharpness_decay = BASE_SHARPNESS_DECAY * (rest_days / 7)  # ~2% per week
-    new_state.sharpness = max(0, state.sharpness - sharpness_decay)
+    # --- Sharpness Decay (FM26 #2 formula) ---
+    # ΔSh_decay = days × decay_rate × (1 - natural_fitness/200)
+    nf_decay_modifier = 1.0 - (state.natural_fitness / 200.0)  # Range: 0.5 to 0.9
 
-    # --- Fatigue Recovery ---
-    # Fatigue reduces with rest (faster with high NF)
-    fatigue_recovery_rate = 30 + state.natural_fitness * 2  # 50-70 per day
-    fatigue_recovery = fatigue_recovery_rate * rest_days * training_modifier
+    # Convert to internal scale for calculation
+    current_sharpness_internal = state.sharpness * 100  # 0-10000
+    sharpness_decay_internal = rest_days * SHARPNESS_DECAY_RATE * nf_decay_modifier
+    new_sharpness_internal = max(0, current_sharpness_internal - sharpness_decay_internal)
+    new_state.sharpness = new_sharpness_internal / 100  # Back to 0-100
+
+    # --- Fatigue Recovery (FM26 #2 formula) ---
+    # ΔF_recovery = days × recovery_rate × (1 + natural_fitness/100)
+    nf_fatigue_recovery = 1.0 + (state.natural_fitness / 100.0)  # Range: 1.1 to 1.2
+    fatigue_recovery = rest_days * FATIGUE_RECOVERY_PER_DAY * nf_fatigue_recovery * training_modifier
     new_state.fatigue = max(0, state.fatigue - fatigue_recovery)
 
     # --- Jadedness Recovery ---
