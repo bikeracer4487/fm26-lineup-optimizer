@@ -9,6 +9,26 @@ We need a systematic way to validate that our algorithms behave correctly withou
 
 Current tests exist in `tests/test_validation_scenarios.py` but need expansion.
 
+## CRITICAL: Findings from Steps 1 & 2
+
+### GSS Formula (Step 2)
+All validation must use the finalized Global Selection Score:
+$$GSS = BPS \times \Phi(C) \times \Psi(S) \times \Theta(F) \times \Omega(J)$$
+
+### Key Thresholds to Validate
+| Metric | Threshold | Rule |
+|--------|-----------|------|
+| Condition | 91% | Never start player below this ("91% Floor") |
+| Sharpness | 85% | Below this, prefer reserves first ("85% Gate") |
+| 10-day minutes | 270 | Above this, apply 0.85 penalty ("270-min Rule") |
+| Fatigue state | Jaded | Ω = 0.4 penalty (step function) |
+
+### Multiplier Formulas to Test
+- **Condition**: $\Phi(c) = \frac{1}{1 + e^{-25(c - 0.88)}}$ (steep sigmoid, k=25)
+- **Sharpness**: $\Psi(s) = \frac{1.02}{1 + e^{-15(s - 0.75)}} - 0.02$
+- **Familiarity**: $\Theta(f) = 0.7 + 0.3f$ (LINEAR)
+- **Fatigue**: $\Omega(J) = \{1.0, 0.9, 0.7, 0.4\}$ (step function)
+
 ## Research Objective
 
 **Goal**: Design a comprehensive validation test suite that:
@@ -45,12 +65,14 @@ We can't directly measure "wins" (FM's match engine is stochastic). Instead, we 
 **Expected Behavior**:
 - High rotation (Rotation Index > 0.7)
 - No player starts > 3 consecutive matches
-- Condition stays above 80% for all starters
+- Condition stays above 91% for all starters (per Step 2's "91% Floor" rule)
+- No player exceeds 270 minutes in any 10-day window
 
 **Validation Metrics**:
 - `rotation_index = unique_starters / squad_size`
 - `max_consecutive_starts` for any player
-- `min_condition_at_kickoff` across all matches
+- `min_condition_at_kickoff` across all matches (threshold: 91%, not 80%)
+- `max_10day_minutes` for any player (threshold: 270 minutes)
 
 ### Scenario 2: Cup Final Protection
 **Setup**: Low, Low, Low, Low, High (Cup Final)

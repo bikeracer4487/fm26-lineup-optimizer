@@ -4,27 +4,32 @@
 
 Our scoring model has 20+ tunable parameters across multiplier functions. Without systematic calibration, we're guessing at values. This research defines how to find optimal parameters.
 
-### Parameters to Calibrate
+## CRITICAL: Step 2 Findings Override Previous Assumptions
 
-**Condition Multiplier (per importance level)**:
-- α_condition (floor): 4 values
-- T_condition (threshold): 4 values
-- k_condition (slope): 4 values
+Step 2 research has FINALIZED the multiplier formulas. The calibration task is now significantly simpler because:
 
-**Familiarity Multiplier (per importance level)**:
-- α_familiarity (floor): 4 values
-- T_familiarity (threshold): 4 values
-- k_familiarity (steepness): 4 values
+1. **Condition**: Uses steep sigmoid (k=25, T=0.88) - FIXED
+2. **Sharpness**: Uses bounded sigmoid (k=15, T=0.75) - FIXED
+3. **Familiarity**: Is LINEAR (Θ = 0.7 + 0.3f) - NO k/T parameters to calibrate
+4. **Fatigue**: Is a STEP FUNCTION - NO continuous parameters to calibrate
 
-**Fatigue Multiplier (per importance level)**:
-- α_fatigue (collapse): 4 values
-- r_fatigue (ratio): 4 values
-- k_fatigue (steepness): 4 values
+### Parameters Remaining for Calibration
 
-**Sharpness Multiplier**:
-- floor: 1 value
-- ceiling_range: 1 value
-- exponent: 1 value
+**Condition Multiplier** (may vary by importance):
+- k_condition: Step 2 suggests 25, but may vary by importance (High: 25, Low: 15?)
+- T_condition: Step 2 suggests 0.88, but High importance might tolerate lower
+
+**Sharpness Multiplier** (may vary by importance):
+- k_sharpness: Step 2 suggests 15
+- T_sharpness: Step 2 suggests 0.75
+
+**Familiarity Multiplier** - FIXED:
+- Linear formula: Θ = 0.7 + 0.3f
+- No importance-level variation needed
+
+**Fatigue Multiplier** - STEP FUNCTION:
+- Fresh: 1.0, Match Fit: 0.9, Tired: 0.7, Jaded: 0.4
+- May want to calibrate the 270-minute threshold
 
 **Shadow Pricing**:
 - γ (discount factor): 1 value
@@ -263,22 +268,29 @@ def aggregate_score(result):
 
 ## Parameter Ranges
 
-### Baseline Values (Starting Point)
+### Baseline Values (Updated from Step 2 Research)
 
-From existing documents (averaged where conflicting):
+**IMPORTANT**: Step 2 research has provided DEFINITIVE values. These should be the starting point:
 
-| Parameter | Baseline | Test Range |
-|-----------|----------|------------|
-| α_condition_high | 0.45 | 0.30 - 0.60 |
-| T_condition_high | 77 | 70 - 85 |
-| k_condition_high | 0.11 | 0.08 - 0.15 |
-| α_familiarity_high | 0.35 | 0.25 - 0.50 |
-| T_familiarity_high | 12 | 10 - 14 |
-| k_familiarity_high | 0.50 | 0.35 - 0.70 |
-| ... | ... | ... |
-| γ_shadow | 0.85 | 0.70 - 0.95 |
-| λ_shadow | 1.0 | 0.5 - 2.0 |
-| inertia_weight | 0.5 | 0.0 - 1.0 |
+| Parameter | Step 2 Value | Test Range | Notes |
+|-----------|--------------|------------|-------|
+| k_condition | **25** | 15 - 30 | Very steep - NOT 0.08-0.15! |
+| T_condition | **0.88** | 0.85 - 0.92 | 88% threshold |
+| k_sharpness | **15** | 10 - 20 | Moderate steepness |
+| T_sharpness | **0.75** | 0.70 - 0.80 | 75% threshold |
+| Θ_floor | **0.70** | FIXED | Linear familiarity floor |
+| Θ_slope | **0.30** | FIXED | Linear familiarity slope |
+| Ω_fresh | **1.0** | FIXED | Step function value |
+| Ω_fit | **0.9** | 0.85 - 0.95 | Step function value |
+| Ω_tired | **0.7** | 0.6 - 0.8 | Step function value |
+| Ω_jaded | **0.4** | 0.3 - 0.5 | Step function value |
+| 270_min_threshold | **270** | 240 - 300 | Hidden fatigue rule |
+| 270_min_penalty | **0.85** | 0.8 - 0.9 | Penalty factor |
+| γ_shadow | 0.85 | 0.70 - 0.95 | Shadow discount |
+| λ_shadow | 1.0 | 0.5 - 2.0 | Shadow weight |
+| inertia_weight | 0.5 | 0.0 - 1.0 | Stability slider |
+
+**Note**: Familiarity and base fatigue step function values are FIXED from Step 2 and should NOT be calibrated.
 
 ### Constraints on Parameters
 

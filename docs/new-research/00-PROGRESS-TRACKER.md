@@ -4,13 +4,13 @@
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| Phase 1: Core Algorithm Correction | In Progress | 1/4 |
+| Phase 1: Core Algorithm Correction | In Progress | 2/4 |
 | Phase 2: Multi-Match Planning | Not Started | 0/2 |
 | Phase 3: Supporting Systems | Not Started | 0/3 |
 | Phase 4: Validation & Calibration | Not Started | 0/2 |
 | Phase 5: Implementation | Not Started | 0/1 |
 
-**Overall Progress**: 1/12 steps complete
+**Overall Progress**: 2/12 steps complete
 
 ---
 
@@ -48,26 +48,48 @@
 ---
 
 #### Step 2: Unified Scoring Model
-- **Status**: NOT STARTED
+- **Status**: COMPLETE
 - **Priority**: Critical
 - **Prompt File**: `02-PROMPT-unified-scoring.md`
-- **Result File**: TBD
+- **Result File**: `02-RESULTS-unified-scoring.md`
 - **Dependencies**: Step 1
 - **Goal**: Reconcile multiplier inconsistencies across documents #1-4
 
 **Checklist**:
-- [ ] Prompt document created
-- [ ] Research executed
-- [ ] Results uploaded
-- [ ] Results reviewed
-- [ ] Parameter table finalized
-- [ ] Step marked complete
+- [x] Prompt document created
+- [x] Research executed
+- [x] Results uploaded
+- [x] Results reviewed
+- [x] Parameter table finalized
+- [x] Step marked complete
 
-**Current Issues to Resolve**:
-- Condition: Four different parameter sets across documents
-- Sharpness: Power curve vs sigmoid disagreement
-- Fatigue: Threshold calculation varies
-- Familiarity: Parameters differ between docs
+**Key Findings - Global Selection Score (GSS)**:
+
+The research produced a unified multiplicative model:
+```
+GSS = BPS × Φ(C) × Ψ(S) × Θ(F) × Ω(J)
+```
+
+**Definitive Parameter Values**:
+
+| Multiplier | Formula | Parameters |
+|------------|---------|------------|
+| Condition Φ(c) | `1 / (1 + e^{-k(c - c₀)})` | k=25, c₀=0.88 |
+| Sharpness Ψ(s) | `1.02 / (1 + e^{-k(s - s₀)}) - 0.02` | k=15, s₀=0.75 |
+| Familiarity Θ(f) | `0.7 + 0.3f` | LINEAR (not sigmoid!) |
+| Fatigue Ω(J) | Step function | Fresh=1.0, Fit=0.9, Tired=0.7, Jaded=0.4 |
+
+**Operational Rules Discovered**:
+1. **91% Floor**: Never start player < 91% condition
+2. **85% Sharpness Gate**: Use U21/reserves first to build sharpness
+3. **270-minute Rule**: >270 min in 10 days → 0.85 penalty regardless of UI
+4. **Meta-Attributes**: Pace/Accel get 2.0x weight in BPS calculation
+
+**Major Changes from Current Implementation**:
+- Condition sigmoid MUCH steeper (k=25 vs our k=0.10-0.15)
+- Sharpness uses bounded sigmoid, NOT power curve
+- Familiarity is LINEAR, NOT sigmoid
+- Fatigue uses step function with discrete states
 
 ---
 
@@ -276,17 +298,17 @@
 | Step | Prompt Created | Research Done | Result File | Reviewed | Finalized |
 |------|----------------|---------------|-------------|----------|-----------|
 | 1 | Yes | Yes | `01-RESULTS-fm26-mechanics.md` | Yes | Yes |
-| 2 | Yes | No | - | No | No |
-| 3 | No | No | - | No | No |
-| 4 | No | No | - | No | No |
-| 5 | No | No | - | No | No |
-| 6 | No | No | - | No | No |
-| 7 | No | No | - | No | No |
-| 8 | No | No | - | No | No |
-| 9 | No | No | - | No | No |
-| 10 | No | No | - | No | No |
-| 11 | No | No | - | No | No |
-| 12 | No | N/A | - | No | No |
+| 2 | Yes | Yes | `02-RESULTS-unified-scoring.md` | Yes | Yes |
+| 3 | Yes | No | - | No | No |
+| 4 | Yes | No | - | No | No |
+| 5 | Yes | No | - | No | No |
+| 6 | Yes | No | - | No | No |
+| 7 | Yes | No | - | No | No |
+| 8 | Yes | No | - | No | No |
+| 9 | Yes | No | - | No | No |
+| 10 | Yes | No | - | No | No |
+| 11 | Yes | No | - | No | No |
+| 12 | Yes | N/A | - | No | No |
 
 ---
 
@@ -327,6 +349,10 @@ These documents represent prior research that will be consolidated:
 | Date | Step | Action | Notes |
 |------|------|--------|-------|
 | 2025-12-29 | - | Research program initiated | Master plan and tracker created |
+| 2025-12-29 | 1 | Step 1 COMPLETE | FM26 mechanics verified, findings applied to prompts 02, 03, 06 |
+| 2025-12-29 | 2 | Step 2 COMPLETE | GSS model finalized: k=25 condition, k=15 sharpness, linear familiarity |
+| 2025-12-29 | - | Prompts 03-06 updated | Added Step 2 findings (GSS formula, 270-min rule, step function) |
+| 2025-12-29 | - | Prompts 07, 10, 11 updated | Added linear familiarity, 91% thresholds, corrected calibration params |
 
 ---
 

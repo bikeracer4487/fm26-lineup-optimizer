@@ -47,6 +47,28 @@ The following verified findings provide calibration targets:
 - Injury risk formula: $Risk_{inj} \propto (Load_{recent})^2 \times \frac{1}{Condition} \times Injury\_Proneness$
 - 3 full 90-min matches in 7 days = "High Risk" regardless of condition
 
+## CRITICAL: Findings from Unified Scoring Research (Step 2)
+
+### Finalized Multiplier Formulas
+These are the DEFINITIVE formulas the state propagation must integrate with:
+
+**Condition Multiplier**: $\Phi(c) = \frac{1}{1 + e^{-25(c - 0.88)}}$
+- k=25 (very steep), c₀=0.88 (88% threshold)
+- Players < 91% condition should NOT start
+
+**Sharpness Multiplier**: $\Psi(s) = \frac{1.02}{1 + e^{-15(s - 0.75)}} - 0.02$
+- k=15, s₀=0.75 (75% threshold)
+- Players < 85% sharpness should use reserves first
+
+**Fatigue Step Function**:
+$$\Omega(J) = \begin{cases} 1.0 & \text{Fresh} \\ 0.9 & \text{Match Fit} \\ 0.7 & \text{Tired} \\ 0.4 & \text{Jaded/Needs Rest} \end{cases}$$
+
+### The 270-Minute Rule (Hidden Fatigue)
+If a player has played >270 minutes in the last 10 days, apply a 0.85 penalty factor REGARDLESS of UI status. This prevents mid-season collapse from hidden accumulated fatigue.
+
+### Calibration Target
+State propagation equations must produce outputs that, when fed through the multipliers above, yield sensible GSS scores. This provides a validation checkpoint.
+
 ## Specific Questions
 
 ### 1. Condition Dynamics

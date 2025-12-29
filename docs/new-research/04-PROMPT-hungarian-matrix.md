@@ -9,6 +9,25 @@ Our lineup optimizer uses the Hungarian (Munkres) algorithm to solve the player-
 
 Previous documents (#3 and #4) describe REST slot designs but differ in approach. We need a definitive architecture.
 
+## CRITICAL: Findings from Unified Scoring Research (Step 2)
+
+The Hungarian matrix must encode the finalized GSS (Global Selection Score) formula:
+
+$$GSS = BPS \times \Phi(C) \times \Psi(S) \times \Theta(F) \times \Omega(J)$$
+
+**Definitive Multiplier Formulas**:
+- **Condition**: $\Phi(c) = \frac{1}{1 + e^{-25(c - 0.88)}}$ (k=25, c₀=0.88)
+- **Sharpness**: $\Psi(s) = \frac{1.02}{1 + e^{-15(s - 0.75)}} - 0.02$ (k=15, s₀=0.75)
+- **Familiarity**: $\Theta(f) = 0.7 + 0.3f$ (LINEAR, not sigmoid!)
+- **Fatigue**: $\Omega(J) = \{1.0, 0.9, 0.7, 0.4\}$ (step function: Fresh, Fit, Tired, Jaded)
+
+**Key Operational Rules**:
+- 91% Floor: Players < 91% condition should have HIGH cost for playing slots
+- 85% Sharpness Gate: Players < 85% sharpness should prefer REST slots
+- 270-minute Rule: >270 min in 10 days → 0.85 penalty regardless of UI status
+
+The cost matrix must correctly encode these multipliers and rules.
+
 ### Current Conflicts
 
 **REST Slot Design**:

@@ -6,6 +6,20 @@ Our lineup optimizer plans across a 5-match horizon using "shadow pricing" - a t
 
 Current shadow pricing implementation exists in `shadow_pricing.py` but may need refinement.
 
+## CRITICAL: Findings from Unified Scoring Research (Step 2)
+
+Shadow pricing must integrate with the finalized GSS formula:
+
+$$GSS = BPS \times \Phi(C) \times \Psi(S) \times \Theta(F) \times \Omega(J)$$
+
+**Key Thresholds for Shadow Calculations**:
+- Condition drops below 91% → player should REST (Φ drops significantly)
+- Sharpness drops below 85% → player utility severely degraded (Ψ < 0.68)
+- 270-minute rule → hidden fatigue penalty of 0.85
+
+**Implication for Shadow Pricing**:
+Shadow cost should consider the multiplicative impact of condition/fatigue on future utility. A player at 88% condition has Φ ≈ 0.50, halving their effective utility. This should heavily influence the decision to rest them now.
+
 ### Current Formula (from FM26 #1)
 
 ```

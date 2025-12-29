@@ -53,6 +53,21 @@ $$Risk_{inj} \propto (Load_{recent})^2 \times \frac{1}{Condition} \times Injury\
 - "Double Intensity" + 2 matches/week = death spiral (never recovers to 100%)
 - Must auto-switch to "Rest/Half" when condition <90%
 
+## CRITICAL: Findings from Unified Scoring Research (Step 2)
+
+### Finalized Fatigue Step Function
+The unified scoring model uses a DISCRETE step function for jadedness/fatigue:
+
+$$\Omega(J) = \begin{cases} 1.0 & \text{Fresh} \\ 0.9 & \text{Match Fit} \\ 0.7 & \text{Tired} \\ 0.4 & \text{Jaded/Needs Rest} \end{cases}$$
+
+### The 270-Minute Rule (Hidden Fatigue)
+**CRITICAL**: If a player has played >270 minutes in the last 10 days, apply a 0.85 penalty factor REGARDLESS of the UI status. This preemptive heuristic accounts for the lag between actual physiological fatigue and the UI notification.
+
+### Thresholds Integration
+- Players < 91% condition should NOT start (condition multiplier Φ drops too low)
+- The step function for Ω means state transitions are DISCRETE not continuous
+- Rest policy should aim to keep players at "Fresh" or "Match Fit" (Ω ≥ 0.9)
+
 ## The Fatigue Model
 
 ### Internal vs Visible Fatigue

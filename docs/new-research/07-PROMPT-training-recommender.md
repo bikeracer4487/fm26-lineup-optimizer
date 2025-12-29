@@ -132,6 +132,25 @@ FM26 has split IP/OOP roles. Training affects:
 - Should recommendations specify role as well as position?
 - How do we handle positions with many role options?
 
+## CRITICAL: Findings from Steps 1 & 2
+
+### Dual IP/OOP Familiarity (Step 1)
+FM26 evaluates familiarity for BOTH In-Possession and Out-of-Possession positions separately. Training recommendations must consider:
+- IP familiarity (attacking phase position)
+- OOP familiarity (defensive phase position)
+- A player "Natural" at AMC (IP) but "Unconvincing" at MR (OOP) gets penalized during transitions
+
+### Linear Familiarity Multiplier (Step 2)
+The familiarity multiplier is LINEAR, not sigmoid:
+$$\Theta(f) = 0.7 + 0.3f$$
+
+This means:
+- 0% familiarity → 70% effectiveness (not zero!)
+- 50% familiarity → 85% effectiveness
+- 100% familiarity → 100% effectiveness
+
+Training recommendations should aim for familiarity levels that provide meaningful GSS improvements, not just incremental gains.
+
 ## Expected Deliverables
 
 ### A. Tactical Gap Algorithm
