@@ -36,10 +36,35 @@ Where:
 - $B_{i,s}$: Base Effective Rating (Harmonic Mean of IP/OOP roles)
 - $\Phi$: Condition Multiplier
 - $\Psi$: Sharpness Multiplier
-- $\Theta$: Familiarity Multiplier
-- $\Lambda$: Fatigue Multiplier
+- $\Theta$: Familiarity Multiplier (now must be DUAL: IP + OOP)
+- $\Lambda$: Fatigue/Jadedness Multiplier
 
 All multipliers use bounded sigmoid: $\alpha + (1 - \alpha) \times \sigma(k \times (x - T))$
+
+## CRITICAL: Findings from FM26 Mechanics Research (Step 1)
+
+The following verified findings MUST inform parameter choices:
+
+### Scale Clarification
+- **Condition**: Internal 0-10,000 scale (UI shows hearts, not percentages)
+- **Sharpness**: Internal 0-10,000 scale (Green tick = >8,000, Orange = <7,000)
+- **Our multipliers should work on 0-100 percentage scale** (divide by 100)
+
+### Verified Thresholds
+| Metric | Value | Meaning |
+|--------|-------|---------|
+| Condition 9,200+ (92%) | "Match Fit" | No micro-inefficiencies |
+| Condition 9,500+ (95%) | "Peak" | Full attribute access |
+| Condition <6,100 (61%) | "Critical" | Exponential injury risk |
+| Sharpness >8,000 (80%) | "Sharp" | Green tick |
+| Sharpness <7,000 (70%) | "Lacking" | Orange warning |
+| Sharpness decay | 3-5% per day | "Seven-Day Cliff" phenomenon |
+
+### Dual-Familiarity Requirement
+FM26 evaluates familiarity for BOTH IP and OOP positions. The research suggests:
+$$S_{composite} = (W_{IP} \times S_{IP}) + (W_{OOP} \times S_{OOP}) - C_{transition}$$
+
+Our familiarity multiplier must account for this dual evaluation.
 
 ## Questions to Resolve
 
@@ -50,10 +75,17 @@ Given the FM26 mechanics findings from Step 1:
 - How steep (k) should the transition be?
 - Should we use sigmoid, piecewise, or another form?
 
+**VERIFIED THRESHOLDS from Step 1**:
+- 92% = "Match Fit" (no micro-inefficiencies)
+- 95% = "Peak" (full attribute access)
+- 61% = "Critical" (exponential injury risk)
+- Previous docs used 75-88% thresholds - these appear TOO LOW
+
 **Constraints**:
 - α must be > 0 (emergency utility never zero)
-- High importance should tolerate lower condition (critical matches need best XI)
-- Low importance should have stricter thresholds (preserve players)
+- High importance: threshold should be ~85-90% (tolerate some tiredness for key matches)
+- Medium importance: threshold should be ~90-92% (standard "match fit")
+- Low importance: threshold should be ~92-95% (only peak condition players)
 
 ### 2. Sharpness Multiplier Ψ(Sh)
 - Should we use power curve or sigmoid?
@@ -61,21 +93,41 @@ Given the FM26 mechanics findings from Step 1:
 - How should "Sharpness Build Mode" work? (prioritize rusty players)
 - Should sharpness multiplier ever exceed 1.0?
 
+**CRITICAL FINDING from Step 1 - "Seven-Day Cliff"**:
+- Sharpness decays 3-5% PER DAY without match play (much faster than FM24!)
+- Players need 45-60 minutes per week MINIMUM to maintain sharpness
+- Green tick = >80%, Orange = <70%
+- Low sharpness affects "decision latency" - mental attributes execute slower
+
 **Trade-offs**:
 - Power curve: Matches research showing diminishing returns at high sharpness
 - Sigmoid: Provides smooth bounded transitions, consistent with other multipliers
-- Build mode: Needs to boost low-sharpness players without being too aggressive
+- Build mode: Now MORE CRITICAL due to aggressive decay - must prioritize rusty players aggressively
 
-### 3. Familiarity Multiplier Θ(Fam)
+**New constraint**: Sharpness penalties should be MORE SEVERE than in previous docs given the "latency" effect on Decisions attribute
+
+### 3. Familiarity Multiplier Θ(Fam) - NOW DUAL IP/OOP
 - What is the minimum acceptable familiarity for each importance level?
 - How severely should we penalize "Unconvincing" (6-9) players?
 - Should "Awkward" (1-5) players ever be selected?
+- **NEW**: How do we combine IP and OOP familiarity into one multiplier?
 
-**FM26 Familiarity Tiers** (verify from Step 1):
+**CRITICAL FINDING from Step 1 - Dual-Phase Evaluation**:
+- FM26 evaluates familiarity for BOTH IP and OOP positions separately
+- A player "Natural" at AMC (IP) but "Unconvincing" at MR (OOP) gets penalized during defensive transitions
+- Penalty manifests as poor Positioning and Concentration
+- Research suggests: $S_{composite} = (W_{IP} \times S_{IP}) + (W_{OOP} \times S_{OOP}) - C_{transition}$
+
+**Proposed Approach**:
+Instead of single familiarity value, calculate:
+$$\Theta_{composite} = \min(\Theta(Fam_{IP}), \Theta(Fam_{OOP})) \times \beta$$
+Or use weighted harmonic mean to penalize imbalance (similar to IP/OOP role ratings)
+
+**FM26 Familiarity Tiers** (confirmed):
 - Natural: 19-20
-- Accomplished: 13-18
+- Accomplished: 13-18 (OOP familiarity should be at least this)
 - Competent: 10-12
-- Unconvincing: 6-9
+- Unconvincing: 6-9 (triggers transition penalties)
 - Awkward: 1-5
 
 ### 4. Fatigue Multiplier Λ(F, T)

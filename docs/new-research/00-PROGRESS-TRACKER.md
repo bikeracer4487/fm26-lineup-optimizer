@@ -4,13 +4,13 @@
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| Phase 1: Core Algorithm Correction | Not Started | 0/4 |
+| Phase 1: Core Algorithm Correction | In Progress | 1/4 |
 | Phase 2: Multi-Match Planning | Not Started | 0/2 |
 | Phase 3: Supporting Systems | Not Started | 0/3 |
 | Phase 4: Validation & Calibration | Not Started | 0/2 |
 | Phase 5: Implementation | Not Started | 0/1 |
 
-**Overall Progress**: 0/12 steps complete
+**Overall Progress**: 1/12 steps complete
 
 ---
 
@@ -19,21 +19,31 @@
 ### Phase 1: Core Algorithm Correction
 
 #### Step 1: FM26 Game Mechanics Deep Dive
-- **Status**: NOT STARTED
+- **Status**: COMPLETE
 - **Priority**: Critical
 - **Prompt File**: `01-PROMPT-fm26-mechanics.md`
-- **Result File**: TBD
+- **Result File**: `01-RESULTS-fm26-mechanics.md`
 - **Goal**: Ground-truth verification of FM26 mechanics (condition, sharpness, fatigue, jadedness)
 
 **Checklist**:
-- [ ] Prompt document created
-- [ ] Research executed
-- [ ] Results uploaded
-- [ ] Results reviewed
-- [ ] Follow-up questions resolved
-- [ ] Step marked complete
+- [x] Prompt document created
+- [x] Research executed
+- [x] Results uploaded
+- [x] Results reviewed
+- [x] Follow-up questions resolved (incorporated into subsequent prompts)
+- [x] Step marked complete
 
-**Notes**: This is foundational - all other steps depend on accurate FM26 mechanics understanding.
+**Key Findings Applied to Future Steps**:
+- Condition: 0-10,000 scale, 92% = "Match Fit", 95% = "Peak"
+- Sharpness: "Seven-Day Cliff" - 3-5% decay/day (much faster than FM24)
+- Jadedness: Only "Holiday" clears it, not standard "Rest"
+- Dual IP/OOP familiarity evaluation is critical
+- Physical attributes (Pace/Accel) have 1.25-1.5x weight in match engine
+
+**Prompts Updated Based on Findings**:
+- `02-PROMPT-unified-scoring.md` - Added verified thresholds, dual-familiarity requirement
+- `03-PROMPT-state-propagation.md` - Added calibration targets
+- `06-PROMPT-fatigue-rest.md` - Added jadedness/holiday mechanics
 
 ---
 
@@ -265,8 +275,8 @@
 
 | Step | Prompt Created | Research Done | Result File | Reviewed | Finalized |
 |------|----------------|---------------|-------------|----------|-----------|
-| 1 | No | No | - | No | No |
-| 2 | No | No | - | No | No |
+| 1 | Yes | Yes | `01-RESULTS-fm26-mechanics.md` | Yes | Yes |
+| 2 | Yes | No | - | No | No |
 | 3 | No | No | - | No | No |
 | 4 | No | No | - | No | No |
 | 5 | No | No | - | No | No |

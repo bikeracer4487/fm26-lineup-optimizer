@@ -24,6 +24,29 @@ Our lineup optimizer plans across a 5-match horizon. To do this, we must predict
 
 **Goal**: Validate and calibrate state propagation equations against actual FM26 behavior. Produce equations that accurately predict player states after matches and rest periods.
 
+## CRITICAL: Findings from FM26 Mechanics Research (Step 1)
+
+The following verified findings provide calibration targets:
+
+### Condition (0-10,000 internal scale)
+- Recovery formula: $\Delta C_{daily} = (R_{base} \times \alpha_{NF}) - (L_{train} \times \beta_{age})$
+- "Double Intensity" training trap: Players NEVER return to 100% if playing 2x/week
+- Must switch to "Rest" when condition <90% to hit "Peak" before next match
+- Post-match recovery depends heavily on Natural Fitness
+
+### Sharpness ("Seven-Day Cliff")
+- Decay rate: **3-5% per day** (much faster than FM24's ~1-2%)
+- Minimum 45-60 minutes per week to maintain positive trend
+- Green tick = >80%, Orange warning = <70%
+- U21 matches can help but recovery window must be >72 hours
+
+### Fatigue/Jadedness
+- Jadedness accumulates linearly with match minutes, exponentially with high-intensity training
+- Only "Holiday" (1 week) effectively resets jadedness
+- Standard "Rest" is insufficient for jaded players
+- Injury risk formula: $Risk_{inj} \propto (Load_{recent})^2 \times \frac{1}{Condition} \times Injury\_Proneness$
+- 3 full 90-min matches in 7 days = "High Risk" regardless of condition
+
 ## Specific Questions
 
 ### 1. Condition Dynamics

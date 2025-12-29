@@ -24,6 +24,35 @@ Our app needs a comprehensive fatigue model and clear rest policies.
 3. Prevents jadedness through proactive management
 4. Handles player archetypes (veteran, youngster, workhorse, fragile)
 
+## CRITICAL: Findings from FM26 Mechanics Research (Step 1)
+
+### Jadedness Model (Verified)
+- **Scale**: 0-200 or 0-1000 (proportional to condition scale)
+- **Accumulation**: Linear with match minutes, EXPONENTIAL with high-intensity training
+- **Threshold**: Determined by Natural Fitness attribute
+- **Effects when jaded**:
+  1. Hidden "Consistency" attribute temporarily reduced
+  2. Condition recovery rate ($\Delta C$) slows significantly (2 days → 4 days to 95%)
+  3. Non-contact injury susceptibility increases
+
+### The "Holiday" Requirement (Critical)
+- **Standard "Rest" is INSUFFICIENT** to clear jadedness
+- Only "Send on Holiday" (1 week minimum) effectively zeros the jadedness counter
+- This is because Holiday removes player from training load entirely
+
+### FM26 vs FM24 Calibration
+- Jadedness ACCUMULATION rate slightly LOWER in FM26 (modern conditioning modeled)
+- But PENALTY for ignoring "Needs Rest" warning is MORE SEVERE
+
+### Injury Risk Formula (Verified)
+$$Risk_{inj} \propto (Load_{recent})^2 \times \frac{1}{Condition} \times Injury\_Proneness$$
+- 3 full 90-min matches in 7 days = "High Risk" REGARDLESS of condition
+- High-press tactics cause exponentially higher condition decay in final 15 minutes
+
+### Training Intensity Impact
+- "Double Intensity" + 2 matches/week = death spiral (never recovers to 100%)
+- Must auto-switch to "Rest/Half" when condition <90%
+
 ## The Fatigue Model
 
 ### Internal vs Visible Fatigue
