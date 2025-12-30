@@ -7,10 +7,10 @@
 | Phase 1: Core Algorithm Correction | **COMPLETE** | 4/4 |
 | Phase 2: Multi-Match Planning | **COMPLETE** | 2/2 |
 | Phase 3: Supporting Systems | **COMPLETE** | 3/3 |
-| Phase 4: Validation & Calibration | **IN PROGRESS** | 1/2 |
+| Phase 4: Validation & Calibration | **COMPLETE** | 2/2 |
 | Phase 5: Implementation | Not Started | 0/1 |
 
-**Overall Progress**: 10/12 steps complete (Phase 4 IN PROGRESS)
+**Overall Progress**: 11/12 steps complete (Phase 4 COMPLETE)
 
 ---
 
@@ -625,21 +625,76 @@ is_sharpness = (FIS < 50) AND (rusty_key_players >= 3) AND (sched_mod >= 1.0)
 ---
 
 #### Step 11: Parameter Calibration
-- **Status**: NOT STARTED
+- **Status**: COMPLETE
 - **Priority**: High
 - **Prompt File**: `11-PROMPT-calibration.md`
-- **Result File**: TBD
+- **Result File**: `11-RESULTS-calibration.md`
 - **Dependencies**: Step 10
 - **Goal**: Grid search and sensitivity analysis
 
 **Checklist**:
-- [ ] Prompt document created
-- [ ] Research executed
-- [ ] Results uploaded
-- [ ] Results reviewed
-- [ ] Default parameters finalized
-- [ ] Sensitivity analysis complete
-- [ ] Step marked complete
+- [x] Prompt document created
+- [x] Research executed
+- [x] Results uploaded
+- [x] Results reviewed
+- [x] Default parameters finalized
+- [x] Sensitivity analysis complete
+- [x] Step marked complete
+
+**Key Findings - Parameter Calibration Methodology:**
+
+**Three-Phase Calibration Framework:**
+1. **Phase 1: Sobol Sensitivity Analysis** - Reduce 50 → 20 critical parameters
+2. **Phase 2: BOHB Optimization** - Tune biological parameters efficiently
+3. **Phase 3: Rolling Horizon** - Calibrate shadow pricing dynamics
+
+**Parameter Classification:**
+| Category | Examples | Nature |
+|----------|----------|--------|
+| Biological Constraints | Sigmoid k, T | Rigid (physiology) |
+| Tactical Variables | Positional drag | Elastic (tunable) |
+| Strategic Valuations | Shadow prices, γ | Abstract (OR-derived) |
+
+**Sobol Sensitivity Analysis:**
+- Screen criteria: S_Ti < 0.01 → Non-Critical (fix to defaults)
+- High S_Ti + Low S_i → Interaction-Dominant (dangerous)
+- Requires N(k+2) evaluations (~52,000 for k=50)
+
+**BOHB Algorithm Selection:**
+| Method | Verdict | Reason |
+|--------|---------|--------|
+| Grid Search | Rejected | 5^50 combinations intractable |
+| Genetic Algorithms | Rejected | Noisy fitness, local optima |
+| **BOHB** | **Selected** | TPE + Hyperband = sample-efficient |
+
+**Proposed Parameter Ranges:**
+| Parameter | Symbol | Range | Justification |
+|-----------|--------|-------|---------------|
+| Sigmoid Steepness | k | 2.0-8.0 | Controls risk "cliff edge" |
+| Danger Threshold | T | 1.3-1.8 | Aligns with ACWR danger zone |
+| Sharpness Half-life | H_sharp | 5-10 days | Detraining effects |
+| Drag (FB→CB) | δ | 0.05-0.15 | Lower intensity move |
+| Drag (CB→FB) | δ | 0.20-0.40 | High sprint demand move |
+| Discount Factor | γ | 0.85-0.98 | Myopic vs hoarding balance |
+| Shadow Convexity | α | 1.5-3.0 | Non-linear fatigue cost |
+
+**AHP Match Importance Weights:**
+| Competition | Weight |
+|-------------|--------|
+| Champions League | 0.50 |
+| Domestic League | 0.30 |
+| FA Cup | 0.15 |
+| League Cup | 0.05 |
+
+**Validation Stress Tests:**
+1. **Christmas Crunch**: 4 games in 10 days → must use >18 unique starters
+2. **Death Spiral**: Cascade injuries → must prefer youth over OOP seniors
+
+**Rolling Horizon Shadow Pricing:**
+$$\lambda_{i,t} = f(\text{Importance}_t, \text{Scarcity}_i, \text{FutureLoad}_i)$$
+- γ → 0: Myopic (play best XI now)
+- γ → 1: Hoarding (rest stars excessively)
+- Target: Match elite manager rotation frequency
 
 ---
 
@@ -675,7 +730,7 @@ is_sharpness = (FIS < 50) AND (rusty_key_players >= 3) AND (sched_mod >= 1.0)
 | 8 | Yes | Yes | `08-RESULTS-player-removal.md` | Yes | Yes |
 | 9 | Yes | Yes | `09-RESULTS-match-importance.md` | Yes | Yes |
 | 10 | Yes | Yes | `10-RESULTS-validation-suite.md` | Yes | Yes |
-| 11 | Yes | No | - | No | No |
+| 11 | Yes | Yes | `11-RESULTS-calibration.md` | Yes | Yes |
 | 12 | Yes | N/A | - | No | No |
 
 ---
@@ -737,6 +792,7 @@ These documents represent prior research that will be consolidated:
 | 2025-12-29 | - | Prompts 10, 11 updated | Added match importance tests, manager profiles, FIS calibration |
 | 2025-12-30 | 10 | Step 10 COMPLETE | 21 validation protocols, integration tests, pytest framework |
 | 2025-12-30 | - | Prompt 11 updated | Added validation-derived calibration recommendations |
+| 2025-12-30 | 11 | Step 11 COMPLETE - PHASE 4 DONE | Sobol GSA, BOHB optimization, Rolling Horizon shadow pricing |
 
 ---
 
