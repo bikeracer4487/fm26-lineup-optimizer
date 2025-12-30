@@ -5,12 +5,12 @@
 | Phase | Status | Progress |
 |-------|--------|----------|
 | Phase 1: Core Algorithm Correction | **COMPLETE** | 4/4 |
-| Phase 2: Multi-Match Planning | Not Started | 0/2 |
+| Phase 2: Multi-Match Planning | **IN PROGRESS** | 1/2 |
 | Phase 3: Supporting Systems | Not Started | 0/3 |
 | Phase 4: Validation & Calibration | Not Started | 0/2 |
 | Phase 5: Implementation | Not Started | 0/1 |
 
-**Overall Progress**: 4/12 steps complete (Phase 1 COMPLETE)
+**Overall Progress**: 5/12 steps complete (Phase 2 IN PROGRESS)
 
 ---
 
@@ -207,20 +207,55 @@ $$C_{total} = w_1 C_{perf} + w_2 C_{dev} + w_3 C_{fatigue}$$
 ### Phase 2: Multi-Match Planning
 
 #### Step 5: Shadow Pricing Formula
-- **Status**: NOT STARTED
+- **Status**: COMPLETE
 - **Priority**: High
 - **Prompt File**: `05-PROMPT-shadow-pricing.md`
-- **Result File**: TBD
+- **Result File**: `05-RESULTS-shadow-pricing.md`
 - **Dependencies**: Step 4
 - **Goal**: Multi-match opportunity cost calculation
 
 **Checklist**:
-- [ ] Prompt document created
-- [ ] Research executed
-- [ ] Results uploaded
-- [ ] Results reviewed
-- [ ] Shadow cost formula finalized
-- [ ] Step marked complete
+- [x] Prompt document created
+- [x] Research executed
+- [x] Results uploaded
+- [x] Results reviewed
+- [x] Shadow cost formula finalized
+- [x] Step marked complete
+
+**Key Findings - Shadow Pricing**:
+
+**Shadow Cost Formula (Trajectory Bifurcation)**:
+$$\lambda_{p,t} = S_p^{VORP} \times \sum_{k=t+1}^{T} (\gamma^{k-t} \times I_k \times \max(0, \Delta GSS_{p,k}))$$
+
+Where ΔGSS = GSS(rest trajectory) - GSS(play trajectory)
+
+**Importance Weights (NEW Exponential Scale)**:
+| Scenario | Weight | Shadow Behavior |
+|----------|--------|-----------------|
+| Cup Final | 10.0 | Massive shadow zones in preceding weeks |
+| Continental KO | 5.0 | Strong preservation of key assets |
+| League (Title Rival) | 3.0 | Significant shadow cost |
+| League (Standard) | 1.5 | Balanced rotation |
+| Cup (Early) | 0.8 | High shadow for starters (low gain) |
+| Dead Rubber | 0.1 | Shadow blocks tired starters |
+
+**Parameter Table**:
+| Parameter | Symbol | Default | Range |
+|-----------|--------|---------|-------|
+| Discount Factor | γ | 0.85 | 0.70-0.95 |
+| Shadow Weight | λ_shadow | 1.0 | 0.0-2.0 |
+| Scarcity Scaling | λ_V | 2.0 | 1.0-3.0 |
+| Jadedness Threshold | J_lim | 270 | Fixed |
+| Rest Threshold | Φ_min | 91% | 85-95% |
+
+**VORP Scarcity Index** (Key Player Identification):
+$$\alpha_{scarcity} = 1 + \lambda_V \times \min(0.5, \frac{GSS_{star} - GSS_{backup}}{GSS_{star}})$$
+- Gap% > 10% → player is "Key"
+- Max scarcity multiplier: 2.0
+
+**Algorithm**: O(N × H) heuristic lookahead (<1ms execution)
+- Rejects Lagrangian Relaxation for performance
+- Achieves >90% optimal solution quality
 
 **Current Code**: `ui/api/shadow_pricing.py`
 
@@ -373,7 +408,7 @@ $$C_{total} = w_1 C_{perf} + w_2 C_{dev} + w_3 C_{fatigue}$$
 | 2 | Yes | Yes | `02-RESULTS-unified-scoring.md` | Yes | Yes |
 | 3 | Yes | Yes | `03-RESULTS-state-propagation.md` | Yes | Yes |
 | 4 | Yes | Yes | `04-RESULTS-hungarian-matrix.md` | Yes | Yes |
-| 5 | Yes | No | - | No | No |
+| 5 | Yes | Yes | `05-RESULTS-shadow-pricing.md` | Yes | Yes |
 | 6 | Yes | No | - | No | No |
 | 7 | Yes | No | - | No | No |
 | 8 | Yes | No | - | No | No |
@@ -429,6 +464,8 @@ These documents represent prior research that will be consolidated:
 | 2025-12-29 | - | Prompts 04-06, 10-11 updated | Added R_pos coefficients, 14-day window, sharpness cliff tests |
 | 2025-12-29 | 4 | Step 4 COMPLETE - PHASE 1 DONE | Two-stage algorithm, Big M=10^6, multi-objective scalarization |
 | 2025-12-29 | - | Prompts 05, 10, 11 updated | Added scenario weights, switching costs, bench selection tests |
+| 2025-12-29 | 5 | Step 5 COMPLETE | Shadow cost formula, VORP scarcity index, O(N×H) heuristic |
+| 2025-12-29 | - | Prompts 06, 10, 11 updated | Added importance weights (0.1-10.0), shadow pricing parameters |
 
 ---
 

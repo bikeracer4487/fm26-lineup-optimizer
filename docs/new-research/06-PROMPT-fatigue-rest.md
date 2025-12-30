@@ -91,6 +91,45 @@ This explains why playing a player for a 4th consecutive 90-minute match imparts
 
 **Implication**: Schedule friendlies during international breaks to prevent non-internationals from falling off the cliff.
 
+## CRITICAL: Findings from Shadow Pricing Research (Step 5)
+
+### Shadow Cost Integration with Rest Policy
+Shadow pricing calculates the opportunity cost of player usage:
+$$\lambda_{p,t} = S_p^{VORP} \times \sum_{k=t+1}^{T} (\gamma^{k-t} \times I_k \times \max(0, \Delta GSS_{p,k}))$$
+
+Where ΔGSS = GSS(rest trajectory) - GSS(play trajectory)
+
+### VORP-Based Rest Prioritization
+"Key Players" are identified via VORP (Value Over Replacement Player) scarcity index:
+- Gap% = (GSS_star - GSS_backup) / GSS_star
+- If Gap% > 10%, player is "Key" → higher shadow cost → more rest protection
+- Scarcity multiplier: α = 1 + λ_V × min(0.5, Gap%)
+
+**Implication for Rest Policy**: Key players with high shadow costs should receive more aggressive rest recommendations even when their visible condition looks acceptable.
+
+### Importance Weights for Rest Decisions
+| Scenario | Weight | Rest Implication |
+|----------|--------|------------------|
+| Cup Final | 10.0 | Maximum preservation in preceding 2 weeks |
+| Continental KO | 5.0 | Strong rest enforcement |
+| Title Rival | 3.0 | Significant shadow cost |
+| Standard League | 1.5 | Normal rotation |
+| Cup (Early) | 0.8 | High rotation, preserve for league |
+| Dead Rubber | 0.1 | Full rotation, key player rest |
+
+### Integration Points with Rest Advisor
+1. **Shadow cost > Current utility** → Recommend REST
+2. **"Must rest"** = Infinite shadow cost for current match
+3. **Recovery timeline** affects trajectory simulation in shadow calculator
+4. **Position-specific recovery** (from Step 3 R_pos) affects shadow cost magnitude
+
+### Key Parameters for Rest Integration
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| γ (discount) | 0.85 | Future match weight decay (15%/match) |
+| λ_shadow | 1.0 | Shadow cost sensitivity multiplier |
+| λ_V | 2.0 | VORP scarcity scaling factor |
+
 ## The Fatigue Model
 
 ### Internal vs Visible Fatigue

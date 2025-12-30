@@ -47,9 +47,20 @@ Step 2 research has FINALIZED the multiplier formulas. The calibration task is n
 - Pre-cliff decay: 1-2%/day
 - Post-cliff decay: 5-8%/day
 
-**Shadow Pricing**:
-- γ (discount factor): 1 value
-- λ_shadow (weight): 1 value
+**Shadow Pricing (CALIBRATED from Step 5)**:
+- γ (discount factor): Default 0.85, Range 0.70-0.95
+- λ_shadow (weight): Default 1.0, Range 0.5-2.0
+- λ_V (scarcity scaling): Default 2.0, Range 1.0-3.0
+
+**Importance Weights (from Step 5 - May Calibrate)**:
+| Scenario | Default | Range | Notes |
+|----------|---------|-------|-------|
+| Cup Final | 10.0 | 8.0-12.0 | Highest priority |
+| Continental KO | 5.0 | 4.0-6.0 | High leverage |
+| Title Rival | 3.0 | 2.5-4.0 | "Six-pointer" |
+| Standard League | 1.5 | 1.0-2.0 | Baseline |
+| Cup (Early) | 0.8 | 0.5-1.0 | Low leverage |
+| Dead Rubber | 0.1 | 0.05-0.2 | Negligible |
 
 **Stability**:
 - inertia_weight: 1 value
@@ -326,6 +337,7 @@ def aggregate_score(result):
 | 270_min_penalty | **0.85** | 0.8 - 0.9 | Penalty factor |
 | γ_shadow | 0.85 | 0.70 - 0.95 | Shadow discount |
 | λ_shadow | 1.0 | 0.5 - 2.0 | Shadow weight |
+| λ_V (scarcity) | 2.0 | 1.0 - 3.0 | VORP scarcity scaling (Step 5) |
 | inertia_weight | 0.5 | 0.0 - 1.0 | Stability slider |
 
 **Note**: Familiarity and base fatigue step function values are FIXED from Step 2 and should NOT be calibrated.

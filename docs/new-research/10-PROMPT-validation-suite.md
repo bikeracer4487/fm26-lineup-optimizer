@@ -84,6 +84,46 @@ $$GSS = BPS \times \Phi(C) \times \Psi(S) \times \Theta(F) \times \Omega(J)$$
 ### Lagrangian Relaxation Tests
 **Test**: "Min 4 Club-Grown" quota should be satisfied via iterative subsidy
 
+## CRITICAL: Findings from Shadow Pricing Research (Step 5)
+
+### Shadow Pricing Validation Tests
+1. **Trajectory Bifurcation**: Verify GSS(rest) vs GSS(play) correctly projected
+2. **VORP Scarcity**: Key player (Gap% > 10%) has higher shadow cost than non-key
+3. **Discount Factor**: γ=0.85 correctly decays future match influence
+4. **Importance Weighting**: Cup Final (10.0) overrides 4 Low matches (0.8 each)
+
+### Shadow Pricing Test Parameters
+| Parameter | Default | Test Values |
+|-----------|---------|-------------|
+| γ (discount) | 0.85 | 0.70, 0.85, 0.95 |
+| λ_shadow | 1.0 | 0.5, 1.0, 2.0 |
+| λ_V (scarcity) | 2.0 | 1.0, 2.0, 3.0 |
+
+### Importance Weights (NEW from Step 5)
+| Scenario | Weight | Test Implication |
+|----------|--------|------------------|
+| Cup Final | 10.0 | Should override all prior matches |
+| Continental KO | 5.0 | Strong preservation trigger |
+| Title Rival | 3.0 | Moderate shadow increase |
+| Standard League | 1.5 | Baseline weight |
+| Cup (Early) | 0.8 | Below baseline |
+| Dead Rubber | 0.1 | Near-zero weight |
+
+### Additional Scenario: Shadow Pricing Effectiveness
+**Scenario 2b: Shadow Price Calculation Verification**
+- **Setup**: Same as Cup Final Protection (L,L,L,L,H)
+- **Expected**: Shadow cost for star at Match 1 > utility at Match 1
+- **Validation**:
+  - `shadow_cost_match_1` > `current_utility` for key players
+  - Star player rested in matches 3-4 due to shadow cost
+  - Star player at 98%+ condition for Cup Final
+
+### VORP Scarcity Index Test
+**Scenario**: Two players at same position
+- Player A: GSS = 85, Backup GSS = 60 → Gap% = 29% → Key Player
+- Player B: GSS = 75, Backup GSS = 72 → Gap% = 4% → Not Key
+- **Expected**: Shadow cost(A) > Shadow cost(B) by factor of ~1.5x
+
 ## Research Objective
 
 **Goal**: Design a comprehensive validation test suite that:
