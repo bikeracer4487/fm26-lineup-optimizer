@@ -241,6 +241,288 @@ $$GSI = (Scarcity_{pos} \times Weight_{pos}) + InjuryRisk_{starter} + ScheduleDe
 - **Anti-case**: Star player (1st choice) recommended for conversion
 - **Expected**: Penalty applied OR recommendation rejected
 
+## CRITICAL: Findings from Player Removal Research (Step 8)
+
+### Contribution Score Validation Tests
+
+**Component Weight Validation**:
+| Component | Weight | Test Focus |
+|-----------|--------|------------|
+| Effective Ability | 45% | Weighted role attributes, not raw CA |
+| Reliability | 20% | Hidden attrs (Consistency, Important Matches, Pressure) |
+| Performance | 25% | "Moneyball" metrics (Avg Rating) |
+| Scarcity | 10% | Spine/left-foot premium |
+
+**Scenario 16: Effective Ability vs Raw CA**
+- **Setup**: Player A (CA 150, poor role fit), Player B (CA 130, perfect role fit)
+- **Expected**: Player B has higher Contribution Score despite lower CA
+- **Validation**: `contribution_score_B` > `contribution_score_A`
+
+**Scenario 17: Reliability Coefficient**
+- **Setup**: Player with Consistency 8, Important Matches 6, Pressure 7, Injury Proneness 15
+- **Expected**: $R_{coef} < 0.7$ → "High Risk" flag
+- **Formula**: $R = (0.4 \times 8 + 0.3 \times 6 + 0.3 \times 7) / 20 \times (1 - 0.25) = 0.41$
+- **Validation**: `reliability_coefficient` < 0.7 AND `high_risk_flag` = True
+
+**Scenario 18: Form Shield Protection**
+- **Setup**: Player with low CA but Avg Rating > 7.20 over 20 matches
+- **Expected**: "Form Shield" active, removal blocked
+- **Validation**: `form_shield` = True AND `protected` = True
+
+### Aging Curve Tests
+
+**Position-Specific Peak Validation**:
+| Position | Peak Start | Peak End | Decline | Test Case |
+|----------|------------|----------|---------|-----------|
+| GK | 29 | 34 | 35 | 33yo GK = "peak" |
+| DL/DR | 25 | 29 | 30 | 30yo FB = "declining" |
+| AM | 24 | 28 | 30 | 29yo AM = "declining" |
+
+**Scenario 19: Peak Sell Timing**
+- **Setup**: 29yo Winger (AM position), Peak End = 28
+- **Expected**: `action_timing` = "sell_peak_value"
+- **Validation**: Future value model recommends sale BEFORE decline
+
+**Scenario 20: Rising vs Stagnating Youth**
+- **Setup A**: 20yo with PA-CA = 30, recent progress rate = 0.8
+- **Setup B**: 20yo with PA-CA = 30, recent progress rate = 0.3
+- **Expected A**: `value_trend` = "increasing"
+- **Expected B**: `value_trend` = "stagnating" (False Prospect flag)
+
+### Financial Analysis Tests
+
+**30-30-30-10 Wage Structure Validation**:
+| Tier | Slots | Budget Share | Test Focus |
+|------|-------|--------------|------------|
+| Key | 4 | 30% | Top 4 by contribution |
+| First Team | 7 | 30% | Ranks 5-11 |
+| Rotation | 11 | 30% | Ranks 12-22 |
+| Backup | 5 | 10% | Ranks 23+ |
+
+**Scenario 21: Wage Efficiency Ratio**
+- **Setup**: Player ranked #15 (Rotation tier), earning Key Player wages
+- **Expected**: `wage_vs_tier_cap_ratio` > 1.5 → "Wage Dump" recommendation
+- **Validation**: `recommendation` = "Urgent Wage Dump"
+
+**Scenario 22: Book Value vs Market Value**
+- **Setup**: Player bought for £50M, 3 years remaining on 5-year contract
+- **Expected**: `book_value` = £30M
+- **If** Market Value < Book Value → Recommend Loan (avoid loss)
+- **Validation**: `amortization_check` flags financial risk
+
+### Protection Rule Tests
+
+**Scenario 23: Youth Protection Rules**
+- **Setup**: 19yo with PA = 160, Professionalism = 15
+- **Expected**: Protected (High Potential Asset)
+- **Anti-case**: 19yo with PA = 160, Professionalism = 6, stalled development
+- **Expected**: NOT Protected ("Ravel Morrison" rule)
+
+**Scenario 24: Recent Signing Protection**
+- **Setup**: Player signed 90 days ago
+- **Expected**: Protected (Recent Signing, <180 days)
+- **Validation**: `protection_type` = "Financial"
+
+**Scenario 25: HGC Quota Critical**
+- **Setup**: Squad has exactly 4 HGC players, considering removing one
+- **Expected**: Protected (Registration Critical)
+- **Validation**: `blocking_reason` = "HGC Quota Failure"
+
+### Squad Balance Tests
+
+**Scenario 26: Positional Depth Check**
+- **Setup**: Only 2 players at LB position, considering removing one
+- **Expected**: `blocking_issue` = True, removal blocked
+- **Validation**: `depth_warnings` contains "Critical Lack of Depth at LB"
+
+**Scenario 27: Leadership Void Risk**
+- **Setup**: Removing team captain/leader
+- **Expected**: Warning flagged (not blocking but noted)
+- **Validation**: `depth_warnings` contains "Leadership Void Risk"
+
+### Decision Gate Tests
+
+**Gate Priority Order Validation**:
+1. Deadwood (Priority 1): Low score + no potential
+2. Financial Burden (Priority 2): Wage ratio > 1.4
+3. Peak Sell (Priority 3): Decline imminent
+4. Development Loan (Priority 4): Age <22, high PA, below threshold
+
+**Scenario 28: Gate Prioritization**
+- **Setup**: Player matches both Gate 2 (wage burden) and Gate 3 (peak sell)
+- **Expected**: Classified as Priority 2 (higher priority gate wins)
+- **Validation**: `priority` = 2, `reason` contains "Wage Efficiency"
+
+### Youth Loan Policy Tests
+
+**Scenario 29: Age-Based Youth Policy**
+- **Setup A**: 17yo with high PA
+- **Expected A**: KEEP (Club Grown accumulation, 15-21 window)
+- **Setup B**: 19yo with high PA, <20 matches this season
+- **Expected B**: LOAN (needs first team minutes)
+- **Validation**: `action` reflects age-appropriate policy
+
+## CRITICAL: Findings from Match Importance Research (Step 9)
+
+### Final Importance Score (FIS) Validation Tests
+
+**Master Formula**:
+$$FIS = (Base \times M_{opp} \times M_{sched} \times M_{user}) + B_{context}$$
+
+### Base Importance Table Tests
+
+**Scenario 30: Competition Base Score Lookup**
+| Test Case | Competition | Stage | Expected Base |
+|-----------|-------------|-------|---------------|
+| Title decider | League (Title Race) | Last 10 | 100 |
+| Mid-table clash | League (Mid-Table) | Any | 60 |
+| Dead rubber | League (Dead Rubber) | Last 5 | 20 |
+| CL knockout | Champions League | R16+ | 95 |
+| Cup early | Domestic Cup (Major) | Early | 40 |
+| Friendly | Friendly | Any | 10 |
+
+**Validation**: `get_competition_base_score()` returns correct values
+
+### Opponent Strength Modifier Tests
+
+**Scenario 31: Relative Strength Calculation**
+- **Setup**: User Rep = 8000, Opponent Rep = 10500
+- **Expected**: Rs = 10500/8000 = 1.31 → Classification = "Titan" → M_opp = 1.2x
+- **Validation**: `opponent_modifier` = 1.2
+
+**Scenario 32: Minnow Detection**
+- **Setup**: User Rep = 9000, Opponent Rep = 4000
+- **Expected**: Rs = 4000/9000 = 0.44 → Classification = "Minnow" → M_opp = 0.6x
+- **Validation**: `opponent_modifier` = 0.6
+
+| Rs Range | Classification | M_opp | Test Case |
+|----------|----------------|-------|-----------|
+| > 1.3 | Titan | 1.2x | Champions vs User |
+| 0.9-1.1 | Peer | 1.0x | Same-tier opponent |
+| < 0.6 | Minnow | 0.6x | Lower league cup opponent |
+
+### Schedule Context Modifier Tests
+
+**Scenario 33: 72-Hour Recovery Rule**
+- **Setup**: League match Wednesday, CL Semi-Final Saturday (3 days gap)
+- **Expected**: CL base ≥ 80 AND gap ≤ 3 → M_sched = 0.7x
+- **Validation**: `schedule_modifier` = 0.7 AND `reasoning` contains "recovery"
+
+**Scenario 34: Fixture Congestion (ACWR)**
+- **Setup**: 3rd match in 7 days
+- **Expected**: M_sched *= 0.8 (congestion penalty)
+- **Validation**: `schedule_modifier` includes 0.8 multiplier
+
+**Scenario 35: Freshness Bonus**
+- **Setup**: 8 days since last match
+- **Expected**: M_sched = 1.1x (freshness bonus)
+- **Validation**: `schedule_modifier` = 1.1
+
+| Condition | M_sched | Test Validation |
+|-----------|---------|-----------------|
+| Next High ≤3 days | 0.7x | 72-hour rule active |
+| Next High = 4 days | 0.9x | Slight rotation |
+| 3rd in 7 days | 0.8x | ACWR congestion |
+| ≥7 days rest | 1.1x | Freshness bonus |
+
+### Contextual Bonus Tests
+
+**Scenario 36: Rivalry/Derby Bonus**
+- **Setup**: Match flagged as derby, FIS = 60
+- **Expected**: FIS += 20 → Final FIS = 80
+- **Validation**: `is_derby` = True AND `fis_raw` increased by 20
+
+**Scenario 37: Form Correction Bonus**
+- **Setup**: Team on 4-match losing streak
+- **Expected**: B_context += 15
+- **Validation**: `losing_streak >= 3` triggers +15 bonus
+
+**Scenario 38: Cup Run Bonus**
+- **Setup**: User objective includes "Cup Glory", match is QF
+- **Expected**: B_context += 10
+- **Validation**: Bonus applied when `round >= QF` AND `objective_includes_cup`
+
+| Bonus Type | Value | Trigger Condition |
+|------------|-------|-------------------|
+| Rivalry/Derby | +20 | `is_derby` = True |
+| Form Correction | +15 | `losing_streak >= 3` |
+| Cup Run | +10 | QF+ with Cup objective |
+
+### FIS Threshold Classification Tests
+
+**Scenario 39: Threshold Boundary Tests**
+| FIS Score | Expected Level | Test Case |
+|-----------|----------------|-----------|
+| 95 | High | Title decider vs Titan |
+| 85 | High | Boundary test (exactly 85) |
+| 84 | Medium | Just below High threshold |
+| 50 | Medium | Boundary test (exactly 50) |
+| 49 | Low | Just below Medium threshold |
+| 25 | Low | Dead rubber vs Minnow |
+
+**Validation**: Classification matches threshold rules exactly
+
+### Sharpness Detection Tests
+
+**Scenario 40: Sharpness Override Logic**
+- **Setup**: FIS = 30 (Low), 4 key players with sharpness < 70%, 7 days until next match
+- **Expected**: `is_sharpness_candidate` = True → Level = "Sharpness"
+- **Conditions Met**:
+  1. FIS < 50? ✓ (30)
+  2. Rusty key players >= 3? ✓ (4)
+  3. sched_mod >= 1.0? ✓ (recovery time available)
+- **Validation**: `level` = "Sharpness" AND `reasoning` mentions "match fitness"
+
+**Scenario 41: Sharpness Rejected (Congestion)**
+- **Setup**: FIS = 30, 4 rusty players, BUT sched_mod = 0.7 (CL in 3 days)
+- **Expected**: `is_sharpness_candidate` = False (recovery time not available)
+- **Validation**: `level` = "Low" (not Sharpness)
+
+### Manager Profile Tests
+
+**Scenario 42: Youth Developer Profile**
+- **Setup**: Manager persona = "The Architect", Cup early round
+- **Expected**: `user_mod` = 0.5 (secondary cup weight)
+- **Impact**: FIS lowered, more likely to classify as Low → youth play
+
+**Scenario 43: Glory Hunter Profile**
+- **Setup**: Manager persona = "The Glory Hunter", Cup QF
+- **Expected**: `user_mod` = 1.2 (cup weight)
+- **Impact**: FIS elevated, more likely to classify as High
+
+| Profile | League | Major Cup | Secondary Cup | Continental |
+|---------|--------|-----------|---------------|-------------|
+| Architect | 1.0 | 0.8 | 0.5 | 1.2 |
+| Pragmatist | 1.3 | 0.6 | 0.6 | 0.6 |
+| Glory Hunter | 1.0 | 1.2 | 1.0 | 1.2 |
+
+### Integration Test Scenarios
+
+**Scenario 44: Giant Killing Setup (Full Calculation)**
+- **Setup**: FA Cup 3rd Round, PL team vs League Two, standard week
+- **Calculation**: Base(40) × M_opp(0.6) × M_sched(1.0) = 24
+- **Expected**: FIS = 24 → Level = "Low"
+- **Validation**: Heavy rotation recommended
+
+**Scenario 45: Congestion Crunch (Full Calculation)**
+- **Setup**: League match (Contention), peer opponent, CL QF in 3 days
+- **Calculation**: Base(80) × M_opp(1.0) × M_sched(0.7) = 56
+- **Expected**: FIS = 56 → Level = "Medium"
+- **Validation**: Partial rotation, not full strength
+
+**Scenario 46: Must-Win Derby (Full Calculation)**
+- **Setup**: Title race, derby match, team on losing streak
+- **Calculation**: Base(100) × M_opp(1.0) × M_sched(1.0) + Derby(20) + Form(15) = 135
+- **Expected**: FIS = 135 → Level = "High" (confident)
+- **Validation**: Best XI mandatory, confidence meter = 100%
+
+### Override Warning Tests
+
+**Scenario 47: User Override Warning**
+- **Setup**: System suggests High, user selects Low
+- **Expected**: Warning modal displays with win probability delta
+- **Validation**: `warning_triggered` = True AND `message` contains probability impact
+
 ## Research Objective
 
 **Goal**: Design a comprehensive validation test suite that:

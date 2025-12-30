@@ -6,11 +6,11 @@
 |-------|--------|----------|
 | Phase 1: Core Algorithm Correction | **COMPLETE** | 4/4 |
 | Phase 2: Multi-Match Planning | **COMPLETE** | 2/2 |
-| Phase 3: Supporting Systems | **IN PROGRESS** | 1/3 |
-| Phase 4: Validation & Calibration | Not Started | 0/2 |
+| Phase 3: Supporting Systems | **COMPLETE** | 3/3 |
+| Phase 4: Validation & Calibration | **IN PROGRESS** | 1/2 |
 | Phase 5: Implementation | Not Started | 0/1 |
 
-**Overall Progress**: 7/12 steps complete (Phase 3 IN PROGRESS)
+**Overall Progress**: 10/12 steps complete (Phase 4 IN PROGRESS)
 
 ---
 
@@ -390,61 +390,235 @@ $$RER = \frac{\text{Sum of Weighted Attributes for Target Role}}{\text{Total Cur
 ---
 
 #### Step 8: Player Removal Model
-- **Status**: NOT STARTED
+- **Status**: COMPLETE
 - **Priority**: Medium
 - **Prompt File**: `08-PROMPT-player-removal.md`
-- **Result File**: TBD
+- **Result File**: `08-RESULTS-player-removal.md`
 - **Dependencies**: None
 - **Goal**: Multi-factor sell/loan/release decisions
 
 **Checklist**:
-- [ ] Prompt document created
-- [ ] Research executed
-- [ ] Results uploaded
-- [ ] Results reviewed
-- [ ] Decision model finalized
-- [ ] Step marked complete
+- [x] Prompt document created
+- [x] Research executed
+- [x] Results uploaded
+- [x] Results reviewed
+- [x] Decision model finalized
+- [x] Step marked complete
+
+**Key Findings - Player Removal Decision Model:**
+
+**Contribution Score Algorithm (0-100)**:
+| Component | Weight | Source |
+|-----------|--------|--------|
+| Effective Ability | 45% | Weighted role attributes (not raw CA) |
+| Reliability | 20% | Hidden attrs (Consistency, Important Matches, Pressure) |
+| Performance | 25% | "Moneyball" metrics (Avg Rating >7.20 = Form Shield) |
+| Scarcity | 10% | Spine/left-foot premium |
+
+**Reliability Coefficient**:
+$$R_{coef} = 0.4 \times Consistency + 0.3 \times ImportantMatches + 0.3 \times Pressure$$
+- Multiplied by $(1 - InjuryPenalty)$
+- If $R_{coef} < 0.7$ → "High Risk" flag
+
+**Position-Specific Aging Curves**:
+| Position | Peak Start | Peak End | Decline |
+|----------|------------|----------|---------|
+| GK | 29 | 34 | 35 |
+| DC | 27 | 31 | 32 |
+| DL/DR | 25 | 29 | 30 |
+| DM/MC | 26 | 30 | 32 |
+| AM | 24 | 28 | 30 |
+| ST | 25 | 29 | 31 |
+
+**30-30-30-10 Wage Structure Rule**:
+- Key Players (Top 4): 30% of budget
+- First Team (Next 7): 30%
+- Rotation (Next 11): 30%
+- Youth/Backup: 10%
+
+**Wage Efficiency Thresholds**:
+- Ratio > 1.25 → Financially inefficient
+- Ratio > 1.50 → "Wage Dump" candidate (urgent)
+
+**Protection Rules**:
+1. High PA Youth (≤21, PA ≥150): Protected
+2. Key Contributors (Top 15): Protected
+3. Recent Signings (<180 days): Protected
+4. HGC Quota Critical (<4 HGC): Protected
+
+**Decision Gates (Priority Order)**:
+1. **Deadwood**: Low score + no potential → Sell/Release
+2. **Financial Burden**: Wage ratio >1.4 → Sell
+3. **Peak Sell**: Decline imminent → Sell (asset maximization)
+4. **Development Loan**: Age <22, PA >130, below threshold → Loan
+
+**Youth Policy**:
+- Age 15-18: KEEP (Club Grown accumulation)
+- Age 18+: LOAN if not getting >20 matches/season
 
 **Current Code**: `ui/api/api_player_removal.py`
 
 ---
 
 #### Step 9: Match Importance Scoring
-- **Status**: NOT STARTED
+- **Status**: COMPLETE
 - **Priority**: Medium
 - **Prompt File**: `09-PROMPT-match-importance.md`
-- **Result File**: TBD
+- **Result File**: `09-RESULTS-match-importance.md`
 - **Dependencies**: None
 - **Goal**: Automatic importance classification
 
 **Checklist**:
-- [ ] Prompt document created
-- [ ] Research executed
-- [ ] Results uploaded
-- [ ] Results reviewed
-- [ ] Classification rules defined
-- [ ] Step marked complete
+- [x] Prompt document created
+- [x] Research executed
+- [x] Results uploaded
+- [x] Results reviewed
+- [x] Classification rules defined
+- [x] Step marked complete
+
+**Key Findings - Automated Match Importance Classification System (AMICS)**:
+
+**Final Importance Score (FIS) Formula**:
+$$FIS = (Base \times M_{opp} \times M_{sched} \times M_{user}) + B_{context}$$
+
+**Base Importance Table (0-100)**:
+| Competition | Stage | Base Score |
+|-------------|-------|------------|
+| League (Title/Relegation) | Last 10 | 100 |
+| League (Contention) | Regular | 80 |
+| League (Mid-Table) | Any | 60 |
+| League (Dead Rubber) | Last 5 | 20 |
+| Champions League | KO (R16+) | 95 |
+| Champions League | Group (Open) | 85 |
+| Domestic Cup (Major) | SF/Final | 100 |
+| Domestic Cup (Major) | Early | 40 |
+| Secondary Cup | Late | 70 |
+| Secondary Cup | Early | 30 |
+| Friendlies | Any | 10 |
+
+**Opponent Strength Modifier (M_opp)**:
+| Relative Strength | Classification | Modifier |
+|-------------------|----------------|----------|
+| > 1.3 | Titan | 1.2x |
+| 1.1-1.3 | Superior | 1.1x |
+| 0.9-1.1 | Peer | 1.0x |
+| 0.6-0.9 | Inferior | 0.8x |
+| < 0.6 | Minnow | 0.6x |
+
+**Schedule Context Modifier (M_sched)**:
+| Condition | Modifier | Rationale |
+|-----------|----------|-----------|
+| Next High ≤3 days | 0.7x | 72-hour recovery rule |
+| Next High = 4 days | 0.9x | Slight rotation |
+| 3rd match in 7 days | 0.8x | ACWR congestion |
+| ≥7 days since last | 1.1x | Freshness bonus |
+
+**Contextual Bonuses (B_context)**:
+- Rivalry/Derby: +20
+- Form Correction (≥3 losses): +15
+- Cup Run (QF+ with objective): +10
+
+**FIS Thresholds**:
+- **High**: FIS ≥ 85 (Must Win)
+- **Medium**: 50 ≤ FIS < 85 (Important)
+- **Low**: FIS < 50 (Rotation)
+- **Sharpness**: Override when Low AND ≥3 rusty key players
+
+**Sharpness Detection Logic**:
+```
+is_sharpness = (FIS < 50) AND (rusty_key_players >= 3) AND (sched_mod >= 1.0)
+```
+
+**Manager Profiles**:
+- "The Architect" (Youth): Cup 0.8x/0.5x
+- "The Pragmatist" (Survival): League 1.3x, Cup 0.6x
+- "The Glory Hunter" (Cups): Cup 1.2x
 
 ---
 
 ### Phase 4: Validation & Calibration
 
 #### Step 10: Validation Test Suite
-- **Status**: NOT STARTED
+- **Status**: COMPLETE
 - **Priority**: High
 - **Prompt File**: `10-PROMPT-validation-suite.md`
-- **Result File**: TBD
+- **Result File**: `10-RESULTS-validation-suite.md`
 - **Dependencies**: Steps 2-6
 - **Goal**: Offline evaluation metrics and test cases
 
 **Checklist**:
-- [ ] Prompt document created
-- [ ] Research executed
-- [ ] Results uploaded
-- [ ] Results reviewed
-- [ ] Test scenarios defined
-- [ ] Metrics finalized
-- [ ] Step marked complete
+- [x] Prompt document created
+- [x] Research executed
+- [x] Results uploaded
+- [x] Results reviewed
+- [x] Test scenarios defined
+- [x] Metrics finalized
+- [x] Step marked complete
+
+**Key Findings - Validation Framework:**
+
+**21 Validation Protocols Defined:**
+
+*GSS Component Tests (1-5):*
+| Protocol | Focus | Key Metric |
+|----------|-------|------------|
+| 1 | Specialist vs Generalist | BPS(Specialist) > BPS(Generalist) |
+| 2 | Reliability Coefficient | ρ = 1 - (20-Consistency)/40 |
+| 3 | Condition Cliff (91% Floor) | Φ(0.91) ≈ 0.68 |
+| 4 | Sharpness Seven-Day Cliff | Day 21 sharpness < 75% |
+| 5 | Jadedness Step Function | Ω thresholds at 200/400/700 |
+
+*State Propagation Tests (6-8):*
+| Protocol | Focus | Key Metric |
+|----------|-------|------------|
+| 6 | Positional Drag | R_pos(WB)=1.65 vs R_pos(GK)=0.2 |
+| 7 | 270-Minute Rule | 2.5x J penalty when exceeded |
+| 8 | Holiday vs Rest | 50 pts/day vs 5 pts/day recovery |
+
+*Optimization Engine Tests (9-11):*
+| Protocol | Focus | Key Metric |
+|----------|-------|------------|
+| 9 | Solver Correctness | Global maximum found |
+| 10 | Safe Big M | M = 10^6 (no overflow) |
+| 11 | Scalarization Weights | Youth Rate monotonic with w₂ |
+
+*Shadow Pricing Tests (12-14):*
+| Protocol | Focus | Key Metric |
+|----------|-------|------------|
+| 12 | Lagrangian Dual | λ extraction via relaxation |
+| 13 | Trajectory Bifurcation | ShadowCost > DirectUtility |
+| 14 | VORP Scarcity Gap | Correlation r > 0.8 |
+
+*Supporting System Tests (15-21):*
+| Protocol | Focus | Key Metric |
+|----------|-------|------------|
+| 15 | Gap Severity Index | GSI > 0.9 triggers action |
+| 16 | Mascherano Protocol | d(DM,CB) << d(ST,CB) |
+| 17 | Age Plasticity | 32yo = Rejected |
+| 18 | Effective Ability | Role fit > Raw CA |
+| 19 | Wage Dump Trigger | Ratio > 1.5 = Urgent |
+| 20 | Giant Killing FIS | 40 × 0.6 = 24 → Low |
+| 21 | 72-Hour Rule | M_sched = 0.7 when gap ≤ 3 |
+
+**Integration Test Scenarios:**
+1. **Christmas Crunch** (5 matches in 13 days):
+   - Rotation Index > 0.7
+   - Condition Floor Violations = 0
+   - No player crosses J=700
+
+2. **Death Spiral Prevention**:
+   - System accepts lower ATS over constraint violation
+   - Youth call-ups to preserve health
+
+**Key Metrics:**
+- **ATS**: Aggregate Team Strength = Σ GSS(p)
+- **FVC**: Fatigue Violation Count (Target: 0)
+- **RI**: Rotation Index = Unique Starters / Squad Size
+
+**Technical Implementation:**
+- Pytest parametrization for curve testing
+- PlayerState dataclass with full schema
+- Process-based validation (not outcome-based)
 
 **Current Code**: `tests/test_validation_scenarios.py`
 
@@ -498,9 +672,9 @@ $$RER = \frac{\text{Sum of Weighted Attributes for Target Role}}{\text{Total Cur
 | 5 | Yes | Yes | `05-RESULTS-shadow-pricing.md` | Yes | Yes |
 | 6 | Yes | Yes | `06-RESULTS-fatigue-rest.md` | Yes | Yes |
 | 7 | Yes | Yes | `07-RESULTS-training-recommender.md` | Yes | Yes |
-| 8 | Yes | No | - | No | No |
-| 9 | Yes | No | - | No | No |
-| 10 | Yes | No | - | No | No |
+| 8 | Yes | Yes | `08-RESULTS-player-removal.md` | Yes | Yes |
+| 9 | Yes | Yes | `09-RESULTS-match-importance.md` | Yes | Yes |
+| 10 | Yes | Yes | `10-RESULTS-validation-suite.md` | Yes | Yes |
 | 11 | Yes | No | - | No | No |
 | 12 | Yes | N/A | - | No | No |
 
@@ -557,7 +731,13 @@ These documents represent prior research that will be consolidated:
 | 2025-12-29 | - | Prompts 10, 11 updated | Added jadedness thresholds, archetype tests, training integration |
 | 2025-12-29 | 7 | Step 7 COMPLETE | PTRE architecture, GSI formula, age plasticity, difficulty classes |
 | 2025-12-29 | - | Prompts 10, 11 updated | Added position training tests, calibration parameters |
+| 2025-12-29 | 8 | Step 8 COMPLETE | Player removal model, contribution score, aging curves, wage structure |
+| 2025-12-29 | - | Prompts 10, 11 updated | Added removal decision tests, financial calibration parameters |
+| 2025-12-29 | 9 | Step 9 COMPLETE - PHASE 3 DONE | AMICS system, FIS formula, base importance table, modifiers |
+| 2025-12-29 | - | Prompts 10, 11 updated | Added match importance tests, manager profiles, FIS calibration |
+| 2025-12-30 | 10 | Step 10 COMPLETE | 21 validation protocols, integration tests, pytest framework |
+| 2025-12-30 | - | Prompt 11 updated | Added validation-derived calibration recommendations |
 
 ---
 
-*Last Updated: 2025-12-29*
+*Last Updated: 2025-12-30*

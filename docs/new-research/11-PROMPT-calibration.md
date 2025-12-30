@@ -152,6 +152,143 @@ Step 2 research has FINALIZED the multiplier formulas. The calibration task is n
 | Lahm (FB→DM) | Decisions, Teamwork, Composure | 15, 14, 13 | ±1 each |
 | Firmino (AMC→ST) | Work Rate, Technique, OtB | 14, 13, 13 | ±1 each |
 
+**Player Removal Model (CALIBRATED from Step 8)**:
+
+*Contribution Score Component Weights*:
+| Component | Default Weight | Calibration Range | Notes |
+|-----------|----------------|-------------------|-------|
+| Effective Ability | 0.45 | 0.40-0.50 | Role-weighted, not raw CA |
+| Reliability | 0.20 | 0.15-0.25 | Hidden attributes impact |
+| Performance | 0.25 | 0.20-0.30 | Moneyball metrics |
+| Scarcity | 0.10 | 0.05-0.15 | Position rarity |
+
+*Reliability Coefficient Weights*:
+| Hidden Attribute | Weight | Calibration Range |
+|------------------|--------|-------------------|
+| Consistency | 0.40 | 0.35-0.45 |
+| Important Matches | 0.30 | 0.25-0.35 |
+| Pressure | 0.30 | 0.25-0.35 |
+
+*Reliability Threshold*:
+| Threshold | Default | Calibration Range | Implication |
+|-----------|---------|-------------------|-------------|
+| High Risk | 0.70 | 0.65-0.75 | Below this = "High Risk" flag |
+
+*Form Shield Threshold*:
+| Metric | Default | Calibration Range |
+|--------|---------|-------------------|
+| Avg Rating | 7.20 | 7.00-7.40 |
+| Min Matches | 20 | 15-25 |
+
+*Position-Specific Aging Curves*:
+| Position | Peak Start | Peak End | Decline | Calibration |
+|----------|------------|----------|---------|-------------|
+| GK | 29 | 34 | 35 | ±1 year |
+| DC | 27 | 31 | 32 | ±1 year |
+| DL/DR | 25 | 29 | 30 | ±1 year |
+| DM/MC | 26 | 30 | 32 | ±1 year |
+| AM | 24 | 28 | 30 | ±1 year |
+| ST | 25 | 29 | 31 | ±1 year |
+
+*30-30-30-10 Wage Structure*:
+| Tier | Slots | Budget Share | Calibration Range |
+|------|-------|--------------|-------------------|
+| Key | 4 | 30% | 25-35% |
+| First Team | 7 | 30% | 25-35% |
+| Rotation | 11 | 30% | 25-35% |
+| Backup | 5 | 10% | 5-15% |
+
+*Wage Efficiency Thresholds*:
+| Threshold | Ratio | Calibration Range | Action |
+|-----------|-------|-------------------|--------|
+| Inefficient | 1.25 | 1.20-1.30 | Flag for review |
+| Wage Dump | 1.50 | 1.40-1.60 | Urgent sale |
+
+*Protection Rule Thresholds*:
+| Rule | Default | Calibration Range | Notes |
+|------|---------|-------------------|-------|
+| Youth PA Threshold | 150 | 140-160 | Club stature dependent |
+| Protected Count | 15 | 12-18 | Top N by contribution |
+| Recent Signing Period | 180 days | 120-240 days | Adaptation window |
+| Min HGC Count | 4 | FIXED (UEFA Rule) | Registration critical |
+| Min Position Depth | 2 | 2-3 | Blocking threshold |
+
+*Youth Loan Policy*:
+| Age Range | Default Action | Calibration |
+|-----------|----------------|-------------|
+| 15-18 | KEEP | FIXED (Club Grown) |
+| 18+ | LOAN if <20 matches | 15-25 matches threshold |
+
+*Stalled Development Threshold*:
+| Metric | Default | Calibration Range |
+|--------|---------|-------------------|
+| Progress Rate | 0.5 | 0.4-0.6 |
+| PA-CA Headroom | 20 | 15-25 |
+
+**Match Importance Classification (CALIBRATED from Step 9)**:
+
+*Base Importance Scores (0-100)*:
+| Competition | Stage | Default | Calibration Range |
+|-------------|-------|---------|-------------------|
+| League (Title/Relegation) | Last 10 | 100 | FIXED |
+| League (Contention) | Regular | 80 | 75-85 |
+| League (Mid-Table) | Any | 60 | 50-70 |
+| League (Dead Rubber) | Last 5 | 20 | 15-25 |
+| Champions League | KO (R16+) | 95 | 90-100 |
+| Champions League | Group (Open) | 85 | 80-90 |
+| Champions League | Group (Safe) | 50 | 40-60 |
+| Domestic Cup (Major) | SF/Final | 100 | FIXED |
+| Domestic Cup (Major) | Early | 40 | 30-50 |
+| Secondary Cup | Late | 70 | 60-80 |
+| Secondary Cup | Early | 30 | 20-40 |
+| Friendlies | Any | 10 | 5-15 |
+
+*Opponent Strength Modifiers (M_opp)*:
+| Relative Strength | Classification | Default | Calibration Range |
+|-------------------|----------------|---------|-------------------|
+| > 1.3 | Titan | 1.2x | 1.15-1.25 |
+| 1.1-1.3 | Superior | 1.1x | 1.05-1.15 |
+| 0.9-1.1 | Peer | 1.0x | FIXED |
+| 0.6-0.9 | Inferior | 0.8x | 0.75-0.85 |
+| < 0.6 | Minnow | 0.6x | 0.5-0.7 |
+
+*Schedule Context Modifiers (M_sched)*:
+| Condition | Default | Calibration Range | Notes |
+|-----------|---------|-------------------|-------|
+| Next High ≤3 days | 0.7x | 0.6-0.8 | 72-hour recovery |
+| Next High = 4 days | 0.9x | 0.85-0.95 | Slight rotation |
+| 3rd match in 7 days | 0.8x | 0.75-0.85 | ACWR congestion |
+| ≥7 days rest | 1.1x | 1.05-1.15 | Freshness bonus |
+
+*Contextual Bonuses (B_context)*:
+| Bonus Type | Default | Calibration Range | Trigger |
+|------------|---------|-------------------|---------|
+| Rivalry/Derby | +20 | +15 to +25 | `is_derby` flag |
+| Form Correction | +15 | +10 to +20 | `losing_streak >= 3` |
+| Cup Run | +10 | +5 to +15 | QF+ with Cup objective |
+
+*FIS Classification Thresholds*:
+| Level | Threshold | Calibration Range | Meaning |
+|-------|-----------|-------------------|---------|
+| High | ≥ 85 | 80-90 | Must Win |
+| Medium | 50-84 | 45-55 (low) | Important |
+| Low | < 50 | 45-55 | Rotation |
+
+*Sharpness Detection Thresholds*:
+| Parameter | Default | Calibration Range | Notes |
+|-----------|---------|-------------------|-------|
+| FIS Threshold | < 50 | < 45-55 | Low importance required |
+| Rusty Player Count | ≥ 3 | 2-4 | Key players with sharpness < 70% |
+| Sharpness Threshold | 70% | 65-75% | Definition of "rusty" |
+
+*Manager Profile Weights*:
+| Profile | League | Major Cup | Secondary Cup | Continental |
+|---------|--------|-----------|---------------|-------------|
+| Balanced | 1.0 | 1.0 | 1.0 | 1.0 |
+| Architect (Youth) | 1.0 | 0.8 | 0.5 | 1.2 |
+| Pragmatist (Survival) | 1.3 | 0.6 | 0.6 | 0.6 |
+| Glory Hunter (Cups) | 1.0 | 1.2 | 1.0 | 1.2 |
+
 **Condition Cliff Heuristic (Step 4)**:
 | Condition | Multiplier | Calibration Range |
 |-----------|------------|-------------------|
@@ -162,6 +299,49 @@ Step 2 research has FINALIZED the multiplier formulas. The calibration task is n
 | < 75% | Big M | Threshold: 72-78% |
 
 **Safe Big M**: 10^6 (FIXED - numerical stability requirement)
+
+**Validation-Derived Calibration (from Step 10)**:
+
+*Validated Sigmoid Parameters*:
+| Multiplier | Formula | Key Points |
+|------------|---------|------------|
+| Φ(C) Condition | 1/(1+e^(-25(c-0.88))) | Φ(0.91)≈0.68, Φ(0.88)=0.5 |
+| Ψ(S) Sharpness | 1.02/(1+e^(-15(s-0.75)))-0.02 | Steep drop below 75% |
+
+*Validated Thresholds*:
+| Parameter | Validated Value | Protocol |
+|-----------|-----------------|----------|
+| Condition Floor | 91% | Protocol 3 |
+| Sharpness Cliff | Day 7+ decay | Protocol 4 |
+| Jadedness Fresh | J < 200 | Protocol 5 |
+| Jadedness Jaded | J ≥ 700 | Protocol 5 |
+| 270-Minute Penalty | 2.5x multiplier | Protocol 7 |
+| Recovery (Holiday) | 50 pts/day | Protocol 8 |
+| Recovery (Rest) | 5 pts/day | Protocol 8 |
+
+*Reliability Coefficient Formula*:
+$$\rho = 1 - \frac{20 - Consistency}{K_{cons}}$$
+Where K_cons = 40 (calibration range: 35-45)
+
+*Positional Drag Coefficients (Validated)*:
+| Position | R_pos | Calibration Range |
+|----------|-------|-------------------|
+| GK | 0.20 | 0.15-0.25 |
+| CB | 1.00 | FIXED (baseline) |
+| WB | 1.65 | 1.50-1.80 |
+
+*Integration Test Pass Criteria*:
+| Test | Metric | Target |
+|------|--------|--------|
+| Christmas Crunch | Rotation Index | > 0.7 |
+| Christmas Crunch | Condition Violations | 0 |
+| Christmas Crunch | J > 700 violations | 0 (unless NF > 16) |
+| Death Spiral | Youth Call-up | Triggered before constraints violated |
+
+*Shadow Pricing Priority (Calibration Focus)*:
+- Discount factor γ is the most sensitive parameter
+- VORP correlation with shadow price should be r > 0.8
+- Trajectory bifurcation must show ShadowCost > DirectUtility for Cup Final protection
 
 **Total**: ~50+ parameters
 
