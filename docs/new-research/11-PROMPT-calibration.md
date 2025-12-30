@@ -47,6 +47,36 @@ Step 2 research has FINALIZED the multiplier formulas. The calibration task is n
 - Pre-cliff decay: 1-2%/day
 - Post-cliff decay: 5-8%/day
 
+**Fatigue/Jadedness Model (CALIBRATED from Step 6)**:
+
+*Jadedness Thresholds (0-1000 scale)*:
+| State | J Range | Ω Multiplier | Calibration Range |
+|-------|---------|--------------|-------------------|
+| Fresh | 0-200 | 1.00 | FIXED |
+| Match Fit | 201-400 | 0.90 | 0.88-0.92 |
+| Tired | 401-700 | 0.70 | 0.65-0.75 |
+| Jaded | 701+ | 0.40 | 0.35-0.45 |
+
+*Recovery Rates*:
+| Recovery Type | Points/Day | Calibration Range |
+|---------------|------------|-------------------|
+| Holiday | 50 | 40-60 |
+| Rest at Club | 5 | 3-8 |
+| Training (Half) | 3 | 2-5 |
+| Training (Double) | -10 | -15 to -5 |
+
+*Archetype Thresholds (NEW from Step 6)*:
+| Archetype | Minute Cap (14d) | Calibration Range |
+|-----------|------------------|-------------------|
+| Standard | 270 | FIXED |
+| Glass Cannon | 180 | 150-210 |
+| Veteran (30+) | 180 | 150-210 |
+| Workhorse | 360 | 300-400 |
+
+*Training Integration*:
+- Death Spiral Threshold: 2 matches/week + Double Intensity
+- Auto-switch to Half when Condition < 90% (calibrate: 85-95%)
+
 **Shadow Pricing (CALIBRATED from Step 5)**:
 - γ (discount factor): Default 0.85, Range 0.70-0.95
 - λ_shadow (weight): Default 1.0, Range 0.5-2.0

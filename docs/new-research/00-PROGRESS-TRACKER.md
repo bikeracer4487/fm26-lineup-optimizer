@@ -5,12 +5,12 @@
 | Phase | Status | Progress |
 |-------|--------|----------|
 | Phase 1: Core Algorithm Correction | **COMPLETE** | 4/4 |
-| Phase 2: Multi-Match Planning | **IN PROGRESS** | 1/2 |
+| Phase 2: Multi-Match Planning | **COMPLETE** | 2/2 |
 | Phase 3: Supporting Systems | Not Started | 0/3 |
 | Phase 4: Validation & Calibration | Not Started | 0/2 |
 | Phase 5: Implementation | Not Started | 0/1 |
 
-**Overall Progress**: 5/12 steps complete (Phase 2 IN PROGRESS)
+**Overall Progress**: 6/12 steps complete (Phase 2 COMPLETE)
 
 ---
 
@@ -262,21 +262,59 @@ $$\alpha_{scarcity} = 1 + \lambda_V \times \min(0.5, \frac{GSS_{star} - GSS_{bac
 ---
 
 #### Step 6: Fatigue Dynamics & Rest Policy
-- **Status**: NOT STARTED
+- **Status**: COMPLETE
 - **Priority**: High
 - **Prompt File**: `06-PROMPT-fatigue-rest.md`
-- **Result File**: TBD
+- **Result File**: `06-RESULTS-fatigue-rest.md`
 - **Dependencies**: Steps 1, 3
 - **Goal**: Thresholds, recovery, vacation recommendations
 
 **Checklist**:
-- [ ] Prompt document created
-- [ ] Research executed
-- [ ] Results uploaded
-- [ ] Results reviewed
-- [ ] Rest policy defined
-- [ ] Vacation recommendations specified
-- [ ] Step marked complete
+- [x] Prompt document created
+- [x] Research executed
+- [x] Results uploaded
+- [x] Results reviewed
+- [x] Rest policy defined
+- [x] Vacation recommendations specified
+- [x] Step marked complete
+
+**Key Findings - Fatigue Dynamics & Rest Policy**:
+
+**Dual-Variable State Space**:
+$$\Phi_t = \begin{bmatrix} C_t \\ J_t \end{bmatrix}$$
+- Condition (C): Visible, recovers in 2-3 days
+- Jadedness (J): Hidden accumulator, requires specific intervention
+
+**Jadedness Thresholds (0-1000 scale)**:
+| State | J Range | Ω Multiplier | Operational Effect |
+|-------|---------|--------------|-------------------|
+| Fresh | 0-200 | 1.00 | Peak performance |
+| Match Fit | 201-400 | 0.90 | Minor decay, no penalty |
+| Tired | 401-700 | 0.70 | Significant penalty, high injury risk |
+| Jaded | 701+ | 0.40 | Critical - Consistency penalty active |
+
+**The Holiday Protocol** (CRITICAL):
+- Standard rest clears ~5 J points/day (insufficient)
+- Holiday clears ~50 J points/day (10x faster)
+- **When "Rst" icon appears**: Training → Rest → Send on Holiday (1 Week)
+
+**Player Archetypes**:
+| Archetype | Profile | Policy |
+|-----------|---------|--------|
+| Workhorse | NF 15+, Sta 15+ | Holiday every 15 matches |
+| Glass Cannon | Inj Prone >12, NF <12 | Cap 180 mins/14d, sub at 60' |
+| Veteran (30+) | Age >30 | One game per week max |
+| Youngster (<19) | Age <19 | Limit 20-25 senior starts/season |
+
+**Training Integration**:
+- "Double Intensity" + 2 matches/week = death spiral
+- Rule: If 2+ matches in week → Training = "Half" or "Rest"
+
+**Rest Policy Decision Tree**:
+1. **Jaded?** → MANDATORY VACATION (1 week)
+2. **Red Zone?** (>270 mins/14d OR <91% condition) → ENFORCED REST
+3. **Tired?** (91-94% OR 180-270 mins) → ROTATION/BENCH
+4. **Fresh?** (>95% AND <180 mins) → AVAILABLE
 
 ---
 
@@ -409,7 +447,7 @@ $$\alpha_{scarcity} = 1 + \lambda_V \times \min(0.5, \frac{GSS_{star} - GSS_{bac
 | 3 | Yes | Yes | `03-RESULTS-state-propagation.md` | Yes | Yes |
 | 4 | Yes | Yes | `04-RESULTS-hungarian-matrix.md` | Yes | Yes |
 | 5 | Yes | Yes | `05-RESULTS-shadow-pricing.md` | Yes | Yes |
-| 6 | Yes | No | - | No | No |
+| 6 | Yes | Yes | `06-RESULTS-fatigue-rest.md` | Yes | Yes |
 | 7 | Yes | No | - | No | No |
 | 8 | Yes | No | - | No | No |
 | 9 | Yes | No | - | No | No |
@@ -466,6 +504,8 @@ These documents represent prior research that will be consolidated:
 | 2025-12-29 | - | Prompts 05, 10, 11 updated | Added scenario weights, switching costs, bench selection tests |
 | 2025-12-29 | 5 | Step 5 COMPLETE | Shadow cost formula, VORP scarcity index, O(N×H) heuristic |
 | 2025-12-29 | - | Prompts 06, 10, 11 updated | Added importance weights (0.1-10.0), shadow pricing parameters |
+| 2025-12-29 | 6 | Step 6 COMPLETE - PHASE 2 DONE | Dual-variable fatigue model, Holiday Protocol, player archetypes |
+| 2025-12-29 | - | Prompts 10, 11 updated | Added jadedness thresholds, archetype tests, training integration |
 
 ---
 

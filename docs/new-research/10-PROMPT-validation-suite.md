@@ -124,6 +124,50 @@ $$GSS = BPS \times \Phi(C) \times \Psi(S) \times \Theta(F) \times \Omega(J)$$
 - Player B: GSS = 75, Backup GSS = 72 → Gap% = 4% → Not Key
 - **Expected**: Shadow cost(A) > Shadow cost(B) by factor of ~1.5x
 
+## CRITICAL: Findings from Fatigue Dynamics Research (Step 6)
+
+### Dual-Variable Fatigue Model Tests
+1. **Condition vs Jadedness**: Player with 95% Condition but J=600 should be flagged "Tired"
+2. **270-Minute Trigger**: Player at 270+ mins in 14-day window should trigger 2.5x jadedness accumulation
+3. **Holiday Protocol**: "Rst" status player → recommend Holiday, not just bench rest
+
+### Jadedness Threshold Tests
+| State | J Range | Expected Ω | Test Case |
+|-------|---------|------------|-----------|
+| Fresh | 0-200 | 1.00 | Player just returned from vacation |
+| Match Fit | 201-400 | 0.90 | Regular rotation player |
+| Tired | 401-700 | 0.70 | 3 matches in 10 days |
+| Jaded | 701+ | 0.40 | "Rst" icon visible |
+
+### Player Archetype Tests
+**Scenario 9: Archetype-Specific Thresholds**
+- **Glass Cannon** (Inj Prone >12): Should trigger rest at 180 mins/14d (not 270)
+- **Veteran (30+)**: Should flag "risky" for midweek-weekend double header
+- **Workhorse** (NF 15+): Can exceed 270 occasionally without immediate penalty
+- **Youngster (<19)**: Flag if >25 starts approaching (development concern)
+
+### Training Integration Tests
+**Scenario 10: Death Spiral Detection**
+- **Setup**: Player on "Double Intensity" with 2 matches this week
+- **Expected**: System warns of irrecoverable fatigue debt
+- **Validation**: `training_intensity_warning` = True
+
+### Holiday Protocol Validation
+**Scenario 11: Jadedness Recovery**
+- **Setup**: Player with "Rst" status (J > 700)
+- **Action A**: Bench for 1 match (stays at club)
+- **Action B**: Send on Holiday (1 week)
+- **Expected**: Action B reduces J by ~350 points vs ~35 for Action A
+- **Validation**: `holiday_recovery_rate` ≈ 10x `bench_recovery_rate`
+
+### Recovery Rate Tests
+| Recovery Type | Points/Day | Test Validation |
+|---------------|------------|-----------------|
+| Holiday | ~50 | Player returns Fresh after 1 week (J: 700 → 350) |
+| Rest at Club | ~5 | "Rst" status persists after 1 week bench |
+| Training (Half) | ~3 | Slow recovery, sharpness maintained |
+| Training (Double) | -10 | Jadedness INCREASES despite rest days |
+
 ## Research Objective
 
 **Goal**: Design a comprehensive validation test suite that:
