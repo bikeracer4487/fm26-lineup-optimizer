@@ -1,3 +1,21 @@
+"""
+FM26 Player Removal Advisor API
+===============================
+
+Provides player removal/divestment recommendations using Step 8 research findings.
+
+Key Features (Step 8 Research):
+1. Contribution Score: 45% Ability, 25% Performance, 20% Reliability, 10% Scarcity
+2. Position Aging Curves: Position-specific peak and decline ages
+3. Wage Efficiency: 30-30-30-10 wage structure analysis
+4. Reliability Coefficient: Hidden attribute risk assessment
+5. Future Value Assessment: Asset trajectory prediction
+
+References:
+- docs/new-research/08-RESULTS-player-removal.md (Step 8 Research)
+- docs/new-research/12-IMPLEMENTATION-PLAN.md (consolidated specification)
+"""
+
 import sys
 import os
 import json
@@ -11,6 +29,26 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'
 
 import data_manager
 from fm_match_ready_selector import MatchReadySelector
+
+# Import Step 8 Research parameters
+from scoring_parameters import (
+    CONTRIBUTION_WEIGHTS,
+    AGING_CURVES,
+    get_aging_curve,
+    get_career_phase,
+    get_years_until_decline,
+    WAGE_EFFICIENCY_THRESHOLDS,
+    WAGE_TIERS,
+    get_wage_tier,
+    calculate_target_wage,
+    calculate_wage_efficiency_ratio,
+    get_wage_recommendation,
+    RELIABILITY_THRESHOLD,
+    calculate_reliability_coefficient,
+    is_high_risk_player,
+    calculate_contribution_score,
+    assess_asset_trajectory,
+)
 
 @contextlib.contextmanager
 def suppress_stdout():

@@ -28,102 +28,104 @@ This is a Football Manager 2026 lineup optimization tool that uses advanced algo
 - Squad depth analysis for rotation planning
 - **Receding Horizon Control (RHC)** with Shadow Pricing for 5-match optimization
 
-## Operational Research Framework (New)
+## Operational Research Framework
 
-The project now implements an advanced OR framework based on research documented in `docs/new-research/FM26 #1 - System spec + decision model (foundation).md`.
+The project implements an advanced OR framework based on comprehensive research documented in `docs/new-research/` (Steps 1-12). The research supersedes earlier FM26 #1-4 documents.
 
-### Multiplicative Match Utility Score
+**Research Reference**: See `docs/new-research/00-PROGRESS-TRACKER.md` for the complete 12-step research program and `docs/new-research/12-IMPLEMENTATION-PLAN.md` for consolidated specifications.
+
+### Global Selection Score (GSS) - Step 2 Research
 
 Player utility is calculated using a multiplicative model:
 
 ```
-U_{i,s} = B_{i,s} * Φ(C_i) * Ψ(Sh_i) * Θ(Fam_{i,s}) * Λ(F_i)
+GSS = BPS × Φ(C) × Ψ(S) × Θ(F) × Ω(J)
 ```
 
 Where:
-- **B_{i,s}**: Base Effective Rating (Harmonic Mean of IP and OOP roles)
-- **Φ**: Condition Multiplier (Physiology)
-- **Ψ**: Sharpness Multiplier (Form)
-- **Θ**: Familiarity Multiplier (Tactical)
-- **Λ**: Fatigue/Jadedness Multiplier (Long-term health)
+- **BPS**: Base Player Score (position-specific rating)
+- **Φ(C)**: Condition Multiplier - steep sigmoid
+- **Ψ(S)**: Sharpness Multiplier - bounded sigmoid
+- **Θ(F)**: Familiarity Multiplier - LINEAR (not sigmoid!)
+- **Ω(J)**: Jadedness Multiplier - step function
 
-### Harmonic Mean for IP/OOP
+### Condition Multiplier Φ(C) - Step 2
 
-Instead of a simple weighted average, the system uses **Harmonic Mean** to penalize imbalanced players:
+**Formula**: `Φ(c) = 1 / (1 + e^{-k(c - c₀)})`
 
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| k         | 25    | Steep sigmoid slope |
+| c₀        | 0.88  | Threshold (88% = FM26 "Match Fit") |
+
+**Critical Rule - 91% Floor**: Never start a player below 91% condition.
+
+### Sharpness Multiplier Ψ(S) - Step 2
+
+**Formula**: `Ψ(s) = 1.02 / (1 + e^{-k(s - s₀)}) - 0.02`
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| k         | 15    | Moderate sigmoid slope |
+| s₀        | 0.75  | Threshold (75% = effectiveness cliff) |
+
+**Seven-Day Cliff**: Sharpness decays 5-8%/day after 7 days without match play.
+
+### Familiarity Multiplier Θ(F) - Step 2
+
+**Formula**: `Θ(f) = 0.7 + 0.3f` (LINEAR, not sigmoid!)
+
+| Familiarity | Multiplier |
+|-------------|------------|
+| 0% (Awkward) | 0.70 |
+| 50% (Competent) | 0.85 |
+| 100% (Natural) | 1.00 |
+
+### Jadedness Multiplier Ω(J) - Step 2/6
+
+**Formula**: Step function with discrete states (0-1000 scale)
+
+| State | J Range | Ω Multiplier | Action |
+|-------|---------|--------------|--------|
+| Fresh | 0-200 | 1.00 | Peak performance |
+| Fit | 201-400 | 0.90 | Monitor |
+| Tired | 401-700 | 0.70 | Rotate/Rest |
+| Jaded | 701+ | 0.40 | HOLIDAY REQUIRED |
+
+**Holiday Protocol**: Only "Holiday" clears jadedness (50 pts/day vs 5 pts/day for Rest).
+
+### Shadow Pricing - Step 5 Research
+
+**Shadow Cost Formula**:
 ```
-B_{i,s} = 2 * R_IP * R_OOP / (R_IP + R_OOP)
-```
-
-This ensures a player who excels at attacking (180) but is terrible at defending (20) scores only 36, not 100.
-
-### Bounded Sigmoid Multiplier Functions (FM26 #2 Spec)
-
-All multipliers now use bounded sigmoid functions for smooth, continuous behavior:
-
-```
-Multiplier(x) = α + (1 - α) × σ(k × (x - T))
-```
-
-Where `σ(z) = 1 / (1 + e^(-z))` is the standard sigmoid function.
-
-#### Condition Multiplier Φ(C) Parameters
-
-| Importance | α (floor) | T (threshold) | k (slope) |
-|------------|-----------|---------------|-----------|
-| High       | 0.40      | 75%           | 0.12      |
-| Medium     | 0.35      | 82%           | 0.10      |
-| Low        | 0.30      | 88%           | 0.08      |
-| Sharpness  | 0.35      | 80%           | 0.15      |
-
-#### Familiarity Multiplier Θ(Fam) Parameters
-
-| Importance | α (floor) | T (threshold) | k (steepness) |
-|------------|-----------|---------------|---------------|
-| High       | 0.30      | 12            | 0.55          |
-| Medium     | 0.40      | 10            | 0.45          |
-| Low        | 0.50      | 7             | 0.35          |
-| Sharpness  | 0.25      | 14            | 0.70          |
-
-#### Fatigue Multiplier Λ(F) Parameters (Player-Relative)
-
-```
-Λ(F, T) = α + (1 - α) × (1 - σ(k × (F/T - r)))
-```
-
-| Importance | α (collapse) | r (ratio) | k (steepness) |
-|------------|--------------|-----------|---------------|
-| High       | 0.50         | 0.85      | 5.0           |
-| Medium     | 0.25         | 0.75      | 6.0           |
-| Low        | 0.15         | 0.65      | 8.0           |
-| Sharpness  | 0.20         | 0.70      | 7.0           |
-
-#### Sharpness Multiplier Ψ(Sh) - Power Curve
-
-```
-Ψ = 0.40 + 0.60 × (Sh/100)^0.8
+λ_{p,t} = S_p^{VORP} × Σ_{k=t+1}^{T} (γ^{k-t} × I_k × max(0, ΔGSS_{p,k}))
 ```
 
-This matches FM's in-game sharpness curve with floor of 40% at 0% sharpness.
+Where ΔGSS = GSS(rest trajectory) - GSS(play trajectory)
 
-### Importance Weights
+**Parameters**:
+| Parameter | Symbol | Default | Range |
+|-----------|--------|---------|-------|
+| Discount Factor | γ | 0.85 | 0.70-0.95 |
+| Shadow Weight | λ_shadow | 1.0 | 0.0-2.0 |
+| Scarcity Scaling | λ_V | 2.0 | 1.0-3.0 |
 
-| Importance | Weight |
-|------------|--------|
-| High       | 1.5    |
-| Medium     | 1.0    |
-| Low        | 0.6    |
-| Sharpness  | 0.8    |
-
-### Shadow Pricing for 5-Match Planning
-
-The RHC optimizer calculates "shadow costs" representing the opportunity cost of using a player now vs. saving them for a future important match:
-
+**VORP Scarcity Index**:
 ```
-Cost_shadow(p, k) = Σ (Imp_m/Imp_avg * Utility(p,m)/ΔDays * IsKeyPlayer(p))
+α_scarcity = 1 + λ_V × min(0.5, (GSS_star - GSS_backup) / GSS_star)
 ```
+Gap% > 10% means player is "Key" and gets shadow protection.
 
-High shadow cost means the player is valuable for an upcoming high-importance match.
+### Importance Weights - Step 5/9 Research
+
+| Scenario | Weight | Shadow Behavior |
+|----------|--------|-----------------|
+| Cup Final | 10.0 | Massive shadow zones |
+| Continental KO | 5.0 | Strong preservation |
+| Title Rival | 3.0 | Significant shadow cost |
+| League (Standard) | 1.5 | Balanced rotation |
+| Cup (Early) | 0.8 | High shadow for starters |
+| Dead Rubber | 0.1 | Shadow blocks tired starters |
 
 ### Training Intensity Setting
 
@@ -132,46 +134,47 @@ A new Training Intensity setting (Low/Medium/High) in the Tactics tab adjusts re
 - **Medium**: Standard recovery
 - **High**: -20% recovery rate (double intensity training)
 
-### State Propagation Equations (FM26 #2 Spec)
+### State Propagation - Step 3 Research
 
-Player state evolves according to these equations:
+Player state evolves according to calibrated equations from Step 3 research.
+
+#### Positional Drag Coefficients (R_pos)
+
+The key finding from Step 3: position determines condition drain rate.
+
+| Position | R_pos | Rotation Need |
+|----------|-------|---------------|
+| GK | 0.20 | Almost none |
+| CB/DC | 0.95 | Can play consecutive |
+| DM | 1.15 | Moderate |
+| CM/MC | 1.45 | High - rotate |
+| AMC/AM | 1.35 | High |
+| Winger (AML/AMR) | 1.40 | High |
+| **FB/WB** | **1.65** | **100% rotation required** |
+| ST/STC | 1.40 | High |
+
+**Critical Finding**: Fullbacks/Wingbacks have the highest drain (1.65) and require 100% rotation.
 
 #### Condition Propagation
 ```
-C_{k+1} = min(100, C_k - ΔC_match + ΔC_recovery)
-
-ΔC_match = (minutes / 90) × drain_rate × (1 - stamina/200)
-ΔC_recovery = days × recovery_rate × (natural_fitness/100)
+C_{k+1} = C_k + (10000 - C_k) × β × (Natural_Fitness)^γ × (1 - J_penalty)
 ```
+- Natural Fitness has increasing returns (γ > 1)
+- Jadedness throttles recovery
 
-**Position-Specific Drain Rates:**
-| Position Type | Drain Rate |
-|---------------|------------|
-| GK            | 15         |
-| CB, DM        | 25         |
-| FB, CM, AM    | 30         |
-| Winger, ST    | 35         |
+#### 270-Minute Rule (Step 3 Refined)
+- Window: **14 days** (not 10)
+- Threshold: 270 minutes
+- Penalty: **2.5x** jadedness accumulation when exceeded
 
-#### Sharpness Propagation (Internal 0-10000 Scale)
-```
-Sh_{k+1} = Sh_k + ΔSh_gain - ΔSh_decay
+#### Sharpness Seven-Day Cliff
+| Days Without Match | Decay Rate |
+|--------------------|------------|
+| 0-3 days | ~0%/day |
+| 4-6 days | ~1.5%/day |
+| 7+ days | **5-8%/day** (cliff) |
 
-ΔSh_gain = (minutes / 90) × 1500 × match_type_factor × (1 + NF/400)
-ΔSh_decay = days_without_match × 100 × (1 - NF/200)
-```
-
-**Match Type Factors:**
-- Competitive: 1.0
-- Friendly: 0.7
-- Reserve: 0.5
-
-#### Fatigue Propagation
-```
-F_{k+1} = max(0, F_k + ΔF_match - ΔF_recovery)
-
-ΔF_match = (minutes / 90) × 20 × intensity_factor × age_modifier × position_mult
-ΔF_recovery = days × 10 × (1 + NF/100) × training_modifier
-```
+**Operational Rule**: "Stamina wins the match, Natural Fitness wins the season"
 
 ### Polyvalent Stability Mechanisms (FM26 #2 Spec)
 
@@ -206,17 +209,28 @@ A Stability slider in the Tactics tab controls `inertia_weight`:
 - **0.5**: Balanced (default - moderate stability)
 - **1.0**: Maximum stability (strongly prefers consistent assignments)
 
-### New Files (OR Framework)
+### Core Files (OR Framework)
+
+| File | Purpose | Research Source |
+|------|---------|-----------------|
+| `scoring_parameters.py` | All parameter values (GSS, jadedness, R_pos, etc.) | Steps 2, 3, 5, 6, 11 |
+| `ui/api/scoring_model.py` | GSS multipliers (condition, sharpness, familiarity, jadedness) | Step 2 |
+| `ui/api/state_simulation.py` | R_pos coefficients, state propagation, 270-min rule | Step 3 |
+| `ui/api/shadow_pricing.py` | VORP scarcity index, shadow cost calculation | Step 5 |
+| `ui/api/api_rest_advisor.py` | Jadedness thresholds, Holiday Protocol, archetypes | Step 6 |
+| `ui/api/api_training_advisor.py` | GSI formula, age plasticity, difficulty classes | Step 7 |
+| `ui/api/api_player_removal.py` | Contribution score, aging curves, wage structure | Step 8 |
+| `ui/api/match_importance.py` | AMICS system, FIS formula, importance modifiers | Step 9 |
+| `tests/test_validation_scenarios.py` | 21 validation protocols, integration tests | Step 10 |
+| `tests/calibration_harness.py` | Sobol GSA, BOHB optimization, stress tests | Step 11 |
+
+### Research Documentation
 
 | File | Purpose |
 |------|---------|
-| `scoring_parameters.py` | Sigmoid parameter tables, importance weights, stability config |
-| `ui/api/scoring_model.py` | Bounded sigmoid multipliers with Harmonic Mean |
-| `ui/api/state_simulation.py` | Position-specific drain rates, state propagation |
-| `ui/api/shadow_pricing.py` | Shadow cost calculation with utility projection |
-| `ui/api/stability.py` | Polyvalent stability (inertia + anchoring) |
-| `ui/api/explainability.py` | Reason string generation |
-| `tests/test_validation_scenarios.py` | Validation test suite with sigmoid tests |
+| `docs/new-research/00-PROGRESS-TRACKER.md` | Research program status (12/12 complete) |
+| `docs/new-research/12-IMPLEMENTATION-PLAN.md` | Consolidated specifications, PR strategy |
+| `docs/new-research/01-11-RESULTS-*.md` | Individual step research findings |
 
 ## Repository Structure
 
@@ -667,8 +681,9 @@ openpyxl>=3.0.0  # Excel file support
 
 ### Branches
 
-- Main development branch: `claude/claude-md-mi2ie0ml8nj6n647-01MfTSDFSa5EJR5DwFcbtzt4`
-- All commits and pushes should go to this branch
+- Main branch: `main`
+- Feature branches should be created for significant changes
+- Current active branch: Check with `git branch` before committing
 
 ### Ignored Files
 

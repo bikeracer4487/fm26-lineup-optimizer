@@ -21,9 +21,14 @@ from scoring_parameters import (
     ScoringContext
 )
 from ui.api.scoring_model import (
-    calculate_match_utility,
+    calculate_match_utility_gss,
     calculate_harmonic_mean,
-    MultiplierBreakdown
+    GSSBreakdown,
+    # GSS multiplier functions (research-based)
+    condition_multiplier_gss,
+    sharpness_multiplier_gss,
+    jadedness_multiplier_gss,
+    is_below_condition_floor,
 )
 from ui.api.state_simulation import (
     PlayerState,
@@ -236,73 +241,42 @@ class ApiMatchReadySelector(MatchReadySelector):
 
             effective_rating = float(base_rating)
 
-            # Apply condition penalty - research-based non-linear modifiers
-            # Source: docs/Research/physical-condition-claude.md
-            # Key thresholds: 100%=1.0, 90%=0.95, 85%=0.89, 80%=0.80, 70%=0.68
+            # Apply GSS multipliers (research-based)
+            # Source: docs/new-research/02-RESULTS-unified-scoring.md
+            # Formula: GSS = BPS × Φ(C) × Ψ(S) × Θ(F) × Ω(J)
+            # Note: Familiarity (Θ) is already baked into Final_XXX ratings
+
+            # Condition Multiplier Φ(C) - STEEP sigmoid (k=25, c₀=0.88)
             condition = row.get('Condition', 10000)
             if pd.notna(condition):
                 cond_pct = condition / 10000 if condition > 100 else condition / 100
+                cond_modifier = condition_multiplier_gss(cond_pct)
 
-                # Research-based modifiers (non-linear, accelerating penalty below 80%)
-                if cond_pct >= 1.0:
-                    cond_modifier = 1.00
-                elif cond_pct >= 0.90:
-                    # Linear interpolation: 90-100% → 0.95-1.00
-                    cond_modifier = 0.95 + (cond_pct - 0.90) * 0.5
-                elif cond_pct >= 0.85:
-                    # Linear interpolation: 85-90% → 0.89-0.95
-                    cond_modifier = 0.89 + (cond_pct - 0.85) * 1.2
-                elif cond_pct >= 0.80:
-                    # Linear interpolation: 80-85% → 0.80-0.89
-                    cond_modifier = 0.80 + (cond_pct - 0.80) * 1.8
-                elif cond_pct >= 0.70:
-                    # Linear interpolation: 70-80% → 0.68-0.80
-                    cond_modifier = 0.68 + (cond_pct - 0.70) * 1.2
-                else:
-                    # Below 70% - severe degradation
-                    cond_modifier = 0.68 * (cond_pct / 0.70)
-
-                # Additional match importance scaling for players below 85% threshold
-                # Research: "85% condition minimum for starting players"
-                if cond_pct < 0.85:
-                    if match_importance == 'High':
-                        cond_modifier *= 0.30  # Near-prohibition: 30% of already-penalized rating
-                    elif match_importance == 'Medium':
-                        cond_modifier *= 0.70  # Heavy penalty: 70% of already-penalized rating
+                # 91% floor enforcement: NEVER start player below this
+                # Research: This is a hard cutoff, not just a penalty
+                if is_below_condition_floor(cond_pct):
+                    cond_modifier *= 0.15  # Severe penalty to effectively exclude
 
                 effective_rating *= cond_modifier
 
-            # Apply fatigue penalty - personalized thresholds per player
-            # Uses player attributes: age, natural fitness, stamina, injury proneness
-            fatigue = row.get('Fatigue', 0)
-            if pd.notna(fatigue) and fatigue > 0:
-                age = row.get('Age', 25)
-                natural_fitness = row.get('Natural Fitness', 10)
-                stamina = row.get('Stamina', 10)
-                injury_proneness = row.get('Injury Proneness', None)
-
-                # Calculate personalized threshold (calls parent method)
-                threshold = self._get_adjusted_fatigue_threshold(age, natural_fitness, stamina, injury_proneness)
-
-                if fatigue >= threshold + 100:
-                    effective_rating *= 0.65  # Severe - well above threshold
-                elif fatigue >= threshold:
-                    effective_rating *= 0.85  # Moderate - at threshold
-                elif fatigue >= threshold - 50:
-                    effective_rating *= 0.95  # Minor - approaching threshold
-
-            # Apply match sharpness factor
+            # Sharpness Multiplier Ψ(S) - bounded sigmoid (k=15, s₀=0.75)
             match_sharpness = row.get('Match Sharpness', 10000)
             if pd.notna(match_sharpness):
                 sharpness_pct = match_sharpness / 10000 if match_sharpness > 100 else match_sharpness / 100
-                if sharpness_pct < 0.60:
-                    effective_rating *= 0.85  # Severe rust
-                elif sharpness_pct < 0.80:
-                    effective_rating *= 0.92  # Lacking sharpness
-                elif sharpness_pct < 0.91:
-                    effective_rating *= 0.97  # Not quite match ready
+                sharpness_modifier = sharpness_multiplier_gss(sharpness_pct)
+                effective_rating *= sharpness_modifier
 
-            # Apply loan logic
+            # Jadedness Multiplier Ω(J) - step function (Fresh/Fit/Tired/Jaded)
+            # Thresholds: Fresh(0-200)=1.0, Fit(201-400)=0.9, Tired(401-700)=0.7, Jaded(701+)=0.4
+            jadedness = row.get('Jadedness', 0)
+            if jadedness == 0:
+                # Fall back to Fatigue field if Jadedness not present
+                jadedness = row.get('Fatigue', 0)
+            if pd.notna(jadedness) and jadedness > 0:
+                jadedness_modifier = jadedness_multiplier_gss(int(jadedness))
+                effective_rating *= jadedness_modifier
+
+            # Apply loan logic (business rule, not part of GSS model)
             loan_status = row.get('LoanStatus', 'Own')
             if loan_status == 'LoanedIn':
                 if match_importance == 'Low':

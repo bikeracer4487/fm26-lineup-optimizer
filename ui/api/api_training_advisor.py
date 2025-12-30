@@ -1,3 +1,21 @@
+"""
+FM26 Training Advisor API
+=========================
+
+Provides position training recommendations using Step 7 research findings.
+
+Key Features (Step 7 Research):
+1. Gap Severity Index (GSI): Prioritizes positions by scarcity, injury risk, schedule
+2. Age Plasticity: Adjusts retraining timelines based on player age
+3. Difficulty Classes: I (Fluid) to IV (Inversion) for position transitions
+4. Euclidean Distance: Finds best candidates by attribute similarity
+5. Retraining Efficiency Ratio: Evaluates CA cost efficiency
+
+References:
+- docs/new-research/07-RESULTS-training-recommender.md (Step 7 Research)
+- docs/new-research/12-IMPLEMENTATION-PLAN.md (consolidated specification)
+"""
+
 import sys
 import os
 import json
@@ -10,6 +28,19 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'
 
 from fm_training_advisor import TrainingAdvisor
 import data_manager
+
+# Import Step 7 Research parameters
+from scoring_parameters import (
+    AGE_PLASTICITY,
+    get_age_plasticity,
+    RETRAINING_DIFFICULTY,
+    get_retraining_difficulty,
+    POSITION_WEIGHTS_GSI,
+    calculate_gsi,
+    calculate_euclidean_distance,
+    calculate_retraining_efficiency,
+    estimate_retraining_weeks,
+)
 
 
 def load_tactic_config():
@@ -223,7 +254,75 @@ def main():
         for rec in filtered_recs:
             player_name = rec['player']
             position = rec['position']
-            
+
+            # Get player data for Step 7 calculations
+            player_data = advisor.df[advisor.df['Name'] == player_name]
+            player_age = int(player_data['Age'].iloc[0]) if len(player_data) > 0 and 'Age' in player_data.columns else 25
+            best_position = player_data['Best Position'].iloc[0] if len(player_data) > 0 and 'Best Position' in player_data.columns else None
+
+            # --- Step 7: Age Plasticity ---
+            plasticity = get_age_plasticity(player_age)
+            plasticity_label = 'High' if plasticity >= 0.8 else 'Medium' if plasticity >= 0.5 else 'Low' if plasticity >= 0.2 else 'Minimal'
+
+            # --- Step 7: Difficulty Class ---
+            if best_position:
+                # Map best position to our position format
+                from_pos = best_position.replace('/', '(').replace(')', ')').replace('(L', '(L)').replace('(R', '(R)').replace('(C', '(C)')
+                if from_pos and position:
+                    difficulty = get_retraining_difficulty(from_pos, position)
+                    difficulty_class = difficulty['name']
+                    difficulty_weeks = f"{difficulty['weeks_min']}-{difficulty['weeks_max']} weeks"
+                else:
+                    difficulty_class = 'Unknown'
+                    difficulty_weeks = 'N/A'
+            else:
+                difficulty_class = 'Unknown'
+                difficulty_weeks = 'N/A'
+
+            # --- Step 7: Estimated Timeline with Age/Versatility ---
+            current_skill = rec['current_skill_rating']
+
+            # Infer versatility from existing multi-positionality
+            versatility_score = 0.5  # Default medium
+            if is_universalist := player_name in universalist_names:
+                versatility_score = min(1.0, universalist_names.get(player_name, 0) / 5)
+
+            # Calculate estimated weeks using Step 7 formula
+            if best_position and position:
+                est_weeks = estimate_retraining_weeks(
+                    from_pos=from_pos if best_position else 'M(C)',
+                    to_pos=position,
+                    age=player_age,
+                    versatility=versatility_score,
+                    match_exposure='cup_subs'  # Default assumption
+                )
+
+                # Adjust based on current skill level
+                if current_skill >= 13:
+                    est_weeks = max(4, est_weeks // 2)  # Already competent
+                elif current_skill >= 10:
+                    est_weeks = max(6, int(est_weeks * 0.7))  # Unconvincing but OK
+
+                # Convert weeks to timeline string
+                if est_weeks <= 8:
+                    timeline = f'{est_weeks} weeks to Natural'
+                elif est_weeks <= 16:
+                    timeline = f'{est_weeks // 4}-{(est_weeks // 4) + 1} months to Accomplished'
+                elif est_weeks <= 36:
+                    timeline = f'{est_weeks // 4} months to Competent'
+                else:
+                    timeline = f'{est_weeks // 4}+ months (low plasticity)'
+            else:
+                # Fallback to old logic
+                if current_skill >= 13:
+                    timeline = '2-4 months to Natural'
+                elif current_skill >= 10:
+                    timeline = '6-9 months to Natural'
+                elif current_skill >= 8:
+                    timeline = '12+ months to Competent'
+                else:
+                    timeline = '18+ months (high versatility needed)'
+
             # Strategic Category
             strategic_category = rec.get('category', 'Standard')
             reason_lower = rec['reason'].lower()
@@ -231,33 +330,29 @@ def main():
                 strategic_category += ' | Winger→WB Pipeline'
             elif 'aging' in reason_lower and 'playmaker' in reason_lower:
                 strategic_category += ' | Aging AMC→DM'
-            
+
             # Universalist
             is_universalist = player_name in universalist_names
             universalist_coverage = universalist_names.get(player_name, 0)
-            
-            # Timeline
-            current_skill = rec['current_skill_rating']
-            if current_skill >= 13:
-                timeline = '2-4 months to Natural'
-            elif current_skill >= 10:
-                timeline = '6-9 months to Natural'
-            elif current_skill >= 8:
-                timeline = '12+ months to Competent'
-            else:
-                timeline = '18+ months (high versatility needed)'
-                
+
             # Variety
             variety_info = advisor.assess_positional_variety(position)
             fills_variety_gap = len(variety_info.get('needs', [])) > 0
 
-            # Add new fields
+            # Add new fields (including Step 7 additions)
             rec['strategic_category'] = strategic_category
             rec['estimated_timeline'] = timeline
             rec['is_universalist'] = is_universalist
             rec['universalist_coverage'] = universalist_coverage
             rec['fills_variety_gap'] = fills_variety_gap
-            
+
+            # Step 7 additions
+            rec['age_plasticity'] = plasticity
+            rec['plasticity_label'] = plasticity_label
+            rec['difficulty_class'] = difficulty_class
+            rec['difficulty_weeks'] = difficulty_weeks
+            rec['player_age'] = player_age
+
             enriched_recs.append(rec)
             
         # 3. SAVE TO CSV for Match Selector
