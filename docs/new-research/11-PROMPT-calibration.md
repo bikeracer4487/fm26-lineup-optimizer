@@ -111,6 +111,47 @@ Step 2 research has FINALIZED the multiplier formulas. The calibration task is n
 **Switching Costs (NEW from Step 4)**:
 - Position change penalty: Calibrate range 0.02-0.10 (% utility loss)
 
+**Position Training (CALIBRATED from Step 7)**:
+
+*Age Plasticity Factors*:
+| Age Bracket | Plasticity | Calibration Range | Strategy |
+|-------------|------------|-------------------|----------|
+| 16-21 | 1.0 | FIXED | Radical conversions OK |
+| 22-26 | 0.7 | 0.6-0.8 | Adjacent moves only |
+| 27-31 | 0.4 | 0.3-0.5 | Career extension roles |
+| 32+ | 0.1 | 0.05-0.15 | Emergency swaps only |
+
+*Familiarity Efficiency Thresholds (0-20 scale)*:
+| Status | Range | Efficiency | Calibration Range |
+|--------|-------|------------|-------------------|
+| Natural | 18-20 | 1.00 | FIXED |
+| Accomplished | 15-17 | 0.95 | 0.93-0.97 |
+| Competent | 12-14 | 0.85 | 0.80-0.90 |
+| Unconvincing | 9-11 | 0.70 | 0.65-0.75 |
+| Awkward | 5-8 | 0.50 | 0.45-0.55 |
+
+*Retraining Timeline (Weeks to Accomplished)*:
+| Difficulty Class | Base Time | Calibration Range | Examples |
+|------------------|-----------|-------------------|----------|
+| I (Fluid) | 6 | 4-8 | LB→LWB, DM→MC |
+| II (Structural) | 16 | 12-20 | DM→CB, AMC→ST |
+| III (Spatial) | 30 | 24-36 | AMR→MC, ST→AMR |
+| IV (Inversion) | ∞ | REJECT | ST→DR, MC→GK |
+
+*Retraining Efficiency Ratio (RER) Thresholds*:
+| RER Score | Decision | Calibration Range |
+|-----------|----------|-------------------|
+| > 0.8 | Recommend | 0.75-0.85 |
+| 0.5-0.8 | Conditional | Fixed |
+| < 0.5 | Reject | 0.45-0.55 |
+
+*Strategic Archetype Attribute Thresholds*:
+| Archetype | Key Attributes | Minimum Value | Calibration Range |
+|-----------|----------------|---------------|-------------------|
+| Mascherano (DM→CB) | Tackling, Anticipation, JR | 14, 13, 12 | ±1 each |
+| Lahm (FB→DM) | Decisions, Teamwork, Composure | 15, 14, 13 | ±1 each |
+| Firmino (AMC→ST) | Work Rate, Technique, OtB | 14, 13, 13 | ±1 each |
+
 **Condition Cliff Heuristic (Step 4)**:
 | Condition | Multiplier | Calibration Range |
 |-----------|------------|-------------------|

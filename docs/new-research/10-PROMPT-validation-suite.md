@@ -168,6 +168,79 @@ $$GSS = BPS \times \Phi(C) \times \Psi(S) \times \Theta(F) \times \Omega(J)$$
 | Training (Half) | ~3 | Slow recovery, sharpness maintained |
 | Training (Double) | -10 | Jadedness INCREASES despite rest days |
 
+## CRITICAL: Findings from Position Training Research (Step 7)
+
+### Position Training Recommendation Tests
+
+**Gap Severity Index (GSI) Validation**:
+$$GSI = (Scarcity_{pos} \times Weight_{pos}) + InjuryRisk_{starter} + ScheduleDensity$$
+
+| Test Case | Setup | Expected GSI | Notes |
+|-----------|-------|--------------|-------|
+| No LB backup | 1 Natural LB, 0 backups | High (>0.8) | Scarcity multiplier active |
+| Deep CB pool | 4 Natural CBs, 2 backups | Low (<0.3) | No gap detected |
+| Injury-prone starter | Natural fitness <10, Inj Prone >15 | Medium-High | Risk factor elevates |
+
+### Euclidean Distance Candidate Selection Tests
+**Scenario 12: Winger-to-Fullback Conversion**
+- **Setup**: Need WB backup, squad has high-pace Winger with Work Rate 15+
+- **Expected**: Winger recommended with Distance score < 5.0
+- **Validation**: `candidate_distance` < threshold AND `pace > 14` AND `workrate > 13`
+
+**Scenario 13: DM-to-CB Conversion (Mascherano Protocol)**
+- **Setup**: CB gap, DM has Tackling 14+, Anticipation 13+, Passing 13+, JR > 12
+- **Expected**: DM recommended as Class II conversion (12-20 weeks)
+- **Validation**: `archetype_match` = "Mascherano" AND `difficulty_class` = 2
+
+### Retraining Efficiency Ratio (RER) Tests
+| Conversion | Expected RER | Result |
+|------------|--------------|--------|
+| DM → CB | High (>0.8) | Recommend (attribute overlap) |
+| ST → Winger | Low (<0.4) | Reject (CA waste in Finishing/Heading) |
+| AMC → ST (Firmino) | Medium (0.6-0.8) | Recommend conditionally |
+
+### Age Plasticity Validation
+| Age | Plasticity | Test Expectation |
+|-----|------------|------------------|
+| 18 | 1.0 | Class III conversions recommended |
+| 25 | 0.7 | Only Class I-II recommended |
+| 30 | 0.4 | Only Class I recommended |
+| 33 | 0.1 | Emergency swaps only; Class II+ rejected |
+
+### Familiarity Threshold Tests
+| Status | Range | Expected Efficiency |
+|--------|-------|---------------------|
+| Natural | 18-20 | 1.00 (100%) |
+| Accomplished | 15-17 | 0.95 (Match Ready) |
+| Competent | 12-14 | 0.85 (Emergency Use) |
+| Unconvincing | 9-11 | 0.70 |
+| Awkward | 5-8 | 0.50 |
+
+**Test**: Player at Familiarity 12 should have 85% efficiency multiplier
+
+### Difficulty Class Timeline Tests
+| Class | Description | Time (Weeks) | Test Validation |
+|-------|-------------|--------------|-----------------|
+| I (Fluid) | Same pitch area | 4-8 | LB→LWB in 6 weeks |
+| II (Structural) | Different spatial | 12-20 | DM→CB in 16 weeks |
+| III (Spatial) | Geography change | 24-36 | AMR→MC in 30 weeks |
+| IV (Inversion) | Complete inversion | 52+/Impossible | ST→DR rejected |
+
+### Strategic Archetype Protocol Tests
+**Scenario 14: Archetype Detection**
+- **Mascherano** (DM→CB): Tackling ≥14, Anticipation ≥13, JR >12
+- **Lahm** (FB→DM): Decisions ≥15, Teamwork ≥14, Composure >13
+- **Firmino** (AMC→ST): Work Rate ≥14, Technique ≥13, Off the Ball ≥13
+
+**Validation**: System correctly identifies archetype and boosts priority score
+
+### Opportunity Cost Tests
+**Scenario 15: Depth Impact Check**
+- **Setup**: Player is 3rd choice in current position (low opportunity cost)
+- **Expected**: High conversion score (moving them doesn't create new gap)
+- **Anti-case**: Star player (1st choice) recommended for conversion
+- **Expected**: Penalty applied OR recommendation rejected
+
 ## Research Objective
 
 **Goal**: Design a comprehensive validation test suite that:
