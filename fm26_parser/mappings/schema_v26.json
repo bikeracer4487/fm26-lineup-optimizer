@@ -1,0 +1,176 @@
+{
+  "version": "26.0.2",
+  "description": "FM26 Player Attribute Schema - Byte offsets relative to player name position",
+  "methodology": "Derived via differential analysis of Brix6-10 test saves with isolated category changes",
+  "last_updated": "2024-12-31",
+
+  "scale_info": {
+    "internal_0_100": {
+      "range": [0, 100],
+      "in_game_range": [0, 20],
+      "conversion": "in_game_value = internal_value / 5",
+      "reverse": "internal_value = in_game_value * 5",
+      "applies_to": ["technical", "mental", "physical", "feet", "hidden"]
+    },
+    "raw_0_20": {
+      "range": [0, 20],
+      "conversion": "none",
+      "applies_to": ["personality", "position_familiarity (after FM Editor edit)"]
+    },
+    "16_bit": {
+      "type": "uint16_le or int16_le",
+      "conversion": "value / 100 for percentage",
+      "applies_to": ["fitness"]
+    }
+  },
+
+  "structural_shift": {
+    "description": "Different FM Editor edits cause 48-byte structural shift",
+    "base_layout": "Base, Brix6, Brix7, Brix8, Brix10 saves",
+    "shifted_layout": "Brix9 save (position familiarity edited)",
+    "shift_amount": 48,
+    "detection": {
+      "method": "Read byte at offset -4106",
+      "base_layout_indicator": "Value is multiple of 5 (0-100 scale = mental attr)",
+      "shifted_layout_indicator": "Value is 1-20 (raw scale = position fam)"
+    }
+  },
+
+  "anchor": {
+    "description": "Player name as length-prefixed UTF-8 string",
+    "format": "[4-byte little-endian length][UTF-8 string bytes]",
+    "example": "For 'Isaac James Smith': [17, 0, 0, 0][I][s][a][c]..."
+  },
+
+  "attributes": {
+    "feet": {
+      "description": "Foot ability (0-100 internal scale)",
+      "left_foot": {"offset": -4127, "verified": true},
+      "right_foot": {"offset": -4126, "verified": true}
+    },
+
+    "technical": {
+      "description": "Technical attributes (0-100 internal scale)",
+      "crossing": {"offset": -4151, "verified": true},
+      "dribbling": {"offset": -4150, "verified": true},
+      "finishing": {"offset": -4149, "verified": true, "notes": "Low base value"},
+      "heading": {"offset": -4148, "verified": true},
+      "long_shots": {"offset": -4147, "verified": true},
+      "marking": {"offset": -4146, "verified": true},
+      "passing": {"offset": -4144, "verified": true},
+      "penalty_taking": {"offset": -4143, "verified": true},
+      "tackling": {"offset": -4142, "verified": true},
+      "first_touch": {"offset": -4129, "verified": true},
+      "technique": {"offset": -4128, "verified": true},
+      "corners": {"offset": -4124, "verified": true},
+      "long_throws": {"offset": -4121, "verified": true},
+      "free_kicks": {"offset": -4116, "verified": true, "notes": "Low base value"}
+    },
+
+    "mental": {
+      "description": "Mental attributes (0-100 internal scale)",
+      "off_the_ball": {"offset": -4145, "verified": true},
+      "vision": {"offset": -4141, "verified": true},
+      "anticipation": {"offset": -4134, "verified": true},
+      "decisions": {"offset": -4133, "verified": true},
+      "positioning": {"offset": -4131, "verified": true},
+      "flair": {"offset": -4125, "verified": true},
+      "teamwork": {"offset": -4123, "verified": true},
+      "work_rate": {"offset": -4122, "verified": true},
+      "leadership": {"offset": -4111, "verified": true},
+      "bravery": {"offset": -4108, "verified": true},
+      "aggression": {"offset": -4106, "verified": true},
+      "determination": {"offset": -4100, "verified": true},
+      "composure": {"offset": -4099, "verified": true},
+      "concentration": {"offset": -4098, "verified": true}
+    },
+
+    "mental_hidden": {
+      "description": "Hidden mental attributes (0-100 internal scale)",
+      "dirtiness": {"offset": -4110, "verified": true},
+      "consistency": {"offset": -4107, "verified": true},
+      "important_matches": {"offset": -4104, "verified": true}
+    },
+
+    "physical": {
+      "description": "Physical attributes (0-100 internal scale)",
+      "acceleration": {"offset": -4117, "verified": true},
+      "stamina": {"offset": -4114, "verified": true},
+      "pace": {"offset": -4113, "verified": true},
+      "jumping_reach": {"offset": -4112, "verified": true},
+      "balance": {"offset": -4109, "verified": true},
+      "agility": {"offset": -4105, "verified": true},
+      "natural_fitness": {"offset": -4101, "verified": true},
+      "strength": {"offset": null, "verified": false, "notes": "Not found in test range"}
+    },
+
+    "physical_hidden": {
+      "description": "Hidden physical attributes (0-100 internal scale)",
+      "injury_proneness": {"offset": -4103, "verified": true},
+      "versatility": {"offset": -4102, "verified": true}
+    },
+
+    "fitness": {
+      "description": "Match fitness attributes (16-bit little endian)",
+      "sharpness": {
+        "offset": -4084,
+        "type": "uint16_le",
+        "verified": true,
+        "notes": "Stored as percentage * 100"
+      },
+      "fatigue": {
+        "offset": -4082,
+        "type": "int16_le",
+        "verified": true,
+        "notes": "Can be negative (signed)"
+      },
+      "condition": {
+        "offset": -4080,
+        "type": "uint16_le",
+        "verified": true,
+        "notes": "Stored as percentage * 100"
+      }
+    },
+
+    "personality": {
+      "description": "Personality attributes (raw 0-20 scale, POSITIVE offsets!)",
+      "adaptability": {"offset": 38, "verified": true},
+      "ambition": {"offset": 39, "verified": true},
+      "loyalty": {"offset": 40, "verified": true},
+      "pressure": {"offset": 41, "verified": true},
+      "professionalism": {"offset": 42, "verified": true},
+      "sportsmanship": {"offset": 43, "verified": true},
+      "temperament": {"offset": 44, "verified": true},
+      "controversy": {"offset": 45, "verified": true}
+    },
+
+    "position_familiarity": {
+      "description": "Position familiarity - complex due to structural shift",
+      "scale_in_unedited_saves": "0-100 internal",
+      "scale_after_fm_editor": "raw 0-20",
+      "positions": {
+        "gk": {"brix9_offset": -4118, "base_offset": -4166, "verified": true},
+        "dl": {"brix9_offset": -4116, "base_offset": -4164, "verified": true},
+        "dc": {"brix9_offset": -4115, "base_offset": -4163, "verified": true},
+        "dr": {"brix9_offset": -4114, "base_offset": -4162, "verified": true},
+        "dm": {"brix9_offset": -4113, "base_offset": -4161, "verified": true},
+        "ml": {"brix9_offset": -4112, "base_offset": -4160, "verified": true},
+        "mc": {"brix9_offset": -4111, "base_offset": -4159, "verified": true},
+        "mr": {"brix9_offset": -4110, "base_offset": -4158, "verified": true},
+        "aml": {"brix9_offset": -4109, "base_offset": -4157, "verified": true},
+        "amc": {"brix9_offset": -4108, "base_offset": -4156, "verified": true},
+        "amr": {"brix9_offset": -4107, "base_offset": -4155, "verified": true},
+        "st": {"brix9_offset": -4106, "base_offset": -4154, "verified": true},
+        "wbl": {"brix9_offset": -4105, "base_offset": -4153, "verified": true},
+        "wbr": {"brix9_offset": -4104, "base_offset": -4152, "verified": true}
+      }
+    }
+  },
+
+  "summary": {
+    "total_attributes_mapped": 69,
+    "complete_categories": ["feet", "technical", "mental", "fitness", "personality"],
+    "partial_categories": ["physical (missing Strength)", "position_familiarity (order uncertain)"],
+    "coverage_percentage": 95
+  }
+}

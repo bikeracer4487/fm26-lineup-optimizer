@@ -15,7 +15,14 @@
       "Bash(dir /b \"C:\\\\GitHub\\\\fm26-lineup-optimizer\\\\ui\\\\api\\\\*.py\")",
       "Bash(ls:*)",
       "Bash(pip install:*)",
-      "Bash(pip3 list:*)"
+      "Bash(pip3 list:*)",
+      "Bash(xxd:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:code.google.com)",
+      "WebFetch(domain:www.fmscout.com)",
+      "Bash(\"/Users/Douglas.Mason/Library/Application Support/Sports Interactive/Football Manager 26/cloud/games/Brixham.fm\" )",
+      "Bash(\"/Users/Douglas.Mason/Library/Application Support/Sports Interactive/Football Manager 26/cloud/games/Brixham2.fm\" )",
+      "Bash(\"/Users/Douglas.Mason/Library/Application Support/Sports Interactive/Football Manager 26/cloud/games/Brixham3.fm\" )"
     ],
     "deny": [],
     "ask": []

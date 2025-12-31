@@ -1,0 +1,92 @@
+{
+  "version": "26.0",
+  "description": "FM26 Player Attribute Schema - Complete Mapping",
+  "methodology": "Category-isolated differential analysis (Brixham6-10)",
+  "anchor": "Player full name (length-prefixed UTF-8 string)",
+  "scale": {
+    "internal_range": [
+      0,
+      100
+    ],
+    "in_game_range": [
+      1,
+      20
+    ],
+    "conversion": "in_game = internal / 5"
+  },
+  "fitness": {},
+  "attributes": {
+    "Crossing": {
+      "offset": -4151,
+      "type": "uint8"
+    },
+    "Long Shots": {
+      "offset": -4147,
+      "type": "uint8"
+    },
+    "Marking": {
+      "offset": -4146,
+      "type": "uint8"
+    },
+    "Off The Ball": {
+      "offset": -4145,
+      "type": "uint8"
+    },
+    "Passing": {
+      "offset": -4144,
+      "type": "uint8"
+    },
+    "Positioning": {
+      "offset": -4131,
+      "type": "uint8"
+    },
+    "First Touch": {
+      "offset": -4129,
+      "type": "uint8"
+    },
+    "Left Foot": {
+      "offset": -4127,
+      "type": "uint8"
+    },
+    "Right Foot": {
+      "offset": -4126,
+      "type": "uint8"
+    },
+    "Corners": {
+      "offset": -4124,
+      "type": "uint8"
+    },
+    "Stamina": {
+      "offset": -4114,
+      "type": "uint8"
+    },
+    "Jumping Reach": {
+      "offset": -4112,
+      "type": "uint8"
+    },
+    "Dirtiness": {
+      "offset": -4110,
+      "type": "uint8"
+    },
+    "Balance": {
+      "offset": -4109,
+      "type": "uint8"
+    },
+    "Bravery": {
+      "offset": -4108,
+      "type": "uint8"
+    },
+    "Aggression": {
+      "offset": -4106,
+      "type": "uint8"
+    },
+    "Injury Proneness": {
+      "offset": -4103,
+      "type": "uint8"
+    },
+    "Determination": {
+      "offset": -4100,
+      "type": "uint8"
+    }
+  }
+}
