@@ -142,6 +142,19 @@ public enum ErrorDescriptions {
         }
     }
 
+    /// A caution about a pick, as a whole sentence: out of position in a phase, with his familiarity and the threshold
+    /// below which a player is out of position; or chosen by the manager although a rule would leave him out, with the
+    /// rule's phrase. With `projected`, a fitness figure in that rule is called projected.
+    public static func describe(_ warning: PickWarning, parameters: EngineParameters, projected: Bool = false) -> String {
+        switch warning {
+        case .outOfPosition(let phase, let familiarity):
+            "Out of position \(phase == .inPossession ? "in possession" : "out of possession"): familiarity \(familiarity), "
+                + "below \(parameters.outOfPositionBelow.value)."
+        case .overridesRule(let exclusion):
+            "Chosen by you over a rule: \(describe(exclusion, parameters: parameters, projected: projected))."
+        }
+    }
+
     public static func describe(_ error: DecodingError) -> String {
         func path(_ codingPath: [CodingKey], adding key: CodingKey? = nil) -> String {
             let parts = (codingPath + (key.map { [$0] } ?? [])).map(\.stringValue)

@@ -212,6 +212,28 @@ import Testing
         #expect(ErrorDescriptions.describe(Exclusion.belowConditionFloor(0.846), parameters: p) == "condition 84% is below the 90% floor")
     }
 
+    @Test func outOfPositionNamesThePhaseTheFamiliarityAndTheThreshold() {
+        let p = EngineParameters.fm27
+        #expect(ErrorDescriptions.describe(PickWarning.outOfPosition(.inPossession, familiarity: 1), parameters: p)
+            == "Out of position in possession: familiarity 1, below 10.")
+        #expect(ErrorDescriptions.describe(PickWarning.outOfPosition(.outOfPossession, familiarity: 8), parameters: p)
+            == "Out of position out of possession: familiarity 8, below 10.")
+        var lower = p
+        lower.outOfPositionBelow = Parameter(6, .derived, source: "test")
+        #expect(ErrorDescriptions.describe(PickWarning.outOfPosition(.inPossession, familiarity: 5), parameters: lower)
+            == "Out of position in possession: familiarity 5, below 6.")
+    }
+
+    @Test func aRuleOverriddenSaysSoWithTheRulesPhrase() {
+        let p = EngineParameters.fm27
+        #expect(ErrorDescriptions.describe(PickWarning.overridesRule(.rejected), parameters: p)
+            == "Chosen by you over a rule: rejected for this fixture.")
+        #expect(ErrorDescriptions.describe(PickWarning.overridesRule(.belowConditionFloor(0.78)), parameters: p)
+            == "Chosen by you over a rule: condition 78% is below the 85% floor.")
+        #expect(ErrorDescriptions.describe(PickWarning.overridesRule(.belowConditionFloor(0.78)), parameters: p, projected: true)
+            == "Chosen by you over a rule: projected condition 78% is below the 85% floor.")
+    }
+
     @Test func eachOverrideProblemSaysWhyTheChoiceWasNotUsed() {
         let p = EngineParameters.fm27
         #expect(ErrorDescriptions.describe(OverrideProblem.notInSquad, parameters: p) == "who is not in the imported squads")

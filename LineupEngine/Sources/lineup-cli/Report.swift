@@ -14,12 +14,13 @@ enum Report {
     }
 
     /// The import summary, then each profile's lineup under its name, then a comparison when there are two.
-    static func render(_ header: Header, importance: Importance, results: [(profile: RatingProfile, lineup: Lineup)]) -> String {
+    static func render(_ header: Header, importance: Importance, results: [(profile: RatingProfile, lineup: Lineup)],
+                       parameters: EngineParameters) -> String {
         var out = ["Tactic: \(header.tactic.name)   Importance: \(importance.rawValue)", ""] + summary(header)
         for (profile, lineup) in results {
             out.append("")
             out.append("=== Rating profile: \(profile.name) ===")
-            out += render(lineup, book: header.book, tactic: header.tactic)
+            out += render(lineup, book: header.book, tactic: header.tactic, parameters: parameters, projected: false)
         }
         if results.count == 2 {
             out.append("")
@@ -53,7 +54,7 @@ enum Report {
         for (fixture, lineup, projected) in planned {
             out.append("")
             out.append("=== \(fixture.date.iso)  v \(fixture.opponent)  (\(fixture.importance.rawValue)) ===")
-            out += render(lineup, book: header.book, tactic: fixture.tactic)
+            out += render(lineup, book: header.book, tactic: fixture.tactic, parameters: parameters, projected: projected)
             for slot in SlotID.allCases {
                 guard let problem = lineup.ignoredOverrides[slot] else { continue }
                 let who = fixture.overrides[slot].map { names[$0] ?? $0.key } ?? "?"
@@ -107,7 +108,8 @@ enum Report {
         return out
     }
 
-    private static func render(_ lineup: Lineup, book: SquadBook, tactic: Tactic) -> [String] {
+    private static func render(_ lineup: Lineup, book: SquadBook, tactic: Tactic, parameters: EngineParameters,
+                               projected: Bool) -> [String] {
         var out: [String] = []
         let squadOf = Dictionary(book.allPlayers.map { ($0.id, $0.squad) }, uniquingKeysWith: { first, _ in first })
         out.append("")
@@ -120,7 +122,9 @@ enum Report {
             out.append("  \(pad(pick.slot.rawValue, 5)) \(pad("\(ip) / \(oop)", 52)) \(pad(pick.name, 22)) \(pad(squad, 10))"
                 + " rating \(fixed(pick.rating.value, 1))  fitness cond \(fixed(f.condition, 2)) sharp \(fixed(f.sharpness, 2))"
                 + " jaded \(fixed(f.jadedness, 2))  value \(fixed(pick.value, 1))")
-            for warning in pick.warnings { out.append("        ! \(describe(warning))") }
+            for warning in pick.warnings {
+                out.append("        ! " + ErrorDescriptions.describe(warning, parameters: parameters, projected: projected))
+            }
             for reason in pick.reasons { out.append("        - \(reason)") }
         }
 
@@ -171,14 +175,6 @@ enum Report {
         switch warning {
         case .ownClubUnknown: ErrorDescriptions.describe(warning) + " Pass --own-club <name>."
         case .sharedName: ErrorDescriptions.describe(warning)
-        }
-    }
-
-    static func describe(_ warning: PickWarning) -> String {
-        switch warning {
-        case .outOfPosition(let phase, let familiarity):
-            "out of position \(phase == .inPossession ? "in possession" : "out of possession") (familiarity \(familiarity))"
-        case .overridesRule: "overrides a selection rule"
         }
     }
 

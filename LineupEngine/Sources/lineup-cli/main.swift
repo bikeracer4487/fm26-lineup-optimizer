@@ -196,7 +196,7 @@ do {
         let results = try profiles.map { profile in
             (profile: profile, lineup: try LineupSelector(catalog: catalog, profile: profile, parameters: .fm27).select(request))
         }
-        output = Report.render(header, importance: options.importance, results: results)
+        output = Report.render(header, importance: options.importance, results: results, parameters: .fm27)
 
     case .plan:
         // A key the squads do not have is a mistake in the file, not a player to leave out quietly.
