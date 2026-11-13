@@ -8,6 +8,17 @@ public struct RatingTables: Sendable {
     /// Key role name.
     public let thresholds: [String: [Attribute: Int]]
 
+    /// The evidence label and source of each table, as `EngineParameters.all` gives them for single numbers.
+    public static let evidence: [(name: String, evidence: Evidence, source: String)] = [
+        ("positionWeights", .carriedOverFM26,
+         "rating_calculator.py POSITION_WEIGHTS (branch customizable-tactics), from FM26 engine testing"),
+        ("consensusBonuses", .carriedOverFM26,
+         "rating_calculator.py CONSENSUS_BONUSES (branch customizable-tactics)"),
+        ("thresholds", .carriedOverFM26,
+         "rating_calculator.py THRESHOLDS (branch customizable-tactics); the Python notes they are tuned for elite players "
+            + "in top leagues and can be too harsh for lower-league squads"),
+    ]
+
     /// Builds tables directly, without the checks `init(json:)` makes; for tests that need custom tables.
     init(positionWeights: [Position: [Attribute: Double]], consensusBonuses: [String: [Attribute: Double]],
          thresholds: [String: [Attribute: Int]]) {

@@ -112,7 +112,7 @@ public struct RatingEngine: Sendable {
     private func roleScore(_ player: Player, _ role: Role) throws -> Double {
         let weighted = role.key.map { ($0, parameters.keyWeight.value) }
             + role.preferable.filter { !role.key.contains($0) }.map { ($0, parameters.preferableWeight.value) }
-        guard !weighted.isEmpty else { return 50 }
+        guard !weighted.isEmpty else { return parameters.emptyRoleScore.value }
         var sum = 0.0
         for (attribute, weight) in weighted { sum += try normalised(player, attribute) * weight }
         return 100 * sum / weighted.reduce(0) { $0 + $1.1 }

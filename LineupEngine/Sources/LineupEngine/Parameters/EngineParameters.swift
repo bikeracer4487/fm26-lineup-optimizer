@@ -28,6 +28,8 @@ public struct EngineParameters: Sendable {
     public var balanceBonus: Parameter<Double>
     public var thresholdPenaltyPerPoint: Parameter<Double>
     public var thresholdPenaltyFloor: Parameter<Double>
+    /// The role score of a role that lists no key or preferable attributes.
+    public var emptyRoleScore: Parameter<Double>
     /// Highest minimum first. A familiarity below every minimum takes the last step's factor.
     public var familiaritySteps: Parameter<[FamiliarityStep]>
     public var defensivePhaseWeightIP: Parameter<Double>
@@ -61,6 +63,7 @@ public struct EngineParameters: Sendable {
             balanceBonus: carried(0.01),
             thresholdPenaltyPerPoint: carried(0.02),
             thresholdPenaltyFloor: carried(0.80),
+            emptyRoleScore: Parameter(50, .carriedOverFM26, source: "rating_calculator.py calculate_role_score (branch customizable-tactics)"),
             familiaritySteps: Parameter(
                 [FamiliarityStep(minimum: 18, factor: 1.00), FamiliarityStep(minimum: 15, factor: 0.95),
                  FamiliarityStep(minimum: 13, factor: 0.90), FamiliarityStep(minimum: 10, factor: 0.80),
@@ -84,9 +87,14 @@ public struct EngineParameters: Sendable {
             jadednessSteps: Parameter(
                 [JadednessStep(upTo: 200, factor: 1.00), JadednessStep(upTo: 400, factor: 0.90), JadednessStep(upTo: 700, factor: 0.70)],
                 .carriedOverFM26,
-                source: pythonSource),
-            jadednessAbove: Parameter(0.40, .carriedOverFM26, source: pythonSource),
-            conditionFloor: Parameter(0.85, .carriedOverFM26, source: pythonSource),
+                source: "scoring_parameters.py JADEDNESS_THRESHOLDS and JADEDNESS_MULTIPLIERS: fresh to 200 ×1.00, fit to 400 ×0.90, tired to 700 ×0.70"),
+            jadednessAbove: Parameter(
+                0.40, .carriedOverFM26,
+                source: "scoring_parameters.py JADEDNESS_MULTIPLIERS: jaded (701 and above) ×0.40"),
+            conditionFloor: Parameter(
+                0.85, .carriedOverFM26,
+                source: "fm_match_ready_selector.py (\"NEVER field players below 85% condition\"; it cuts the rating below 85% "
+                    + "rather than leaving the player out); docs/Research/physical-condition.md (85% condition minimum for starting players)"),
             jadedThreshold: Parameter(400, .fm27Observation, source: "\(fitnessSource); FM Lens labels players \"Jaded\" above 400"))
     }()
 

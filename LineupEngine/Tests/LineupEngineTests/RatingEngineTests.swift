@@ -160,6 +160,16 @@ import Testing
         #expect(some.roleScore == 100)
     }
 
+    @Test func theEmptyRoleScoreComesFromTheParameters() throws {
+        var parameters = EngineParameters.fm27
+        parameters.emptyRoleScore = Parameter(40, .derived, source: "test: lowered empty-role score")
+        let lowered = RatingEngine(tables: try RatingTables.bundled(), parameters: parameters, configuration: .fm27)
+        let p = Player.fixture(attributes: [.passing: 20], familiarity: [.attackingMidLeft: 20])
+        #expect(try lowered.rating(for: p, in: probe(.attackingMidLeft, key: [])).inPossession.roleScore == 40)
+        // A role with attributes does not read it.
+        #expect(try lowered.rating(for: p, in: probe(.attackingMidLeft)).inPossession.roleScore == 100)
+    }
+
     @Test func ratingsDoNotDependOnDictionaryOrder() throws {
         let tables = try RatingTables.bundled()
         func reversed<V>(_ table: [Attribute: V]) -> [Attribute: V] {

@@ -13,6 +13,17 @@ import Testing
         #expect(t.consensusBonuses["ST|Central Outlet Centre Forward"]?[.pace] == 0.030)
     }
 
+    @Test func everyTableCarriesAnEvidenceLabelAndASource() throws {
+        let entries = RatingTables.evidence
+        #expect(entries.map(\.name) == ["positionWeights", "consensusBonuses", "thresholds"])
+        #expect(entries.allSatisfy { $0.evidence == .carriedOverFM26 && !$0.source.isEmpty })
+        for (entry, table) in zip(entries, ["POSITION_WEIGHTS", "CONSENSUS_BONUSES", "THRESHOLDS"]) {
+            #expect(entry.source.contains("rating_calculator.py") && entry.source.contains(table), "\(entry.name): \(entry.source)")
+        }
+        let thresholds = try #require(entries.first { $0.name == "thresholds" })
+        #expect(thresholds.source.contains("elite"))
+    }
+
     @Test func anUnknownAttributeInATableFailsToLoad() {
         let json = #"{"positionWeights":{"GK":{"Workrate":1.0}},"consensusBonuses":{},"thresholds":{}}"#
         #expect(throws: CatalogError.unknownAttribute(role: "GK", name: "Workrate")) {
