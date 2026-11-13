@@ -24,4 +24,35 @@ import Testing
         let json = #"{"positionWeights":{"XX":{"Pace":1.0}},"consensusBonuses":{},"thresholds":{}}"#
         #expect(throws: CatalogError.self) { try RatingTables(json: Data(json.utf8)) }
     }
+
+    private func bundledJSON(editing edit: (inout [String: [String: [String: Double]]]) -> Void) throws -> Data {
+        // The library's resource lives in the source tree; the test bundle's own `Bundle.module` is a different bundle.
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Sources/LineupEngine/Resources/rating_tables.json")
+        var object = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        var weights = try #require(object["positionWeights"] as? [String: [String: Double]])
+        var wrapper = ["w": weights]
+        edit(&wrapper)
+        weights = wrapper["w"]!.mapValues { $0 }
+        object["positionWeights"] = weights as [String: [String: Double]]
+        return try JSONSerialization.data(withJSONObject: object)
+    }
+
+    @Test func aPositionWithoutWeightsFailsToLoadAndNamesIt() throws {
+        let data = try bundledJSON { $0["w"]?["GK"] = nil }
+        #expect(throws: CatalogError.malformed(reason: "rating tables have no position weights for GK")) {
+            try RatingTables(json: data)
+        }
+    }
+
+    @Test func anEmptyOrZeroSumWeightTableFailsToLoadAndNamesThePosition() throws {
+        let empty = try bundledJSON { $0["w"]?["D (C)"] = [:] }
+        #expect(throws: CatalogError.malformed(reason: "rating tables have empty or zero-sum position weights for D (C)")) {
+            try RatingTables(json: empty)
+        }
+        let zero = try bundledJSON { $0["w"]?["ST (C)"] = ["Pace": 0] }
+        #expect(throws: CatalogError.malformed(reason: "rating tables have empty or zero-sum position weights for ST (C)")) {
+            try RatingTables(json: zero)
+        }
+    }
 }

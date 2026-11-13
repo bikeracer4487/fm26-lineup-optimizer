@@ -35,6 +35,14 @@ public struct RatingTables: Sendable {
             }
             weights[position] = try attributes(table, owner: code)
         }
+        for position in Position.allCases {
+            guard let table = weights[position] else {
+                throw CatalogError.malformed(reason: "rating tables have no position weights for \(position.rawValue)")
+            }
+            guard table.values.reduce(0, +) > 0 else {
+                throw CatalogError.malformed(reason: "rating tables have empty or zero-sum position weights for \(position.rawValue)")
+            }
+        }
         positionWeights = weights
         consensusBonuses = try file.consensusBonuses.reduce(into: [:]) { $0[$1.key] = try attributes($1.value, owner: $1.key) }
         thresholds = try file.thresholds.reduce(into: [:]) { $0[$1.key] = try attributes($1.value, owner: $1.key) }

@@ -34,6 +34,11 @@ public struct SlotRating: Equatable, Sendable {
     public let value: Double
 }
 
+public enum RatingError: Error, Equatable {
+    case missingAttribute(player: String, attribute: Attribute)
+    case missingFamiliarity(player: String, position: Position)
+}
+
 public struct RatingEngine: Sendable {
     // The current-ability factor is an FM26 rule, not an FM27 one: it exists only so the
     // port can be compared with the Python, so these numbers stay out of `EngineParameters`.
@@ -52,67 +57,78 @@ public struct RatingEngine: Sendable {
         self.configuration = configuration
     }
 
-    public func rating(for player: Player, in assignment: SlotAssignment) -> SlotRating {
-        let ip = phaseRating(player, position: assignment.ipPosition, role: assignment.ipRole)
-        let oop = phaseRating(player, position: assignment.oopPosition, role: assignment.oopRole)
+    public func rating(for player: Player, in assignment: SlotAssignment) throws -> SlotRating {
+        let ip = try phaseRating(player, position: assignment.ipPosition, role: assignment.ipRole)
+        let oop = try phaseRating(player, position: assignment.oopPosition, role: assignment.oopRole)
         let w = assignment.oopPosition.isDefensive ? parameters.defensivePhaseWeightIP.value : parameters.otherPhaseWeightIP.value
         let combined = 2 * (w * ip.value + (1 - w) * oop.value)
         return SlotRating(inPossession: ip, outOfPossession: oop, ipWeight: w,
                           value: configuration.roundsLikeThePythonReference ? roundedToOneDecimal(combined) : combined)
     }
 
-    private func phaseRating(_ player: Player, position: Position, role: Role) -> PhaseRating {
-        let positionScore = positionScore(player, position)
-        let roleScore = roleScore(player, role)
-        let consensus = consensusBonus(player, position, role)
-        let thresholdFactor = thresholdFactor(player, role)
+    private func phaseRating(_ player: Player, position: Position, role: Role) throws -> PhaseRating {
+        let positionScore = try positionScore(player, position)
+        let roleScore = try roleScore(player, role)
+        let consensus = try consensusBonus(player, position, role)
+        let thresholdFactor = try thresholdFactor(player, role)
         var base = (parameters.positionShare.value * positionScore + parameters.roleShare.value * roleScore
                     + parameters.consensusShare.value * consensus) * thresholdFactor
         if configuration.appliesCurrentAbilityFactor { base *= currentAbilityFactor(player.currentAbility) }
         if configuration.roundsLikeThePythonReference { base = roundedToOneDecimal(base) }
-        let familiarity = player.familiarity[position] ?? 1
+        guard let familiarity = player.familiarity[position] else {
+            throw RatingError.missingFamiliarity(player: player.name, position: position)
+        }
         return PhaseRating(positionScore: positionScore, roleScore: roleScore, consensusBonus: consensus,
                            thresholdFactor: thresholdFactor, base: base, familiarity: familiarity,
                            familiarityFactor: familiarityFactor(familiarity))
     }
 
-    /// An attribute missing from the player reads as 10, as in the Python.
-    private func normalised(_ player: Player, _ attribute: Attribute) -> Double {
-        (Double(player.attributes[attribute] ?? 10) - 1) / 19
+    private func value(_ player: Player, _ attribute: Attribute) throws -> Int {
+        guard let value = player.attributes[attribute] else {
+            throw RatingError.missingAttribute(player: player.name, attribute: attribute)
+        }
+        return value
     }
 
-    private func positionScore(_ player: Player, _ position: Position) -> Double {
-        guard let weights = tables.positionWeights[position] else { return 50 }
+    private func normalised(_ player: Player, _ attribute: Attribute) throws -> Double {
+        (Double(try value(player, attribute)) - 1) / 19
+    }
+
+    private func positionScore(_ player: Player, _ position: Position) throws -> Double {
+        // `RatingTables` guarantees a non-empty, positive-sum table for every position.
+        let weights = tables.positionWeights[position] ?? [:]
         let total = weights.values.reduce(0, +)
-        guard total > 0 else { return 0 }
-        return 100 * weights.reduce(0) { $0 + normalised(player, $1.key) * $1.value } / total
+        var sum = 0.0
+        for (attribute, weight) in weights { sum += try normalised(player, attribute) * weight }
+        return 100 * sum / total
     }
 
-    private func roleScore(_ player: Player, _ role: Role) -> Double {
+    private func roleScore(_ player: Player, _ role: Role) throws -> Double {
         let weighted = role.key.map { ($0, parameters.keyWeight.value) }
             + role.preferable.filter { !role.key.contains($0) }.map { ($0, parameters.preferableWeight.value) }
         guard !weighted.isEmpty else { return 50 }
-        let sum = weighted.reduce(0) { $0 + normalised(player, $1.0) * $1.1 }
+        var sum = 0.0
+        for (attribute, weight) in weighted { sum += try normalised(player, attribute) * weight }
         return 100 * sum / weighted.reduce(0) { $0 + $1.1 }
     }
 
-    private func consensusBonus(_ player: Player, _ position: Position, _ role: Role) -> Double {
+    private func consensusBonus(_ player: Player, _ position: Position, _ role: Role) throws -> Double {
         let flagged = Set(role.key).union(role.preferable)
         var bonus = 0.0
         for (attribute, weight) in tables.consensusBonuses["\(position.tableKey)|\(role.name)"] ?? [:] where !flagged.contains(attribute) {
-            bonus += normalised(player, attribute) * weight
+            bonus += try normalised(player, attribute) * weight
         }
         if !flagged.contains(.balance), position != .goalkeeper {
-            bonus += normalised(player, .balance) * parameters.balanceBonus.value
+            bonus += try normalised(player, .balance) * parameters.balanceBonus.value
         }
         return min(bonus * 100, parameters.consensusCap.value)
     }
 
-    private func thresholdFactor(_ player: Player, _ role: Role) -> Double {
+    private func thresholdFactor(_ player: Player, _ role: Role) throws -> Double {
         var factor = 1.0
         for (attribute, minimum) in tables.thresholds[role.name] ?? [:] {
-            let value = player.attributes[attribute] ?? 10
-            if value < minimum { factor *= 1 - parameters.thresholdPenaltyPerPoint.value * Double(minimum - value) }
+            let have = try value(player, attribute)
+            if have < minimum { factor *= 1 - parameters.thresholdPenaltyPerPoint.value * Double(minimum - have) }
         }
         return max(factor, parameters.thresholdPenaltyFloor.value)
     }

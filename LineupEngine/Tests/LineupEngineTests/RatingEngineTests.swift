@@ -16,7 +16,7 @@ import Testing
     @Test func allTensGivesAPositionScoreOfFortySevenPointFour() throws {
         // every attribute 10 gives n = 9/19; a natural centre-back in the sample tactic's D_CL slot
         let cb = Player.fixture(all: 10, familiarity: [dc: 20])
-        let r = engine.rating(for: cb, in: try slot(.D_CL))
+        let r = (try engine.rating(for: cb, in: try slot(.D_CL)))
         #expect(abs(r.inPossession.positionScore - 47.368) < 0.01)
         #expect(r.inPossession.familiarityFactor == 1.0 && r.ipWeight == 0.5)
     }
@@ -26,16 +26,16 @@ import Testing
         let passer = Player.fixture(attributes: [.passing: 15], familiarity: [dc: 20])
         let finisher = Player.fixture(attributes: [.finishing: 15], familiarity: [dc: 20])
         let s = try slot(.D_CL)
-        let before = engine.rating(for: base, in: s)
-        #expect(engine.rating(for: passer, in: s).value > before.value)
-        #expect(engine.rating(for: finisher, in: s).value == before.value)
+        let before = (try engine.rating(for: base, in: s))
+        #expect((try engine.rating(for: passer, in: s)).value > before.value)
+        #expect((try engine.rating(for: finisher, in: s)).value == before.value)
     }
 
     @Test func familiarityStepsApplyPerPhase() throws {
         // AM_L slot: in possession AM (L), out of possession M (L)
         let both = Player.fixture(familiarity: [aml: 20, ml: 20])
         let ipOnly = Player.fixture(familiarity: [aml: 20, ml: 9])
-        let a = engine.rating(for: both, in: try slot(.AM_L)), b = engine.rating(for: ipOnly, in: try slot(.AM_L))
+        let a = (try engine.rating(for: both, in: try slot(.AM_L))), b = (try engine.rating(for: ipOnly, in: try slot(.AM_L)))
         #expect(b.inPossession.value == a.inPossession.value)
         #expect(b.outOfPossession.familiarityFactor == 0.60)
         #expect(b.value < a.value)
@@ -46,7 +46,7 @@ import Testing
                       (9, 0.60), (8, 0.60), (7, 0.35), (5, 0.35), (4, 0.10), (1, 0.10)])
     func familiarityFactorAtEachStep(_ familiarity: Int, _ factor: Double) throws {
         let p = Player.fixture(familiarity: [dc: familiarity])
-        let r = engine.rating(for: p, in: try slot(.D_CL))
+        let r = (try engine.rating(for: p, in: try slot(.D_CL)))
         #expect(r.inPossession.familiarity == familiarity)
         #expect(r.inPossession.familiarityFactor == factor)
         #expect(abs(r.inPossession.value - r.inPossession.base * factor) < 1e-9)
@@ -59,9 +59,9 @@ import Testing
         let met = Player.fixture(attributes: [.acceleration: 14, .pace: 14, .offTheBall: 13], familiarity: [st: 20])
         let short = Player.fixture(attributes: [.acceleration: 12, .pace: 14, .offTheBall: 13], familiarity: [st: 20])
         let broken = Player.fixture(attributes: [.acceleration: 1, .pace: 1, .offTheBall: 1], familiarity: [st: 20])
-        #expect(engine.rating(for: met, in: s).inPossession.thresholdFactor == 1.0)
-        #expect(abs(engine.rating(for: short, in: s).inPossession.thresholdFactor - 0.96) < 1e-9)
-        #expect(abs(engine.rating(for: broken, in: s).inPossession.thresholdFactor - 0.80) < 1e-9)
+        #expect((try engine.rating(for: met, in: s)).inPossession.thresholdFactor == 1.0)
+        #expect(abs((try engine.rating(for: short, in: s)).inPossession.thresholdFactor - 0.96) < 1e-9)
+        #expect(abs((try engine.rating(for: broken, in: s)).inPossession.thresholdFactor - 0.80) < 1e-9)
     }
 
     @Test func currentAbilityDoesNotChangeAnFM27Rating() throws {
@@ -69,7 +69,31 @@ import Testing
         let weak = Player.fixture(familiarity: [dc: 20], currentAbility: 60)
         let strong = Player.fixture(familiarity: [dc: 20], currentAbility: 140)
         let s = try slot(.D_CL)
-        #expect(engine.rating(for: weak, in: s).value == engine.rating(for: strong, in: s).value)
-        #expect(reference.rating(for: weak, in: s).value < reference.rating(for: strong, in: s).value)
+        #expect((try engine.rating(for: weak, in: s)).value == (try engine.rating(for: strong, in: s)).value)
+        #expect((try reference.rating(for: weak, in: s)).value < (try reference.rating(for: strong, in: s)).value)
+    }
+
+    @Test func aMissingAttributeThePositionReadsThrowsNamingPlayerAndAttribute() throws {
+        var p = Player.fixture(name: "Gap Man", familiarity: [dc: 20])
+        p.attributes[.tackling] = nil
+        #expect(throws: RatingError.missingAttribute(player: "Gap Man", attribute: .tackling)) {
+            try engine.rating(for: p, in: try slot(.D_CL))
+        }
+    }
+
+    @Test func aMissingFamiliarityThrowsNamingPlayerAndPosition() throws {
+        var p = Player.fixture(name: "Gap Man", familiarity: [dc: 20])
+        p.familiarity[dc] = nil
+        #expect(throws: RatingError.missingFamiliarity(player: "Gap Man", position: dc)) {
+            try engine.rating(for: p, in: try slot(.D_CL))
+        }
+    }
+
+    @Test func aMissingAttributeTheSlotDoesNotReadStillRates() throws {
+        let full = Player.fixture(familiarity: [dc: 20])
+        var p = full
+        p.attributes[.finishing] = nil
+        let s = try slot(.D_CL)
+        #expect(try engine.rating(for: p, in: s).value == engine.rating(for: full, in: s).value)
     }
 }

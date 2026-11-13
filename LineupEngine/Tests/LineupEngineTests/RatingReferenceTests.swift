@@ -60,7 +60,7 @@ struct RatingReference: Decodable {
         #expect(ref.cases.count > 400)
         var worst = (ip: 0.0, oop: 0.0, combined: 0.0)
         for c in ref.cases {
-            let r = engine.rating(for: try c.builtPlayer, in: try c.assignment(catalog))
+            let r = try engine.rating(for: try c.builtPlayer, in: try c.assignment(catalog))
             worst.ip = max(worst.ip, abs(r.inPossession.base - c.ipRating))
             worst.oop = max(worst.oop, abs(r.outOfPossession.base - c.oopRating))
             worst.combined = max(worst.combined, abs(r.value - c.combinedRating))
