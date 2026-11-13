@@ -85,6 +85,11 @@ public struct Store: Sendable {
         directory.appendingPathComponent("\(file.rawValue).json")
     }
 
+    /// Whether the file is on disk, readable or not.
+    func exists(_ file: StoreFile) -> Bool {
+        FileManager.default.fileExists(atPath: url(file).path)
+    }
+
     public func load<Value: Codable>(_ file: StoreFile, as: Value.Type, otherwise fresh: Value) -> Loaded<Value> {
         let fileManager = FileManager.default
         let path = url(file)
