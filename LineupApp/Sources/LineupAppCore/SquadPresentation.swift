@@ -104,6 +104,12 @@ public struct SquadRow: Identifiable, Equatable, Sendable {
     public let statuses: [PlayerStatus]
     public let statusText: String
     public let isOut: Bool
+    /// The line of the position he knows best, for his magnet; nil when no position is known.
+    public let line: PitchLine?
+    public let conditionMeter: Meter
+    public let sharpnessMeter: Meter
+    /// His statuses as stamps.
+    public let stamps: [StatusStamp]
 
     init(_ player: Player, loan: LoanStatus) {
         id = player.id
@@ -123,6 +129,10 @@ public struct SquadRow: Identifiable, Equatable, Sendable {
         statuses = PlayerStatus.of(player, loan: loan)
         statusText = PlayerStatus.text(statuses)
         isOut = PlayerStatus.isOut(statuses)
+        line = PitchLine.main(familiarity: player.familiarity)
+        conditionMeter = Meter(fraction: player.condition)
+        sharpnessMeter = Meter(fraction: player.sharpness)
+        stamps = PlayerStatus.stamps(statuses)
     }
 
     /// The rows in the table's sort order: the first comparator that tells two rows apart decides, and rows
@@ -237,9 +247,11 @@ extension AppModel {
             .map { SquadRow($0, loan: self.squad.book.loanStatus(of: $0, override: settings.clubOverride)) }
     }
 
-    /// "imported 13 Nov", or "not imported yet".
+    /// "Imported 13 Nov, 18 players", or "Not imported yet".
     public func importedText(for squad: Squad) -> String {
-        self.squad.importedOn[squad].map { "imported \(DayText.dayAndMonth($0))" } ?? "not imported yet"
+        guard let day = self.squad.importedOn[squad] else { return "Not imported yet" }
+        let count = players.filter { $0.squad == squad }.count
+        return "Imported \(DayText.dayAndMonth(day)), \(count == 1 ? "1 player" : "\(count) players")"
     }
 
     /// The report of an import that worked. Names come from the squad as imported, and removed players' names

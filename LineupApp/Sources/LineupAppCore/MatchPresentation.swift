@@ -104,6 +104,10 @@ public struct TokenContent: Identifiable, Equatable, Sendable {
     /// His full name, for the token's help.
     public let name: String
     public let surname: String
+    /// The letters on his magnet: `BoardText.initials`, or a question mark when his name is not known.
+    public let initials: String
+    /// The line his slot is in, which colours his magnet.
+    public var line: PitchLine { PitchLine(slot) }
     /// His match-day value to one decimal place; nil for a confirmed lineup.
     public let value: String?
     public let marks: [TokenMark]
@@ -117,9 +121,11 @@ public struct PickFigure: Equatable, Sendable, Identifiable {
     public let label: String
     public let figure: String?
     public let factor: String?
+    /// Whether the factor lowers his value: below 1.
+    public let lowers: Bool
 
-    public init(label: String, figure: String?, factor: String?) {
-        self.label = label; self.figure = figure; self.factor = factor
+    public init(label: String, figure: String?, factor: String?, lowers: Bool = false) {
+        self.label = label; self.figure = figure; self.factor = factor; self.lowers = lowers
     }
 }
 
@@ -132,12 +138,20 @@ public struct PickDetail: Equatable, Sendable {
     public let slotText: String
     /// The role in each phase, and where he plays it.
     public let roles: [String]
-    /// Rating, condition, sharpness and jadedness on the day with their factors, then the match-day value.
-    public let figures: [PickFigure]
+    /// Rating, condition, sharpness and jadedness on the day with their factors.
+    public let cards: [PickFigure]
+    /// The match-day value to one decimal place.
+    public let valueText: String
+    /// The cards, then the match-day value.
+    public var figures: [PickFigure] {
+        cards + [PickFigure(label: "Match-day value", figure: valueText, factor: nil)]
+    }
     /// A sentence for each way he is out of position.
     public let cautions: [String]
     /// The engine's reasons, as written.
     public let reasons: [String]
+    /// The same reasons, each with what it did to his value.
+    public let markedReasons: [MarkedReason]
     public let isOverride: Bool
 
     /// The engine's sentence for each phase he is out of position in. A rule overridden gets none: the engine's last
@@ -493,7 +507,7 @@ extension AppModel {
             let squads = squadsByPlayer
             return lineup.picks.map { pick in
                 TokenContent(slot: pick.slot, player: pick.player, name: pick.name, surname: MatchText.surname(pick.name),
-                             value: MatchText.oneDecimal(pick.value),
+                             initials: BoardText.initials(pick.name), value: MatchText.oneDecimal(pick.value),
                              marks: TokenMark.marks(isOverride: pick.isOverride, warnings: pick.warnings,
                                                     squad: squads[pick.player]))
             }
@@ -514,10 +528,10 @@ extension AppModel {
             starters[slot].map { player in
                 if let name = names[player] ?? current[player] {
                     return TokenContent(slot: slot, player: player, name: name, surname: MatchText.surname(name),
-                                        value: nil, marks: [])
+                                        initials: BoardText.initials(name), value: nil, marks: [])
                 }
                 return TokenContent(slot: slot, player: player, name: MatchText.unknownPlayer,
-                                    surname: MatchText.unknownSurname, value: nil, marks: [])
+                                    surname: MatchText.unknownSurname, initials: BoardText.unknownInitials, value: nil, marks: [])
             }
         }
     }
@@ -543,18 +557,20 @@ extension AppModel {
         return PickDetail(
             slot: slot, player: pick.player, name: pick.name,
             squadText: player?.squad.displayName ?? "No longer in the squads", slotText: slot.displayName, roles: roles,
-            figures: [
+            cards: [
                 PickFigure(label: "Rating", figure: MatchText.oneDecimal(pick.rating.value), factor: nil),
                 PickFigure(label: label("Condition"), figure: onTheDay.map { MatchText.percent($0.condition) } ?? MatchText.noFigure,
-                           factor: MatchText.factor(pick.fitness.condition)),
+                           factor: MatchText.factor(pick.fitness.condition), lowers: pick.fitness.condition < 1),
                 PickFigure(label: label("Sharpness"), figure: onTheDay.map { MatchText.percent($0.sharpness) } ?? MatchText.noFigure,
-                           factor: MatchText.factor(pick.fitness.sharpness)),
+                           factor: MatchText.factor(pick.fitness.sharpness), lowers: pick.fitness.sharpness < 1),
                 PickFigure(label: label("Jadedness"), figure: onTheDay.map { "\(Int($0.jadedness.rounded()))" } ?? MatchText.noFigure,
-                           factor: MatchText.factor(pick.fitness.jadedness)),
-                PickFigure(label: "Match-day value", figure: MatchText.oneDecimal(pick.value), factor: nil),
+                           factor: MatchText.factor(pick.fitness.jadedness), lowers: pick.fitness.jadedness < 1),
             ],
+            valueText: MatchText.oneDecimal(pick.value),
             cautions: PickDetail.cautions(pick.warnings, parameters: planParameters, projected: plan.fitnessIsProjected),
-            reasons: pick.reasons, isOverride: pick.isOverride)
+            reasons: pick.reasons,
+            markedReasons: MarkedReason.marks(reasons: pick.reasons, fitness: pick.fitness, adjustments: pick.adjustments),
+            isOverride: pick.isOverride)
     }
 
     /// The players the owner left out of the fixture, by name.

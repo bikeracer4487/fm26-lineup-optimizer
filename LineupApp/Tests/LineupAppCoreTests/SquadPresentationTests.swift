@@ -147,14 +147,14 @@ private func player(
 @MainActor @Suite struct ImportedOnTests {
     @Test func aSquadNeverImportedSaysSo() throws {
         let t = try TestModel()
-        #expect(Squad.allCases.map(t.model.importedText(for:)) == ["not imported yet", "not imported yet", "not imported yet"])
+        #expect(Squad.allCases.map(t.model.importedText(for:)) == ["Not imported yet", "Not imported yet", "Not imported yet"])
     }
 
     @Test func anImportedSquadShowsTheDayOfItsLastImport() throws {
         let t = try TestModel()
         try t.importFirstTeam()
-        #expect(t.model.importedText(for: .firstTeam) == "imported 13 Nov")
-        #expect(t.model.importedText(for: .u21) == "not imported yet")
+        #expect(t.model.importedText(for: .firstTeam) == "Imported 13 Nov, \(t.model.players.filter { $0.squad == .firstTeam }.count) players")
+        #expect(t.model.importedText(for: .u21) == "Not imported yet")
     }
 }
 
