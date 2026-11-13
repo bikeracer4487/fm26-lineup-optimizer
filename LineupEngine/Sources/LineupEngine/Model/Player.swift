@@ -9,6 +9,16 @@ public struct PlayerID: Hashable, Codable, Sendable {
 
     public init(key: String) { self.key = key }
 
+    /// Encoded as the key string alone.
+    public init(from decoder: any Decoder) throws {
+        key = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(key)
+    }
+
     private static let fmrtePrefix = "fmrte:"
 
     /// The key for FMRTE's `Id` column value: `fmrte:<id>`.
@@ -27,6 +37,12 @@ public struct PlayerID: Hashable, Codable, Sendable {
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
     }
+}
+
+/// Lets `[PlayerID: ...]` encode as a JSON object keyed by the key strings.
+extension PlayerID: CodingKeyRepresentable {
+    public var codingKey: any CodingKey { RawStringCodingKey(key) }
+    public init?<T: CodingKey>(codingKey: T) { self.init(key: codingKey.stringValue) }
 }
 
 /// Which of the club's squads a paste was taken from.
