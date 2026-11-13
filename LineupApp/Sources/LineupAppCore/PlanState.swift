@@ -36,7 +36,7 @@ public struct FixturePlan: Identifiable, Equatable, Sendable {
     }
 
     public init(fixture: StoredFixture, tacticName: String, usesPrimaryBecauseItsTacticWasDeleted: Bool, body: Body,
-                fitnessIsProjected: Bool = false, ignoredOverrides: [String]) {
+                fitnessIsProjected: Bool, ignoredOverrides: [String]) {
         self.fixture = fixture; self.tacticName = tacticName
         self.usesPrimaryBecauseItsTacticWasDeleted = usesPrimaryBecauseItsTacticWasDeleted
         self.body = body; self.fitnessIsProjected = fitnessIsProjected; self.ignoredOverrides = ignoredOverrides

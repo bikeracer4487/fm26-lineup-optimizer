@@ -775,22 +775,71 @@ import LineupEngine
         #expect(fitness(second).values.allSatisfy { $0.daysSinceMatch == nil })
     }
 
-    @Test func theNoteNamesTheMatchesAwaitingAnImport() throws {
+    /// Leaves out of the fixture every non-first-team player the plan starts in it, until it starts none.
+    private func firstTeamOnly(_ model: AppModel, _ id: FixtureID) throws {
+        for _ in 0..<20 {
+            let young = (lineup(plan(model, id))?.picks ?? []).filter { pick in
+                model.players.first { $0.id == pick.player }?.squad != .firstTeam
+            }
+            if young.isEmpty { return }
+            for pick in young { model.reject(pick.player, in: id) }
+        }
+        Issue.record("the fixture still starts players from outside the first team")
+    }
+
+    @Test func theNoteNamesTheMatchesAndTheSquadToImport() throws {
         let t = try TestModel()
         let model = try squad(fixtures: 3, t)
         let ids = model.fixtures.map(\.id)
         #expect(model.fitnessNote == nil)
+        try firstTeamOnly(model, ids[0])
         model.confirm(ids[0])
-        #expect(model.fitnessNote == "The match against Opponent 1 was confirmed after the squad was last imported. Its "
-            + "starters are counted as having played 90 minutes; import the squad again for their real fitness.")
+        try firstTeamOnly(model, ids[1])
         model.confirm(ids[1])
-        #expect(model.fitnessNote == "The matches against Opponent 1 and Opponent 2 were confirmed after the squad was last "
-            + "imported. Their starters are counted as having played 90 minutes; import the squad again for their real fitness.")
+        #expect(model.fitnessNote == "The matches against Opponent 1 and Opponent 2 were confirmed after the first team "
+            + "was last imported. Their starters from that squad are counted as having played 90 minutes; import the first "
+            + "team again for their real fitness.")
+        model.unlock(ids[1])
+        #expect(model.fitnessNote == "The match against Opponent 1 was confirmed after the first team was last imported. "
+            + "Its starters from that squad are counted as having played 90 minutes; import the first team again for their "
+            + "real fitness.")
+    }
+
+    @Test func theNoteIsNilOnceEveryCountedStartersSquadIsImported() throws {
+        // All the starters are first team: importing the first team again leaves nothing counted, though the record
+        // still awaits the U21 squad.
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        try firstTeamOnly(model, model.fixtures[0].id)
+        model.confirm(model.fixtures[0].id)
+        #expect(model.history.first?.awaitingImport == [.firstTeam, .u21])
+        #expect(model.fitnessNote != nil)
         try t.importFirstTeam()
-        #expect(model.fitnessNote != nil)   // the U21 squad is still awaited
+        #expect(model.history.first?.awaitingImport == [.u21])
+        #expect(model.fitnessNote == nil)
+    }
+
+    @Test func theNoteNamesEverySquadWithACountedStarter() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        let ids = model.fixtures.map(\.id)
+        guard let youngster = model.candidates(for: .ST_C, in: ids[0]).first(where: { $0.squad == .u21 && $0.unavailable == nil }) else {
+            Issue.record("no available U21 striker"); return
+        }
+        model.setOverride(youngster.player, at: .ST_C, in: ids[0])
+        let squads = Set((lineup(plan(model, ids[0]))?.picks ?? []).compactMap { pick in
+            model.players.first { $0.id == pick.player }?.squad
+        })
+        try #require(squads == [.firstTeam, .u21])
+        model.confirm(ids[0])
+        #expect(model.fitnessNote == "The match against Opponent 1 was confirmed after the first team and the U21s were "
+            + "last imported. Its starters from those squads are counted as having played 90 minutes; import them again for "
+            + "their real fitness.")
+        try t.importFirstTeam()
+        #expect(model.fitnessNote == "The match against Opponent 1 was confirmed after the U21s were last imported. Its "
+            + "starters from that squad are counted as having played 90 minutes; import the U21s again for their real fitness.")
         try t.importU21()
         #expect(model.fitnessNote == nil)
-        #expect(model.history.count == 2)
     }
 
     @Test func theNoteIsNilWithNothingAwaited() throws {

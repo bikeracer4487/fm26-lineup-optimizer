@@ -138,7 +138,7 @@ extension AppModel {
                         tactic: tactic(for: fixture)!.tactic, overrides: fixture.overrides, rejected: fixture.rejected)
             },
             players: players, ownClub: ownClub, asOf: asOf, confirmed: history.map(\.lineup),
-            played: playedSinceImport(players), retraining: [], settings: settings.plan)
+            played: countedSinceImport(players).map(\.lineup), retraining: [], settings: settings.plan)
         let plan: Plan
         do {
             plan = try Planner(catalog: catalog, profile: profile, parameters: parameters).plan(request)
@@ -151,13 +151,13 @@ extension AppModel {
         let result = fixtures.compactMap { fixture -> FixturePlan? in
             if let record = confirmed[fixture.id] {
                 return FixturePlan(fixture: fixture, tacticName: record.tacticName, usesPrimaryBecauseItsTacticWasDeleted: false,
-                                   body: .confirmed(record), ignoredOverrides: [])
+                                   body: .confirmed(record), fitnessIsProjected: false, ignoredOverrides: [])
             }
             let tacticName = tactic(for: fixture)?.tactic.name ?? ""
             let tacticGone = fixture.tacticID.map { id in !tactics.contains { $0.id == id } } ?? false
             if fixture.date < asOf {
                 return FixturePlan(fixture: fixture, tacticName: tacticName, usesPrimaryBecauseItsTacticWasDeleted: tacticGone,
-                                   body: .missed, ignoredOverrides: [])
+                                   body: .missed, fitnessIsProjected: false, ignoredOverrides: [])
             }
             guard let item = planned[fixture.id] else { return nil }
             let projected = item.fitnessIsProjected
@@ -178,10 +178,18 @@ extension AppModel {
         return .ready(result)
     }
 
-    /// The confirmed matches whose load the imported fitness does not include: each record still awaiting an import,
-    /// with its starters cut down to those in `players` whose squad it awaits. A record left with no starters is dropped,
-    /// since it changes nobody's fitness.
-    private func playedSinceImport(_ players: [Player]) -> [ConfirmedLineup] {
+    /// A confirmed match whose load the imported fitness does not include, as the planner is handed it.
+    private struct CountedMatch {
+        let record: ConfirmedRecord
+        /// The record's lineup with only the counted starters.
+        let lineup: ConfirmedLineup
+        /// The squads those starters are in now.
+        let squads: Set<Squad>
+    }
+
+    /// Each record still awaiting an import, with its starters cut down to those in `players` whose squad it awaits. A
+    /// record left with no starters is dropped, since it changes nobody's fitness. In history order.
+    private func countedSinceImport(_ players: [Player]) -> [CountedMatch] {
         let squadOf = Dictionary(players.map { ($0.id, $0.squad) }, uniquingKeysWith: { first, _ in first })
         return history.compactMap { record in
             guard !record.awaitingImport.isEmpty else { return nil }
@@ -189,28 +197,45 @@ extension AppModel {
             lineup.starters = lineup.starters.filter { _, player in
                 squadOf[player].map(record.awaitingImport.contains) ?? false
             }
-            return lineup.starters.isEmpty ? nil : lineup
+            guard !lineup.starters.isEmpty else { return nil }
+            return CountedMatch(record: record, lineup: lineup, squads: Set(lineup.starters.values.compactMap { squadOf[$0] }))
         }
     }
 
-    /// Why the plan counts matches the imported fitness does not include, naming them by opponent in date order; nil
-    /// when no confirmed match awaits an import.
+    /// While the plan counts confirmed matches the imported fitness does not include: which ones, by opponent in date
+    /// order, and which squads to import again, those of their counted starters. Nil when it counts none.
     public var fitnessNote: String? {
-        let awaiting = history.filter { !$0.awaitingImport.isEmpty }
+        let counted = countedSinceImport(squad.book.allPlayers)
             .sorted { ($0.lineup.date, $0.lineup.fixture.raw) < ($1.lineup.date, $1.lineup.fixture.raw) }
-        guard !awaiting.isEmpty else { return nil }
-        let opponents = awaiting.map { record in
-            fixtures.first { $0.id == record.lineup.fixture }?.opponent
-                ?? "an opponent on \(DayText.short(record.lineup.date))"
+        guard !counted.isEmpty else { return nil }
+        let opponents = counted.map { match in
+            fixtures.first { $0.id == match.lineup.fixture }?.opponent
+                ?? "an opponent on \(DayText.short(match.lineup.date))"
         }
-        let tail = " confirmed after the squad was last imported. "
-        guard opponents.count > 1 else {
-            return "The match against \(opponents[0]) was" + tail
-                + "Its starters are counted as having played 90 minutes; import the squad again for their real fitness."
+        let awaited = Squad.allCases.filter { squad in counted.contains { $0.squads.contains(squad) } }
+        let squads = awaited.map { squad in
+            switch squad {
+            case .firstTeam: "the first team"
+            case .u21: "the U21s"
+            case .u18: "the U18s"
+            }
         }
-        let listed = opponents.dropLast().joined(separator: ", ") + " and " + opponents.last!
-        return "The matches against \(listed) were" + tail
-            + "Their starters are counted as having played 90 minutes; import the squad again for their real fitness."
+        let matches = opponents.count == 1
+            ? "The match against \(opponents[0]) was"
+            : "The matches against \(Self.listed(opponents)) were"
+        let starters = opponents.count == 1 ? "Its starters" : "Their starters"
+        let imported = squads.count == 1
+            ? "\(squads[0]) \(awaited == [.firstTeam] ? "was" : "were") last imported. \(starters) from that squad are counted as having played 90 minutes; "
+                + "import \(squads[0]) again"
+            : "\(Self.listed(squads)) were last imported. \(starters) from those squads are counted as having played 90 "
+                + "minutes; import them again"
+        return "\(matches) confirmed after \(imported) for their real fitness."
+    }
+
+    /// "A", "A and B", "A, B and C".
+    private static func listed(_ items: [String]) -> String {
+        guard items.count > 1 else { return items.first ?? "" }
+        return items.dropLast().joined(separator: ", ") + " and " + items.last!
     }
 
     /// One sentence per tactic the fixtures would be planned with that cannot be used, in the order the fixtures
