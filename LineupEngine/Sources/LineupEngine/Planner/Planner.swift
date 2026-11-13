@@ -9,9 +9,11 @@ public struct PlanRequest: Sendable {
     /// The day the squad was imported.
     public var asOf: Day
     public var confirmed: [ConfirmedLineup]
-    /// Matches played since the squad was imported, which the imported fitness does not include; any order. Each one's
-    /// starters take a match in the projection, on its date or on `asOf` if it is earlier. They do not count as starts:
-    /// a played match that should count towards runs of starts belongs in `confirmed` too.
+    /// Matches whose load the imported fitness does not include; any order. Each one's starters take a match in the
+    /// projection on its date. One dated before `asOf` is taken from the imported figures, as for starters whose squad
+    /// was last imported before it: they take the match, then the days from it to `asOf` as rest days at the plan's
+    /// training intensity, and nobody else is moved by those days. They do not count as starts: a played match that
+    /// should count towards runs of starts belongs in `confirmed` too.
     public var played: [ConfirmedLineup]
     public var retraining: [Retraining]
     public var settings: PlanSettings
@@ -42,7 +44,8 @@ public enum PlanError: Error, Equatable {
     case fixtureBeforeSnapshot(FixtureID, date: Day, asOf: Day)
     /// The two fixtures in fixture-id order.
     case fixturesOnTheSameDay(FixtureID, FixtureID, Day)
-    /// Two fixtures to plan, two confirmed lineups, or two played matches share this id (the lowest such id).
+    /// Two fixtures to plan, two confirmed lineups, two played matches, or a fixture to plan and a played match share this
+    /// id (the lowest such id).
     case duplicateFixtureID(FixtureID)
     case badSettings([String])
     /// `FitnessModel.problems(in:)` found these in the engine parameters.
@@ -65,8 +68,8 @@ public struct Planner: Sendable {
     }
 
     /// Checks, in order: the settings and the parameters (`PlanError`), two players with one identity
-    /// (`DuplicatePlayerError`), then a fixture id repeated among the fixtures, among the confirmed lineups or among the
-    /// played matches, and the dates of every fixture given (`PlanError`). A fixture to plan may share its id with one
+    /// (`DuplicatePlayerError`), then a fixture id repeated among the fixtures, among the confirmed lineups, among the
+    /// played matches or between the fixtures and the played matches, and the dates of every fixture given (`PlanError`). A fixture to plan may share its id with one
     /// confirmed lineup, which its planned lineup then replaces. Then plans the first `settings.horizon` fixtures, with
     /// the played matches in the fitness projection. Throws `TacticError` for an unusable tactic and `RatingError` for a player
     /// with missing data.
@@ -79,6 +82,8 @@ public struct Planner: Sendable {
         try Self.checkUnique(request.fixtures.map(\.id))
         try Self.checkUnique(request.confirmed.map(\.fixture))
         try Self.checkUnique(request.played.map(\.fixture))
+        // A match both to plan and played would be counted twice.
+        try Self.checkUnique(request.fixtures.map(\.id) + request.played.map(\.fixture))
         let ordered = request.fixtures.sorted { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }
         try Self.checkDates(ordered, asOf: request.asOf)
 
@@ -92,10 +97,13 @@ public struct Planner: Sendable {
         let settings = request.settings
         let retraining = Self.latestRetraining(request.retraining)
         var history = StartHistory(request.confirmed)
-        var fitness = Dictionary(uniqueKeysWithValues: players.map { ($0.id, ProjectedFitness($0)) })
-        var projectedTo = request.asOf
-        var anyMatchSoFar = false
         let known = Set(players.map(\.id))
+        let (imported, anyEarlyMatch) = try afterEarlyMatches(
+            request.played.filter { $0.date < request.asOf }, players: players, known: known, asOf: request.asOf,
+            intensity: settings.trainingIntensity)
+        var fitness = imported
+        var projectedTo = request.asOf
+        var anyMatchSoFar = anyEarlyMatch
 
         // Played matches and planned fixtures in one walk, so both take the days between them alike.
         var planned: [PlannedFixture] = []
@@ -105,14 +113,8 @@ public struct Planner: Sendable {
             projectedTo = event.date
             let index: Int
             switch event {
-            case .played(let match, _):
-                // Starters take the match at their slot's position: the lowest slot, in `SlotID` order, for a player
-                // named twice. A starter not in the squad is ignored, and a match with none left moves nothing.
-                var positionOf: [PlayerID: Position] = [:]
-                for slot in SlotID.allCases {
-                    guard let player = match.starters[slot], known.contains(player), positionOf[player] == nil else { continue }
-                    positionOf[player] = slot.position
-                }
+            case .played(let match):
+                let positionOf = Self.positions(in: match, known: known)
                 if !positionOf.isEmpty {
                     fitness = try afterMatch(fitness, players: players, positionOf: positionOf)
                     anyMatchSoFar = true
@@ -179,25 +181,25 @@ public struct Planner: Sendable {
     /// since the import.
     private enum Event {
         case fixture(Int, Day)
-        case played(ConfirmedLineup, Day)
+        case played(ConfirmedLineup)
 
         var date: Day {
             switch self {
-            case .fixture(_, let day), .played(_, let day): day
+            case .fixture(_, let day): day
+            case .played(let match): match.date
             }
         }
     }
 
-    /// The fixtures and the played matches in date order, a played match before a fixture on the same day and played
-    /// matches on one day in id order. A played match before `asOf` is dated `asOf`; those after the last fixture are left
-    /// out, since nothing is planned after them.
+    /// The fixtures and the played matches from `asOf` on, in date order, a played match before a fixture on the same day
+    /// and played matches on one day in id order. Those before `asOf` are left to `afterEarlyMatches`, and those after the
+    /// last fixture are left out, since nothing is planned after them.
     private static func events(_ fixtures: [Fixture], played: [ConfirmedLineup], asOf: Day) -> [Event] {
         guard let last = fixtures.last?.date else { return [] }
         let matches = played
-            .map { (match: $0, date: max($0.date, asOf)) }
-            .filter { $0.date <= last }
-            .sorted { ($0.date, $0.match.fixture.raw) < ($1.date, $1.match.fixture.raw) }
-            .map { Event.played($0.match, $0.date) }
+            .filter { asOf <= $0.date && $0.date <= last }
+            .sorted { ($0.date, $0.fixture.raw) < ($1.date, $1.fixture.raw) }
+            .map(Event.played)
         let planned = fixtures.indices.map { Event.fixture($0, fixtures[$0].date) }
         var merged: [Event] = []
         var next = 0
@@ -208,6 +210,46 @@ public struct Planner: Sendable {
             merged.append(match)
         }
         return merged + planned[next...]
+    }
+
+    /// The imported figures, with the matches played before `asOf` taken by their starters: in date then id order, each
+    /// starter takes the days since his previous such match, then the match; then the days from his last such match to
+    /// `asOf`. Nobody else moves. Also whether any match moved anyone.
+    private func afterEarlyMatches(_ matches: [ConfirmedLineup], players: [Player], known: Set<PlayerID>, asOf: Day,
+                                   intensity: TrainingIntensity) throws -> ([PlayerID: ProjectedFitness], Bool) {
+        var fitness = Dictionary(uniqueKeysWithValues: players.map { ($0.id, ProjectedFitness($0)) })
+        var lastMatch: [PlayerID: Day] = [:]
+        for match in matches.sorted(by: { ($0.date, $0.fixture.raw) < ($1.date, $1.fixture.raw) }) {
+            let positionOf = Self.positions(in: match, known: known)
+            for player in players {
+                guard let position = positionOf[player.id] else { continue }
+                var current = fitness[player.id]!
+                if let since = lastMatch[player.id] {
+                    current = try FitnessProjection.afterDays(since.days(to: match.date), current, player: player,
+                                                              intensity: intensity, parameters: parameters)
+                }
+                fitness[player.id] = try FitnessProjection.afterMatch(current, player: player, position: position,
+                                                                      parameters: parameters)
+                lastMatch[player.id] = match.date
+            }
+        }
+        for player in players {
+            guard let since = lastMatch[player.id] else { continue }
+            fitness[player.id] = try FitnessProjection.afterDays(since.days(to: asOf), fitness[player.id]!, player: player,
+                                                                 intensity: intensity, parameters: parameters)
+        }
+        return (fitness, !lastMatch.isEmpty)
+    }
+
+    /// Where each starter of a played match takes it: his slot's position, the lowest slot in `SlotID` order for a player
+    /// named twice. A starter not in the squad is left out, so a match with none left moves nothing.
+    private static func positions(in match: ConfirmedLineup, known: Set<PlayerID>) -> [PlayerID: Position] {
+        var positionOf: [PlayerID: Position] = [:]
+        for slot in SlotID.allCases {
+            guard let player = match.starters[slot], known.contains(player), positionOf[player] == nil else { continue }
+            positionOf[player] = slot.position
+        }
+        return positionOf
     }
 
     /// Everyone takes `days` nights without a match.
