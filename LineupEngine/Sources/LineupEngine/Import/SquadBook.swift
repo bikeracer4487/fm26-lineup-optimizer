@@ -8,11 +8,13 @@ public enum LoanStatus: Equatable, Sendable {
 
     /// First match wins: a loan to the own club is a loan in; any other loan is a loan out
     /// (also when the own club is unknown); a known, different `club` is a loan in; else own.
+    /// Club names are compared as `PlayerID.normalise` leaves them, so case and spacing do not matter.
     public static func of(_ player: Player, ownClub: String?) -> LoanStatus {
+        let own = ownClub.map(PlayerID.normalise)
         if let loanedTo = player.loanedTo {
-            return loanedTo == ownClub ? .loanedIn(from: player.club) : .loanedOut(to: loanedTo)
+            return PlayerID.normalise(loanedTo) == own ? .loanedIn(from: player.club) : .loanedOut(to: loanedTo)
         }
-        if let ownClub, let club = player.club, club != ownClub { return .loanedIn(from: club) }
+        if let own, let club = player.club, PlayerID.normalise(club) != own { return .loanedIn(from: club) }
         return .own
     }
 }
@@ -74,12 +76,16 @@ public struct SquadBook: Equatable, Codable, Sendable {
         [Squad.firstTeam, .u21, .u18].flatMap { current[$0] ?? [] }
     }
 
-    /// The override if non-empty, otherwise the most common club across all squads (ties to the
-    /// alphabetically first); nil when no player has a club.
+    /// The override, trimmed, unless it is only whitespace; otherwise the most common club across
+    /// all squads, counting names that `PlayerID.normalise` makes equal as one club spelt as first
+    /// seen (ties to the alphabetically first); nil when no player has a club.
     public func ownClub(override: String?) -> String? {
-        if let override, !override.isEmpty { return override }
-        let counts = allPlayers.compactMap(\.club).reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
-        return counts.max { ($0.value, $1.key) < ($1.value, $0.key) }?.key
+        if let trimmed = override?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty { return trimmed }
+        var counts: [String: (spelling: String, count: Int)] = [:]
+        for club in allPlayers.compactMap(\.club) {
+            counts[PlayerID.normalise(club), default: (club, 0)].count += 1
+        }
+        return counts.max { ($0.value.count, $1.key) < ($1.value.count, $0.key) }?.value.spelling
     }
 
     public func loanStatus(of player: Player, override: String?) -> LoanStatus {

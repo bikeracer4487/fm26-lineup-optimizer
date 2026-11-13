@@ -93,6 +93,66 @@ private func book(_ capture: String, squad: Squad) throws -> SquadBook {
         #expect(book.ownClub(override: "") == "Oxford City")
     }
 
+    // MARK: - Club names compared as names, not as exact strings
+
+    /// Four club-column players at Oxford City and one out on loan.
+    private func clubBook() -> SquadBook {
+        var book = SquadBook()
+        book.apply(result((1...4).map { .fixture(name: "P\($0)", club: "Oxford City") }
+                          + [.fixture(name: "Away", club: "Oxford City", loanedTo: "Wallingford")]), to: .firstTeam)
+        return book
+    }
+
+    @Test(arguments: ["oxford city", "OXFORD CITY", "Oxford  City"])
+    func anOverrideInAnotherCaseOrSpacingStillMatchesTheClubColumn(_ override: String) throws {
+        let book = clubBook()
+        #expect(book.ownClub(override: override) == override)
+        let own = try #require(book.allPlayers.first { $0.name == "P1" })
+        #expect(book.loanStatus(of: own, override: override) == .own)
+        let away = try #require(book.allPlayers.first { $0.name == "Away" })
+        #expect(book.loanStatus(of: away, override: override) == .loanedOut(to: "Wallingford"))
+        // A genuinely different club still makes the club column a loan.
+        #expect(book.loanStatus(of: own, override: "Reading") == .loanedIn(from: "Oxford City"))
+    }
+
+    @Test func aTrailingSpaceOverrideIsTrimmedAndMatches() throws {
+        let book = clubBook()
+        #expect(book.ownClub(override: "Oxford City ") == "Oxford City")
+        #expect(book.ownClub(override: "  Reading\t") == "Reading")
+        let own = try #require(book.allPlayers.first { $0.name == "P1" })
+        #expect(book.loanStatus(of: own, override: "Oxford City ") == .own)
+    }
+
+    @Test(arguments: [" ", "   ", "\t"])
+    func aWhitespaceOnlyOverrideCountsAsNoOverride(_ blank: String) {
+        #expect(clubBook().ownClub(override: blank) == "Oxford City")
+        var noClubs = SquadBook()
+        noClubs.apply(result([.fixture(name: "A", club: nil, loanedTo: "Wallingford")]), to: .firstTeam)
+        #expect(noClubs.ownClub(override: blank) == nil)
+        #expect(noClubs.warnings(override: blank) == [.ownClubUnknown])
+        #expect(noClubs.warnings(override: "Oxford City").isEmpty)
+    }
+
+    @Test func aLoanToTheOwnClubInAnotherCaseIsALoanIn() {
+        let loanee = Player.fixture(club: "Reading", loanedTo: "OXFORD CITY")
+        #expect(LoanStatus.of(loanee, ownClub: "Oxford City") == .loanedIn(from: "Reading"))
+        #expect(LoanStatus.of(.fixture(club: "oxford city ", loanedTo: nil), ownClub: "Oxford City") == .own)
+        #expect(LoanStatus.of(.fixture(club: "Reading", loanedTo: "Wallingford"), ownClub: "Oxford City") == .loanedOut(to: "Wallingford"))
+    }
+
+    @Test func clubsThatDifferOnlyInCaseCountAsOneClubSpeltAsFirstSeen() {
+        var book = SquadBook()
+        book.apply(result([.fixture(name: "A", club: "Oxford City"), .fixture(name: "B", club: "oxford city"),
+                           .fixture(name: "C", club: "Reading"), .fixture(name: "D", club: "Reading"),
+                           .fixture(name: "E", club: "OXFORD CITY ")]), to: .firstTeam)
+        #expect(book.ownClub(override: nil) == "Oxford City")
+        // Without the variants, Reading is the most common club.
+        var plain = SquadBook()
+        plain.apply(result([.fixture(name: "A", club: "Oxford City"), .fixture(name: "C", club: "Reading"),
+                            .fixture(name: "D", club: "Reading")]), to: .firstTeam)
+        #expect(plain.ownClub(override: nil) == "Reading")
+    }
+
     @Test func ownClubTiesGoToTheAlphabeticallyFirst() {
         var book = SquadBook()
         book.apply(result([.fixture(name: "A", club: "Reading"), .fixture(name: "B", club: "Oxford City")]), to: .firstTeam)
