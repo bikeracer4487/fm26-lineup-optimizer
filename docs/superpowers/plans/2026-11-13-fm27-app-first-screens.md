@@ -477,6 +477,49 @@ What the screen shows, following the visual direction's layout:
 
 ---
 
+### Task 10: A match played since the last import counts in fitness
+
+Added after Task 7's review, and built before Task 8. Confirming a fixture takes it out of the fixtures the planner plans. The planner starts everyone's fitness from the last import and moves it forward only through the fixtures it plans, so once a match is confirmed its starters look fresh again in every later fixture, until the squad is imported after the match. The owner will often confirm a match and look at the next one before importing again.
+
+**Files:**
+- Modify (engine): `LineupEngine/Sources/LineupEngine/Planner/Planner.swift`, `LineupEngine/Sources/lineup-cli/Report.swift`
+- Modify (app): `Sources/LineupAppCore/StoredTypes.swift`, `Sources/LineupAppCore/AppModel+Plan.swift`, `Sources/LineupAppCore/AppModel+Squad.swift`
+- Test: `LineupEngine/Tests/LineupEngineTests/PlannerTests.swift`, `Tests/LineupAppCoreTests/PlanStateTests.swift`, `Tests/LineupAppCoreTests/StoreTests.swift`
+
+**Interfaces:**
+- Engine:
+  ```swift
+  // PlanRequest gains, defaulted to [] so every existing call compiles unchanged:
+  //   public var played: [ConfirmedLineup]     // matches played since the squad was imported, which the
+  //                                            // imported fitness does not include
+  // PlannedFixture gains:
+  //   public let fitnessIsProjected: Bool      // what the selector was told for this fixture
+  ```
+- App:
+  ```swift
+  // ConfirmedRecord gains:
+  //   public var awaitingImport: Set<Squad>    // squads not imported since this lineup was confirmed
+  // AppModel gains:
+  //   public var fitnessNote: String?          // nil when no confirmed match awaits an import
+  ```
+
+Rules:
+
+- **Engine.** Each lineup in `played` is a match in the projection: its starters take `FitnessProjection.afterMatch` at their slot's position (`SlotID.position`), and everyone takes `afterDays` between events, in date order with the planned fixtures. A played match on the same day as a planned fixture comes first. One dated before `asOf` is applied on `asOf`: the projection cannot go back. A starter who is not among `players` is ignored. `played` does not change the start history; that is still `confirmed`. `fitnessIsProjected` is true for a fixture when a day has passed since `asOf` or any match, played or planned, comes before it; the planner hands the same value to the selector, and the tool and the app read it instead of working it out again.
+- **App.** Confirming sets the record's `awaitingImport` to every squad that has been imported. Importing a squad removes it from every record's `awaitingImport` and saves the history. The planner's `played` is, for each record still awaiting an import, its lineup with the starters cut down to players who are in the squad now and whose squad is still awaited. A history file saved before this field existed loads with nothing awaited.
+- **The note.** `fitnessNote`, when any record awaits an import: "The match against Opponent A was confirmed after the squad was last imported. Its starters are counted as having played 90 minutes; import the squad again for their real fitness." With several, the opponents are listed.
+
+- [ ] **Step 1: Write the failing tests**
+  - Engine `PlannerTests`: `aMatchPlayedSinceTheImportLeavesItsStartersLessFresh` (a starter's fitness at the first fixture equals `FitnessProjection` applied by hand, within 1e-9; a player who did not start is as without it); `aPlayedMatchBeforeTheImportDayIsAppliedOnThatDay`; `aPlayedMatchOnAFixturesDayComesFirst`; `aPlayedStarterWhoHasLeftIsIgnored`; `playedMatchesDoNotChangeRunsOfStarts`; `aFixtureAfterAPlayedMatchHasProjectedFitnessEvenOnTheImportDay`; `inputOrderOfPlayedMatchesDoesNotMatter`; `withNothingPlayedThePlanIsAsBefore`.
+  - App `PlanStateTests`: `confirmingAMatchKeepsItsLoadInLaterFixtures` (a starter of the first fixture has the same projected condition at the second fixture after confirming as before); `importingASquadAgainStopsCountingTheMatchForThatSquadOnly`; `unlockingRemovesTheLoadWithTheRecord`; `theNoteNamesTheMatchesAwaitingAnImport` and nil when none; `awaitingImportSurvivesAReload`.
+  - App `StoreTests`: `aHistoryFileWithoutTheNewFieldLoadsWithNothingAwaited`.
+- [ ] **Step 2: Run** the engine's `swift test --filter PlannerTests` and the app's `swift test --filter "PlanStateTests|StoreTests"` — expect FAIL.
+- [ ] **Step 3: Implement**, engine first.
+- [ ] **Step 4: Run** both packages' full `swift test` — PASS; no build warnings in either.
+- [ ] **Step 5: Commit** — the engine change as "Count matches played since the import in projected fitness", then the app change as "Keep a confirmed match's load in later fixtures until the squad is imported again".
+
+---
+
 ## After this plan
 
 The advisor screens follow the advisors plan: First XI, Second XI and Depth, Training with accept and reject, Rest, Player Removal, and the importance suggestion on Fixtures. The owner's reaction to the look changes `Theme` and the visual direction document.
