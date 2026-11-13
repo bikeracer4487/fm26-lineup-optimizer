@@ -1296,7 +1296,7 @@ Added on 13 November 2026, when the owner found that FMRTE's player grids offer 
 
 **Files:**
 - Modify: `Sources/LineupEngine/Import/GridDetector.swift`, `Sources/LineupEngine/Import/Importer.swift`, `Sources/LineupEngine/Import/SquadBook.swift`, `Sources/LineupEngine/Model/Player.swift`, `Sources/LineupEngine/Reporting/ErrorDescriptions.swift`, `Sources/lineup-cli/Report.swift`, `Tests/LineupEngineTests/Fixtures/captures/README.md`, `CLAUDE.md`
-- Create by copy: `Tests/LineupEngineTests/Fixtures/captures/first-team-with-id.tsv` and `first-team-with-id.grids.json`, from `.superpowers/sdd/2026-11-12-fm27-engine-foundation/captures-with-id/` (exact clipboard bytes and the grid snapshot taken with them; do not alter them)
+- Create by copy, from `.superpowers/sdd/2026-11-12-fm27-engine-foundation/captures-with-id/` (exact clipboard bytes and the grid snapshots taken with them; do not alter them): `Tests/LineupEngineTests/Fixtures/captures/first-team-with-id.tsv` with `first-team-with-id.grids.json`, and `u21-with-id.tsv` with `u21-with-id.grids.json`
 - Test: `ImporterTests.swift`, `GridDetectorTests.swift`, `SquadBookTests.swift`, `EndToEndTests.swift`, `ErrorDescriptionsTests.swift`
 
 **Interfaces:**
@@ -1321,13 +1321,14 @@ Decisions:
   - An incoming player with a name-based key who is the same person as an existing player with an `fmrte:` key takes that existing key. Task 16's rules 1 and 2 already do this; add tests.
   - `SquadWarning.sharedName` is raised only for names that have more than one name-based key. Players with `fmrte:` keys never trigger it.
 - **Sentences:** `.duplicateID` reads "Two rows have the same FMRTE Id <id>: <name> and <name>". `.identifiedByName` reads "This grid has no Id column, so players are identified by name. Add the Id column in FMRTE for exact identity." The command-line tool prints the warning once per squad imported without the column.
-- **The new capture** was taken after a match: ten of the eighteen players are below the 85% condition floor and three are injured. It is added beside the existing `first-team` capture, which stays. Update the captures README: `first-team-with-id` is exact clipboard bytes from the team grid with the `Id` column (99 columns).
+- **The two new captures** were taken after a match, from the team grid with the `Id` column (99 columns). In the first team, ten of the eighteen players are below the 85% condition floor and three are injured; in the U21s one is injured, one is below the floor and Max Treml is out on loan at Wallingford. They are added beside the existing captures, which stay. Update the captures README: both are exact clipboard bytes.
 
 - [ ] **Step 1: Copy the capture into the fixtures and write the failing tests**
   - `GridDetectorTests`: `aPasteWithAnIdColumnFitsTheTeamGrid` (the new capture detects `TeamPlayersColumns`, 99 columns); `idIsNotARequiredColumn`; `anIdMustBeAWholePositiveNumber` (accepted "146837"; rejected "", "0", "-5", "12a", "£12", "1,234").
   - `ImporterTests`: `playersFromAGridWithIdsAreKeyedById` (new capture: 18 players, Alfie Potter's id key is `fmrte:146837` and `fmrteID == 146837`, every key has the `fmrte:` prefix, no `.identifiedByName`, `.duplicateName` or `.indistinguishable` warning); `twoNamesakesWithDifferentIdsNeedNoNameHandling` (duplicate a row of the new capture changing only its `Id`: both import, keys are the two ids, no name warnings); `twoRowsWithOneIdStopTheImport` (`.duplicateID(id: "146837", players: [...])`); `aBlankIdNamesThePlayer`; `aGridWithoutIdsWarnsThatIdentityIsByName` (the `u21` capture: exactly one `.identifiedByName`, keys as before).
   - `SquadBookTests`: `aPlayerWithAnIdMovesBetweenSquadsByIdAlone` (same id, different name spelling and potential ability: still one person, moved); `aNamesakeWithADifferentIdIsADifferentPerson` (no warning, both kept); `importingWithIdsTakesOverFromNameKeyedEntries` (import first team without ids, then the same players with ids: same count, every key now `fmrte:`, nobody in `added` or `removed`); `importingWithoutIdsAfterIdsKeepsTheIdKeys` (the reverse: keys stay `fmrte:`); `sharedNameIsNotRaisedForPlayersWithIds`.
-  - `EndToEndTests`: `thePostMatchSnapshotFieldsWhoItCan`: import the new capture as the first team and the `u21` capture as U21, own club "Oxford City", sample tactic, importance high. Eleven slots accounted for, no player twice, no injured or loaned-out player picked, every first-team pick's key has the `fmrte:` prefix, and no pick has condition below the floor. Record the lineup and the unfilled slots in the report.
+  - `ImporterTests`: `theU21CaptureWithIdsMatchesTheEarlierCapturesPlayers`: the six names in `u21-with-id` equal the six in `u21`, every key has the `fmrte:` prefix, and Max Treml is `fmrte:2000482787` with `loanedTo == "Wallingford"`.
+  - `EndToEndTests`: `thePostMatchSnapshotFieldsWhoItCan`: import `first-team-with-id` as the first team and `u21-with-id` as U21, own club "Oxford City", sample tactic, importance high. Every pick's key has the `fmrte:` prefix and no `.identifiedByName` warning is raised. Eleven slots accounted for, no player twice, no injured or loaned-out player picked, every first-team pick's key has the `fmrte:` prefix, and no pick has condition below the floor. Record the lineup and the unfilled slots in the report.
   - `ErrorDescriptionsTests`: the two new sentences.
 - [ ] **Step 2: Run them and see them fail** — `cd LineupEngine && swift test --filter ImporterTests`.
 - [ ] **Step 3: Implement.**
@@ -1339,7 +1340,7 @@ Decisions:
     --grids Tests/LineupEngineTests/Fixtures/captures/first-team-with-id.grids.json \
     --tactic Tests/LineupEngineTests/Fixtures/tactics/sample-4231.json \
     --first-team Tests/LineupEngineTests/Fixtures/captures/first-team-with-id.tsv \
-    --u21 Tests/LineupEngineTests/Fixtures/captures/u21.tsv --own-club "Oxford City"
+    --u21 Tests/LineupEngineTests/Fixtures/captures/u21-with-id.tsv --own-club "Oxford City"
   ```
 
   Paste the full output into the report.
