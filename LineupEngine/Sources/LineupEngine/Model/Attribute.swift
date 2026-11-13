@@ -117,3 +117,17 @@ public enum Attribute: String, CaseIterable, Codable, Sendable {
         }
     )
 }
+
+/// A string-valued coding key, so dictionaries keyed by raw-value enums encode as JSON objects.
+struct RawStringCodingKey: CodingKey {
+    let stringValue: String
+    var intValue: Int? { nil }
+    init(_ stringValue: String) { self.stringValue = stringValue }
+    init?(stringValue: String) { self.stringValue = stringValue }
+    init?(intValue: Int) { nil }
+}
+
+extension Attribute: CodingKeyRepresentable {
+    public var codingKey: any CodingKey { RawStringCodingKey(rawValue) }
+    public init?<T: CodingKey>(codingKey: T) { self.init(rawValue: codingKey.stringValue) }
+}

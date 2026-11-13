@@ -40,13 +40,18 @@ public enum GridDetector {
             for entry in counts { byGrid[entry.layout.key] = entry.count }
             throw ImportError.noGridFits(fieldCount: fieldCount, violationsByGrid: byGrid)
         case 1:
-            let present = Set(fits[0].columns)
-            let missing = requiredColumns.filter { !present.contains($0) }
-            if !missing.isEmpty { throw ImportError.missingColumns(grid: fits[0].key, columns: missing) }
+            try requireColumns(in: fits[0])
             return fits[0]
         default:
             throw ImportError.ambiguousGrid(keys: fits.map(\.key))
         }
+    }
+
+    /// Throws `missingColumns` unless the layout has every column in `requiredColumns`.
+    static func requireColumns(in layout: GridLayout) throws {
+        let present = Set(layout.columns)
+        let missing = requiredColumns.filter { !present.contains($0) }
+        if !missing.isEmpty { throw ImportError.missingColumns(grid: layout.key, columns: missing) }
     }
 
     /// How many cells, over all rows, do not have the type their column promises.
@@ -60,7 +65,9 @@ public enum GridDetector {
         return total
     }
 
-    private static func violates(_ cell: String, path: String) -> Bool {
+    /// True when the cell does not have the type its column promises. Columns the detector knows
+    /// nothing about never violate.
+    static func violates(_ cell: String, path: String) -> Bool {
         if Attribute.fromFMRTEPath(path) != nil {
             var digits = Substring(cell)
             if path == balancePath, let first = digits.first, currencySymbols.contains(first) {

@@ -113,3 +113,8 @@ public enum SlotID: String, CaseIterable, Codable, Sendable {
         }
     }
 }
+
+extension Position: CodingKeyRepresentable {
+    public var codingKey: any CodingKey { RawStringCodingKey(rawValue) }
+    public init?<T: CodingKey>(codingKey: T) { self.init(rawValue: codingKey.stringValue) }
+}
