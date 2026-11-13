@@ -1,16 +1,33 @@
 import LineupAppCore
 import SwiftUI
 
-/// The app's window: a sidebar listing the screens, and the chosen screen beside it.
+/// Shows another screen beside the sidebar. `RootView` owns which screen is shown and puts this in the
+/// environment, so a button on any screen can go to another.
+public struct ShowScreen: Sendable {
+    let action: @MainActor @Sendable (Screen) -> Void
+
+    @MainActor public func callAsFunction(_ screen: Screen) {
+        action(screen)
+    }
+}
+
+extension EnvironmentValues {
+    @Entry public var showScreen = ShowScreen { _ in }
+}
+
+/// The app's window: a sidebar listing the screens, and the chosen screen beside it, under the model's notices.
 public struct RootView: View {
+    let model: AppModel
     @State private var selection: Screen?
 
     /// - Parameter screen: the screen the sidebar starts on.
-    public init(showing screen: Screen = .squad) {
+    public init(model: AppModel, showing screen: Screen = .squad) {
+        self.model = model
         _selection = State(initialValue: screen)
     }
 
     public var body: some View {
+        let selected = $selection
         NavigationSplitView {
             List(Screen.allCases, selection: $selection) { screen in
                 Text(screen.title)
@@ -18,41 +35,91 @@ public struct RootView: View {
             }
             .navigationSplitViewColumnWidth(Theme.Layout.sidebarWidth)
         } detail: {
-            if let selection {
-                ScreenView(screen: selection)
-            } else {
-                EmptyState("Choose a screen in the sidebar.")
-                    .padding(Theme.Spacing.xl)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            VStack(alignment: .leading, spacing: 0) {
+                NoticeList(model: model)
+                if let selection {
+                    ScreenView(screen: selection, model: model)
+                } else {
+                    EmptyState("Choose a screen in the sidebar.")
+                        .padding(Theme.Spacing.xl)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
             }
         }
+        .environment(\.showScreen, ShowScreen { selected.wrappedValue = $0 })
         .tint(Theme.Colour.hoopBlue)
         .frame(minWidth: Theme.Layout.minimumWindow.width, minHeight: Theme.Layout.minimumWindow.height)
+    }
+}
+
+/// The model's notices, each with a button that dismisses it.
+struct NoticeList: View {
+    let model: AppModel
+
+    var body: some View {
+        if !model.notices.isEmpty {
+            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                ForEach(model.notices) { notice in
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
+                        MarkedText(notice.text, colour: Theme.Colour.amber)
+                        Spacer(minLength: Theme.Spacing.m)
+                        Button("Dismiss") { model.dismiss(notice) }
+                    }
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.xl)
+            .padding(.vertical, Theme.Spacing.m)
+            Divider()
+        }
     }
 }
 
 /// One screen: its title, then its content.
 struct ScreenView: View {
     let screen: Screen
+    let model: AppModel
 
     var body: some View {
+        switch screen {
+        case .squad: SquadScreen(model: model)
+        case .tactics: placeholder("No tactic yet. Add the formation and roles you play in FM27 here.")
+        case .fixtures: placeholder("No fixtures yet. Add the next few matches and how much each one matters.")
+        case .matchSelection: placeholder("No lineup yet. A lineup needs a squad, a tactic and the next fixture.")
+        case .settings: placeholder("No settings yet.")
+        }
+    }
+
+    /// A screen not built yet: its title and what it will hold.
+    private func placeholder(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             Text(screen.title)
                 .font(Theme.Typeface.title())
-            EmptyState(emptyMessage)
+            EmptyState(message)
             Spacer(minLength: 0)
         }
         .padding(Theme.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
+}
 
-    private var emptyMessage: String {
-        switch screen {
-        case .squad: "No squad yet. Copy your first team in FMRTE, then import it here."
-        case .tactics: "No tactic yet. Add the formation and roles you play in FM27 here."
-        case .fixtures: "No fixtures yet. Add the next few matches and how much each one matters."
-        case .matchSelection: "No lineup yet. A lineup needs a squad, a tactic and the next fixture."
-        case .settings: "No settings yet."
-        }
+/// A sentence with a coloured bar beside it: amber for a caution such as a warning or a notice.
+struct MarkedText: View {
+    let text: String
+    let colour: Color
+
+    init(_ text: String, colour: Color) {
+        self.text = text
+        self.colour = colour
+    }
+
+    var body: some View {
+        Text(text)
+            .font(Theme.Typeface.text())
+            .padding(.leading, Theme.Layout.markerWidth + Theme.Spacing.s)
+            .background(alignment: .leading) {
+                Rectangle()
+                    .fill(colour)
+                    .frame(width: Theme.Layout.markerWidth)
+            }
     }
 }

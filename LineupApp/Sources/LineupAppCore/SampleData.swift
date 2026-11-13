@@ -68,6 +68,25 @@ public enum SampleData {
     /// A model on a temporary directory, filled from the engine's captures under `repositoryRoot`:
     /// both squads, the sample 4-2-3-1 as the primary tactic, the five sample fixtures and the sample history.
     @MainActor public static func model(repositoryRoot: URL) throws -> AppModel {
+        try build(repositoryRoot: repositoryRoot).model
+    }
+
+    /// The sample model after an import of text that is not FMRTE rows: the squads are unchanged and
+    /// `lastImport` says why the import failed.
+    @MainActor public static func modelWithFailedImport(repositoryRoot: URL) throws -> AppModel {
+        let (model, input) = try build(repositoryRoot: repositoryRoot)
+        input.clipboard = "Oxford City 2 Banbury United 1"
+        model.importSquad(.firstTeam)
+        return model
+    }
+
+    /// A model with nothing in it, on a new temporary directory, whose clipboard is empty.
+    @MainActor public static func emptyModel() -> AppModel {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("lineup-empty-\(UUID().uuidString)")
+        return AppModel(store: Store(directory: directory), environment: ScriptedInput(today: date).environment)
+    }
+
+    @MainActor private static func build(repositoryRoot: URL) throws -> (model: AppModel, input: ScriptedInput) {
         let fixturesDirectory = repositoryRoot.appendingPathComponent("LineupEngine/Tests/LineupEngineTests/Fixtures")
         func data(_ path: String) throws -> Data {
             let url = fixturesDirectory.appendingPathComponent(path)
@@ -123,6 +142,6 @@ public enum SampleData {
         if let notice = model.notices.first {
             throw SampleDataError(description: "The sample data could not be built: \(notice.text)")
         }
-        return AppModel(store: store, environment: input.environment)
+        return (AppModel(store: store, environment: input.environment), input)
     }
 }

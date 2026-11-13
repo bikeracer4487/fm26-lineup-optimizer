@@ -87,6 +87,21 @@ public enum Theme {
             .system(size: size, weight: weight)
         }
 
+        /// How far a number at `size` moves down to sit level with system text at `textSize` beside it.
+        /// DIN Condensed puts its figures at the top of a tall line (its ascender is its cap height and its
+        /// descender is deep), so centred in a table cell its figures sit higher than the system's letters.
+        /// Taking the line leading as split above and below, this is the gap between where the two faces'
+        /// capitals are centred in their lines; nothing when the face is missing.
+        public static func numberDrop(_ size: CGFloat, besideTextOf textSize: CGFloat = TypeSize.base) -> CGFloat {
+            guard let number = NSFont(name: numberFaceName, size: size) else { return 0 }
+            func capitalsAboveCentre(_ font: NSFont) -> CGFloat {
+                let line = font.ascender - font.descender + font.leading
+                let capitalsCentre = font.leading / 2 + (font.ascender - font.capHeight) + font.capHeight / 2
+                return line / 2 - capitalsCentre
+            }
+            return capitalsAboveCentre(number) - capitalsAboveCentre(NSFont.systemFont(ofSize: textSize))
+        }
+
         /// Whether a DIN face is installed under its PostScript name.
         public static func isInstalled(_ faceName: String) -> Bool {
             NSFont(name: faceName, size: TypeSize.base) != nil
@@ -124,5 +139,31 @@ public enum Theme {
         public static let minimumWindow = CGSize(width: 900, height: 600)
         /// The window's size when the app opens, and the size of the pictures.
         public static let defaultWindow = CGSize(width: 1200, height: 780)
+        /// The coloured bar beside a notice or a warning.
+        public static let markerWidth: CGFloat = 3
+        /// The search field above a table.
+        public static let searchFieldWidth: CGFloat = 220
+        /// The least height a table keeps, so the text above it cannot squeeze it away.
+        public static let tableMinimumHeight: CGFloat = 160
+    }
+
+    // MARK: Tables
+
+    /// Column widths for the squad table, chosen so its ten columns fit beside the sidebar at the default
+    /// window size. Number columns are as narrow as their headings allow; the name and status columns are the
+    /// only ones that grow, and share what a wider window gives.
+    public enum TableColumnWidth {
+        public static let nameMinimum: CGFloat = 140
+        public static let nameIdeal: CGFloat = 140
+        public static let squad: CGFloat = 64
+        public static let age: CGFloat = 28
+        public static let positions: CGFloat = 78
+        public static let ability: CGFloat = 40
+        public static let potential: CGFloat = 54
+        public static let condition: CGFloat = 58
+        public static let sharpness: CGFloat = 64
+        public static let jadedness: CGFloat = 64
+        public static let statusMinimum: CGFloat = 120
+        public static let statusIdeal: CGFloat = 220
     }
 }

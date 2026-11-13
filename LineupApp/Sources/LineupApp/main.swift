@@ -1,23 +1,43 @@
 // FM27 Lineup Optimizer.
 //
 // Usage:
-//   LineupApp                         opens the window
-//   LineupApp --pictures <directory>  draws every screen, light and dark, to PNG files in
-//                                     <directory>, then exits (0 on success, 1 on a problem)
+//   LineupApp                                  opens the window on the app's own files in
+//                                              ~/Library/Application Support/FM27 Lineup Optimizer
+//   LineupApp --sample-data <repository root>  opens the window on the engine's sample squads, tactic and
+//                                              fixtures, in a temporary directory
+//   LineupApp --pictures <directory>           draws every screen, light and dark, to PNG files in
+//                                              <directory>, then exits (0 on success, 1 on a problem).
+//                                              Without --sample-data it draws an empty model; with it,
+//                                              the sample model, and the Squad screen empty and after a
+//                                              failed import as well ("squad-empty-…", "squad-failed-…").
 
 import AppKit
 import Foundation
+import LineupAppCore
 import LineupAppUI
 import LineupEngine
 import SwiftUI
 
+/// The model the window shows, made before the app starts.
+@MainActor enum Startup {
+    static var model: AppModel?
+}
+
 /// The app's window and its life as a regular Mac app.
 struct LineupApplication: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    private let model: AppModel
+
+    init() {
+        guard let model = Startup.model else {
+            fatalError("The app started without its model.")
+        }
+        self.model = model
+    }
 
     var body: some Scene {
         WindowGroup("FM27 Lineup Optimizer") {
-            RootView()
+            RootView(model: model)
         }
         .defaultSize(Theme.Layout.defaultWindow)
     }
@@ -36,36 +56,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// Draws the pictures and returns the process's exit status.
-@MainActor func drawPictures(arguments: [String]) -> Int32 {
-    guard arguments.count == 2 else {
-        FileHandle.standardError.write(Data("--pictures needs one directory, for example --pictures .build/pictures\n".utf8))
-        return 1
+func fail(_ message: String) -> Never {
+    FileHandle.standardError.write(Data("\(message)\n".utf8))
+    exit(1)
+}
+
+/// The sample model from the repository at `root`, or the reason it could not be built.
+@MainActor func sampleModel(_ root: String, failedImport: Bool = false) -> AppModel {
+    let url = URL(fileURLWithPath: root, isDirectory: true)
+    do {
+        return failedImport ? try SampleData.modelWithFailedImport(repositoryRoot: url) : try SampleData.model(repositoryRoot: url)
+    } catch {
+        fail("\(error)")
     }
+}
+
+/// Draws the pictures and returns the process's exit status.
+@MainActor func drawPictures(to path: String, sampleDataRoot: String?) -> Int32 {
     do {
         // Loads the engine's resources once, so an app built without them stops here, before
         // anything is drawn.
         _ = try RoleCatalog.fm27()
     } catch {
-        FileHandle.standardError.write(Data("The engine could not load its role catalogue: \(ErrorDescriptions.describe(error))\n".utf8))
-        return 1
+        fail("The engine could not load its role catalogue: \(ErrorDescriptions.describe(error))")
     }
-    let directory = URL(fileURLWithPath: arguments[1], isDirectory: true)
+    let directory = URL(fileURLWithPath: path, isDirectory: true)
     let application = NSApplication.shared
     application.setActivationPolicy(.prohibited)
+    let size = Theme.Layout.defaultWindow
     do {
-        try ScreenPictures.write(to: directory, size: Theme.Layout.defaultWindow)
+        if let root = sampleDataRoot {
+            try ScreenPictures.write(model: sampleModel(root), to: directory, size: size)
+            try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size, variant: "empty", screens: [.squad])
+            try ScreenPictures.write(model: sampleModel(root, failedImport: true), to: directory, size: size,
+                                     variant: "failed", screens: [.squad])
+        } else {
+            try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size)
+        }
     } catch {
-        FileHandle.standardError.write(Data("\(error)\n".utf8))
-        return 1
+        fail("\(error)")
     }
     print("Wrote the pictures to \(directory.standardizedFileURL.path)")
     return 0
 }
 
-let arguments = Array(CommandLine.arguments.dropFirst())
-if let index = arguments.firstIndex(of: "--pictures") {
-    exit(drawPictures(arguments: Array(arguments[index...])))
-} else {
-    LineupApplication.main()
+let options: LaunchOptions
+do {
+    options = try LaunchOptions.parse(Array(CommandLine.arguments.dropFirst()))
+} catch {
+    fail(error.description)
 }
+
+if let pictures = options.picturesDirectory {
+    exit(drawPictures(to: pictures, sampleDataRoot: options.sampleDataRoot))
+}
+Startup.model = options.sampleDataRoot.map { sampleModel($0) }
+    ?? AppModel(store: Store(directory: LiveEnvironment.storeDirectory), environment: LiveEnvironment.make())
+LineupApplication.main()
