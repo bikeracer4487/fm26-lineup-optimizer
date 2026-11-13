@@ -80,12 +80,7 @@ extension AppModel {
         }
         let engine = RatingEngine(profile: profile, parameters: parameters, configuration: .fm27)
         return Self.ranked(players, rating: { try engine.rating(for: $0, in: assignment).value }) { player in
-            var onTheDay = player
-            if let projection = fitness[player.id] {
-                onTheDay.condition = projection.condition
-                onTheDay.sharpness = projection.sharpness
-                onTheDay.jadedness = Int(projection.jadedness.rounded())
-            }
+            let onTheDay = fitness[player.id].map { Planner.withFitness(player, $0) } ?? player
             let exclusion = RiskRules.exclusion(
                 for: onTheDay, loan: LoanStatus.of(player, ownClub: club), importance: plan.fixture.importance,
                 isNextFixture: index == 0, parameters: parameters)

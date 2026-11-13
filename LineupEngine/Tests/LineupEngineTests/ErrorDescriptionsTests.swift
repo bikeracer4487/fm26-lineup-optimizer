@@ -166,7 +166,8 @@ import Testing
     @Test func aRepeatedFixtureIDNamesIt() {
         let error = PlanError.duplicateFixtureID(FixtureID("cup-3"))
         let text = ErrorDescriptions.describe(error)
-        #expect(text == "More than one fixture, or more than one confirmed lineup, has the id cup-3. Each fixture needs its own id.")
+        #expect(text == "More than one fixture, confirmed lineup or played match has the id cup-3. "
+            + "Each fixture needs its own id.")
         #expect(ErrorDescriptions.describe(error as Error) == text)
         expectPlain(text)
     }

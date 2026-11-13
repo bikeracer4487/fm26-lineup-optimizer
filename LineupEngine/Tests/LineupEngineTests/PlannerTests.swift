@@ -623,6 +623,21 @@ import Testing
         #expect(beyond == base)
     }
 
+    @Test func withFitnessAppliesTheProjectionAndRoundsJadedness() {
+        let player = squad[0]
+        let fitness = ProjectedFitness(condition: 0.81, sharpness: 0.64, jadedness: 212.5, daysSinceMatch: 3)
+        let onTheDay = Planner.withFitness(player, fitness)
+        #expect(onTheDay.condition == 0.81)
+        #expect(onTheDay.sharpness == 0.64)
+        #expect(onTheDay.jadedness == 213)
+        // Everything else is as imported.
+        var expected = player
+        expected.condition = 0.81; expected.sharpness = 0.64; expected.jadedness = 213
+        #expect(onTheDay == expected)
+        // The imported figures come back unchanged.
+        #expect(Planner.withFitness(player, ProjectedFitness(player)) == player)
+    }
+
     @Test func aMatchBothToPlanAndPlayedIsRefused() throws {
         let fixtures = [fixture("a", day: 1), fixture("b", day: 3)]
         #expect(throws: PlanError.duplicateFixtureID(FixtureID("b"))) {

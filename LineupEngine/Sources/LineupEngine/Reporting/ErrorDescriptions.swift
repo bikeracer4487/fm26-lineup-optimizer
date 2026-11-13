@@ -110,7 +110,7 @@ public enum ErrorDescriptions {
         case .fixturesOnTheSameDay(let first, let second, let day):
             "The fixtures \(first.raw) and \(second.raw) are both on \(day.iso). A club plays one match a day: correct one of the dates."
         case .duplicateFixtureID(let fixture):
-            "More than one fixture, or more than one confirmed lineup, has the id \(fixture.raw). Each fixture needs its own id."
+            "More than one fixture, confirmed lineup or played match has the id \(fixture.raw). Each fixture needs its own id."
         case .badSettings(let problems): "The plan settings cannot be used: \(problems.joined(separator: "; "))."
         case .badParameters(let problems): "The engine's parameters cannot be used: \(problems.joined(separator: "; "))."
         }

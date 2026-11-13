@@ -284,7 +284,7 @@ public struct Planner: Sendable {
 
     /// The player as the selector sees him on the day: projected condition and sharpness, jadedness to the nearest whole number.
     /// Injuries carry through unchanged: FMRTE gives no return date.
-    private static func withFitness(_ player: Player, _ fitness: ProjectedFitness) -> Player {
+    public static func withFitness(_ player: Player, _ fitness: ProjectedFitness) -> Player {
         var copy = player
         copy.condition = fitness.condition
         copy.sharpness = fitness.sharpness
