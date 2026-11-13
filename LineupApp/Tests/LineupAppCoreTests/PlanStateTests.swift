@@ -1000,6 +1000,50 @@ import LineupEngine
         #expect(record(plan(model, ids[0]))?.awaitingImport == [.u21])
     }
 
+    /// Confirming a planned match counts every squad imported so far as imported before kick-off, so a squad imported
+    /// on a missed match's day is counted the same way.
+    @Test func aSquadImportedOnTheMissedMatchDayStillAwaitsAnImport() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        let ids = model.fixtures.map(\.id)
+        model.moveToday(by: 1)
+        try t.importFirstTeam()   // on 14 November, the match day
+        model.moveToday(by: 1)
+        try t.importU21()         // on 15 November, after the match
+        #expect(model.canConfirm(ids[0]))
+        model.confirmMissed(ids[0])
+        #expect(record(plan(model, ids[0]))?.awaitingImport == [.firstTeam])
+    }
+
+    @Test func aRememberedElevenIsShownAndConfirmedWhileThePlanIsStopped() throws {
+        let t = try TestModel()
+        let (model, ids, remembered) = try missedWithEleven(t)
+        #expect(model.shownPlans == plans(model))
+        // A second match on the next fixture's day stops the plan; the missed fixture needs no planner.
+        model.addFixture(date: model.fixtures[1].date, opponent: "Rivals", importance: .low)
+        guard case .failed = model.planState else {
+            Issue.record("expected the plan to stop, got \(model.planState)")
+            return
+        }
+        #expect(model.shownPlans.map(\.id) == [ids[0]])
+        #expect(model.shownPlans.first?.body == .missed(remembered))
+        #expect(model.canConfirm(ids[0]))
+        let keeper = try #require(remembered.starters[.GK])
+        let leftBack = try #require(remembered.starters[.D_L])
+        model.setRemembered(leftBack, at: .GK, in: ids[0])
+        #expect(model.shownPlans.first?.body == .missed(model.fixtures[0].lastPlanned))
+        #expect(model.fixtures[0].lastPlanned?.starters[.D_L] == keeper)
+        model.confirm(ids[0])
+        let confirmed = try #require(model.history.first { $0.lineup.fixture == ids[0] })
+        #expect(confirmed.lineup.starters[.GK] == leftBack)
+        #expect(model.shownPlans.isEmpty)
+    }
+
+    @Test func nothingIsShownWithoutASquad() throws {
+        let t = try TestModel()
+        #expect(t.model.shownPlans.isEmpty)
+    }
+
     @Test func aPlayerPutInTheRememberedElevenSwapsWithHisOldSlot() throws {
         let t = try TestModel()
         let (model, ids, remembered) = try missedWithEleven(t)

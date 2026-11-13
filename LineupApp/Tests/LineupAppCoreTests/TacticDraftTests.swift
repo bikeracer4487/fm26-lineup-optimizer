@@ -361,6 +361,46 @@ import Testing
         #expect(onDisk.map(\.id) == [id])
     }
 
+    @Test func aDraftIsKeptWhenSavingItsTacticFails() throws {
+        let t = try TestModel()
+        let id = t.model.addTactic(named: "Main")
+        let changed = try changedDraft(t.model, id)
+        t.model.setDraft(changed, for: id)
+        let refusals = Refusals()
+        let model = AppModel(store: Store(directory: t.directory, refuse: { refusals.error(for: $0) }),
+                             environment: t.input.environment)
+        refusals.files = [.tactics]
+        model.saveDraft(id)
+        #expect(model.notices.contains { $0.text.hasPrefix("Your tactics could not be saved") })
+        #expect(model.hasUnsavedChanges(id))
+        // The tactics file still holds the old tactic, and the edit is still saved as a draft.
+        let reopened = t.reopened()
+        #expect(reopened.draft(for: id)?.tactic == changed.tactic)
+        #expect(reopened.hasUnsavedChanges(id))
+    }
+
+    @Test func draftsAreKeptWhenTheTacticsFileCouldNotBeReadOrKeptAside() throws {
+        let t = try TestModel()
+        let id = t.model.addTactic(named: "Main")
+        let changed = try changedDraft(t.model, id)
+        t.model.setDraft(changed, for: id)
+        let draftsFile = t.directory.appendingPathComponent("drafts.json")
+        let draftsBefore = try Data(contentsOf: draftsFile)
+        try Data("{".utf8).write(to: t.directory.appendingPathComponent("tactics.json"))
+        struct Refused: Error {}
+        let store = Store(directory: t.directory, move: { _, _ in throw Refused() }, copy: { _, _ in throw Refused() })
+        let model = AppModel(store: store, environment: t.input.environment)
+        #expect(model.tactics.isEmpty)
+        #expect(model.tacticDrafts[id]?.tactic == changed.tactic)
+        #expect(try Data(contentsOf: draftsFile) == draftsBefore)
+
+        // Changing another tactic saves the drafts with the one whose tactic could not be read still in them.
+        let other = model.addTactic(named: "Other")
+        model.setDraft(try changedDraft(model, other), for: other)
+        let onDisk = Store(directory: t.directory).load(.drafts, as: [StoredTactic].self, otherwise: []).value
+        #expect(Set(onDisk.map(\.id)) == [id, other])
+    }
+
     // MARK: The editor's words
 
     @Test func theEditorsWordsAreWorkedOutFromTheDraft() throws {

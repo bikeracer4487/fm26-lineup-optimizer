@@ -68,21 +68,21 @@ public struct Store: Sendable {
     let directory: URL
     private let move: @Sendable (URL, URL) throws -> Void
     private let copy: @Sendable (URL, URL) throws -> Void
+    /// An error to throw instead of saving the file; nil to save it.
+    private let refuse: @Sendable (StoreFile) -> (any Error)?
 
     public init(directory: URL) {
-        self.init(
-            directory: directory,
-            move: { try FileManager.default.moveItem(at: $0, to: $1) },
-            copy: { try FileManager.default.copyItem(at: $0, to: $1) })
+        self.init(directory: directory, move: { try FileManager.default.moveItem(at: $0, to: $1) })
     }
 
     /// File operations are injectable so tests can make them fail.
     init(
         directory: URL,
-        move: @escaping @Sendable (URL, URL) throws -> Void,
-        copy: @escaping @Sendable (URL, URL) throws -> Void = { try FileManager.default.copyItem(at: $0, to: $1) }
+        move: @escaping @Sendable (URL, URL) throws -> Void = { try FileManager.default.moveItem(at: $0, to: $1) },
+        copy: @escaping @Sendable (URL, URL) throws -> Void = { try FileManager.default.copyItem(at: $0, to: $1) },
+        refuse: @escaping @Sendable (StoreFile) -> (any Error)? = { _ in nil }
     ) {
-        self.directory = directory; self.move = move; self.copy = copy
+        self.directory = directory; self.move = move; self.copy = copy; self.refuse = refuse
     }
 
     /// The file's name at the start of a sentence.
@@ -161,6 +161,7 @@ public struct Store: Sendable {
     }
 
     public func save<Value: Codable>(_ value: Value, to file: StoreFile) throws {
+        if let refusal = refuse(file) { throw refusal }
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         let encoder = JSONEncoder()

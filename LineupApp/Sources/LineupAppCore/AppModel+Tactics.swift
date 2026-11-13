@@ -91,9 +91,13 @@ extension AppModel {
         var tactic = draft.tactic
         tactic.name = tactic.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let stored = StoredTactic(id: id, tactic: tactic)
-        guard problems(saving: stored).isEmpty else { return false }
-        changeDrafts { $0[id] = nil }
-        update(stored)
+        guard problems(saving: stored).isEmpty, let index = tactics.firstIndex(where: { $0.id == id }) else { return false }
+        // The tactic is saved first, and the draft dropped only once it is on disk, so a failed save loses no edit.
+        tactics[index] = stored
+        if save(.tactics) {
+            changeDrafts { $0[id] = nil }
+        }
+        replan()
         return true
     }
 

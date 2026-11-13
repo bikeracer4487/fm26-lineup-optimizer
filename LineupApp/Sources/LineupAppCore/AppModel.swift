@@ -77,6 +77,9 @@ public struct AppEnvironment: Sendable {
     /// The rating profile the plan is made with: the engine's standard one.
     let profile: RatingProfile
 
+    /// The notice showing for each file that could not be saved, so a file that keeps failing is noticed once.
+    @ObservationIgnored private var saveFailureNotices: [StoreFile: Notice.ID] = [:]
+
     /// How many times the plan has been worked out, so tests can tell when a change did not replan.
     @ObservationIgnored var timesPlanned = 0
     @ObservationIgnored let store: Store
@@ -109,9 +112,13 @@ public struct AppEnvironment: Sendable {
         self.fixtures = fixtures.value.sorted(by: Self.dateOrder)
         self.history = history.value
         self.squad = squad.value
-        // A draft is kept only for a saved tactic it differs from.
+        // A draft is kept only for a saved tactic it differs from. When the tactics file could not be read and was left
+        // where it is, its tactics are still on disk, so every draft is kept for them.
         let saved = Dictionary(tactics.value.map { ($0.id, $0.tactic) }, uniquingKeysWith: { first, _ in first })
-        let kept = drafts.value.filter { saved[$0.id] != nil && saved[$0.id] != $0.tactic }
+        let tacticsLeftUnread = tactics.notice != nil && !tactics.replaceOnDisk && store.exists(.tactics)
+        let kept = tacticsLeftUnread
+            ? drafts.value
+            : drafts.value.filter { saved[$0.id] != nil && saved[$0.id] != $0.tactic }
         self.tacticDrafts = Dictionary(kept.map { ($0.id, TacticDraft($0.tactic)) }, uniquingKeysWith: { first, _ in first })
         self.notices = [settings.notice, tactics.notice, fixtures.notice, history.notice, squad.notice, drafts.notice]
             .compactMap { $0 }.map(Notice.init(text:))
@@ -141,8 +148,9 @@ public struct AppEnvironment: Sendable {
         (a.date, a.id.raw) < (b.date, b.id.raw)
     }
 
-    /// Writes the file from the state in memory; a failure becomes a notice and the state is kept.
-    func save(_ file: StoreFile) {
+    /// Writes the file from the state in memory, and whether it was written. A failure becomes a notice, unless one
+    /// for the same file is still showing, and the state is kept.
+    @discardableResult func save(_ file: StoreFile) -> Bool {
         do {
             switch file {
             case .settings: try store.save(settings, to: .settings)
@@ -152,10 +160,15 @@ public struct AppEnvironment: Sendable {
             case .squad: try store.save(squad, to: .squad)
             case .drafts: try store.save(savedDrafts, to: .drafts)
             }
+            return true
         } catch {
+            if let showing = saveFailureNotices[file], notices.contains(where: { $0.id == showing }) { return false }
             let subject = file.description.prefix(1).uppercased() + file.description.dropFirst()
-            notices.append(Notice(text: "\(subject) could not be saved: \(error.localizedDescription) "
-                + "The change is kept while the app is open and is saved the next time that part of the app changes."))
+            let notice = Notice(text: "\(subject) could not be saved: \(error.localizedDescription) "
+                + "The change is kept while the app is open and is saved the next time that part of the app changes.")
+            notices.append(notice)
+            saveFailureNotices[file] = notice.id
+            return false
         }
     }
 
@@ -166,9 +179,17 @@ public struct AppEnvironment: Sendable {
         planState = rememberingElevens(workedOutPlan())
     }
 
-    /// The drafts as saved: each with its tactic's id, in the order the tactics are listed.
+    /// The drafts as saved: each with its tactic's id, in the order the tactics are listed; then, by id, those kept for
+    /// tactics in a file that could not be read.
     private var savedDrafts: [StoredTactic] {
-        tactics.compactMap { stored in tacticDrafts[stored.id].map { StoredTactic(id: stored.id, tactic: $0.tactic) } }
+        let listed = tactics.compactMap { stored in
+            tacticDrafts[stored.id].map { StoredTactic(id: stored.id, tactic: $0.tactic) }
+        }
+        let known = Set(tactics.map(\.id))
+        let unread = tacticDrafts.filter { !known.contains($0.key) }
+            .sorted { $0.key.uuidString < $1.key.uuidString }
+            .map { StoredTactic(id: $0.key, tactic: $0.value.tactic) }
+        return listed + unread
     }
 
     /// Applies `change` to the unsaved drafts and saves them if it changed anything.

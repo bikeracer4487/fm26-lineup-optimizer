@@ -189,6 +189,14 @@ public enum SampleData {
         return model
     }
 
+    /// The missed-eleven model with a second fixture on 17 November, so the plan stops while the missed fixture's eleven
+    /// can still be confirmed.
+    @MainActor public static func modelWithMissedElevenWhileThePlanIsStopped(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithMissedEleven(repositoryRoot: repositoryRoot)
+        model.addFixture(date: Day(year: 2026, month: 11, day: 17)!, opponent: "Opponent F", importance: .low)
+        return model
+    }
+
     /// The sample model with a second fixture on 17 November, so the plan stops: a club plays one match a day.
     @MainActor public static func modelWithTwoMatchesOnOneDay(repositoryRoot: URL) throws -> AppModel {
         let model = try build(repositoryRoot: repositoryRoot).model

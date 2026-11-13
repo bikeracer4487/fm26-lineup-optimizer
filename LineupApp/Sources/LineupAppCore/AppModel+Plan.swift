@@ -63,12 +63,12 @@ extension AppModel {
             names: names, tacticName: plan.tacticName, awaitingImport: Set(squad.importedOn.keys)))
     }
 
-    /// Records a missed fixture's remembered eleven as played. Only a squad imported before the match day still awaits
-    /// an import that includes it: one imported since already has its load. Nothing happens unless the fixture is
-    /// missed and has a remembered eleven.
+    /// Records a missed fixture's remembered eleven as played. A squad imported up to the match day still awaits an
+    /// import that includes it, since an import on the day counts as made before kick-off, as `confirm` counts it; one
+    /// imported since already has its load. Nothing happens unless the fixture is missed and has a remembered eleven.
     public func confirmMissed(_ fixture: FixtureID) {
         guard let eleven = rememberedEleven(fixture), let stored = fixtures.first(where: { $0.id == fixture }) else { return }
-        let awaiting = squad.importedOn.filter { $0.value < stored.date }.keys
+        let awaiting = squad.importedOn.filter { $0.value <= stored.date }.keys
         record(ConfirmedRecord(
             lineup: ConfirmedLineup(fixture: fixture, date: stored.date, starters: eleven.starters),
             names: eleven.names, tacticName: eleven.tacticName, awaitingImport: Set(awaiting)))
@@ -112,12 +112,24 @@ extension AppModel {
 
     // MARK: A missed fixture's remembered eleven
 
-    /// The remembered eleven of a missed fixture; nil for any other fixture, or a missed one with none.
+    /// The remembered eleven of a missed fixture; nil for any other fixture, or a missed one with none. Worked out from
+    /// the saved fixtures, not the plan, so it is there whether or not the plan could be made.
     private func rememberedEleven(_ fixture: FixtureID) -> PlannedEleven? {
-        guard let plan = fixturePlans.first(where: { $0.id == fixture }), case .missed(let eleven?) = plan.body else {
-            return nil
-        }
-        return eleven
+        guard let stored = fixtures.first(where: { $0.id == fixture }), isMissed(stored) else { return nil }
+        return stored.lastPlanned
+    }
+
+    /// Before the plan's starting day with no confirmed lineup: as `workedOutPlan` shows it.
+    private func isMissed(_ fixture: StoredFixture) -> Bool {
+        guard let start = planStartDay else { return false }
+        return fixture.date < start && !history.contains { $0.lineup.fixture == fixture.id }
+    }
+
+    /// The fixtures Match Selection shows: the plan's when it is ready; otherwise the missed fixtures, whose remembered
+    /// elevens need no planner and can still be put right and confirmed.
+    public var shownPlans: [FixturePlan] {
+        if case .ready(let plans) = planState { return plans }
+        return fixtures.filter(isMissed).map(missedPlan)
     }
 
     /// The players not out on loan.

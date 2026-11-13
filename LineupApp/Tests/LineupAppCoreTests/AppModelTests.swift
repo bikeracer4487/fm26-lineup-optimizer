@@ -492,6 +492,32 @@ import LineupEngine
         #expect(text.hasSuffix("The change is kept while the app is open and is saved the next time that part of the app changes."))
     }
 
+    @Test func aSaveThatKeepsFailingIsNoticedOnceUntilDismissed() throws {
+        let t = try TestModel()
+        let fm = FileManager.default
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: t.directory.path)
+        defer { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: t.directory.path) }
+        t.model.addFixture(date: day("2026-11-14"), opponent: "Rovers", importance: .high)
+        t.model.addFixture(date: day("2026-11-17"), opponent: "United", importance: .low)
+        #expect(t.model.notices.count == 1)
+        // Dismissed, the next failure is noticed again.
+        t.model.dismiss(try #require(t.model.notices.first))
+        t.model.addFixture(date: day("2026-11-20"), opponent: "City", importance: .low)
+        #expect(t.model.notices.count == 1)
+    }
+
+    @Test func failuresOfDifferentFilesAreEachNoticed() throws {
+        let t = try TestModel()
+        let fm = FileManager.default
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: t.directory.path)
+        defer { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: t.directory.path) }
+        t.model.addFixture(date: day("2026-11-14"), opponent: "Rovers", importance: .high)
+        t.model.addTactic(named: "Main")
+        // Adding the first tactic saves the settings too, as it becomes the primary.
+        #expect(t.model.notices.map { $0.text.prefix(24) }.sorted()
+                == ["Your saved fixtures coul", "Your settings could not ", "Your tactics could not b"])
+    }
+
     // MARK: Sample data
 
     @Test func sampleDataLoadsBothSquadsATacticAndFiveFixtures() throws {

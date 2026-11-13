@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import LineupEngine
 @testable import LineupAppCore
 
@@ -59,5 +60,20 @@ enum Captures {
 
     deinit {
         try? FileManager.default.removeItem(at: directory)
+    }
+}
+
+/// Which files a store refuses to save, changed by a test as it goes.
+final class Refusals: Sendable {
+    struct Refused: Error {}
+    private let refused = Mutex<Set<StoreFile>>([])
+
+    var files: Set<StoreFile> {
+        get { refused.withLock { $0 } }
+        set { refused.withLock { $0 = newValue } }
+    }
+
+    func error(for file: StoreFile) -> (any Error)? {
+        files.contains(file) ? Refused() : nil
     }
 }
