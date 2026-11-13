@@ -22,16 +22,19 @@ public enum ScreenPictures {
 
     /// Draws each of `screens` from `model` at the given size, in light and in dark, and writes
     /// "<screen>-light.png" and "<screen>-dark.png" into `directory`; with a variant,
-    /// "<screen>-<variant>-light.png" and "<screen>-<variant>-dark.png".
+    /// "<screen>-<variant>-light.png" and "<screen>-<variant>-dark.png". With a tactic slot, the Tactics editor is
+    /// drawn with that slot selected.
     @MainActor public static func write(
-        model: AppModel, to directory: URL, size: CGSize, variant: String? = nil, screens: [Screen] = Screen.allCases
+        model: AppModel, to directory: URL, size: CGSize, variant: String? = nil, screens: [Screen] = Screen.allCases,
+        tacticSlot: TacticSlot? = nil
     ) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let appearances: [(suffix: String, name: NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
         for screen in screens {
             for appearance in appearances {
                 let name = ([screen.rawValue] + [variant].compactMap { $0 } + [appearance.suffix]).joined(separator: "-") + ".png"
-                let png = try draw(RootView(model: model, showing: screen), size: size, appearance: appearance.name, name: name)
+                let png = try draw(RootView(model: model, showing: screen, tacticSlot: tacticSlot), size: size,
+                                   appearance: appearance.name, name: name)
                 do {
                     try png.write(to: directory.appendingPathComponent(name), options: .atomic)
                 } catch {

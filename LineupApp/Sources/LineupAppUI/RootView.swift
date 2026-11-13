@@ -18,11 +18,15 @@ extension EnvironmentValues {
 /// The app's window: a sidebar listing the screens, and the chosen screen beside it, under the model's notices.
 public struct RootView: View {
     let model: AppModel
+    let tacticSlot: TacticSlot?
     @State private var selection: Screen?
 
-    /// - Parameter screen: the screen the sidebar starts on.
-    public init(model: AppModel, showing screen: Screen = .squad) {
+    /// - Parameters:
+    ///   - screen: the screen the sidebar starts on.
+    ///   - tacticSlot: the slot the Tactics editor opens with selected.
+    public init(model: AppModel, showing screen: Screen = .squad, tacticSlot: TacticSlot? = nil) {
         self.model = model
+        self.tacticSlot = tacticSlot
         _selection = State(initialValue: screen)
     }
 
@@ -38,7 +42,7 @@ public struct RootView: View {
             VStack(alignment: .leading, spacing: 0) {
                 NoticeList(model: model)
                 if let selection {
-                    ScreenView(screen: selection, model: model)
+                    ScreenView(screen: selection, model: model, tacticSlot: tacticSlot)
                 } else {
                     EmptyState("Choose a screen in the sidebar.")
                         .padding(Theme.Spacing.xl)
@@ -78,11 +82,12 @@ struct NoticeList: View {
 struct ScreenView: View {
     let screen: Screen
     let model: AppModel
+    let tacticSlot: TacticSlot?
 
     var body: some View {
         switch screen {
         case .squad: SquadScreen(model: model)
-        case .tactics: placeholder("No tactic yet. Add the formation and roles you play in FM27 here.")
+        case .tactics: TacticsScreen(model: model, startingSlot: tacticSlot)
         case .fixtures: placeholder("No fixtures yet. Add the next few matches and how much each one matters.")
         case .matchSelection: placeholder("No lineup yet. A lineup needs a squad, a tactic and the next fixture.")
         case .settings: placeholder("No settings yet.")

@@ -145,6 +145,66 @@ public enum Theme {
         public static let searchFieldWidth: CGFloat = 220
         /// The least height a table keeps, so the text above it cannot squeeze it away.
         public static let tableMinimumHeight: CGFloat = 160
+        /// The field for a tactic's name.
+        public static let nameFieldWidth: CGFloat = 240
+        /// The height of a row of controls, kept whether it holds menus or a sentence, so what is below it stays put.
+        public static let controlRowHeight: CGFloat = 24
+    }
+
+    // MARK: Pitch
+
+    /// How a pitch is drawn: its markings, stripes and the tokens on it.
+    public enum Pitch {
+        /// The turf beyond the touchlines and goal lines.
+        public static let margin: CGFloat = 8
+        /// Corner rounding of the turf.
+        public static let cornerRadius: CGFloat = 6
+        /// The width of the chalk lines.
+        public static let lineWidth: CGFloat = 1.5
+        /// How strongly the chalk lines show against the turf.
+        public static let lineOpacity: Double = 0.55
+        /// The number of mown stripes from goal line to goal line.
+        public static let stripeCount = 12
+        /// The least size a pitch keeps, so two side by side stay legible.
+        public static let minimumSize = CGSize(width: 300, height: 380)
+
+        /// The markings as fractions of the pitch, from the Laws of the Game (a 105 by 68 metre pitch).
+        public enum Markings {
+            /// Penalty area: 40.32 metres across, 16.5 deep.
+            public static let penaltyAreaWidth: CGFloat = 40.32 / 68
+            public static let penaltyAreaDepth: CGFloat = 16.5 / 105
+            /// Goal area: 18.32 metres across, 5.5 deep.
+            public static let goalAreaWidth: CGFloat = 18.32 / 68
+            public static let goalAreaDepth: CGFloat = 5.5 / 105
+            /// Penalty mark: 11 metres out.
+            public static let penaltyMarkDistance: CGFloat = 11 / 105
+            /// Centre circle and penalty arc: 9.15 metres, as a fraction of the pitch's width.
+            public static let circleRadius: CGFloat = 9.15 / 68
+            /// The centre and penalty marks.
+            public static let markRadius: CGFloat = 2
+        }
+
+        /// The space between neighbouring tokens.
+        public static let tokenGap: CGFloat = 4
+        /// Corner rounding of a token.
+        public static let tokenCornerRadius: CGFloat = 5
+        /// Padding inside a token.
+        public static let tokenPadding: CGFloat = 3
+        /// The height of an empty slot's token, which holds only its code.
+        public static let emptyTokenHeight: CGFloat = 26
+        /// The fill behind a filled slot's token: chalk at this opacity.
+        public static let tokenFillOpacity: Double = 0.16
+        /// The outline of an empty slot: chalk at this opacity, dashed.
+        public static let emptyTokenOpacity: Double = 0.4
+        public static let emptyTokenDash: [CGFloat] = [3, 3]
+        public static let emptyTokenLineWidth: CGFloat = 1
+        /// The outline of the slot the selected one turns into, or turns from.
+        public static let linkedLineWidth: CGFloat = 2
+        /// The most lines a role name takes under its slot's code. Two fit six rows in the default window; the
+        /// longest names (four words) are cut, and shown in full in the role menu and the slot's help.
+        public static let roleNameLines = 2
+        /// How far a role name may shrink to fit its token, before it is cut.
+        public static let roleNameMinimumScale: CGFloat = 0.85
     }
 
     // MARK: Tables

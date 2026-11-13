@@ -93,6 +93,20 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model with its tactic saved without the in-possession striker, so the tactic has a problem:
+    /// ten in-possession slots, and an out-of-possession striker nothing turns into.
+    @MainActor public static func modelWithTacticProblem(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        guard var stored = model.tactics.first else {
+            throw SampleDataError(description: "The sample model has no tactic.")
+        }
+        var draft = TacticDraft(stored.tactic)
+        draft.toggle(.ST_C, in: .inPossession, catalog: model.catalog)
+        stored.tactic = draft.tactic
+        model.update(stored)
+        return model
+    }
+
     /// A model with nothing in it, on a new temporary directory, whose clipboard is empty.
     @MainActor public static func emptyModel() -> AppModel {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("lineup-empty-\(UUID().uuidString)")

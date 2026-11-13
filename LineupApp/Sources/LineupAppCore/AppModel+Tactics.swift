@@ -84,6 +84,35 @@ extension AppModel {
         tactic.problems(catalog: catalog).map(ErrorDescriptions.describe)
     }
 
+    /// Everything that stops `stored` being saved: first its name, which must not be blank and must differ from
+    /// every other tactic's (ignoring case and the spaces around it), then the engine's problems.
+    public func problems(saving stored: StoredTactic) -> [String] {
+        let name = stored.tactic.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        var found: [String] = []
+        if name.isEmpty {
+            found.append("Give the tactic a name.")
+        } else if let other = tactics.first(where: { $0.id != stored.id && Self.sameName($0.tactic.name, name) }) {
+            found.append("Another tactic is already called \(other.tactic.name).")
+        }
+        return found + problems(of: stored.tactic)
+    }
+
+    /// `base`, or "<base> 2" and on when another tactic already has that name.
+    public func unusedTacticName(_ base: String) -> String {
+        var name = base
+        var number = 2
+        while tactics.contains(where: { Self.sameName($0.tactic.name, name) }) {
+            name = "\(base) \(number)"
+            number += 1
+        }
+        return name
+    }
+
+    private static func sameName(_ a: String, _ b: String) -> Bool {
+        a.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(b.trimmingCharacters(in: .whitespacesAndNewlines))
+            == .orderedSame
+    }
+
     /// A 4-2-3-1: wing-backs and ball-playing centre-backs, two defensive midfielders, inside forwards either side
     /// of an attacking midfielder, and a channel forward. Out of possession the wide forwards drop to midfield.
     static func starterTactic(named name: String) -> Tactic {
