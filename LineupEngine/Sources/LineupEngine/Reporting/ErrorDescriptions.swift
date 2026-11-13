@@ -97,6 +97,8 @@ public enum ErrorDescriptions {
                 + "Confirm its lineup if it has been played, or correct its date."
         case .fixturesOnTheSameDay(let first, let second, let day):
             "The fixtures \(first.raw) and \(second.raw) are both on \(day.iso). A club plays one match a day: correct one of the dates."
+        case .duplicateFixtureID(let fixture):
+            "More than one fixture, or more than one confirmed lineup, has the id \(fixture.raw). Each fixture needs its own id."
         case .badSettings(let problems): "The plan settings cannot be used: \(problems.joined(separator: "; "))."
         case .badParameters(let problems): "The engine's parameters cannot be used: \(problems.joined(separator: "; "))."
         }

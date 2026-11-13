@@ -10,7 +10,7 @@ import Testing
                      "unknownRole", "missingAttribute", "missingFamiliarity", "keyNotFound", "valueNotFound", "typeMismatch",
                      "dataCorrupted", "wrongSlotCount", "missingGoalkeeper", "unmapped", "mappingTargetInactive",
                      "duplicateMappingTarget", "goalkeeperMappedToOutfield", "TacticError", "problems", "fixtureBeforeSnapshot",
-                     "fixturesOnTheSameDay", "badSettings", "badParameters", "FixtureID", "Day"]
+                     "fixturesOnTheSameDay", "duplicateFixtureID", "badSettings", "badParameters", "FixtureID", "Day"]
         for name in names { #expect(!text.contains("\(name)("), sourceLocation: sourceLocation) }
     }
 
@@ -148,6 +148,14 @@ import Testing
     @Test func twoFixturesOnOneDayNamesBothAndTheDay() {
         let text = ErrorDescriptions.describe(PlanError.fixturesOnTheSameDay(FixtureID("a"), FixtureID("b"), Day(iso: "2026-11-15")!))
         #expect(text == "The fixtures a and b are both on 2026-11-15. A club plays one match a day: correct one of the dates.")
+        expectPlain(text)
+    }
+
+    @Test func aRepeatedFixtureIDNamesIt() {
+        let error = PlanError.duplicateFixtureID(FixtureID("cup-3"))
+        let text = ErrorDescriptions.describe(error)
+        #expect(text == "More than one fixture, or more than one confirmed lineup, has the id cup-3. Each fixture needs its own id.")
+        #expect(ErrorDescriptions.describe(error as Error) == text)
         expectPlain(text)
     }
 

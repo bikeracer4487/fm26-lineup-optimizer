@@ -116,21 +116,61 @@ import Testing
         }
     }
 
-    @Test func checksRunInOrderSettingsParametersPlayersDates() throws {
+    @Test func aFixtureIDUsedTwiceIsRefused() throws {
+        #expect(throws: PlanError.duplicateFixtureID(FixtureID("a"))) {
+            try planner.plan(request([fixture("a", day: 1), fixture("b", day: 3), fixture("a", day: 5)]))
+        }
+        // Several repeats: the lowest id, whatever the input order.
+        let several = [fixture("c", day: 1), fixture("b", day: 2), fixture("c", day: 3), fixture("b", day: 4)]
+        #expect(throws: PlanError.duplicateFixtureID(FixtureID("b"))) { try planner.plan(request(several)) }
+        #expect(throws: PlanError.duplicateFixtureID(FixtureID("b"))) { try planner.plan(request(several.reversed())) }
+        // Beyond the horizon too.
+        #expect(throws: PlanError.duplicateFixtureID(FixtureID("a"))) {
+            try planner.plan(request([fixture("a", day: 1), fixture("a", day: 9)], settings: PlanSettings(horizon: 1)))
+        }
+    }
+
+    @Test func aConfirmedLineupIDUsedTwiceIsRefused() throws {
+        func confirmed(_ id: String, _ n: Int) -> ConfirmedLineup {
+            ConfirmedLineup(fixture: FixtureID(id), date: day(n), starters: [.D_L: self.id(.D_L)])
+        }
+        let lineups = [confirmed("y", -6), confirmed("x", -5), confirmed("y", -3), confirmed("x", -1)]
+        #expect(throws: PlanError.duplicateFixtureID(FixtureID("x"))) {
+            try planner.plan(request([fixture("a", day: 1)], confirmed: lineups))
+        }
+        #expect(throws: PlanError.duplicateFixtureID(FixtureID("x"))) {
+            try planner.plan(request([fixture("a", day: 1)], confirmed: lineups.reversed()))
+        }
+        #expect(throws: PlanError.duplicateFixtureID(FixtureID("x"))) {
+            try planner.plan(request([], confirmed: lineups))
+        }
+        // The fixtures are checked first.
+        #expect(throws: PlanError.duplicateFixtureID(FixtureID("z"))) {
+            try planner.plan(request([fixture("z", day: 1), fixture("z", day: 2)], confirmed: lineups))
+        }
+        // One confirmed lineup sharing an id with a fixture to plan is allowed.
+        #expect(throws: Never.self) {
+            try planner.plan(request([fixture("a", day: 1)], confirmed: [confirmed("a", -1)]))
+        }
+    }
+
+    @Test func checksRunInOrderSettingsParametersPlayersFixtureIDsDates() throws {
         var broken = EngineParameters.fm27
         broken.conditionCurve = Parameter([], .derived, source: "test")
         let brokenPlanner = Planner(catalog: try RoleCatalog.fm27(), profile: try RatingProfile.standard(), parameters: broken)
         let badSettings = PlanSettings(horizon: 0)
         let twins = squad + [squad[0]]
         let badDates = [fixture("a", day: -1)]
+        let repeated = badDates + [fixture("a", day: 4)]
 
         #expect(throws: PlanError.badSettings(badSettings.problems())) {
-            try brokenPlanner.plan(request(badDates, players: twins, asOf: 0, settings: badSettings))
+            try brokenPlanner.plan(request(repeated, players: twins, asOf: 0, settings: badSettings))
         }
         #expect(throws: PlanError.badParameters(["conditionCurve is empty"])) {
-            try brokenPlanner.plan(request(badDates, players: twins))
+            try brokenPlanner.plan(request(repeated, players: twins))
         }
-        #expect(throws: DuplicatePlayerError.self) { try planner.plan(request(badDates, players: twins)) }
+        #expect(throws: DuplicatePlayerError.self) { try planner.plan(request(repeated, players: twins)) }
+        #expect(throws: PlanError.duplicateFixtureID(FixtureID("a"))) { try planner.plan(request(repeated)) }
         #expect(throws: PlanError.fixtureBeforeSnapshot(FixtureID("a"), date: day(-1), asOf: day(0))) {
             try planner.plan(request(badDates))
         }

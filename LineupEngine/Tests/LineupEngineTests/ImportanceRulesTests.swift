@@ -206,7 +206,7 @@ import Testing
         let p = Player.fixture()
         let r = run(p, .medium, history: starts(p, count: 1), stability: 0.5)
         #expect(abs((slot(r, .D_L, .stability)?.factor ?? 0) - 1.01) < 1e-9)
-        #expect(slot(r, .D_L, .stability)?.reason == "Played here last match (×1.01)")
+        #expect(slot(r, .D_L, .stability)?.reason == "Held this slot in his last start (×1.01)")
         #expect(slot(r, .D_R, .stability) == nil)
     }
 
@@ -214,9 +214,18 @@ import Testing
         let p = Player.fixture()
         let r = run(p, .medium, history: starts(p, count: 3), stability: 0.5)
         #expect(abs((slot(r, .D_L, .stability)?.factor ?? 0) - 1.025) < 1e-9)
-        #expect(slot(r, .D_L, .stability)?.reason == "Has held this slot for 3 matches running (×1.02)")
+        #expect(slot(r, .D_L, .stability)?.reason == "Has held this slot in his last 3 starts (×1.02)")
         let mixed = starts(p, count: 2) + [ConfirmedLineup(fixture: FixtureID("old"), date: date.adding(days: -9), starters: [.D_R: p.id])]
         #expect(abs((slot(run(p, .medium, history: mixed, stability: 0.5), .D_L, .stability)?.factor ?? 0) - 1.01) < 1e-9)
+    }
+
+    @Test func theAnchorReasonCountsTheStartsTheParameterNames() {
+        var two = EngineParameters.fm27
+        two.stabilityAnchorRun = Parameter(2, .derived, source: "test")
+        let p = Player.fixture()
+        let r = ImportanceRules.adjustments(for: p, context: context(.medium, history: starts(p, count: 2), stability: 0.5),
+                                            parameters: two)
+        #expect(slot(r, .D_L, .stability)?.reason == "Has held this slot in his last 2 starts (×1.02)")
     }
 
     @Test func noStabilityMeansNoBonusAndHighImportanceStillGetsIt() {

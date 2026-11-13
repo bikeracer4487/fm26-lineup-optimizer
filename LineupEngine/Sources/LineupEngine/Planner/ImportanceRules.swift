@@ -142,9 +142,9 @@ public enum ImportanceRules {
         if recent.count == run, recent.allSatisfy({ $0 == assignment.slot }) {
             let factor = 1 + parameters.stabilityAnchorBonus.value * context.stability
             return [Adjustment(kind: .stability, factor: factor,
-                               reason: "Has held this slot for \(run) matches running (×\(Display.twoDecimals(factor)))")]
+                               reason: "Has held this slot in his last \(run) starts (×\(Display.twoDecimals(factor)))")]
         }
         let factor = 1 + parameters.stabilityRecentBonus.value * context.stability
-        return [Adjustment(kind: .stability, factor: factor, reason: "Played here last match (×\(Display.twoDecimals(factor)))")]
+        return [Adjustment(kind: .stability, factor: factor, reason: "Held this slot in his last start (×\(Display.twoDecimals(factor)))")]
     }
 }

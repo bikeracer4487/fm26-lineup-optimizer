@@ -35,6 +35,8 @@ public enum PlanError: Error, Equatable {
     case fixtureBeforeSnapshot(FixtureID, date: Day, asOf: Day)
     /// The two fixtures in fixture-id order.
     case fixturesOnTheSameDay(FixtureID, FixtureID, Day)
+    /// Two fixtures to plan, or two confirmed lineups, share this id (the lowest such id).
+    case duplicateFixtureID(FixtureID)
     case badSettings([String])
     /// `FitnessModel.problems(in:)` found these in the engine parameters.
     case badParameters([String])
@@ -56,7 +58,8 @@ public struct Planner: Sendable {
     }
 
     /// Checks, in order: the settings and the parameters (`PlanError`), two players with one identity
-    /// (`DuplicatePlayerError`), then the dates of every fixture given (`PlanError`). Then plans the first
+    /// (`DuplicatePlayerError`), then a repeated fixture id and the dates of every fixture given (`PlanError`). A fixture
+    /// to plan may share its id with one confirmed lineup, which its planned lineup then replaces. Then plans the first
     /// `settings.horizon` fixtures. Throws `TacticError` for an unusable tactic and `RatingError` for a player
     /// with missing data.
     public func plan(_ request: PlanRequest) throws -> Plan {
@@ -65,6 +68,8 @@ public struct Planner: Sendable {
         let parameterProblems = FitnessModel.problems(in: parameters)
         guard parameterProblems.isEmpty else { throw PlanError.badParameters(parameterProblems) }
         try DuplicatePlayerError.check(request.players)
+        try Self.checkUnique(request.fixtures.map(\.id))
+        try Self.checkUnique(request.confirmed.map(\.fixture))
         let ordered = request.fixtures.sorted { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }
         try Self.checkDates(ordered, asOf: request.asOf)
 
@@ -72,6 +77,9 @@ public struct Planner: Sendable {
         guard let firstDate = fixtures.first?.date else { return Plan(fixtures: []) }
 
         let players = request.players.sorted { $0.id.key < $1.id.key }
+        let assignmentsByFixture = try fixtures.map { try $0.tactic.assignments(catalog: catalog) }
+        // Tiers ignore fitness, and injury and loan status do not change during a plan, so each is computed once.
+        let tiersByFixture = try fixtures.map { try squadTiers(for: $0, players, ownClub: request.ownClub) }
         let settings = request.settings
         let retraining = Self.latestRetraining(request.retraining)
         var history = StartHistory(request.confirmed)
@@ -85,13 +93,12 @@ public struct Planner: Sendable {
         var planned: [PlannedFixture] = []
         for (index, fixture) in fixtures.enumerated() {
             let onTheDay = players.map { Self.withFitness($0, fitness[$0.id]!) }
-            let assignments = try fixture.tactic.assignments(catalog: catalog)
-            let tiers = try squadTiers(for: fixture, onTheDay, ownClub: request.ownClub)
-            let later = try fixtures[(index + 1)...].map {
-                LaterFixture(fixture: $0, tiers: try squadTiers(for: $0, onTheDay, ownClub: request.ownClub))
+            let assignments = assignmentsByFixture[index]
+            let later = fixtures.indices.dropFirst(index + 1).map {
+                LaterFixture(fixture: fixtures[$0], tiers: tiersByFixture[$0])
             }
             let context = RuleContext(importance: fixture.importance, date: fixture.date, assignments: assignments,
-                                      ownClub: request.ownClub, history: history, tiers: tiers, retraining: retraining,
+                                      ownClub: request.ownClub, history: history, tiers: tiersByFixture[index], retraining: retraining,
                                       stability: settings.stability)
 
             var everySlot: [PlayerID: [Adjustment]] = [:]
@@ -133,9 +140,13 @@ public struct Planner: Sendable {
     private func projectToNext(_ fitness: [PlayerID: ProjectedFitness], players: [Player], lineup: Lineup,
                                assignments: [SlotAssignment], days: Int, intensity: TrainingIntensity) throws
         -> [PlayerID: ProjectedFitness] {
+        let assignmentOf = Dictionary(uniqueKeysWithValues: assignments.map { ($0.slot, $0) })
         var positionOf: [PlayerID: Position] = [:]
         for pick in lineup.picks {
-            positionOf[pick.player] = assignments.first { $0.slot == pick.slot }?.ipPosition
+            guard let assignment = assignmentOf[pick.slot] else {
+                preconditionFailure("A pick at \(pick.slot.rawValue) is not in the fixture's tactic; the selector only picks for the tactic's slots")
+            }
+            positionOf[pick.player] = assignment.ipPosition
         }
         var next: [PlayerID: ProjectedFitness] = [:]
         for player in players {
@@ -149,7 +160,7 @@ public struct Planner: Sendable {
         return next
     }
 
-    /// The first and second elevens for one fixture's tactic. They ignore fitness, so any day's copies give the same tiers.
+    /// The first and second elevens for one fixture's tactic.
     private func squadTiers(for fixture: Fixture, _ players: [Player], ownClub: String?) throws -> SquadTiers {
         try SquadTiers.compute(tactic: fixture.tactic, players: players, ownClub: ownClub, catalog: catalog,
                                profile: profile, parameters: parameters)
@@ -174,6 +185,13 @@ public struct Planner: Sendable {
         }
         return latest.values.flatMap(\.values)
             .sorted { ($0.player.key, $0.position.rawValue) < ($1.player.key, $1.position.rawValue) }
+    }
+
+    /// Throws `duplicateFixtureID` for the lowest id that appears more than once.
+    private static func checkUnique(_ ids: [FixtureID]) throws {
+        var seen = Set<String>()
+        let repeated = ids.map(\.raw).filter { !seen.insert($0).inserted }
+        if let lowest = repeated.min() { throw PlanError.duplicateFixtureID(FixtureID(lowest)) }
     }
 
     /// `fixtures` in date then id order. The first problem in that order is reported: a fixture before the
