@@ -28,9 +28,10 @@
 //                                              matches on one day ("match-failed-…"); and its candidate picker on
 //                                              its own for the first fixture's goalkeeper ("match-picker-…") and
 //                                              for the remembered eleven's goalkeeper ("match-remembered-picker-…").
-//                                              Match Selection and Tactics are drawn again in a narrow window,
-//                                              800 by 700 ("match-narrow-…", "tactics-narrow-…"), and in the
-//                                              smallest window ("match-small-…", "tactics-small-…").
+//                                              Every screen is drawn again in a narrow window, 800 by 700
+//                                              ("<screen>-narrow-…"), and Match Selection and Tactics in the
+//                                              smallest window ("match-small-…", "tactics-small-…"). Both
+//                                              typefaces are drawn at each weight ("type-…").
 
 import AppKit
 import Foundation
@@ -113,6 +114,9 @@ enum SampleState {
     }
 }
 
+/// The narrow window the pictures are drawn in: beside the game on a laptop's screen.
+let narrowWindow = CGSize(width: 800, height: 700)
+
 /// Match Selection's pictures beyond the first: see the usage at the top.
 @MainActor func drawMatchSelection(_ root: String, to directory: URL, size: CGSize) throws {
     try ScreenPictures.write(model: sampleModel(root), to: directory, size: size, variant: "starts",
@@ -147,8 +151,11 @@ enum SampleState {
         name: "match-picker", text: PickerText.planned(.GK), rows: plain.candidateRows(for: .GK, in: next.id),
         to: directory)
 
-    // The narrow and the smallest windows: the detail under the pitch, the pitches stacked, and scrolling.
-    for (variant, small) in [("narrow", CGSize(width: 800, height: 700)), ("small", Theme.Layout.minimumWindow)] {
+    // The narrow and the smallest windows: the detail under the pitch, the pitches stacked, and scrolling; the other
+    // screens narrow, so the pills wrap.
+    try ScreenPictures.write(model: sampleModel(root, .afterImport), to: directory, size: narrowWindow, variant: "narrow",
+                             screens: [.squad, .fixtures, .settings])
+    for (variant, small) in [("narrow", narrowWindow), ("small", Theme.Layout.minimumWindow)] {
         try ScreenPictures.write(model: plain, to: directory, size: small, variant: variant,
                                  screens: [.matchSelection], matchStart: MatchStart(slot: .D_L))
         try ScreenPictures.write(model: sampleModel(root, .unsavedTacticChange), to: directory, size: small,
@@ -170,6 +177,7 @@ enum SampleState {
     application.setActivationPolicy(.prohibited)
     let size = Theme.Layout.defaultWindow
     do {
+        try ScreenPictures.writeTypeSpecimen(to: directory)
         if let root = sampleDataRoot {
             // The left back has the most reasons in the first fixture.
             try ScreenPictures.write(model: sampleModel(root), to: directory, size: size,
@@ -202,6 +210,7 @@ enum SampleState {
     } catch {
         fail("\(error)")
     }
+    print("Drew with the typefaces in \(Theme.Typeface.folder?.path ?? "no folder")")
     print("Wrote the pictures to \(directory.standardizedFileURL.path)")
     return 0
 }

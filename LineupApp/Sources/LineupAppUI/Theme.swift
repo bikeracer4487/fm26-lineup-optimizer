@@ -209,12 +209,16 @@ public enum Theme {
             registered.contains(face)
         }
 
+        /// The folder the faces' files are read from: inside the app's resources when the app is bundled.
+        public static var folder: URL? {
+            Bundle.module.resourceURL?.appendingPathComponent("Fonts", isDirectory: true)
+        }
+
         /// Registers each face's file for this process, once, and keeps those Core Text then finds by name.
         static let registered: Set<Face> = {
             var loaded: Set<Face> = []
-            let folder = Bundle.module.resourceURL?.appendingPathComponent("Fonts", isDirectory: true)
             for face in Face.allCases {
-                guard let url = folder?.appendingPathComponent(face.fileName),
+                guard let url = Typeface.folder?.appendingPathComponent(face.fileName),
                       FileManager.default.fileExists(atPath: url.path) else { continue }
                 // An error here is usually that the face is registered already; the check below decides.
                 _ = CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)

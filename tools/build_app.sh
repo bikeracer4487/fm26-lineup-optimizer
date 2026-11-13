@@ -5,10 +5,11 @@
 #                           and prints its path last
 #
 # The bundle holds the executable, an Info.plist, and every SwiftPM resource bundle found
-# beside the executable (the engine's role catalogue and rating tables among them), copied
-# into Contents/Resources. It is signed ad hoc, for this Mac only. The signed app then draws
-# its empty screens into a temporary directory, which proves it can load the engine's
-# resources from inside the bundle; the script fails if it cannot.
+# beside the executable (the engine's role catalogue and rating tables, and the app's two
+# typefaces, among them), copied into Contents/Resources. It is signed ad hoc, for this Mac
+# only. The signed app then draws its empty screens into a temporary directory, which proves
+# it can load the engine's resources and its typefaces from inside the bundle (a picture run
+# stops if a typeface is missing); the script fails if it cannot.
 set -euo pipefail
 
 ROOT="$(pwd)"
@@ -78,7 +79,7 @@ codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || {
 CHECK="$(mktemp -d)"
 trap 'rm -rf "$CHECK"' EXIT
 if ! "$APP/Contents/MacOS/LineupApp" --pictures "$CHECK/pictures" >"$CHECK/output.txt" 2>&1; then
-    echo "The built app could not draw its screens, so it cannot load the engine's resources:" >&2
+    echo "The built app could not draw its screens, so it cannot load the engine's resources or its typefaces:" >&2
     cat "$CHECK/output.txt" >&2
     exit 1
 fi

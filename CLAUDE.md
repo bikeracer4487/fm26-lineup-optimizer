@@ -86,13 +86,13 @@ Draw the screens without opening a window:
 
     cd LineupApp && swift run -q LineupApp --sample-data .. --pictures .build/pictures
 
-That writes a PNG of every screen and its variants (empty, failed, confirmed and so on), light and dark. A screen is not done until its pictures have been looked at. The pictures approximate the sidebar and draw buttons as an inactive window would; judge the real look in the running app.
+That writes a PNG of every screen and its variants (empty, failed, confirmed and so on), light and dark. A screen is not done until its pictures have been looked at. The pictures draw buttons as an inactive window would; judge the real look in the running app.
 
 Rules for the app:
 
 - The engine decides; the app shows. A view never computes a rating, a reason or a rule. Sentences for errors, warnings and reasons are the engine's (`ErrorDescriptions.describe`, and the reasons on picks and omissions), shown as written. Where the engine has no sentence for something, add one to the engine.
 - Logic for a screen lives in `LineupAppCore` with tests. If a view needs an `if` about data, that is a sign it belongs in Core.
-- Every colour, typeface and measure comes from `Theme`, which holds the visual direction's tokens. No literal colour or font name in a view.
+- The look is the Tactics board in `docs/superpowers/specs/2026-11-13-fm27-app-visual-direction.md`. Its two typefaces, Bricolage Grotesque and Figtree, ship with their licences in `LineupAppUI`'s resources and are registered when the app starts. Every colour, typeface and measure comes from `Theme`; no view holds a literal colour, font name or measure.
 - Nothing the owner reads is an id or a code: slots are "D L" on a token and "left back" in a sentence; fixtures are named by opponent and date.
 - A file that cannot be read gives a notice and a fresh start for that file, and the unreadable file is kept aside. Nothing in a test, a picture run or a sample-data run touches `~/Library/Application Support` or the real clipboard.
 - Unsaved changes to a tactic are kept in the model until saved or reverted. Only the earliest planned fixture can be confirmed. A confirmed match keeps its load on its starters in later fixtures until their squad is imported again.
