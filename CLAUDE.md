@@ -5,7 +5,8 @@
 The FM26 lineup optimizer is being rebuilt as a native Mac app for Football Manager 27: SwiftUI, with the selection engine rewritten in Swift, for one save on this Mac. The Python and Electron code in this repository is the old version. It is kept as reference while the new one is built, and it is removed at the end.
 
 - Design: `docs/superpowers/specs/2026-11-12-fm27-native-app-design.md`
-- Engine plan, complete (Tasks 1 to 18): `docs/superpowers/plans/2026-11-12-fm27-engine-foundation.md`. Its last two sections list the plans still to be written (Planner next, then Advisors, the visual design pass, the App, Clean-up) and the notes and known small faults carried into them.
+- Engine plan, complete (Tasks 1 to 18): `docs/superpowers/plans/2026-11-12-fm27-engine-foundation.md`. Its last two sections list the later plans (Planner, Advisors, the visual design pass, the App, Clean-up) and the notes and known small faults carried into them.
+- Planner plan, written and awaiting the owner's review; nothing in it is built: `docs/superpowers/plans/2026-11-13-fm27-planner.md`.
 - Research: `docs/Research/fm27-*.md` and `docs/Research/fm27_roles.json` are FM27; the other files in `docs/Research/` are FM26. Prefer FM27 evidence. Where it is silent, use the FM26 research and label it as carried over (the owner's rule: a lot carries over between game years). An attribute FM27 tested and found to have no effect is a finding, not a gap.
 
 ## New code: `LineupEngine/`
