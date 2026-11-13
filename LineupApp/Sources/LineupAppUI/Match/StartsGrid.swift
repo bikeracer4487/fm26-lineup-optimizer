@@ -52,9 +52,9 @@ struct StartsGridView: View {
                                 .frame(width: Theme.Match.startsNameWidth, alignment: .leading)
                                 .help(row.name)
                             ForEach(Array(row.cells.enumerated()), id: \.offset) { _, cell in
-                                Text(cell)
+                                Text(cell.text)
                                     .font(Theme.Typeface.number(Theme.TypeSize.step1))
-                                    .foregroundStyle(cell == StartsGrid.noStart ? .secondary : .primary)
+                                    .foregroundStyle(cell.isStart ? .primary : .secondary)
                                     .offset(y: Theme.Typeface.numberDrop(Theme.TypeSize.step1))
                                     .frame(width: Theme.Match.startsCellWidth)
                             }

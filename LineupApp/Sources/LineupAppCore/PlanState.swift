@@ -24,9 +24,8 @@ public struct FixturePlan: Identifiable, Equatable, Sendable {
     /// For a planned lineup, the planner's word on whether the fitness it was chosen on is projected rather than the
     /// imported figures; false for any other.
     public let fitnessIsProjected: Bool
-    /// One sentence per override the engine did not use, in slot order: "<Name> at D L: <the engine's reason>.", or
-    /// "The player chosen for D L is no longer in the squad."
-    public let ignoredOverrides: [String]
+    /// Each override the engine did not use, in slot order.
+    public let ignoredOverrides: [IgnoredOverride]
 
     /// For a missed fixture, what that means and what to do about it; nil for any other.
     public var missedNote: String? {
@@ -36,10 +35,22 @@ public struct FixturePlan: Identifiable, Equatable, Sendable {
     }
 
     public init(fixture: StoredFixture, tacticName: String, usesPrimaryBecauseItsTacticWasDeleted: Bool, body: Body,
-                fitnessIsProjected: Bool, ignoredOverrides: [String]) {
+                fitnessIsProjected: Bool, ignoredOverrides: [IgnoredOverride]) {
         self.fixture = fixture; self.tacticName = tacticName
         self.usesPrimaryBecauseItsTacticWasDeleted = usesPrimaryBecauseItsTacticWasDeleted
         self.body = body; self.fitnessIsProjected = fitnessIsProjected; self.ignoredOverrides = ignoredOverrides
+    }
+}
+
+/// The owner's choice for a slot that the engine did not use, and why, as a sentence: "<Name> at left back: <the
+/// engine's reason>.", or "The player chosen for left back is no longer in the squad."
+public struct IgnoredOverride: Identifiable, Equatable, Sendable {
+    public var id: SlotID { slot }
+    public let slot: SlotID
+    public let sentence: String
+
+    public init(slot: SlotID, sentence: String) {
+        self.slot = slot; self.sentence = sentence
     }
 }
 
@@ -49,8 +60,8 @@ public enum PlanState: Equatable, Sendable {
     /// Empty when no tactic is saved; otherwise one sentence per tactic that a fixture within the horizon would use
     /// and that cannot be used, naming its problems.
     case needsTactic([String])
-    /// The engine's sentences.
-    case failed([String])
+    /// Why the plan stopped, in sentences, and the screen where it is put right.
+    case failed([String], fix: Screen)
     /// Confirmed and planned fixtures together, in date order.
     case ready([FixturePlan])
 }

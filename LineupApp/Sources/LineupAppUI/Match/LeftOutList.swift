@@ -45,7 +45,7 @@ struct LeftOutList: View {
                             Text(row.name)
                                 .font(Theme.Typeface.text())
                             Spacer(minLength: Theme.Spacing.m)
-                            Button("Allow") { model.allow(row.player, in: plan.id) }
+                            Button("Allow him in this match") { model.allow(row.player, in: plan.id) }
                         }
                     }
                 }
@@ -55,8 +55,11 @@ struct LeftOutList: View {
                 VStack(alignment: .leading, spacing: Theme.Spacing.s) {
                     Text("Your choices not used")
                         .font(Theme.Typeface.text(Theme.TypeSize.step1, weight: .semibold))
-                    ForEach(plan.ignoredOverrides, id: \.self) { sentence in
-                        MarkedText(sentence, colour: Theme.Colour.amber)
+                    ForEach(plan.ignoredOverrides) { ignored in
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                            MarkedText(ignored.sentence, colour: Theme.Colour.amber)
+                            Button("Clear this choice") { model.setOverride(nil, at: ignored.slot, in: plan.id) }
+                        }
                     }
                 }
             }

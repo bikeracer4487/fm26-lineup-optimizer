@@ -110,7 +110,7 @@ enum SampleState {
                              screens: [.matchSelection], matchStart: MatchStart(view: .starts))
     // The youth player fixed at AM C selected, so the pin, the youth mark and "Clear override" show; in a taller
     // window, so the left-out list, "Left out by you" and the override not used show below the detail.
-    let tall = CGSize(width: size.width, height: size.height * 1.5)
+    let tall = CGSize(width: size.width, height: size.height * 1.75)
     try ScreenPictures.write(model: sampleModel(root, .choices), to: directory, size: tall, variant: "choices",
                              screens: [.matchSelection], matchStart: MatchStart(slot: .AM_C))
     let confirmed = sampleModel(root, .afterConfirmingFirst)

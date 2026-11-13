@@ -3,11 +3,28 @@ import LineupEngine
 
 /// How Match Selection writes names and figures.
 public enum MatchText {
-    /// The last word of a full name, as a token on the pitch shows it: "Dillon De Silva" is "Silva". A one-word name is
-    /// itself. Particles are not looked for.
+    /// The surname a token on the pitch shows: the last word of the name, with up to two particles before it
+    /// ("Dillon De Silva" is "De Silva", "Jan van der Berg" is "van der Berg"). A one-word name is itself.
     public static func surname(_ name: String) -> String {
-        name.split(whereSeparator: \.isWhitespace).last.map(String.init) ?? name
+        let words = name.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard var first = words.indices.last else { return name }
+        while first > 0, words.count - first < 3, particles.contains(words[first - 1].lowercased()) {
+            first -= 1
+        }
+        return words[first...].joined(separator: " ")
     }
+
+    /// Words that belong to the surname after them.
+    static let particles: Set<String> = ["de", "da", "di", "do", "dos", "del", "della", "van", "von", "der", "den",
+                                         "la", "le", "el", "al", "bin", "ibn", "mac", "st"]
+
+    /// Who a starter is when his name is not known: a confirmed lineup's player since removed from the squads.
+    public static let unknownPlayer = "A player no longer in the squads"
+    /// That player's token.
+    public static let unknownSurname = "Unknown"
+
+    /// What a figure shows when it is not known.
+    public static let noFigure = "—"
 
     /// A rating or a value: "124.4", as the engine writes them in its reasons.
     public static func oneDecimal(_ x: Double) -> String { String(format: "%.1f", x) }
@@ -123,13 +140,12 @@ public struct PickDetail: Equatable, Sendable {
     public let reasons: [String]
     public let isOverride: Bool
 
-    /// A line for each phase he is out of position in. A rule overridden gets none: the engine's last reason already
-    /// says "Chosen by you, overriding: …".
-    public static func cautions(_ warnings: [PickWarning]) -> [String] {
+    /// The engine's sentence for each phase he is out of position in. A rule overridden gets none: the engine's last
+    /// reason already says "Chosen by you, overriding: …".
+    public static func cautions(_ warnings: [PickWarning], parameters: EngineParameters, projected: Bool = false) -> [String] {
         warnings.compactMap { warning in
             switch warning {
-            case .outOfPosition(let phase, let familiarity):
-                "Out of position \(phase == .inPossession ? "in possession" : "out of possession"): familiarity \(familiarity)."
+            case .outOfPosition: ErrorDescriptions.describe(warning, parameters: parameters, projected: projected)
             case .overridesRule: nil
             }
         }
@@ -229,23 +245,30 @@ public struct StartsGrid: Equatable, Sendable {
         public let isConfirmed: Bool
     }
 
+    public struct Cell: Equatable, Sendable {
+        /// His slot, or a dash.
+        public let text: String
+        public let isStart: Bool
+    }
+
     public struct Row: Identifiable, Equatable, Sendable {
         public var id: PlayerID { player }
         public let player: PlayerID
         public let name: String
-        /// His slot in each column, or a dash.
-        public let cells: [String]
+        /// One per column.
+        public let cells: [Cell]
         public let starts: Int
     }
 
     /// What a cell shows when he does not start.
-    public static let noStart = "–"
+    static let noStart = "–"
 
     public let columns: [Column]
     /// By the slot of each player's first start in `SlotID` order (goalkeeper first), then name, then key.
     public let rows: [Row]
 
-    public init(plans: [FixturePlan]) {
+    /// - Parameter names: names for starters a confirmed lineup did not record, such as the squads' now.
+    public init(plans: [FixturePlan], names known: [PlayerID: String] = [:]) {
         var columns: [Column] = []
         var lineups: [[SlotID: PlayerID]] = []
         var names: [PlayerID: String] = [:]
@@ -258,7 +281,7 @@ public struct StartsGrid: Equatable, Sendable {
             case .confirmed(let record):
                 starters = record.lineup.starters
                 for id in SlotID.allCases.compactMap({ starters[$0] }) where names[id] == nil {
-                    names[id] = record.names[id] ?? id.key
+                    names[id] = record.names[id]
                 }
             case .missed:
                 continue
@@ -275,13 +298,15 @@ public struct StartsGrid: Equatable, Sendable {
             }
         }
         let order = Dictionary(uniqueKeysWithValues: SlotID.allCases.enumerated().map { ($1, $0) })
+        func name(_ player: PlayerID) -> String { names[player] ?? known[player] ?? MatchText.unknownPlayer }
         let players = firstSlot.keys.sorted {
-            (order[firstSlot[$0]!]!, names[$0] ?? "", $0.key) < (order[firstSlot[$1]!]!, names[$1] ?? "", $1.key)
+            (order[firstSlot[$0]!]!, name($0), $0.key) < (order[firstSlot[$1]!]!, name($1), $1.key)
         }
         rows = players.map { player in
             let slots = lineups.map { starters in SlotID.allCases.first { starters[$0] == player } }
-            return Row(player: player, name: names[player] ?? player.key,
-                       cells: slots.map { $0?.displayName ?? Self.noStart }, starts: slots.compactMap { $0 }.count)
+            return Row(player: player, name: names[player] ?? known[player] ?? MatchText.unknownPlayer,
+                       cells: slots.map { Cell(text: $0?.displayName ?? Self.noStart, isStart: $0 != nil) },
+                       starts: slots.compactMap { $0 }.count)
         }
         self.columns = columns
     }
@@ -306,10 +331,43 @@ public struct NotReady: Equatable, Sendable {
     public let screen: Screen
 }
 
+/// The pick the owner selected: in which fixture, which slot, and who was in it then.
+public struct PickSelection: Equatable, Sendable {
+    public let fixture: FixtureID
+    public let slot: SlotID
+    public let player: PlayerID
+
+    public init(fixture: FixtureID, slot: SlotID, player: PlayerID) {
+        self.fixture = fixture; self.slot = slot; self.player = player
+    }
+}
+
 public enum MatchPresentation {
     /// The fixture chosen when the screen opens: the first neither confirmed nor missed, else the last.
     public static func initialFixture(in plans: [FixturePlan]) -> FixtureID? {
         (plans.first { if case .planned = $0.body { true } else { false } } ?? plans.last)?.id
+    }
+
+    /// The fixture shown after confirming one: the next with a planned lineup, the one that can now be confirmed; or
+    /// the confirmed one itself when none is left to plan.
+    public static func fixtureAfterConfirming(_ confirmed: FixtureID, in plans: [FixturePlan]) -> FixtureID {
+        plans.first { if case .planned = $0.body { true } else { false } }?.id ?? confirmed
+    }
+
+    /// The pick in `slot` of a planned lineup, to select; nil when the slot has no pick.
+    public static func selection(at slot: SlotID, in plan: FixturePlan) -> PickSelection? {
+        guard case .planned(let lineup, _) = plan.body, let pick = lineup.picks.first(where: { $0.slot == slot }) else {
+            return nil
+        }
+        return PickSelection(fixture: plan.id, slot: slot, player: pick.player)
+    }
+
+    /// The selected slot in the fixture shown: the selection's while it is this fixture's and the same player is still
+    /// in the slot; nil once another fixture is shown or a replan puts someone else there.
+    public static func selectedSlot(_ selection: PickSelection?, in plan: FixturePlan) -> SlotID? {
+        guard let selection, selection.fixture == plan.id,
+              MatchPresentation.selection(at: selection.slot, in: plan) == selection else { return nil }
+        return selection.slot
     }
 
     /// The plan for the chosen fixture while it is in the plan, else for the one `initialFixture` chooses.
@@ -329,12 +387,6 @@ public enum MatchPresentation {
 
     public static func deletedTacticLine(_ plan: FixturePlan) -> String? {
         plan.usesPrimaryBecauseItsTacticWasDeleted ? "This match's tactic was deleted, so the primary tactic is used." : nil
-    }
-
-    /// The screen that fixes a failed plan: Fixtures for two matches on one day, which the app itself reports;
-    /// Settings for anything the engine reports.
-    public static func screenToFix(_ failure: String) -> Screen {
-        failure.hasSuffix(AppModel.sameDayAdvice) ? .fixtures : .settings
     }
 
     /// "Go to Fixtures".
@@ -357,15 +409,14 @@ public enum MatchPresentation {
         case .needsFixtures:
             return NotReady(message: "No fixtures yet. Add the next few matches on the Fixtures screen.",
                             problems: [], isFailure: false, action: goTo(.fixtures), screen: .fixtures)
-        case .failed(let failures):
-            let screen: Screen = failures.contains { screenToFix($0) == .fixtures } ? .fixtures : .settings
+        case .failed(let failures, let screen):
             return NotReady(message: "The plan could not be worked out.", problems: failures, isFailure: true,
                             action: goTo(screen), screen: screen)
         }
     }
 
     /// The candidate picker's title.
-    public static func pickerTitle(_ slot: SlotID) -> String { "Choose who plays at \(slot.displayName)" }
+    public static func pickerTitle(_ slot: SlotID) -> String { "Choose who plays at \(slot.longName)" }
 
     /// What a confirmed lineup is, with the tactic it was confirmed with; nil for any other.
     public static func confirmedLine(_ plan: FixturePlan) -> String? {
@@ -391,11 +442,15 @@ extension AppModel {
                                                     squad: squads[pick.player]))
             }
         case .confirmed(let record):
+            let current = namesByPlayer
             return SlotID.allCases.compactMap { slot in
                 record.lineup.starters[slot].map { player in
-                    let name = record.names[player] ?? player.key
-                    return TokenContent(slot: slot, player: player, name: name, surname: MatchText.surname(name),
-                                        value: nil, marks: [])
+                    if let name = record.names[player] ?? current[player] {
+                        return TokenContent(slot: slot, player: player, name: name, surname: MatchText.surname(name),
+                                            value: nil, marks: [])
+                    }
+                    return TokenContent(slot: slot, player: player, name: MatchText.unknownPlayer,
+                                        surname: MatchText.unknownSurname, value: nil, marks: [])
                 }
             }
         case .missed:
@@ -408,16 +463,17 @@ extension AppModel {
         guard case .planned(let lineup, let fitness) = plan.body,
               let pick = lineup.picks.first(where: { $0.slot == slot }) else { return nil }
         let player = squad.book.allPlayers.first { $0.id == pick.player }
-        let onTheDay = fitness[pick.player] ?? player.map(ProjectedFitness.init)
+        // Only the plan's own figures for the day: without them a dash, never today's figures under its label.
+        let onTheDay = fitness[pick.player]
         func label(_ name: String) -> String { plan.fitnessIsProjected ? "Projected " + name.lowercased() : name }
 
         var roles: [String] = []
         if let tactic = tactic(for: plan.fixture)?.tactic {
             if let role = tactic.inPossession[slot] {
-                roles.append("In possession: \(role) at \(slot.displayName)")
+                roles.append("In possession: \(role) (\(slot.longName))")
             }
             if let target = tactic.mapping[slot], let role = tactic.outOfPossession[target] {
-                roles.append("Out of possession: \(role) at \(target.displayName)")
+                roles.append("Out of possession: \(role) (\(target.longName))")
             }
         }
         return PickDetail(
@@ -425,21 +481,26 @@ extension AppModel {
             squadText: player?.squad.displayName ?? "No longer in the squads", slotText: slot.displayName, roles: roles,
             figures: [
                 PickFigure(label: "Rating", figure: MatchText.oneDecimal(pick.rating.value), factor: nil),
-                PickFigure(label: label("Condition"), figure: onTheDay.map { MatchText.percent($0.condition) },
+                PickFigure(label: label("Condition"), figure: onTheDay.map { MatchText.percent($0.condition) } ?? MatchText.noFigure,
                            factor: MatchText.factor(pick.fitness.condition)),
-                PickFigure(label: label("Sharpness"), figure: onTheDay.map { MatchText.percent($0.sharpness) },
+                PickFigure(label: label("Sharpness"), figure: onTheDay.map { MatchText.percent($0.sharpness) } ?? MatchText.noFigure,
                            factor: MatchText.factor(pick.fitness.sharpness)),
-                PickFigure(label: label("Jadedness"), figure: onTheDay.map { "\(Int($0.jadedness.rounded()))" },
+                PickFigure(label: label("Jadedness"), figure: onTheDay.map { "\(Int($0.jadedness.rounded()))" } ?? MatchText.noFigure,
                            factor: MatchText.factor(pick.fitness.jadedness)),
                 PickFigure(label: "Match-day value", figure: MatchText.oneDecimal(pick.value), factor: nil),
             ],
-            cautions: PickDetail.cautions(pick.warnings), reasons: pick.reasons, isOverride: pick.isOverride)
+            cautions: PickDetail.cautions(pick.warnings, parameters: planParameters, projected: plan.fitnessIsProjected),
+            reasons: pick.reasons, isOverride: pick.isOverride)
     }
 
     /// The players the owner left out of the fixture, by name.
     public func rejectedRows(in plan: FixturePlan) -> [RejectedRow] {
-        RejectedRow.rows(plan.fixture.rejected, names: Dictionary(squad.book.allPlayers.map { ($0.id, $0.name) },
-                                                                  uniquingKeysWith: { first, _ in first }))
+        RejectedRow.rows(plan.fixture.rejected, names: namesByPlayer)
+    }
+
+    /// The plan as starts, naming a starter a confirmed lineup did not record by the squads' name for him.
+    public func startsGrid(for plans: [FixturePlan]) -> StartsGrid {
+        StartsGrid(plans: plans, names: namesByPlayer)
     }
 
     /// The candidates for the slot, best first, with the pick there now marked.
@@ -450,6 +511,10 @@ extension AppModel {
             return lineup.picks.first { $0.slot == slot }?.player
         }()
         return CandidateRow.rows(candidates(for: slot, in: fixture), current: current)
+    }
+
+    private var namesByPlayer: [PlayerID: String] {
+        Dictionary(squad.book.allPlayers.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
     }
 
     private var squadsByPlayer: [PlayerID: Squad] {

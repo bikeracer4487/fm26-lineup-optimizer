@@ -18,15 +18,23 @@ public struct MatchStart: Sendable {
 /// selected pick's reasons beside it and who was left out, and the owner's controls.
 public struct MatchSelectionScreen: View {
     let model: AppModel
+    /// The fixture shown: the one clicked in the strip; after confirming, `MatchPresentation.fixtureAfterConfirming`;
+    /// after unlocking, the unlocked one. While nil, or once it has left the plan, `MatchPresentation.initialFixture`.
     @State private var chosen: FixtureID?
-    @State private var selected: SlotID?
+    /// Holds only while its fixture is shown and the same player is in its slot (`MatchPresentation.selectedSlot`).
+    @State private var selection: PickSelection?
     @State private var view: MatchView
 
     public init(model: AppModel, start: MatchStart = MatchStart()) {
         self.model = model
         _chosen = State(initialValue: start.fixture)
-        _selected = State(initialValue: start.slot)
         _view = State(initialValue: start.view)
+        var selection: PickSelection?
+        if let slot = start.slot, case .ready(let plans) = model.planState,
+           let plan = MatchPresentation.chosen(start.fixture, in: plans) {
+            selection = MatchPresentation.selection(at: slot, in: plan)
+        }
+        _selection = State(initialValue: selection)
     }
 
     public var body: some View {
@@ -55,9 +63,9 @@ public struct MatchSelectionScreen: View {
             header(plan)
             switch view {
             case .teamSheet:
-                FixtureBody(model: model, plan: plan, selected: $selected)
+                FixtureBody(model: model, plan: plan, selection: $selection) { chosen = $0 }
             case .starts:
-                StartsGridView(grid: StartsGrid(plans: plans), chosen: plan.id)
+                StartsGridView(grid: model.startsGrid(for: plans), chosen: plan.id)
             }
         }
     }
@@ -88,7 +96,11 @@ public struct MatchSelectionScreen: View {
                 }
             }
             Spacer(minLength: Theme.Spacing.m)
-            ConfirmControl(model: model, plan: plan)
+            ConfirmControl(model: model, plan: plan) {
+                if case .ready(let plans) = model.planState {
+                    chosen = MatchPresentation.fixtureAfterConfirming(plan.id, in: plans)
+                }
+            }
         }
     }
 }
@@ -97,11 +109,16 @@ public struct MatchSelectionScreen: View {
 struct ConfirmControl: View {
     let model: AppModel
     let plan: FixturePlan
+    /// Called after the lineup is confirmed and the plan worked out again.
+    let confirmed: () -> Void
 
     var body: some View {
         if model.canConfirm(plan.id) {
             VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
-                Button("Confirm this lineup") { model.confirm(plan.id) }
+                Button("Confirm this lineup") {
+                    model.confirm(plan.id)
+                    confirmed()
+                }
                     .buttonStyle(.borderedProminent)
                 Text(MatchPresentation.confirmExplanation)
                     .font(Theme.Typeface.text())
@@ -120,15 +137,20 @@ struct ConfirmControl: View {
 struct FixtureBody: View {
     let model: AppModel
     let plan: FixturePlan
-    @Binding var selected: SlotID?
+    @Binding var selection: PickSelection?
+    /// Shows a fixture: after unlocking, this one.
+    let choose: (FixtureID) -> Void
     @State private var unlocking = false
     @Environment(\.showScreen) private var showScreen
 
     var body: some View {
         switch plan.body {
         case .planned(let lineup, _):
+            let selected = MatchPresentation.selectedSlot(selection, in: plan)
             HStack(alignment: .top, spacing: Theme.Spacing.l) {
-                TeamSheet(tokens: model.tokens(for: plan), unfilled: lineup.unfilled, selected: $selected)
+                TeamSheet(tokens: model.tokens(for: plan), unfilled: lineup.unfilled, selected: selected) { slot in
+                    selection = MatchPresentation.selection(at: slot, in: plan)
+                }
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.Spacing.l) {
                         if let slot = selected, let detail = model.pickDetail(at: slot, in: plan) {
@@ -149,7 +171,7 @@ struct FixtureBody: View {
         case .confirmed:
             let tokens = model.tokens(for: plan)
             HStack(alignment: .top, spacing: Theme.Spacing.l) {
-                TeamSheet(tokens: tokens, unfilled: [], selected: .constant(nil), showsKey: false)
+                TeamSheet(tokens: tokens, unfilled: [], selected: nil, showsKey: false)
                 VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                     if let line = MatchPresentation.confirmedLine(plan) {
                         Text(line)
@@ -171,7 +193,10 @@ struct FixtureBody: View {
                 .frame(width: Theme.Match.detailWidth, alignment: .leading)
             }
             .alert("Unlock this lineup?", isPresented: $unlocking) {
-                Button("Unlock") { model.unlock(plan.id) }
+                Button("Unlock") {
+                    model.unlock(plan.id)
+                    choose(plan.id)
+                }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("The match will be planned again.")

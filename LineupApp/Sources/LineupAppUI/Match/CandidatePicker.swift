@@ -2,8 +2,8 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// Everyone who could be chosen for a slot, best first with his full-fitness rating; a player who cannot play is
-/// greyed with the engine's reason and cannot be chosen. Choosing one fixes him in the slot.
+/// Everyone who could be chosen for a slot with his full-fitness rating: those who can play, best first, then those
+/// who cannot, greyed with the engine's reason; they cannot be chosen. Choosing one fixes him in the slot.
 public struct CandidatePicker: View {
     let title: String
     let rows: [CandidateRow]
@@ -20,7 +20,7 @@ public struct CandidatePicker: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                 Text(title)
                     .font(Theme.Typeface.text(Theme.TypeSize.step1, weight: .semibold))
-                Text("Best first, rated at full fitness. Choosing a player fixes him here for this match.")
+                Text("Those who can play, best first at full fitness; then those who cannot, with the reason. Choosing a player fixes him here for this match.")
                     .font(Theme.Typeface.text())
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -265,7 +265,8 @@ import LineupEngine
         let gone = PlayerID(key: "nobody of that name")
         model.setOverride(gone, at: .D_L, in: id)
         #expect(model.fixtures[0].overrides[.D_L] == gone)
-        #expect(plan(model, id)?.ignoredOverrides == ["The player chosen for D L is no longer in the squad."])
+        #expect(plan(model, id)?.ignoredOverrides
+            == [IgnoredOverride(slot: .D_L, sentence: "The player chosen for left back is no longer in the squad.")])
         #expect(pick(at: .D_L, plan(model, id)) == before)
     }
 
@@ -282,10 +283,11 @@ import LineupEngine
         model.setOverride(striker.id, at: .ST_C, in: id)
         model.setOverride(PlayerID(key: "nobody of that name"), at: .D_L, in: id)
         #expect(plan(model, id)?.ignoredOverrides == [
-            "Jonny Maxted at GK: injured, which cannot be overruled.",
-            "The player chosen for D L is no longer in the squad.",
-            "Tyrone Marsh at AM C: because he is fixed in another slot too.",
-            "Tyrone Marsh at ST: because he is fixed in another slot too.",
+            IgnoredOverride(slot: .GK, sentence: "Jonny Maxted at goalkeeper: injured, which cannot be overruled."),
+            IgnoredOverride(slot: .D_L, sentence: "The player chosen for left back is no longer in the squad."),
+            IgnoredOverride(slot: .AM_C,
+                            sentence: "Tyrone Marsh at central attacking midfield: because he is fixed in another slot too."),
+            IgnoredOverride(slot: .ST_C, sentence: "Tyrone Marsh at striker: because he is fixed in another slot too."),
         ])
     }
 
@@ -462,10 +464,10 @@ import LineupEngine
         let clash = model.addFixture(date: TestModel.today.adding(days: 4), opponent: "Opponent B", importance: .low)
         // The earliest such day, Tue 17 Nov, before Fri 20 Nov; its opponents in alphabetical order.
         #expect(model.planState == .failed(["Two matches are on Tue 17 Nov: against Opponent 2 and against Opponent B. "
-            + "A club plays one match a day: change one of the dates on the Fixtures screen."]))
+            + "A club plays one match a day: change one of the dates on the Fixtures screen."], fix: .fixtures))
         model.deleteFixture(clash)
         #expect(model.planState == .failed(["Two matches are on Fri 20 Nov: against Opponent 3 and against Opponent F. "
-            + "A club plays one match a day: change one of the dates on the Fixtures screen."]))
+            + "A club plays one match a day: change one of the dates on the Fixtures screen."], fix: .fixtures))
     }
 
     @Test func aConfirmedFixtureBeforeTheImportDoesNotStopThePlan() throws {
@@ -482,7 +484,7 @@ import LineupEngine
         settings.plan.horizon = 0
         model.update(settings)
         #expect(model.planState == .failed([ErrorDescriptions.describe(
-            PlanError.badSettings(["Horizon must be at least 1 fixture, but is 0"]))]))
+            PlanError.badSettings(["Horizon must be at least 1 fixture, but is 0"]))], fix: .settings))
         settings.plan.horizon = 5
         model.update(settings)
         #expect(plans(model).count == 1)
@@ -512,14 +514,21 @@ import LineupEngine
 
     // MARK: Candidates
 
-    @Test func candidatesAreBestFirstAndSayWhoCannotPlay() throws {
+    @Test func candidatesWhoCanPlayComeFirstBestFirstThenThoseWhoCannotBestFirst() throws {
         let t = try TestModel()
         let model = try squad(fixtures: 2, t)
         let id = model.fixtures[0].id
         let candidates = model.candidates(for: .GK, in: id)
         let ratings = candidates.compactMap(\.rating)
         #expect(ratings.count == candidates.count)
-        #expect(ratings == ratings.sorted(by: >))
+        let canPlay = candidates.prefix { $0.unavailable == nil }
+        let cannot = candidates.dropFirst(canPlay.count)
+        #expect(!canPlay.isEmpty && !cannot.isEmpty)
+        #expect(cannot.allSatisfy { $0.unavailable != nil })
+        #expect(canPlay.map { $0.rating ?? 0 } == canPlay.map { $0.rating ?? 0 }.sorted(by: >))
+        #expect(cannot.map { $0.rating ?? 0 } == cannot.map { $0.rating ?? 0 }.sorted(by: >))
+        // The injured keeper is the best rated in goal, yet comes after everyone who can play.
+        #expect(ratings.max() == cannot.first?.rating)
         #expect(Set(candidates.map(\.player)).count == candidates.count)
 
         let onLoan = model.players.filter {
@@ -578,6 +587,17 @@ import LineupEngine
         #expect(candidates.last?.unavailable
             == ErrorDescriptions.describe(RatingError.missingAttribute(player: unrated, attribute: .pace)))
         #expect(candidates.dropLast().allSatisfy { $0.rating != nil && $0.unavailable == nil })
+    }
+
+    @Test func aPlayerWhoCannotPlayComesAfterThoseWhoCanAndBeforeThoseWhoCannotBeRated() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let players = Array(t.model.players.prefix(4))
+        let candidates = AppModel.ranked(players, rating: { player in
+            if player.id == players[3].id { throw RatingError.missingAttribute(player: player.name, attribute: .pace) }
+            return [players[0].id: 50.0, players[1].id: 90, players[2].id: 70][player.id]!
+        }, unavailable: { $0.id == players[1].id ? "injured" : nil })
+        #expect(candidates.map(\.player) == [players[2].id, players[0].id, players[1].id, players[3].id])
     }
 
     @Test func aFixtureWithNoPlannedLineupHasNoCandidates() throws {

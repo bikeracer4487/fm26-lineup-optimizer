@@ -54,10 +54,10 @@ extension AppModel {
         replan()
     }
 
-    /// Every player not out on loan, with his full-fitness rating in the slot for the fixture's tactic, best first,
-    /// and why he cannot play in that fixture if he cannot: the engine's rule, judged on the fitness the plan projects
-    /// for that day, worded as the selector words it. A player who cannot be rated comes last, with the engine's
-    /// sentence for why. Empty when the fixture has no planned lineup or its tactic has no such slot.
+    /// Every player not out on loan, with his full-fitness rating in the slot for the fixture's tactic, those who can
+    /// play first, best first (see `ranked`), and why he cannot play in that fixture if he cannot: the engine's rule,
+    /// judged on the fitness the plan projects for that day, worded as the selector words it. A player who cannot be
+    /// rated comes last, with the engine's sentence for why. Empty when the fixture has no planned lineup or its tactic has no such slot.
     public func candidates(for slot: SlotID, in fixture: FixtureID) -> [Candidate] {
         let planned = fixturePlans.compactMap { plan -> (FixturePlan, [PlayerID: ProjectedFitness])? in
             if case .planned(_, let fitness) = plan.body { (plan, fitness) } else { nil }
@@ -94,8 +94,9 @@ extension AppModel {
         }
     }
 
-    /// The players as candidates: those rated best first (then by name and key), then those who cannot be rated, by
-    /// name and key, with the engine's sentence for the failure in place of any other reason.
+    /// The players as candidates: those who can play, best first; then those who cannot, best first; each group then by
+    /// name and key. Last, those who cannot be rated, by name and key, with the engine's sentence for the failure in
+    /// place of any other reason.
     static func ranked(_ players: [Player], rating: (Player) throws -> Double,
                        unavailable: (Player) -> String?) -> [Candidate] {
         var rated: [Candidate] = []
@@ -109,8 +110,11 @@ extension AppModel {
                                          rating: nil, unavailable: ErrorDescriptions.describe(error)))
             }
         }
-        let best = rated.sorted { ($1.rating ?? 0, $0.name, $0.player.key) < ($0.rating ?? 0, $1.name, $1.player.key) }
-        return best + unrated.sorted { ($0.name, $0.player.key) < ($1.name, $1.player.key) }
+        func bestFirst(_ candidates: [Candidate]) -> [Candidate] {
+            candidates.sorted { ($1.rating ?? 0, $0.name, $0.player.key) < ($0.rating ?? 0, $1.name, $1.player.key) }
+        }
+        return bestFirst(rated.filter { $0.unavailable == nil }) + bestFirst(rated.filter { $0.unavailable != nil })
+            + unrated.sorted { ($0.name, $0.player.key) < ($1.name, $1.player.key) }
     }
 
     // MARK: Working the plan out
@@ -129,7 +133,7 @@ extension AppModel {
         let tacticProblems = unusableTactics(withinReach)
         if !tacticProblems.isEmpty { return .needsTactic(tacticProblems) }
         if fixtures.isEmpty { return .needsFixtures }
-        if let clash = Self.sameDayProblem(toPlan) { return .failed([clash]) }
+        if let clash = Self.sameDayProblem(toPlan) { return .failed([clash], fix: .fixtures) }
 
         let parameters = planParameters
         let request = PlanRequest(
@@ -143,7 +147,8 @@ extension AppModel {
         do {
             plan = try Planner(catalog: catalog, profile: profile, parameters: parameters).plan(request)
         } catch {
-            return .failed([ErrorDescriptions.describe(error)])
+            // The checks before this leave the planner only the settings and the parameters to refuse.
+            return .failed([ErrorDescriptions.describe(error)], fix: .settings)
         }
 
         let names = Dictionary(players.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
@@ -164,10 +169,10 @@ extension AppModel {
             let ignored = SlotID.allCases.compactMap { slot in
                 item.lineup.ignoredOverrides[slot].map { problem in
                     if let chosen = fixture.overrides[slot], let name = names[chosen] {
-                        "\(name) at \(slot.displayName): "
-                            + ErrorDescriptions.describe(problem, parameters: parameters, projected: projected) + "."
+                        IgnoredOverride(slot: slot, sentence: "\(name) at \(slot.longName): "
+                            + ErrorDescriptions.describe(problem, parameters: parameters, projected: projected) + ".")
                     } else {
-                        "The player chosen for \(slot.displayName) is no longer in the squad."
+                        IgnoredOverride(slot: slot, sentence: "The player chosen for \(slot.longName) is no longer in the squad.")
                     }
                 }
             }
@@ -268,11 +273,8 @@ extension AppModel {
         let against = matches.sorted { ($0.opponent, $0.id.raw) < ($1.opponent, $1.id.raw) }.map { "against \($0.opponent)" }
         let listed = against.dropLast().joined(separator: ", ") + " and " + against.last!
         return "\(counts[matches.count] ?? "\(matches.count)") matches are on \(DayText.short(day)): \(listed). "
-            + sameDayAdvice
+            + "A club plays one match a day: change one of the dates on the Fixtures screen."
     }
-
-    /// How `sameDayProblem` ends, so Match Selection can tell that failure from the engine's.
-    nonisolated static let sameDayAdvice = "A club plays one match a day: change one of the dates on the Fixtures screen."
 
     /// The day the plan starts from: the latest day a squad was imported.
     var planStartDay: Day? {

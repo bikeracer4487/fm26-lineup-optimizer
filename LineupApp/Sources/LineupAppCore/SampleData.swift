@@ -154,9 +154,9 @@ public enum SampleData {
         let model = try build(repositoryRoot: repositoryRoot).model
         guard let first = model.fixtures.first,
               let youth = model.candidates(for: .AM_C, in: first.id).first(where: { $0.squad == .u21 && $0.unavailable == nil }),
-              let injured = model.players.first(where: \.isInjured),
+              let injured = model.players.first(where: { $0.name == "Jonny Maxted" && $0.isInjured }),
               let striker = model.players.first(where: { $0.name == "Tyrone Marsh" }) else {
-            throw SampleDataError(description: "The sample model lacks a fixture, a U21 player, an injured player or its striker.")
+            throw SampleDataError(description: "The sample model lacks a fixture, a U21 player, its injured goalkeeper or its striker.")
         }
         model.setOverride(youth.player, at: .AM_C, in: first.id)
         model.setOverride(injured.id, at: .GK, in: first.id)

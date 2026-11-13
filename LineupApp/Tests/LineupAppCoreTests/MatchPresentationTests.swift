@@ -4,9 +4,10 @@ import LineupEngine
 @testable import LineupAppCore
 
 @Suite struct MatchTextTests {
-    @Test func aSurnameIsTheLastWordOfTheName() {
+    @Test func aSurnameIsTheLastWordOfAnOrdinaryName() {
         #expect(MatchText.surname("Tyrone Marsh") == "Marsh")
         #expect(MatchText.surname("  Zac   McEachran ") == "McEachran")
+        #expect(MatchText.surname("Evan Peter Humphries") == "Humphries")
     }
 
     @Test func aOneWordNameIsItsOwnSurname() {
@@ -14,10 +15,18 @@ import LineupEngine
         #expect(MatchText.surname("") == "")
     }
 
-    /// Particles are not looked for: the last word is taken, whatever comes before it.
-    @Test func aNameWithAParticleKeepsOnlyItsLastWord() {
-        #expect(MatchText.surname("Dillon De Silva") == "Silva")
-        #expect(MatchText.surname("Kauan Bitencourt de Oliveira") == "Oliveira")
+    @Test func aSurnameKeepsTheParticlesBeforeIt() {
+        #expect(MatchText.surname("Dillon De Silva") == "De Silva")
+        #expect(MatchText.surname("Kauan Bitencourt de Oliveira") == "de Oliveira")
+        #expect(MatchText.surname("Virgil van Dijk") == "van Dijk")
+        #expect(MatchText.surname("Jan van der Berg") == "van der Berg")
+        #expect(MatchText.surname("Ryan Mac Donald") == "Mac Donald")
+    }
+
+    /// A particle that is the whole name before the surname is kept too; a name that is all particles stays whole.
+    @Test func aParticleAtTheStartOfTheNameIsKept() {
+        #expect(MatchText.surname("De Bruyne") == "De Bruyne")
+        #expect(MatchText.surname("van der") == "van der")
     }
 
     @Test func figuresAreWrittenAsTheOtherScreensWriteThem() {
@@ -68,14 +77,16 @@ import LineupEngine
         ])
     }
 
-    @Test func onlyOutOfPositionWarningsGetACautionLine() {
-        // A rule overridden is already in the engine's reasons ("Chosen by you, overriding: …").
+    @Test func outOfPositionWarningsGetTheEnginesSentence() {
+        let p = EngineParameters.fm27
+        // A rule overridden is already in the engine's reasons ("Chosen by you, overriding: …"), so it gets no line.
         #expect(PickDetail.cautions([.outOfPosition(.inPossession, familiarity: 1),
                                      .outOfPosition(.outOfPossession, familiarity: 7),
-                                     .overridesRule(.injured)])
-            == ["Out of position in possession: familiarity 1.", "Out of position out of possession: familiarity 7."])
-        #expect(PickDetail.cautions([.overridesRule(.banned)]) == [])
-        #expect(PickDetail.cautions([]) == [])
+                                     .overridesRule(.injured)], parameters: p)
+            == [ErrorDescriptions.describe(PickWarning.outOfPosition(.inPossession, familiarity: 1), parameters: p),
+                ErrorDescriptions.describe(PickWarning.outOfPosition(.outOfPossession, familiarity: 7), parameters: p)])
+        #expect(PickDetail.cautions([.overridesRule(.banned)], parameters: p) == [])
+        #expect(PickDetail.cautions([], parameters: p) == [])
     }
 }
 
@@ -125,6 +136,17 @@ import LineupEngine
         #expect(MatchPresentation.chosen(FixtureID("q"), in: plans)?.id == FixtureID("q"))
         #expect(MatchPresentation.chosen(FixtureID("gone"), in: plans)?.id == FixtureID("p"))
         #expect(MatchPresentation.chosen(nil, in: plans)?.id == FixtureID("p"))
+    }
+
+    @Test func afterConfirmingTheNextPlannedFixtureIsShown() {
+        let plans = [confirmed(fixture("c", "2026-11-12", "C"), [:]), confirmed(fixture("d", "2026-11-14", "D"), [:]),
+                     planned(fixture("p", "2026-11-17", "P")), planned(fixture("q", "2026-11-21", "Q"))]
+        #expect(MatchPresentation.fixtureAfterConfirming(FixtureID("d"), in: plans) == FixtureID("p"))
+    }
+
+    @Test func afterConfirmingTheLastFixtureItStaysShown() {
+        let plans = [missed(fixture("m", "2026-11-10", "M")), confirmed(fixture("d", "2026-11-14", "D"), [:])]
+        #expect(MatchPresentation.fixtureAfterConfirming(FixtureID("d"), in: plans) == FixtureID("d"))
     }
 
     // MARK: The strip and the heading
@@ -190,7 +212,8 @@ import LineupEngine
         #expect(grid.columns.map(\.opponentText) == ["v Opponent C", "v Opponent D"])
         // By the slot of each player's first start, goalkeeper first.
         #expect(grid.rows.map(\.name) == ["Player k", "Player l", "Player s"])
-        #expect(grid.rows.map(\.cells) == [["GK", "GK"], ["–", "D L"], ["ST", "AM R"]])
+        #expect(grid.rows.map { $0.cells.map(\.text) } == [["GK", "GK"], ["–", "D L"], ["ST", "AM R"]])
+        #expect(grid.rows.map { $0.cells.map(\.isStart) } == [[true, true], [false, true], [true, true]])
         #expect(grid.rows.map(\.starts) == [2, 1, 2])
     }
 
@@ -198,6 +221,21 @@ import LineupEngine
         let plans = [confirmed(fixture("c", "2026-11-12", "C"), [.GK: "b"]),
                      confirmed(fixture("d", "2026-11-14", "D"), [.GK: "a"])]
         #expect(StartsGrid(plans: plans).rows.map(\.name) == ["Player a", "Player b"])
+    }
+
+    @Test func aStarterWithNoNameIsNotShownByHisId() {
+        let fixture = fixture("c", "2026-11-12", "C")
+        let record = ConfirmedRecord(
+            lineup: ConfirmedLineup(fixture: fixture.id, date: fixture.date, starters: [.GK: PlayerID(key: "fmrte:123")]),
+            names: [:], tacticName: "4-2-3-1")
+        let plan = FixturePlan(fixture: fixture, tacticName: "4-2-3-1", usesPrimaryBecauseItsTacticWasDeleted: false,
+                               body: .confirmed(record), fitnessIsProjected: false, ignoredOverrides: [])
+        #expect(StartsGrid(plans: [plan]).rows.map(\.name) == ["A player no longer in the squads"])
+        #expect(StartsGrid(plans: [plan], names: [PlayerID(key: "fmrte:123"): "Jonny Maxted"]).rows.map(\.name)
+            == ["Jonny Maxted"])
+        let token = SampleData.emptyModel().tokens(for: plan).first
+        #expect(token?.name == "A player no longer in the squads")
+        #expect(token?.surname == "Unknown")
     }
 
     @Test func noLineupGivesAnEmptyGrid() {
@@ -251,30 +289,46 @@ import LineupEngine
         #expect(tactic.action == "Go to Tactics")
     }
 
-    @Test func theDayClashGoesToFixturesAndAnyOtherFailureToSettings() throws {
+    @Test func aFailureGoesToTheScreenThatFixesIt() throws {
         let clash = try #require(AppModel.sameDayProblem([fixture("a", "2026-11-14", "A"), fixture("b", "2026-11-14", "B")]))
-        #expect(MatchPresentation.screenToFix(clash) == .fixtures)
         let settings = "The plan settings cannot be used: the horizon must be at least 1."
-        #expect(MatchPresentation.screenToFix(settings) == .settings)
 
-        let failedOnClash = try #require(MatchPresentation.notReady(.failed([clash])))
+        let failedOnClash = try #require(MatchPresentation.notReady(.failed([clash], fix: .fixtures)))
         #expect(failedOnClash.isFailure)
         #expect(failedOnClash.problems == [clash])
         #expect(failedOnClash.message == "The plan could not be worked out.")
         #expect(failedOnClash.screen == .fixtures)
         #expect(failedOnClash.action == "Go to Fixtures")
 
-        let failedOnSettings = try #require(MatchPresentation.notReady(.failed([settings])))
+        let failedOnSettings = try #require(MatchPresentation.notReady(.failed([settings], fix: .settings)))
         #expect(failedOnSettings.screen == .settings)
         #expect(failedOnSettings.action == "Go to Settings")
     }
 
     @Test func thePickerAndAConfirmedLineupSayWhatTheyAre() {
-        #expect(MatchPresentation.pickerTitle(.D_L) == "Choose who plays at D L")
-        #expect(MatchPresentation.pickerTitle(.ST_C) == "Choose who plays at ST")
+        #expect(MatchPresentation.pickerTitle(.D_L) == "Choose who plays at left back")
+        #expect(MatchPresentation.pickerTitle(.ST_C) == "Choose who plays at striker")
         #expect(MatchPresentation.confirmedLine(confirmed(fixture("c", "2026-11-12", "C"), [:]))
             == "Confirmed as played, with 4-2-3-1.")
         #expect(MatchPresentation.confirmedLine(planned(fixture("p", "2026-11-14", "P"))) == nil)
+    }
+
+    @Test func everySlotHasALongNameOfItsOwnForSentences() {
+        let names = SlotID.allCases.map(\.longName)
+        #expect(Set(names).count == SlotID.allCases.count)
+        #expect(names.allSatisfy { !$0.contains("(") && $0 == $0.lowercased() })
+        #expect(SlotID.GK.longName == "goalkeeper")
+        #expect(SlotID.D_L.longName == "left back")
+        #expect(SlotID.D_CL.longName == "left centre-back")
+        #expect(SlotID.D_C.longName == "centre-back")
+        #expect(SlotID.WB_R.longName == "right wing-back")
+        #expect(SlotID.DM_L.longName == "left defensive midfield")
+        #expect(SlotID.DM_C.longName == "defensive midfield")
+        #expect(SlotID.M_CR.longName == "right-centre midfield")
+        #expect(SlotID.AM_C.longName == "central attacking midfield")
+        #expect(SlotID.AM_L.longName == "left attacking midfield")
+        #expect(SlotID.ST_C.longName == "striker")
+        #expect(SlotID.ST_R.longName == "right striker")
     }
 
     @Test func theTwoViewsHaveTheirNames() {
@@ -337,7 +391,8 @@ import LineupEngine
         #expect(detail.squadText == "First team")
         #expect(detail.slotText == "AM L")
         // The sample 4-2-3-1's inside forward on the left becomes a wide midfielder out of possession.
-        #expect(detail.roles == ["In possession: Inside Forward at AM L", "Out of possession: Wide Midfielder at M L"])
+        #expect(detail.roles == ["In possession: Inside Forward (left attacking midfield)",
+                                 "Out of possession: Wide Midfielder (left midfield)"])
         #expect(detail.reasons == pick.reasons)
         #expect(detail.isOverride == pick.isOverride)
 
@@ -356,13 +411,40 @@ import LineupEngine
         #expect(model.pickDetail(at: .M_C, in: plan) == nil)
     }
 
+    @Test func aPlayerWithNoFitnessForTheDayShowsDashesNotTodaysFigures() throws {
+        let model = try sample()
+        let plan = try firstPlan(model)
+        guard case .planned(let lineup, _) = plan.body else { Issue.record("not planned"); return }
+        let bare = FixturePlan(fixture: plan.fixture, tacticName: plan.tacticName, usesPrimaryBecauseItsTacticWasDeleted: false,
+                               body: .planned(lineup, fitness: [:]), fitnessIsProjected: true, ignoredOverrides: [])
+        let detail = try #require(model.pickDetail(at: .AM_L, in: bare))
+        #expect(detail.figures.map(\.figure) == [detail.figures[0].figure, "—", "—", "—", detail.figures[4].figure])
+        #expect(detail.figures[1].factor != nil)
+    }
+
+    @Test func aSelectionHoldsWhileTheSamePlayerIsInTheSlotOfTheSameFixture() throws {
+        let model = try sample()
+        guard case .ready(let plans) = model.planState, plans.count >= 2 else { Issue.record("no plan"); return }
+        let first = plans[0]
+        let selection = try #require(MatchPresentation.selection(at: .D_L, in: first))
+        #expect(MatchPresentation.selectedSlot(selection, in: first) == .D_L)
+        // Another fixture: the selection does not carry over.
+        #expect(MatchPresentation.selectedSlot(selection, in: plans[1]) == nil)
+        // Another player in the slot after a replan: the selection is dropped.
+        let moved = PickSelection(fixture: selection.fixture, slot: selection.slot, player: PlayerID(key: "someone else"))
+        #expect(MatchPresentation.selectedSlot(moved, in: first) == nil)
+        #expect(MatchPresentation.selectedSlot(nil, in: first) == nil)
+        #expect(MatchPresentation.selection(at: .M_C, in: first) == nil)
+    }
+
     @Test func theGoalkeeperOutOfPositionHasACautionLine() throws {
         let model = try sample()
         let plan = try firstPlan(model)
         guard case .planned(let lineup, _) = plan.body else { Issue.record("not planned"); return }
         let keeper = try #require(lineup.picks.first { $0.slot == .GK })
         let detail = try #require(model.pickDetail(at: .GK, in: plan))
-        #expect(detail.cautions == PickDetail.cautions(keeper.warnings))
+        #expect(detail.cautions == PickDetail.cautions(keeper.warnings, parameters: .fm27, projected: plan.fitnessIsProjected))
+        #expect(detail.cautions.first == "Out of position in possession: familiarity 1, below 10.")
         #expect(!keeper.warnings.isEmpty, "the sample's real goalkeeper is injured, so an outfielder is in goal")
     }
 
@@ -400,7 +482,8 @@ import LineupEngine
         let midfielder = try #require(model.tokens(for: plan).first { $0.slot == .AM_C })
         #expect(midfielder.marks.contains(.override))
         #expect(midfielder.marks.contains(.youth(.u21)))
-        #expect(plan.ignoredOverrides.count == 1)
+        #expect(plan.ignoredOverrides.map(\.slot) == [.GK])
+        #expect(plan.ignoredOverrides.first?.sentence.hasPrefix("Jonny Maxted at goalkeeper: injured") == true)
         #expect(model.rejectedRows(in: plan).map(\.name) == ["Tyrone Marsh"])
     }
 

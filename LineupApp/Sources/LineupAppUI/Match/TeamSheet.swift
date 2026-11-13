@@ -7,7 +7,8 @@ import SwiftUI
 struct TeamSheet: View {
     let tokens: [TokenContent]
     let unfilled: [SlotID]
-    @Binding var selected: SlotID?
+    let selected: SlotID?
+    var select: (SlotID) -> Void = { _ in }
     var showsKey = true
 
     var body: some View {
@@ -15,7 +16,7 @@ struct TeamSheet: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             PitchGrid(slots: tokens.map(\.slot) + unfilled) { slot in
                 if let token = byslot[slot] {
-                    PlayerToken(token: token, isSelected: selected == slot) { selected = slot }
+                    PlayerToken(token: token, isSelected: selected == slot) { select(slot) }
                 } else {
                     UnfilledSlotToken(slot: slot)
                 }
