@@ -31,3 +31,10 @@ import Testing
     #expect(Set(paths.compactMap(Position.fromFMRTEPath)).count == 14)
     #expect(Phase(rawValue: "oop") == .outOfPossession)
 }
+
+@Test func everyPositionFMRTEPathRoundTrips() {
+    for position in Position.allCases {
+        #expect(Position.fromFMRTEPath(position.fmrtePath) == position, "\(position.fmrtePath)")
+    }
+    #expect(Set(Position.allCases.map(\.fmrtePath)).count == 14)
+}

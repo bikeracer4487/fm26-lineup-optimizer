@@ -22,3 +22,16 @@ import Testing
     #expect(Attribute(catalogName: "Work Rate") == .workRate)
     #expect(Attribute(catalogName: "Workrate") == nil)
 }
+
+@Test func everyAttributeFMRTEPathRoundTrips() {
+    for attribute in Attribute.allCases {
+        #expect(Attribute.fromFMRTEPath(attribute.fmrtePath) == attribute, "\(attribute.fmrtePath)")
+    }
+    #expect(Set(Attribute.allCases.map(\.fmrtePath)).count == 62)
+}
+
+@Test func attributeFMRTEPathsMatchTheCapture() throws {
+    let captured = try Fixtures.gridColumns("u21", grid: "SearchPlayersColumns")
+        .filter { $0.split(separator: ".").first?.hasSuffix("Attributes") == true }
+    #expect(Set(Attribute.allCases.map(\.fmrtePath)) == Set(captured))
+}

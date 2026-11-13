@@ -95,4 +95,25 @@ public enum Attribute: String, CaseIterable, Codable, Sendable {
         }
         return Attribute(rawValue: name)
     }
+
+    /// The FMRTE grid column path for this attribute, for example `MentalAttributes.Workrate`.
+    /// The inverse of `fromFMRTEPath`.
+    public var fmrtePath: String {
+        let category = switch self {
+        case .aerialReach, .commandOfArea, .communication, .eccentricity, .handling, .kicking, .oneOnOnes, .reflexes, .rushingOutTendency, .punchingTendency, .throwing: "GoalKeeperAttributes"
+        case .consistency, .dirtiness, .importantMatches, .injuryProneness, .versatility: "HiddenAttributes"
+        case .aggression, .anticipation, .bravery, .composure, .concentration, .decisions, .determination, .flair, .leadership, .offTheBall, .positioning, .teamwork, .vision, .workRate: "MentalAttributes"
+        case .adaptability, .ambition, .controversy, .loyalty, .pressure, .professionalism, .sportsmanship, .temperament: "PersonalityAttributes"
+        case .acceleration, .agility, .balance, .jumpingReach, .leftFoot, .naturalFitness, .pace, .rightFoot, .stamina, .strength: "PhysicalAttributes"
+        case .corners, .crossing, .dribbling, .finishing, .firstTouch, .freeKickTaking, .heading, .longShots, .longThrows, .marking, .passing, .penaltyTaking, .tackling, .technique: "TechnicalAttributes"
+        }
+        return category + "." + (Attribute.fmrteComponent[self] ?? rawValue.replacingOccurrences(of: " ", with: ""))
+    }
+
+    /// Path components that differ from the attribute name with its spaces removed.
+    private static let fmrteComponent: [Attribute: String] = Dictionary(
+        uniqueKeysWithValues: renamed.compactMap { component, name in
+            Attribute(rawValue: name).map { ($0, component) }
+        }
+    )
 }

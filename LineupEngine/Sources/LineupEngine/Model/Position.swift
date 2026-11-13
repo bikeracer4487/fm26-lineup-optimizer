@@ -48,6 +48,28 @@ public enum Position: String, CaseIterable, Codable, Sendable {
         "Striker": .striker,
     ]
 
+    /// The FMRTE grid column path for this position's rating, for example `Positions.Striker`.
+    /// The inverse of `fromFMRTEPath`.
+    public var fmrtePath: String {
+        let component = switch self {
+        case .goalkeeper: "Goalkeeper"
+        case .defenderLeft: "DefenderLeft"
+        case .defenderCentral: "DefenderCentral"
+        case .defenderRight: "DefenderRight"
+        case .wingBackLeft: "WingBackLeft"
+        case .wingBackRight: "WingBackRight"
+        case .defensiveMidfielder: "DefensiveMidfielder"
+        case .midfielderLeft: "MidfielderLeft"
+        case .midfielderCentral: "MidfielderCentral"
+        case .midfielderRight: "MidfielderRight"
+        case .attackingMidLeft: "AttackingMidLeft"
+        case .attackingMidCentral: "AttackingMidCentral"
+        case .attackingMidRight: "AttackingMidRight"
+        case .striker: "Striker"
+        }
+        return "Positions." + component
+    }
+
     /// Maps an FMRTE column path such as `Positions.DefenderCentral` to a position.
     public static func fromFMRTEPath(_ path: String) -> Position? {
         let parts = path.split(separator: ".").map(String.init)
