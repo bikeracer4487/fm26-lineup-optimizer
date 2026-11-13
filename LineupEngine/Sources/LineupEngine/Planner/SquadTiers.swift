@@ -5,6 +5,15 @@ import Foundation
 public struct DuplicatePlayerError: Error, Equatable {
     public let id: PlayerID
     public let names: [String]
+
+    /// Throws for the lowest key that more than one player has.
+    static func check(_ players: [Player]) throws {
+        var byID: [PlayerID: [String]] = [:]
+        for player in players { byID[player.id, default: []].append(player.name) }
+        if let duplicate = byID.filter({ $0.value.count > 1 }).min(by: { $0.key.key < $1.key.key }) {
+            throw DuplicatePlayerError(id: duplicate.key, names: duplicate.value.sorted())
+        }
+    }
 }
 
 /// The first and second elevens at full fitness: who the first-choice players are and who covers them.
@@ -37,11 +46,7 @@ public struct SquadTiers: Equatable, Sendable {
     /// unusable tactic and `RatingError` for a player with missing data.
     public static func compute(tactic: Tactic, players: [Player], ownClub: String?, catalog: RoleCatalog,
                                profile: RatingProfile, parameters: EngineParameters) throws -> SquadTiers {
-        var byID: [PlayerID: [String]] = [:]
-        for player in players { byID[player.id, default: []].append(player.name) }
-        if let duplicate = byID.filter({ $0.value.count > 1 }).min(by: { $0.key.key < $1.key.key }) {
-            throw DuplicatePlayerError(id: duplicate.key, names: duplicate.value.sorted())
-        }
+        try DuplicatePlayerError.check(players)
         let assignments = try tactic.assignments(catalog: catalog)
         let engine = RatingEngine(profile: profile, parameters: parameters, configuration: .fm27)
         // Sorting by key makes the result independent of input order.

@@ -898,6 +898,52 @@ import Testing
         #expect(projected.value == today.value)
     }
 
+    @Test func aProjectedFitnessExclusionSaysItIsProjected() throws {
+        let cover = Player.fixture(name: "Cover Striker", familiarity: [.striker: 10])
+        let low = changing("Striker", in: squad(cover)) { $0.condition = 0.78 }
+        let projected = try selector.select(adjusted(request(low), projected: true))
+        #expect(projected.omissions.first?.cause == .excluded(.belowConditionFloor(0.78)))
+        #expect(projected.omissions.first?.reason == "Left out: projected condition 78% is below the 85% floor")
+        let chosen = try selector.select(adjusted(request(low, overrides: [.ST_C: id("Striker")]), projected: true))
+        #expect(pick(chosen, .ST_C)?.reasons.last == "Chosen by you, overriding: projected condition 78% is below the 85% floor")
+
+        let jaded = changing("Striker", in: squad(cover)) { $0.jadedness = 450 }
+        let projectedJaded = try selector.select(adjusted(request(jaded), projected: true))
+        #expect(projectedJaded.omissions.first?.reason == "Left out: projected jadedness 450 is above 400")
+        let chosenJaded = try selector.select(adjusted(request(jaded, overrides: [.ST_C: id("Striker")]), projected: true))
+        #expect(pick(chosenJaded, .ST_C)?.reasons.last == "Chosen by you, overriding: projected jadedness 450 is above 400")
+
+        // Exclusions that are not projected read as they do today.
+        let injured = try selector.select(adjusted(request(changing("Striker", in: squad(cover)) { $0.isInjured = true }), projected: true))
+        #expect(injured.omissions.first?.reason == "Left out: injured")
+        let banned = try selector.select(adjusted(request(changing("Striker", in: squad(cover)) { $0.isBanned = true }), projected: true))
+        #expect(banned.omissions.first?.reason == "Left out: banned for this fixture")
+        let rejected = try selector.select(adjusted(request(squad(cover), rejected: [id("Striker")]), projected: true))
+        #expect(rejected.omissions.first?.reason == "Left out: rejected for this fixture")
+    }
+
+    @Test func aFitnessExclusionTodayReadsAsBefore() throws {
+        let cover = Player.fixture(name: "Cover Striker", familiarity: [.striker: 10])
+        let low = changing("Striker", in: squad(cover)) { $0.condition = 0.78 }
+        #expect(try selector.select(request(low)).omissions.first?.reason == "Left out: below the 85% condition floor at 78%")
+        let chosen = try selector.select(request(low, overrides: [.ST_C: id("Striker")]))
+        #expect(pick(chosen, .ST_C)?.reasons.last == "Chosen by you, overriding: condition 78% is below the 85% floor")
+        let jaded = changing("Striker", in: squad(cover)) { $0.jadedness = 450 }
+        #expect(try selector.select(request(jaded)).omissions.first?.reason == "Left out: jadedness 450 is above 400")
+    }
+
+    @Test func aProjectedFitnessOmissionSaysItIsProjected() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        for change in [{ (p: inout Player) in p.condition = 0.86 }, { (p: inout Player) in p.condition = 0.86; p.sharpness = 0.75 }] {
+            let players = changing("Striker", in: squad(rival), change)
+            let today = try #require(try selector.select(request(players)).omissions.first)
+            let projected = try #require(try selector.select(adjusted(request(players), projected: true)).omissions.first)
+            #expect(today.reason.hasPrefix("Left out: condition 86%") || today.reason.hasPrefix("Left out: fitness lowers"))
+            #expect(projected.cause == today.cause)
+            #expect(projected.reason == today.reason.replacingOccurrences(of: "Left out: ", with: "Left out: projected "))
+        }
+    }
+
     @Test func anIdealPlayerLeftOutByAnAdjustmentSaysWhy() throws {
         let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
         let held = Adjustment(kind: .savedForLater, factor: 0.90, reason: "kept fresher for the cup final")

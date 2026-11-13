@@ -11,6 +11,7 @@ public enum ErrorDescriptions {
         case let e as RatingError: describe(e)
         case let e as DecodingError: describe(e)
         case let e as DuplicatePlayerError: describe(e)
+        case let e as PlanError: describe(e)
         default: "Unexpected error: \(error.localizedDescription)"
         }
     }
@@ -87,6 +88,18 @@ public enum ErrorDescriptions {
     public static func describe(_ error: DuplicatePlayerError) -> String {
         "Two players share the identity \(error.id.key): \(error.names.joined(separator: " and ")). "
             + "Import the squad again so each player has his own identity."
+    }
+
+    public static func describe(_ error: PlanError) -> String {
+        switch error {
+        case .fixtureBeforeSnapshot(let fixture, let date, let asOf):
+            "The fixture \(fixture.raw) on \(date.iso) is before the squad was imported on \(asOf.iso). "
+                + "Confirm its lineup if it has been played, or correct its date."
+        case .fixturesOnTheSameDay(let first, let second, let day):
+            "The fixtures \(first.raw) and \(second.raw) are both on \(day.iso). A club plays one match a day: correct one of the dates."
+        case .badSettings(let problems): "The plan settings cannot be used: \(problems.joined(separator: "; "))."
+        case .badParameters(let problems): "The engine's parameters cannot be used: \(problems.joined(separator: "; "))."
+        }
     }
 
     public static func describe(_ error: DecodingError) -> String {

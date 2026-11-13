@@ -25,6 +25,20 @@ import Foundation
         #expect(PlanSettings(savingPlayers: 0).problems().isEmpty)
     }
 
+    @Test func settingsThatAreNotFiniteAreReported() {
+        for value in [Double.nan, .infinity, -.infinity] {
+            #expect(PlanSettings(stability: value).problems() == ["Stability must be between 0 and 1, but is \(value)"])
+        }
+        #expect(PlanSettings(savingPlayers: .nan).problems() == ["Saving players must be between 0 and 10, but is nan"])
+        #expect(PlanSettings(savingPlayers: .infinity).problems() == ["Saving players must be between 0 and 10, but is inf"])
+    }
+
+    @Test func savingPlayersIsAtMostTen() {
+        #expect(PlanSettings(savingPlayers: 10).problems().isEmpty)
+        #expect(PlanSettings(savingPlayers: 10.5).problems() == ["Saving players must be between 0 and 10, but is 10.5"])
+        #expect(PlanSettings(savingPlayers: -1).problems() == ["Saving players must be between 0 and 10, but is -1.0"])
+    }
+
     @Test func confirmedLineupAndRetrainingRoundTripThroughJSON() throws {
         let day = try #require(Day(iso: "2026-11-14"))
         let lineup = ConfirmedLineup(

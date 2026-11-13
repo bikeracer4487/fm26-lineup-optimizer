@@ -9,7 +9,8 @@ import Testing
                      "ambiguousGrid", "missingColumns", "invalidValue", "unexpectedScale", "duplicateID", "malformed", "unknownAttribute",
                      "unknownRole", "missingAttribute", "missingFamiliarity", "keyNotFound", "valueNotFound", "typeMismatch",
                      "dataCorrupted", "wrongSlotCount", "missingGoalkeeper", "unmapped", "mappingTargetInactive",
-                     "duplicateMappingTarget", "goalkeeperMappedToOutfield", "TacticError", "problems"]
+                     "duplicateMappingTarget", "goalkeeperMappedToOutfield", "TacticError", "problems", "fixtureBeforeSnapshot",
+                     "fixturesOnTheSameDay", "badSettings", "badParameters", "FixtureID", "Day"]
         for name in names { #expect(!text.contains("\(name)("), sourceLocation: sourceLocation) }
     }
 
@@ -133,6 +134,34 @@ import Testing
         #expect(corrupted.contains("not valid"))
         #expect(ErrorDescriptions.describe(DecodingError.valueNotFound(String.self, .init(codingPath: [], debugDescription: "x"))).contains("no value"))
         for text in [mismatch, corrupted] { expectPlain(text) }
+    }
+
+    @Test func aFixtureBeforeTheSnapshotNamesItAndBothDates() {
+        let error = PlanError.fixtureBeforeSnapshot(FixtureID("cup-3"), date: Day(iso: "2026-11-10")!, asOf: Day(iso: "2026-11-12")!)
+        let text = ErrorDescriptions.describe(error)
+        #expect(text == "The fixture cup-3 on 2026-11-10 is before the squad was imported on 2026-11-12. "
+            + "Confirm its lineup if it has been played, or correct its date.")
+        #expect(ErrorDescriptions.describe(error as Error) == text)
+        expectPlain(text)
+    }
+
+    @Test func twoFixturesOnOneDayNamesBothAndTheDay() {
+        let text = ErrorDescriptions.describe(PlanError.fixturesOnTheSameDay(FixtureID("a"), FixtureID("b"), Day(iso: "2026-11-15")!))
+        #expect(text == "The fixtures a and b are both on 2026-11-15. A club plays one match a day: correct one of the dates.")
+        expectPlain(text)
+    }
+
+    @Test func badPlanSettingsListEveryProblem() {
+        let text = ErrorDescriptions.describe(PlanError.badSettings(["Stability must be between 0 and 1, but is 2.0", "Horizon must be at least 1 fixture, but is 0"]))
+        #expect(text == "The plan settings cannot be used: Stability must be between 0 and 1, but is 2.0; "
+            + "Horizon must be at least 1 fixture, but is 0.")
+        expectPlain(text)
+    }
+
+    @Test func badParametersListEveryProblem() {
+        let text = ErrorDescriptions.describe(PlanError.badParameters(["conditionCurve is empty", "jadednessSteps is empty"]))
+        #expect(text == "The engine's parameters cannot be used: conditionCurve is empty; jadednessSteps is empty.")
+        expectPlain(text)
     }
 
     @Test func foreignErrorsGetAGenericLineNotADump() {

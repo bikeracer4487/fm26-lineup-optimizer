@@ -79,11 +79,13 @@ public struct PlanSettings: Equatable, Codable, Sendable {
     /// One plain-words sentence per setting that is out of range.
     public func problems() -> [String] {
         var found: [String] = []
+        // A closed range never contains NaN or infinity, so this also requires a finite number.
         if !(0...1).contains(stability) {
             found.append("Stability must be between 0 and 1, but is \(stability)")
         }
-        if !(savingPlayers >= 0) {
-            found.append("Saving players must be 0 or more, but is \(savingPlayers)")
+        // At most 10 keeps every saving cost far below the selector's solver limit. NaN and infinity fail both checks.
+        if !(0...10).contains(savingPlayers) {
+            found.append("Saving players must be between 0 and 10, but is \(savingPlayers)")
         }
         if horizon < 1 {
             found.append("Horizon must be at least 1 fixture, but is \(horizon)")

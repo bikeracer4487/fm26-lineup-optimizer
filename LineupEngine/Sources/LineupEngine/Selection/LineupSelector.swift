@@ -208,7 +208,7 @@ public struct LineupSelector: Sendable {
             let displacement: Displacement? = !startsWithoutOverrides.contains(i) ? nil
                 : overridden.contains(s) ? .inHisSlot(by: players[placed[s]!]) : .elsewhere(by: overridePlayers)
             omissions.append(omission(players[i], assignments[s], rating: rating, fitness: fitness[i], adjustments: applied[s][i],
-                                      excluded: exclusions[i], displacement: displacement))
+                                      excluded: exclusions[i], displacement: displacement, projected: request.fitnessIsProjected))
         }
 
         return Lineup(picks: picks, unfilled: unfilled, omissions: omissions, ignoredOverrides: ignored)
@@ -270,7 +270,7 @@ public struct LineupSelector: Sendable {
         if fitness.sharpness < 1 { reasons.append("\(label("Sharpness")) \(percent(player.sharpness)) (×\(twoDecimals(fitness.sharpness)))") }
         if fitness.jadedness < 1 { reasons.append("\(label("Jadedness")) \(player.jadedness) (×\(twoDecimals(fitness.jadedness)))") }
         reasons += adjustments.map(\.reason)
-        if isOverride { reasons.append("Chosen by you" + (broken.map { ", overriding: \(rule($0))" } ?? "")) }
+        if isOverride { reasons.append("Chosen by you" + (broken.map { ", overriding: \(rule($0, projected: projected))" } ?? "")) }
 
         return Pick(slot: assignment.slot, player: player.id, name: player.name, rating: rating, fitness: fitness,
                     value: adjustedValue(matchDayValue(rating, fitness), adjustments), isOverride: isOverride,
@@ -286,15 +286,15 @@ public struct LineupSelector: Sendable {
     }
 
     /// The cause, first that applies: an exclusion, a displacement by an override, adjustments that
-    /// lower his value in his ideal slot, his fitness on the day.
+    /// lower his value in his ideal slot, his fitness on the day. With `projected`, fitness figures are called projected.
     private func omission(_ player: Player, _ assignment: SlotAssignment, rating: SlotRating, fitness: FitnessFactors,
-                          adjustments: [Adjustment], excluded: Exclusion?, displacement: Displacement?) -> Omission {
+                          adjustments: [Adjustment], excluded: Exclusion?, displacement: Displacement?, projected: Bool) -> Omission {
         let holding = adjustments.filter(\.holdsBack)
         let cause: OmissionCause
         let reason: String
         if let excluded {
             cause = .excluded(excluded)
-            reason = "Left out: " + leftOutText(excluded)
+            reason = "Left out: " + leftOutText(excluded, projected: projected)
         } else if let displacement {
             switch displacement {
             case .inHisSlot(let chosen):
@@ -321,10 +321,11 @@ public struct LineupSelector: Sendable {
                     }
                 }
             let fall = "lowers him from \(oneDecimal(rating.value)) to \(oneDecimal(today))"
+            let figures = projected ? "projected " : ""
             reason = switch below.count {
             case 0: "Left out: others are a better fit today"
-            case 1: "Left out: \(below[0]) \(fall)"
-            default: "Left out: fitness \(fall) (\(below.joined(separator: ", ")))"
+            case 1: "Left out: \(figures)\(below[0]) \(fall)"
+            default: "Left out: \(figures)fitness \(fall) (\(below.joined(separator: ", ")))"
             }
         }
         return Omission(player: player.id, name: player.name, slot: assignment.slot, cause: cause, reason: reason)
@@ -346,26 +347,27 @@ public struct LineupSelector: Sendable {
         return limiting.kind
     }
 
-    /// The broken rule, in plain words, as it follows "overriding: ".
-    private func rule(_ exclusion: Exclusion) -> String {
-        switch exclusion {
+    /// The broken rule, in plain words, as it follows "overriding: ". With `projected`, a fitness figure is called projected.
+    private func rule(_ exclusion: Exclusion, projected: Bool) -> String {
+        let figure = projected ? "projected " : ""
+        return switch exclusion {
         case .injured: "injured"
         case .outOnLoan(let club): "on loan at \(club)"
         case .banned: "banned"
         case .belowConditionFloor(let condition):
-            "condition \(percent(condition)) is below the \(percent(parameters.conditionFloor.value)) floor"
-        case .jaded(let jadedness): "jadedness \(jadedness) is above \(parameters.jadedThreshold.value)"
+            "\(figure)condition \(percent(condition)) is below the \(percent(parameters.conditionFloor.value)) floor"
+        case .jaded(let jadedness): "\(figure)jadedness \(jadedness) is above \(parameters.jadedThreshold.value)"
         case .rejected: "rejected for this fixture"
         }
     }
 
-    /// The exclusion as it follows "Left out: ".
-    private func leftOutText(_ exclusion: Exclusion) -> String {
+    /// The exclusion as it follows "Left out: ". A projected condition leads with the figure, so "projected" sits beside it.
+    private func leftOutText(_ exclusion: Exclusion, projected: Bool) -> String {
         switch exclusion {
         case .banned: "banned for this fixture"
-        case .belowConditionFloor(let condition):
+        case .belowConditionFloor(let condition) where !projected:
             "below the \(percent(parameters.conditionFloor.value)) condition floor at \(percent(condition))"
-        default: rule(exclusion)
+        case .injured, .outOnLoan, .belowConditionFloor, .jaded, .rejected: rule(exclusion, projected: projected)
         }
     }
 
