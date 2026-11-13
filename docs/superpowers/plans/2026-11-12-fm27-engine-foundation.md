@@ -1248,6 +1248,48 @@ Decisions:
 
 ---
 
+### Task 16: Keep a player's identity when namesakes join, leave or move
+
+Added after the re-review of the whole-branch fixes. Identity is name-based until the owner confirms whether FMRTE offers a unique ID column (spec section 16). The re-review found one remaining fault and one instability in that scheme:
+
+- **A real move can duplicate a player.** Import U21 first, so its Brayden Daniel (potential ability 70) holds the plain key. Import a first team containing a different Brayden Daniel (120), who becomes `brayden daniel#120`. Import the first team again, now also containing the 70 player, who has moved up. The importer keys him `brayden daniel#70`; `SquadBook` only tries keys built from that incoming key, never the plain one he already holds in U21, so it sees no move. The book then holds him in both squads under two keys, and one person can fill two slots.
+- **A key changes when a namesake joins or leaves.** When a namesake joins a player's paste the importer re-keys him (`brayden daniel` becomes `brayden daniel#120`); when the namesake leaves, he reverts. Each change is reported as one player removed and one added, and anything later stored by `PlayerID` would lose him.
+
+**Files:**
+- Modify: `Sources/LineupEngine/Import/SquadBook.swift`, `Sources/LineupEngine/Parameters/EngineParameters.swift`, `Sources/LineupEngine/Selection/FitnessModel.swift` or `Selection/LineupSelector.swift` (see the last decision)
+- Test: `SquadBookTests.swift`, `EngineParametersTests.swift`
+
+**Interfaces:**
+- Consumes: `SquadBook`, `ImportResult`, `Player`, `PlayerID`, `SquadChange`, `SquadWarning`.
+- Produces: no new types. `SquadBook.apply(_:to:)` keeps its signature.
+
+Decisions. "The same person" means equal normalised name, equal `potentialAbility` and equal `nationalities`. When `apply` decides the key for each incoming player, the first rule that matches wins:
+
+1. **He is already in this squad.** If this squad's current list holds the same person, the incoming player takes that player's existing key, whatever key the importer gave him.
+2. **He is in another squad.** If another squad holds the same person, the incoming player takes that key, the holder is removed from the other squad, and he is reported in `movedIn`.
+3. **Otherwise** the existing rules apply: his importer key, re-keyed if a different person elsewhere already holds it.
+
+Details:
+- An existing key can be claimed by only one incoming player in one import. If two incoming players are the same person as one existing player (indistinguishable namesakes), the first in paste order takes the existing key and the other falls through to the next rule.
+- When several existing players qualify under one rule, take the first in `allPlayers` order.
+- After keys are decided, they must be unique within the import. If rule 1 or 2 gives a player a key that another incoming player's importer key equals, the other player is the one re-keyed, by the existing rules.
+- `SquadChange`: a player who keeps his key under rule 1 is not `added` or `removed`; he is `changed` only if a field other than `id` differs.
+- Two small fixes from the same re-review, in this task because they are one line each: the source of `conditionFloor` in `EngineParameters` cites `docs/Research/physical-condition.md`, but the line it quotes is in `docs/Research/physical-condition-claude.md`; correct the path there and in the test that asserts it. `FitnessFactors.product` is now unused and duplicates the multiplication inside the selector's match-day value helper; make that helper use `product`.
+
+- [ ] **Step 1: Write the failing tests** in `SquadBookTests.swift`:
+  - `aRealMoveIsSeenEvenWhenANamesakeIsInTheDestinationPaste`: the scenario above with "Tyrone Marsh" (potential ability 90 in U21 with the plain key; first-team import holding Marsh 120 and Marsh 90). Expect `movedIn` to hold the U21 player's original key, U21 no longer to hold him, exactly two Marshes in `allPlayers`, and their two keys distinct.
+  - `aNamesakeJoiningThePasteDoesNotChangeAnExistingPlayersKey`: first team holds Marsh 120 with the plain key; re-import the first team with a second, different Marsh 90 added. The 120 player's key is unchanged, he is not in `added` or `removed`, and the newcomer has a different key.
+  - `aNamesakeLeavingDoesNotChangeTheRemainingPlayersKey`: the reverse; the remaining player keeps whatever key he had.
+  - `theSameSequenceInEitherImportOrderLosesNobody`: both orders of first team and U21 with a cross-squad namesake, then the move; in each, every person appears exactly once.
+  - `indistinguishableNamesakesDoNotBothClaimOneExistingKey`: two incoming players identical in name, potential ability and nationalities against one existing player; keys end up distinct and both players survive.
+  - `aPlayerWithNoNationalityStillGetsAStableKey`: the numbered fallback is reached and both players survive with distinct keys.
+- [ ] **Step 2: Run them and see them fail** — `cd LineupEngine && swift test --filter SquadBookTests`.
+- [ ] **Step 3: Implement the three rules in `SquadBook.apply`, and the two small fixes.**
+- [ ] **Step 4: Run the whole suite** — `cd LineupEngine && swift test`; expected: all PASS, no build warnings. Run the real-data command from Task 14 and confirm its output is unchanged.
+- [ ] **Step 5: Commit** — "Keep a player's identity when namesakes join, leave or move".
+
+---
+
 ## Later plans
 
 Each is written when the one before it is done, because each depends on interfaces and findings from the last.
