@@ -58,6 +58,18 @@ import Testing
                 + "in the paste; re-sorting the grid in FMRTE can swap them")
     }
 
+    @Test func anUnknownClubSaysWhatIsAssumedAndHowToFixIt() {
+        #expect(ErrorDescriptions.describe(SquadWarning.ownClubUnknown)
+            == "Your club cannot be told from the squads pasted, so every player with a club under 'loaned to' is treated "
+                + "as out on loan. Set your club's name.")
+    }
+
+    @Test func aSharedNameNamesThePlayersAndHowTheyAreToldApart() {
+        #expect(ErrorDescriptions.describe(SquadWarning.sharedName("Jo Bloggs"))
+            == "More than one player is called Jo Bloggs; they are kept as separate players, told apart by potential "
+                + "ability, then nationality.")
+    }
+
     @Test func aPasteNoSavedGridIsWideEnoughForSaysSo() {
         let none = ErrorDescriptions.describe(ImportError.noGridFits(fieldCount: 97, violationsByGrid: [:]))
         #expect(none == "No saved FMRTE grid has 97 columns, as the paste has; FMRTE may not have saved its current layout yet")

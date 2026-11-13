@@ -52,6 +52,18 @@ public enum ErrorDescriptions {
         }
     }
 
+    /// A warning about the squads taken together, as a whole sentence.
+    public static func describe(_ warning: SquadWarning) -> String {
+        switch warning {
+        case .ownClubUnknown:
+            "Your club cannot be told from the squads pasted, so every player with a club under 'loaned to' is treated "
+                + "as out on loan. Set your club's name."
+        case .sharedName(let name):
+            "More than one player is called \(name); they are kept as separate players, told apart by potential "
+                + "ability, then nationality."
+        }
+    }
+
     public static func describe(_ error: CatalogError) -> String {
         switch error {
         case .malformed(let reason): "The role or rating data is damaged: \(reason)"

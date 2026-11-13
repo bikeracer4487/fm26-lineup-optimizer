@@ -165,11 +165,11 @@ enum Report {
 
     static func describe(_ warning: ImportWarning) -> String { ErrorDescriptions.describe(warning) }
 
+    /// The engine's sentence; for an unknown club, followed by the option that sets it here.
     static func describe(_ warning: SquadWarning) -> String {
         switch warning {
-        case .ownClubUnknown: "Some players are on loan but your club cannot be told from the pasted squads. Pass --own-club <name>."
-        case .sharedName(let name):
-            "More than one player is called \(name); they are kept as separate players, told apart by potential ability, then nationality."
+        case .ownClubUnknown: ErrorDescriptions.describe(warning) + " Pass --own-club <name>."
+        case .sharedName: ErrorDescriptions.describe(warning)
         }
     }
 
