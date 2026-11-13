@@ -41,16 +41,6 @@ public enum PitchLayout {
         }
     }
 
-    /// The slot's short name on the pitch: its code with a space for the underscore, without the "C" of the two
-    /// positions that have no sides (striker and defensive midfield).
-    public static func label(of slot: SlotID) -> String {
-        switch slot {
-        case .ST_C: "ST"
-        case .DM_C: "DM"
-        default: slot.rawValue.replacingOccurrences(of: "_", with: " ")
-        }
-    }
-
     /// The slot's cell within `field`, the area inside the touchlines and goal lines.
     static func cell(of slot: SlotID, in field: CGRect) -> CGRect {
         let (row, column) = place(of: slot)

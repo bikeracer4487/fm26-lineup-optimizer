@@ -151,13 +151,43 @@ import LineupEngine
         #expect(t.reopened().fixtures == t.model.fixtures)
     }
 
-    @Test func twoFixturesOnOneDayAreAllowed() throws {
+    @Test func aSecondMatchOnOneDayIsRefusedAtOnce() throws {
         let t = try TestModel()
-        t.model.addFixture(date: day("2026-11-14"), opponent: "A", importance: .low)
+        let first = t.model.addFixture(date: day("2026-11-14"), opponent: "A", importance: .low)
+        var draft = t.model.newFixtureDraft()
+        draft.date = day("2026-11-14")
+        // Shown before any attempt to save, and after a blank opponent once that is due.
+        #expect(draft.shownProblem == "There is already a match on that day, against A.")
+        #expect(draft.problem == "Say who the match is against.")
+        draft.opponent = "B"
+        #expect(draft.problem == "There is already a match on that day, against A.")
+        #expect(t.model.save(draft) == nil)
+        #expect(t.model.fixtures.count == 1)
+        draft.date = day("2026-11-15")
+        #expect(draft.problem == nil)
+        #expect(t.model.save(draft) != nil)
+
+        // The fixture being edited does not count against itself; a confirmed match counts like any other.
+        var edited = t.model.fixtureDraft(for: try #require(t.model.fixtures.first { $0.id == first }))
+        #expect(edited.problem == nil)
+        edited.date = day("2026-11-15")
+        #expect(edited.problem == "There is already a match on that day, against B.")
+        t.model.history.append(ConfirmedRecord(
+            lineup: ConfirmedLineup(fixture: first, date: day("2026-11-14"), starters: [:]), names: [:], tacticName: "T"))
+        var another = t.model.newFixtureDraft()
+        another.date = day("2026-11-14")
+        another.opponent = "C"
+        #expect(another.problem == "There is already a match on that day, against A.")
+    }
+
+    @Test func savingChecksTheDayAgainstTheFixturesSavedNow() throws {
+        let t = try TestModel()
         var draft = FixtureDraft(date: day("2026-11-14"))
         draft.opponent = "B"
-        #expect(t.model.save(draft) != nil)
-        #expect(t.model.fixtures.count == 2)
+        t.model.addFixture(date: day("2026-11-14"), opponent: "A", importance: .low)
+        #expect(draft.problem == nil)   // made before A was added
+        #expect(t.model.save(draft) == nil)
+        #expect(t.model.fixtures.count == 1)
     }
 
     @Test func savingAnEditedDraftKeepsTheFixturesChoicesOfPlayers() throws {
@@ -169,7 +199,7 @@ import LineupEngine
         fixture.rejected = [PlayerID(key: "alfie potter")]
         t.model.update(fixture)
 
-        var draft = FixtureDraft(fixture)
+        var draft = t.model.fixtureDraft(for: fixture)
         #expect(!draft.isNew && draft.saveButtonTitle == "Save changes")
         draft.date = day("2026-11-20")
         draft.opponent = "Rovers"

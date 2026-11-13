@@ -83,7 +83,7 @@ struct TacticEditor: View {
     @ViewBuilder private var inspector: some View {
         if let selected, let role = draft.role(at: selected.slot, in: selected.phase) {
             HStack(alignment: .center, spacing: Theme.Spacing.l) {
-                Text("\(PitchLayout.label(of: selected.slot)), \(phaseName(selected.phase))")
+                Text("\(selected.slot.displayName), \(phaseName(selected.phase))")
                     .font(Theme.Typeface.text(weight: .semibold))
                 Picker("Role", selection: roleBinding(selected)) {
                     ForEach(roleNames(selected, current: role), id: \.self) { name in
@@ -129,7 +129,7 @@ struct TacticEditor: View {
     }
 
     private func targetName(_ target: SlotID) -> String {
-        let label = PitchLayout.label(of: target)
+        let label = target.displayName
         if draft.role(at: target, in: .outOfPossession) == nil {
             return "\(label) (empty)"
         }
@@ -206,7 +206,7 @@ struct SlotToken: View {
             }
         }
         .buttonStyle(.plain)
-        .help(role.map { "\(PitchLayout.label(of: slot)): \($0)" } ?? "Add a slot at \(PitchLayout.label(of: slot))")
+        .help(role.map { "\(slot.displayName): \($0)" } ?? "Add a slot at \(slot.displayName)")
     }
 
     private var shape: RoundedRectangle {
@@ -215,7 +215,7 @@ struct SlotToken: View {
 
     private func filled(_ role: String) -> some View {
         VStack(spacing: 0) {
-            Text(PitchLayout.label(of: slot))
+            Text(slot.displayName)
                 .font(Theme.Typeface.number(Theme.TypeSize.step1))
             Text(role)
                 .font(Theme.Typeface.text())
@@ -241,7 +241,7 @@ struct SlotToken: View {
     }
 
     private var empty: some View {
-        Text(PitchLayout.label(of: slot))
+        Text(slot.displayName)
             .font(Theme.Typeface.number(Theme.TypeSize.base))
             .foregroundStyle(Theme.Colour.chalk.opacity(Theme.Pitch.emptyTokenOpacity))
             .frame(maxWidth: .infinity)

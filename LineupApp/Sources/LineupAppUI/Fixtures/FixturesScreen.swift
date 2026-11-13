@@ -68,7 +68,7 @@ public struct FixturesScreen: View {
             .width(Theme.TableColumnWidth.fixtureState)
             TableColumn("") { fixture in
                 HStack(spacing: Theme.Spacing.s) {
-                    Button("Edit") { editing = EditorRequest(draft: FixtureDraft(fixture)) }
+                    Button("Edit") { editing = EditorRequest(draft: model.fixtureDraft(for: fixture)) }
                     Button("Delete") { delete(fixture) }
                 }
             }

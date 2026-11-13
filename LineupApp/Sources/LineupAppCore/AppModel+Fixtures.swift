@@ -39,11 +39,16 @@ extension AppModel {
         replan()
     }
 
-    /// Takes the settings as given; the planner reports any plan setting out of range.
+    /// Takes the settings as given; the planner reports any plan setting out of range. Replans only when something the
+    /// plan reads has changed: the plan settings, the condition floor, the club or the primary tactic.
     public func update(_ settings: AppSettings) {
+        let before = self.settings
         self.settings = settings
         save(.settings)
-        replan()
+        if before.plan != settings.plan || before.conditionFloor != settings.conditionFloor
+            || before.clubOverride != settings.clubOverride || before.primaryTacticID != settings.primaryTacticID {
+            replan()
+        }
     }
 
     /// The fixture's own tactic while it is saved, else the primary.

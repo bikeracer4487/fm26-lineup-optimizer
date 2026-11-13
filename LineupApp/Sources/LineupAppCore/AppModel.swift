@@ -71,6 +71,8 @@ public struct AppEnvironment: Sendable {
     /// The rating profile the plan is made with: the engine's standard one.
     let profile: RatingProfile
 
+    /// How many times the plan has been worked out, so tests can tell when a change did not replan.
+    @ObservationIgnored var timesPlanned = 0
     @ObservationIgnored let store: Store
     @ObservationIgnored let environment: AppEnvironment
 
@@ -139,6 +141,7 @@ public struct AppEnvironment: Sendable {
     /// Works the plan out again from the saved state. Every action that changes the squad, the saved tactics, the
     /// fixtures, the history or the settings calls this after saving.
     func replan() {
+        timesPlanned += 1
         planState = workedOutPlan()
     }
 

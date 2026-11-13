@@ -130,6 +130,7 @@ public enum SampleData {
         record.lineup.date = first.date
         model.history.append(record)
         model.save(.history)
+        model.replan()
         var settings = model.settings
         settings.currentDate = Day(year: 2026, month: 11, day: 18)!
         model.update(settings)

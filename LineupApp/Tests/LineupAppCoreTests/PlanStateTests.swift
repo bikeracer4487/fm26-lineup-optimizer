@@ -89,35 +89,42 @@ import LineupEngine
     @Test func noTacticNeedsATactic() throws {
         let t = try TestModel()
         try t.importFirstTeam()
-        #expect(t.model.planState == .needsTactic)
+        #expect(t.model.planState == .needsTactic([]))
         t.model.addFixture(date: TestModel.today, opponent: "Banbury United", importance: .medium)
-        #expect(t.model.planState == .needsTactic)
+        #expect(t.model.planState == .needsTactic([]))
 
         let model = try SampleData.modelWithTacticProblem(repositoryRoot: Captures.repositoryRoot)
-        #expect(model.planState == .needsTactic)
+        guard let primary = model.primaryTactic else { Issue.record("no primary tactic"); return }
+        let problems = model.problems(of: primary.tactic)
+        #expect(!problems.isEmpty)
+        #expect(model.planState == .needsTactic(["Sample 4-2-3-1 cannot be used: \(problems.joined(separator: "; "))."]))
     }
 
-    @Test func aTacticWithProblemsStopsThePlanOnlyWhenAFixtureUsesIt() throws {
+    @Test func aTacticWithProblemsStopsThePlanOnlyWhenAFixtureWithinTheHorizonUsesIt() throws {
         let t = try TestModel()
-        let model = try squad(fixtures: 2, t)
+        let model = try squad(fixtures: 3, t)
         let spare = model.addTactic(named: "Spare")
         var broken = model.tactics.first { $0.id == spare }!
         broken.tactic.inPossession[.ST_C] = nil
         model.update(broken)
-        #expect(plans(model).count == 2)
+        #expect(plans(model).count == 3)
+        let sentence = "Spare cannot be used: \(model.problems(of: broken.tactic).joined(separator: "; "))."
 
-        var fixture = model.fixtures[1]
-        fixture.tacticID = spare
-        model.update(fixture)
-        #expect(model.planState == .needsTactic)
+        for index in [1, 2] {
+            var fixture = model.fixtures[index]
+            fixture.tacticID = spare
+            model.update(fixture)
+        }
+        #expect(model.planState == .needsTactic([sentence]))   // one sentence for the tactic, not one per fixture
 
-        // Confirmed, the fixture needs no tactic.
-        fixture.tacticID = nil
-        model.update(fixture)
-        model.confirm(fixture.id)
-        fixture.tacticID = spare
-        model.update(fixture)
-        #expect(plans(model).count == 2)
+        var settings = model.settings
+        settings.plan.horizon = 1
+        model.update(settings)
+        #expect(plans(model).map(\.id) == [model.fixtures[0].id])
+
+        // Once the first is confirmed, the second is within the horizon.
+        model.confirm(model.fixtures[0].id)
+        #expect(model.planState == .needsTactic([sentence]))
     }
 
     @Test func noFixturesNeedsFixtures() throws {
@@ -250,14 +257,28 @@ import LineupEngine
         let gone = PlayerID(key: "nobody of that name")
         model.setOverride(gone, at: .D_L, in: id)
         #expect(model.fixtures[0].overrides[.D_L] == gone)
-        #expect(plan(model, id)?.ignoredOverrides
-            == ["D_L: " + ErrorDescriptions.describe(OverrideProblem.notInSquad, parameters: .fm27)])
+        #expect(plan(model, id)?.ignoredOverrides == ["The player chosen for D L is no longer in the squad."])
         #expect(pick(at: .D_L, plan(model, id)) == before)
+    }
 
-        guard let injured = model.players.first(where: \.isInjured) else { Issue.record("no injured player"); return }
-        model.setOverride(injured.id, at: .AM_C, in: id)
-        #expect(plan(model, id)?.ignoredOverrides
-            == ["D_L: who is not in the imported squads", "AM_C: injured, which cannot be overruled"])
+    @Test func anIgnoredOverrideNamesThePlayerTheSlotAndTheEnginesReason() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 1, t)
+        let id = model.fixtures[0].id
+        guard let keeper = model.players.first(where: { $0.name == "Jonny Maxted" }), keeper.isInjured,
+              let striker = model.players.first(where: { $0.name == "Tyrone Marsh" }) else {
+            Issue.record("the capture's injured keeper or its striker is missing"); return
+        }
+        model.setOverride(keeper.id, at: .GK, in: id)
+        model.setOverride(striker.id, at: .AM_C, in: id)
+        model.setOverride(striker.id, at: .ST_C, in: id)
+        model.setOverride(PlayerID(key: "nobody of that name"), at: .D_L, in: id)
+        #expect(plan(model, id)?.ignoredOverrides == [
+            "Jonny Maxted at GK: injured, which cannot be overruled.",
+            "The player chosen for D L is no longer in the squad.",
+            "Tyrone Marsh at AM C: because he is fixed in another slot too.",
+            "Tyrone Marsh at ST: because he is fixed in another slot too.",
+        ])
     }
 
     // MARK: Confirm and unlock
@@ -316,6 +337,23 @@ import LineupEngine
         #expect(model.history == history)
     }
 
+    @Test func onlyTheEarliestPlannedFixtureCanBeConfirmed() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 3, t)
+        let ids = model.fixtures.map(\.id)
+        #expect(model.canConfirm(ids[0]) && model.whyNotConfirm(ids[0]) == nil)
+        #expect(!model.canConfirm(ids[1]))
+        #expect(model.whyNotConfirm(ids[1]) == "Confirm the earlier match against Opponent 1 first.")
+        model.confirm(ids[1])
+        #expect(model.history.isEmpty)
+
+        model.confirm(ids[0])
+        #expect(!model.canConfirm(ids[0]) && model.whyNotConfirm(ids[0]) == nil)   // confirmed, not planned
+        #expect(model.canConfirm(ids[1]) && model.whyNotConfirm(ids[1]) == nil)
+        #expect(model.whyNotConfirm(ids[2]) == "Confirm the earlier match against Opponent 2 first.")
+        #expect(!model.canConfirm(FixtureID("no such fixture")) && model.whyNotConfirm(FixtureID("no such fixture")) == nil)
+    }
+
     @Test func unlockingPlansItAgainWithItsChoices() throws {
         let t = try TestModel()
         let model = try squad(fixtures: 2, t)
@@ -367,16 +405,53 @@ import LineupEngine
         #expect(lineup(plans[1])?.picks.count == 11)
     }
 
-    @Test func movingTheDatePastAnUnconfirmedFixtureStopsThePlanWithTheEnginesSentence() throws {
+    @Test func anUnconfirmedFixtureBeforeTheImportIsMissedAndThePlanGoesOn() throws {
         let t = try TestModel()
-        let model = try squad(fixtures: 1, t)
-        let fixture = model.fixtures[0]
+        let model = try squad(fixtures: 2, t)
+        let ids = model.fixtures.map(\.id)
         model.moveToday(by: 2)
-        #expect(plans(model).count == 1)   // the plan starts from the import, not from the game's date
+        #expect(plans(model).allSatisfy { lineup($0) != nil })   // the plan starts from the import, not the game's date
         try t.importFirstTeam()
-        #expect(model.planState == .failed([ErrorDescriptions.describe(
-            PlanError.fixtureBeforeSnapshot(fixture.id, date: fixture.date, asOf: TestModel.today.adding(days: 2)))]))
-        #expect(model.candidates(for: .GK, in: fixture.id).isEmpty)
+
+        let plans = plans(model)
+        #expect(plans.map(\.id) == ids)
+        #expect(plans[0].body == .missed)
+        #expect(plans[0].tacticName == model.primaryTactic?.tactic.name)
+        #expect(plans[0].missedNote == "This match is before the squad was last imported and no lineup was confirmed for "
+            + "it, so it does not count towards runs of starts. Delete it, or correct its date, on the Fixtures screen.")
+        #expect(lineup(plans[1])?.picks.count == 11)
+        #expect(plans[1].missedNote == nil)
+
+        // The missed match is not the next to play, is not played, and offers no one to choose.
+        #expect(!model.canConfirm(ids[0]) && model.whyNotConfirm(ids[0]) == nil)
+        model.confirm(ids[0])
+        #expect(model.history.isEmpty)
+        #expect(model.candidates(for: .GK, in: ids[0]).isEmpty)
+        #expect(model.canConfirm(ids[1]))
+
+        // Moving its date back on makes it a fixture to plan again.
+        var fixture = model.fixtures[0]
+        fixture.date = TestModel.today.adding(days: 3)
+        model.update(fixture)
+        #expect(self.plans(model).allSatisfy { lineup($0) != nil })
+    }
+
+    @Test func twoFixturesToPlanOnOneDayStopThePlanInTheOwnersWords() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 3, t)
+        // A confirmed match is history, so a fixture to plan on its day is no clash.
+        model.confirm(model.fixtures[0].id)
+        model.addFixture(date: model.fixtures[0].date, opponent: "Opponent E", importance: .low)
+        #expect(plans(model).count == 4)
+
+        model.addFixture(date: TestModel.today.adding(days: 7), opponent: "Opponent F", importance: .low)
+        let clash = model.addFixture(date: TestModel.today.adding(days: 4), opponent: "Opponent B", importance: .low)
+        // The earliest such day, Tue 17 Nov, before Fri 20 Nov; its opponents in alphabetical order.
+        #expect(model.planState == .failed(["Two matches are on Tue 17 Nov: against Opponent 2 and against Opponent B. "
+            + "A club plays one match a day: change one of the dates on the Fixtures screen."]))
+        model.deleteFixture(clash)
+        #expect(model.planState == .failed(["Two matches are on Fri 20 Nov: against Opponent 3 and against Opponent F. "
+            + "A club plays one match a day: change one of the dates on the Fixtures screen."]))
     }
 
     @Test func aConfirmedFixtureBeforeTheImportDoesNotStopThePlan() throws {
@@ -428,7 +503,9 @@ import LineupEngine
         let model = try squad(fixtures: 2, t)
         let id = model.fixtures[0].id
         let candidates = model.candidates(for: .GK, in: id)
-        #expect(candidates.map(\.rating) == candidates.map(\.rating).sorted(by: >))
+        let ratings = candidates.compactMap(\.rating)
+        #expect(ratings.count == candidates.count)
+        #expect(ratings == ratings.sorted(by: >))
         #expect(Set(candidates.map(\.player)).count == candidates.count)
 
         let onLoan = model.players.filter {
@@ -472,6 +549,23 @@ import LineupEngine
         #expect(candidate?.unavailable?.hasPrefix("projected condition") == true)
     }
 
+    @Test func aPlayerWhoCannotBeRatedStaysLastWithTheEnginesSentence() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let players = Array(t.model.players.prefix(4))
+        let unrated = players[1].name
+        let candidates = AppModel.ranked(players, rating: { player in
+            if player.name == unrated { throw RatingError.missingAttribute(player: player.name, attribute: .pace) }
+            return Double(player.name.count)
+        }, unavailable: { _ in nil })
+        #expect(candidates.count == 4)
+        #expect(candidates.last?.name == unrated)
+        #expect(candidates.last?.rating == nil)
+        #expect(candidates.last?.unavailable
+            == ErrorDescriptions.describe(RatingError.missingAttribute(player: unrated, attribute: .pace)))
+        #expect(candidates.dropLast().allSatisfy { $0.rating != nil && $0.unavailable == nil })
+    }
+
     @Test func aFixtureWithNoPlannedLineupHasNoCandidates() throws {
         let t = try TestModel()
         let model = try squad(fixtures: 3, t)
@@ -501,8 +595,9 @@ import LineupEngine
         }
 
         // The game's date alone does not move the plan's starting day; an import on the new date does.
+        let planned = model.timesPlanned
         model.moveToday(by: 1)
-        #expect(model.planState == state)
+        #expect(model.planState == state && model.timesPlanned == planned)
         try t.importFirstTeam()
         changed("An import")
 
@@ -542,6 +637,33 @@ import LineupEngine
         model.makePrimary(other)
         changed("Another tactic made primary")
         #expect(plans(model).allSatisfy { $0.tacticName == "Starter" })
+    }
+
+    @Test func onlySettingsThePlanReadsReplan() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 1, t)
+        let state = model.planState
+        var count = model.timesPlanned
+
+        model.moveToday(by: 1)
+        var settings = model.settings
+        settings.fmrteConfigPath = "/somewhere/else/config.json"
+        settings.clubName = "  Oxford City "   // the same club once trimmed
+        model.update(settings)
+        #expect(model.timesPlanned == count)
+        #expect(model.planState == state)
+
+        for change in [{ (s: inout AppSettings) in s.plan.stability = 0.9 },
+                       { $0.conditionFloor = 0.9 },
+                       { $0.clubName = "Banbury United" },
+                       { $0.primaryTacticID = UUID() }] {
+            settings = model.settings
+            change(&settings)
+            model.update(settings)
+            #expect(model.timesPlanned == count + 1)
+            count = model.timesPlanned
+        }
+        #expect(model.planState == .needsTactic(["No tactic is the primary one. Make one primary on the Tactics screen."]))
     }
 
     @Test func anUnsavedTacticChangeDoesNotChangeThePlan() throws {

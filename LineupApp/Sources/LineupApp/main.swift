@@ -118,7 +118,7 @@ enum SampleState {
             // The editor for the confirmed fixture, so the note about its confirmed lineup is shown.
             let past = sampleModel(root, .pastFixtures)
             guard let confirmed = past.fixtures.first else { fail("The sample model has no fixtures.") }
-            try ScreenPictures.writeFixtureEditor(model: past, draft: FixtureDraft(confirmed), to: directory)
+            try ScreenPictures.writeFixtureEditor(model: past, draft: past.fixtureDraft(for: confirmed), to: directory)
             // The striker nothing turns into, selected out of possession.
             try ScreenPictures.write(model: sampleModel(root, .tacticProblem), to: directory, size: size,
                                      variant: "problem", screens: [.tactics],

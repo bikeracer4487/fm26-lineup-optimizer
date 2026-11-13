@@ -54,6 +54,9 @@ public struct FixtureDraft: Equatable, Sendable {
     public var importance: Importance
     /// Nil: the primary tactic.
     public var tacticID: UUID?
+    /// The other saved fixtures' opponents by day, the first in date order where a day has several: a club plays one
+    /// match a day. The model fills it in.
+    public var otherMatches: [Day: String] = [:]
 
     /// A new fixture of medium importance on the primary tactic.
     public init(date: Day) {
@@ -73,14 +76,22 @@ public struct FixtureDraft: Equatable, Sendable {
     /// yet a mistake, so it is not pointed out.
     public private(set) var problemIsDue = false
 
-    /// Why the draft cannot be saved, or nil when it can. Two fixtures on one day are allowed; the planner says so.
+    /// Why the draft cannot be saved, or nil when it can: a blank opponent, then another match on the same day.
     public var problem: String? {
+        opponentProblem ?? dayProblem
+    }
+
+    /// `problem`, the blank opponent only once it is due; another match on the day at once.
+    public var shownProblem: String? {
+        (problemIsDue ? opponentProblem : nil) ?? dayProblem
+    }
+
+    private var opponentProblem: String? {
         Self.isBlank(opponent) ? "Say who the match is against." : nil
     }
 
-    /// `problem`, once it is due.
-    public var shownProblem: String? {
-        problemIsDue ? problem : nil
+    private var dayProblem: String? {
+        otherMatches[date].map { "There is already a match on that day, against \($0)." }
     }
 
     public mutating func noteSaveAttempt() {
@@ -126,14 +137,34 @@ extension AppModel {
     /// A new fixture on the day after the last fixture from today on, or today in the game when there is none.
     public func newFixtureDraft() -> FixtureDraft {
         let last = fixtures.last { $0.date >= settings.currentDate }
-        return FixtureDraft(date: last.map { $0.date.adding(days: 1) } ?? settings.currentDate)
+        var draft = FixtureDraft(date: last.map { $0.date.adding(days: 1) } ?? settings.currentDate)
+        draft.otherMatches = matches(besides: nil)
+        return draft
+    }
+
+    /// A draft of the saved fixture, to edit.
+    public func fixtureDraft(for fixture: StoredFixture) -> FixtureDraft {
+        var draft = FixtureDraft(fixture)
+        draft.otherMatches = matches(besides: fixture.id)
+        return draft
+    }
+
+    /// Every saved fixture's opponent by day except `id`'s, the first in date order where a day has several.
+    private func matches(besides id: FixtureID?) -> [Day: String] {
+        var found: [Day: String] = [:]
+        for fixture in fixtures where fixture.id != id && found[fixture.date] == nil {
+            found[fixture.date] = fixture.opponent
+        }
+        return found
     }
 
     /// Saves the draft as a new fixture, or over the fixture it was made from, keeping that fixture's choices of
     /// players. The opponent is saved without spaces around it. Nil, with nothing saved, when the draft has a
-    /// problem or its fixture has been deleted.
+    /// problem, judged against the fixtures saved now, or its fixture has been deleted.
     @discardableResult public func save(_ draft: FixtureDraft) -> FixtureID? {
-        guard draft.problem == nil else { return nil }
+        var checked = draft
+        checked.otherMatches = matches(besides: draft.id)
+        guard checked.problem == nil else { return nil }
         let opponent = draft.opponent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let id = draft.id else {
             let id = FixtureID(UUID().uuidString)
