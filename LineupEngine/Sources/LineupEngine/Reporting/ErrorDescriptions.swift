@@ -10,6 +10,7 @@ public enum ErrorDescriptions {
         case let e as TacticError: describe(e)
         case let e as RatingError: describe(e)
         case let e as DecodingError: describe(e)
+        case let e as DuplicatePlayerError: describe(e)
         default: "Unexpected error: \(error.localizedDescription)"
         }
     }
@@ -81,6 +82,11 @@ public enum ErrorDescriptions {
         case .missingAttribute(let player, let attribute): "\(player) has no value for the attribute \(attribute.rawValue)"
         case .missingFamiliarity(let player, let position): "\(player) has no familiarity for the position \(position.rawValue)"
         }
+    }
+
+    public static func describe(_ error: DuplicatePlayerError) -> String {
+        "Two players share the identity \(error.id.key): \(error.names.joined(separator: " and ")). "
+            + "Import the squad again so each player has his own identity."
     }
 
     public static func describe(_ error: DecodingError) -> String {

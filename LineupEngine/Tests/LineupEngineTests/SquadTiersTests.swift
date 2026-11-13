@@ -53,6 +53,39 @@ import Testing
         #expect(t.ratings[PlannerFixture.id(.AM_C, "first")] == nil)
     }
 
+    @Test func aPlayerLoanedInToTheOwnClubStaysInTheTiers() throws {
+        let squad = changing(.AM_C, "first", in: try PlannerFixture.squad()) { $0.loanedTo = "Oxford City"; $0.club = "Elsewhere FC" }
+        let t = try tiers(squad)
+        #expect(t.first[.AM_C] == PlannerFixture.id(.AM_C, "first"))
+        #expect(t.ratings[PlannerFixture.id(.AM_C, "first")] != nil)
+    }
+
+    @Test func withNoOwnClubALoanedPlayerIsStillLeftOut() throws {
+        // LoanStatus.of treats any loan as a loan out when the own club is unknown.
+        let squad = changing(.AM_C, "first", in: try PlannerFixture.squad()) { $0.loanedTo = "Oxford City" }
+        let t = try tiers(squad, ownClub: nil)
+        #expect(t.ratings[PlannerFixture.id(.AM_C, "first")] == nil)
+        #expect(t.first[.AM_C] == PlannerFixture.id(.AM_C, "second"))
+    }
+
+    @Test func twoRecordsUnderOneIdentityAreRefusedWhicheverComesFirst() throws {
+        let squad = try PlannerFixture.squad()
+        var twin = squad.first { $0.id == PlannerFixture.id(.ST_C, "first") }!
+        twin.age = 31
+        let expected = DuplicatePlayerError(id: PlannerFixture.id(.ST_C, "first"), names: ["ST_C first", "ST_C first"])
+        #expect(throws: expected) { try tiers(squad + [twin]) }
+        #expect(throws: expected) { try tiers([twin] + squad) }
+        #expect(throws: expected) { try tiers(squad.reversed() + [twin]) }
+    }
+
+    @Test func theLowestDuplicatedKeyIsReported() throws {
+        let squad = try PlannerFixture.squad()
+        let dupes = squad.filter { [PlannerFixture.id(.ST_C, "first"), PlannerFixture.id(.D_L, "first")].contains($0.id) }
+        #expect(throws: DuplicatePlayerError(id: PlannerFixture.id(.D_L, "first"), names: ["D_L first", "D_L first"])) {
+            try tiers(squad + dupes)
+        }
+    }
+
     @Test func fitnessDoesNotChangeTheTiers() throws {
         let base = try tiers(PlannerFixture.squad())
         let tired = changing(.GK, "first", in: try PlannerFixture.squad()) { $0.condition = 0.5; $0.sharpness = 0.3; $0.isBanned = true }

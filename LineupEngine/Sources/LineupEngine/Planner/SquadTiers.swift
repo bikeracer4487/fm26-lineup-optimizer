@@ -1,5 +1,12 @@
 import Foundation
 
+/// Two or more players in the squad share one identity, so the engine cannot tell them apart.
+/// `names` are the records' names, sorted; `id` is the lowest duplicated key.
+public struct DuplicatePlayerError: Error, Equatable {
+    public let id: PlayerID
+    public let names: [String]
+}
+
 /// The first and second elevens at full fitness: who the first-choice players are and who covers them.
 public struct SquadTiers: Equatable, Sendable {
     public let first: [SlotID: PlayerID]
@@ -26,15 +33,19 @@ public struct SquadTiers: Equatable, Sendable {
 
     /// Injured players and players out on loan are left out; condition, sharpness, jadedness and bans
     /// are ignored. The second eleven is the best assignment from the players the first did not use.
-    /// Throws `TacticError` for an unusable tactic and `RatingError` for a player with missing data.
+    /// Throws `DuplicatePlayerError` when two players share an id (checked first), `TacticError` for an
+    /// unusable tactic and `RatingError` for a player with missing data.
     public static func compute(tactic: Tactic, players: [Player], ownClub: String?, catalog: RoleCatalog,
                                profile: RatingProfile, parameters: EngineParameters) throws -> SquadTiers {
+        var byID: [PlayerID: [String]] = [:]
+        for player in players { byID[player.id, default: []].append(player.name) }
+        if let duplicate = byID.filter({ $0.value.count > 1 }).min(by: { $0.key.key < $1.key.key }) {
+            throw DuplicatePlayerError(id: duplicate.key, names: duplicate.value.sorted())
+        }
         let assignments = try tactic.assignments(catalog: catalog)
         let engine = RatingEngine(profile: profile, parameters: parameters, configuration: .fm27)
-        // A repeated PlayerID is a caller error: keep the first. Sorting by key makes the result
-        // independent of input order.
-        var seen = Set<PlayerID>()
-        let eligible = players.filter { seen.insert($0.id).inserted }
+        // Sorting by key makes the result independent of input order.
+        let eligible = players
             .sorted { $0.id.key < $1.id.key }
             .filter { player in
                 if player.isInjured { return false }

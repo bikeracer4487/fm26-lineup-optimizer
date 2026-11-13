@@ -13,6 +13,13 @@ import Testing
         for name in names { #expect(!text.contains("\(name)("), sourceLocation: sourceLocation) }
     }
 
+    @Test func aDuplicatePlayerErrorNamesThePlayersAndSaysToImportAgain() {
+        let text = ErrorDescriptions.describe(DuplicatePlayerError(id: PlayerID(key: "jo bloggs"), names: ["Jo Bloggs", "Jo Bloggs"]))
+        #expect(text.contains("jo bloggs") && text.contains("Jo Bloggs and Jo Bloggs") && text.contains("Import the squad again"))
+        let viaGeneric = ErrorDescriptions.describe(DuplicatePlayerError(id: PlayerID(key: "k"), names: ["A", "B"]) as Error)
+        #expect(viaGeneric.contains("A and B") && !viaGeneric.hasPrefix("Unexpected error"))
+    }
+
     @Test func importErrorsNameTheirSpecifics() {
         let invalid = ErrorDescriptions.describe(ImportError.invalidValue(player: "Jo Bloggs", column: "Condition", value: "abc"))
         #expect(invalid.contains("Jo Bloggs") && invalid.contains("Condition") && invalid.contains("abc"))
