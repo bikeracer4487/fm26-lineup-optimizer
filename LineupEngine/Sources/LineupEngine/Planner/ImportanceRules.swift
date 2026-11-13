@@ -25,18 +25,16 @@ public enum ImportanceRules {
         -> (everySlot: [Adjustment], bySlot: [SlotID: [Adjustment]]) {
         var everySlot: [Adjustment] = []
         everySlot += loanedIn(player, context, parameters)
+        everySlot += consecutiveStarts(player, context, parameters)
         everySlot += needsSharpness(player, context, parameters)
         everySlot += development(player, context, parameters)
 
-        let starts = context.history.consecutiveStarts(
-            of: player.id, before: context.date, windowDays: parameters.consecutiveStartWindowDays.value)
         let recent = context.history.recentSlots(
             of: player.id, before: context.date, limit: parameters.stabilityAnchorRun.value)
 
         var bySlot: [SlotID: [Adjustment]] = [:]
         for assignment in context.assignments {
             var found: [Adjustment] = []
-            found += consecutiveStarts(starts, assignment, context, parameters)
             found += retraining(player, assignment, context, parameters)
             found += stability(recent, assignment, context, parameters)
             bySlot[assignment.slot] = found.sorted(by: inKindOrder)
@@ -62,14 +60,22 @@ public enum ImportanceRules {
                            reason: "On loan here: marked down so the club's own players get the minutes (×\(Display.twoDecimals(factor)))")]
     }
 
-    private static func consecutiveStarts(_ starts: Int, _ assignment: SlotAssignment, _ context: RuleContext,
+    /// The run of starts tires him wherever he plays next, so the factor applies in every slot. Each position he
+    /// played during the run gives the highest step the run has reached there; the lowest of those factors applies.
+    /// A position with no step reached, or missing from the table, gives none.
+    private static func consecutiveStarts(_ player: Player, _ context: RuleContext,
                                           _ parameters: EngineParameters) -> [Adjustment] {
-        guard context.importance != .high,
-              let steps = parameters.consecutiveStartSteps.value[assignment.ipPosition],
-              let step = steps.filter({ $0.starts <= starts }).max(by: { $0.starts < $1.starts }),
-              step.factor != 1 else { return [] }
-        return [Adjustment(kind: .consecutiveStarts, factor: step.factor,
-                           reason: "Has started the last \(starts) matches in quick succession (×\(Display.twoDecimals(step.factor)))")]
+        guard context.importance != .high else { return [] }
+        let starts = context.history.consecutiveStarts(
+            of: player.id, before: context.date, windowDays: parameters.consecutiveStartWindowDays.value)
+        let played = context.history.recentSlots(of: player.id, before: context.date, limit: starts).map(\.position)
+        let factors = played.compactMap { position in
+            parameters.consecutiveStartSteps.value[position]?
+                .filter { $0.starts <= starts }.max { $0.starts < $1.starts }?.factor
+        }
+        guard let factor = factors.min(), factor != 1 else { return [] }
+        return [Adjustment(kind: .consecutiveStarts, factor: factor,
+                           reason: "Has started the last \(starts) matches in quick succession (×\(Display.twoDecimals(factor)))")]
     }
 
     private static func needsSharpness(_ player: Player, _ context: RuleContext, _ parameters: EngineParameters) -> [Adjustment] {

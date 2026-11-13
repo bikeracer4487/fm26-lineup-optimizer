@@ -67,38 +67,85 @@ import Testing
 
     // MARK: Consecutive starts
 
-    @Test func aFullBackNeedsTwoStartsToBeMarkedDown() {
+    /// One start per slot, newest first, `spacing` days apart, the newest `spacing` days before the fixture.
+    func run(_ player: Player, newestFirst slots: [SlotID], spacing: Int = 3) -> [ConfirmedLineup] {
+        slots.enumerated().map { i, slot in
+            ConfirmedLineup(fixture: FixtureID("f\(i + 1)"), date: date.adding(days: -spacing * (i + 1)), starters: [slot: player.id])
+        }
+    }
+
+    func noSlotHasAConsecutiveStartsAdjustment(_ r: (everySlot: [Adjustment], bySlot: [SlotID: [Adjustment]])) -> Bool {
+        r.bySlot.values.allSatisfy { !$0.contains { $0.kind == .consecutiveStarts } }
+    }
+
+    @Test func aRunAtFullBackMarksHimDownInEverySlot() {
         let p = Player.fixture()
         let r = run(p, .medium, history: starts(p, count: 2))
-        #expect(slot(r, .D_L, .consecutiveStarts)?.factor == 0.90)
-        #expect(slot(r, .D_R, .consecutiveStarts)?.factor == 0.90)
-        #expect(slot(r, .ST_C, .consecutiveStarts) == nil)
-        #expect(slot(r, .D_CL, .consecutiveStarts) == nil)
-        #expect(run(p, .medium, history: starts(p, count: 1)).bySlot[.D_L]?.isEmpty ?? true)
-    }
-
-    @Test func moreStartsMarkDownFurther() {
-        let p = Player.fixture()
-        let r = run(p, .low, history: starts(p, count: 4))
-        #expect(slot(r, .D_L, .consecutiveStarts)?.factor == 0.60)
-        #expect(slot(r, .D_L, .consecutiveStarts)?.reason == "Has started the last 4 matches in quick succession (×0.60)")
-        #expect(slot(run(p, .low, history: starts(p, count: 3)), .D_L, .consecutiveStarts)?.reason
+        #expect(every(r, .consecutiveStarts)?.factor == 0.90)
+        #expect(every(r, .consecutiveStarts)?.reason == "Has started the last 2 matches in quick succession (×0.90)")
+        #expect(noSlotHasAConsecutiveStartsAdjustment(r))
+        // More starts mark him down further.
+        #expect(every(run(p, .low, history: starts(p, count: 3)), .consecutiveStarts)?.reason
                 == "Has started the last 3 matches in quick succession (×0.75)")
+        let four = run(p, .low, history: starts(p, count: 4))
+        #expect(every(four, .consecutiveStarts)?.factor == 0.60)
+        #expect(every(four, .consecutiveStarts)?.reason == "Has started the last 4 matches in quick succession (×0.60)")
+        #expect(noSlotHasAConsecutiveStartsAdjustment(four))
+        // One start is not a run.
+        #expect(every(run(p, .medium, history: starts(p, count: 1)), .consecutiveStarts) == nil)
     }
 
-    @Test func aCentreBackNeedsFiveStartsAndAMidfielderThree() {
+    @Test func aRunAtCentreBackNeedsFiveStarts() {
         let p = Player.fixture()
-        #expect(slot(run(p, .sharpness, history: starts(p, count: 4)), .D_CL, .consecutiveStarts) == nil)
-        #expect(slot(run(p, .sharpness, history: starts(p, count: 5)), .D_CL, .consecutiveStarts)?.factor == 0.90)
-        #expect(slot(run(p, .sharpness, history: starts(p, count: 6)), .D_CL, .consecutiveStarts)?.factor == 0.80)
-        #expect(slot(run(p, .sharpness, history: starts(p, count: 3)), .ST_C, .consecutiveStarts)?.factor == 0.90)
-        #expect(slot(run(p, .sharpness, history: starts(p, count: 3)), .AM_C, .consecutiveStarts)?.factor == 0.90)
+        #expect(every(run(p, .sharpness, history: starts(p, count: 4, slot: .D_CL)), .consecutiveStarts) == nil)
+        #expect(every(run(p, .sharpness, history: starts(p, count: 5, slot: .D_CL)), .consecutiveStarts)?.factor == 0.90)
+        #expect(every(run(p, .sharpness, history: starts(p, count: 6, slot: .D_CL)), .consecutiveStarts)?.factor == 0.80)
+        // A midfielder or a striker needs three.
+        #expect(every(run(p, .sharpness, history: starts(p, count: 2, slot: .AM_C)), .consecutiveStarts) == nil)
+        #expect(every(run(p, .sharpness, history: starts(p, count: 3, slot: .AM_C)), .consecutiveStarts)?.factor == 0.90)
+        #expect(every(run(p, .sharpness, history: starts(p, count: 3, slot: .ST_C)), .consecutiveStarts)?.factor == 0.90)
     }
 
-    @Test func consecutiveStartsAreIgnoredInBigMatchesAndWhenSpacedOut() {
+    @Test func theMostDemandingPositionOfTheRunDecides() {
         let p = Player.fixture()
-        #expect(slot(run(p, .high, history: starts(p, count: 4)), .D_L, .consecutiveStarts) == nil)
-        #expect(slot(run(p, .low, history: starts(p, count: 4, spacing: 7)), .D_L, .consecutiveStarts) == nil)
+        // D_L, then ST_C twice: three starts are ×0.75 at full back and ×0.90 up front.
+        let mixed = run(p, .medium, history: run(p, newestFirst: [.ST_C, .ST_C, .D_L]))
+        #expect(every(mixed, .consecutiveStarts)?.factor == 0.75)
+        #expect(every(mixed, .consecutiveStarts)?.reason == "Has started the last 3 matches in quick succession (×0.75)")
+        #expect(noSlotHasAConsecutiveStartsAdjustment(mixed))
+        #expect(every(run(p, .medium, history: run(p, newestFirst: [.ST_C, .ST_C, .ST_C])), .consecutiveStarts)?.factor == 0.90)
+        // A position whose steps the run has not reached adds nothing: two starts are a step at full back only.
+        #expect(every(run(p, .medium, history: run(p, newestFirst: [.D_CL, .D_L])), .consecutiveStarts)?.factor == 0.90)
+        #expect(every(run(p, .medium, history: run(p, newestFirst: [.D_CL, .ST_C])), .consecutiveStarts) == nil)
+        // Starts before the run do not count: a full-back start a week before two striker starts.
+        let broken = run(p, newestFirst: [.ST_C, .ST_C])
+            + [ConfirmedLineup(fixture: FixtureID("old"), date: date.adding(days: -13), starters: [.D_L: p.id])]
+        #expect(every(run(p, .medium, history: broken), .consecutiveStarts) == nil)
+        // A position missing from the table adds nothing; the others still count.
+        var q = parameters
+        var steps = q.consecutiveStartSteps.value
+        steps[.defenderLeft] = nil
+        q.consecutiveStartSteps = Parameter(steps, .derived, source: "test")
+        let withoutFullBack = ImportanceRules.adjustments(
+            for: p, context: context(.medium, history: run(p, newestFirst: [.ST_C, .ST_C, .D_L])), parameters: q)
+        #expect(every(withoutFullBack, .consecutiveStarts)?.factor == 0.90)
+        let onlyFullBack = ImportanceRules.adjustments(
+            for: p, context: context(.medium, history: run(p, newestFirst: [.D_L, .D_L, .D_L])), parameters: q)
+        #expect(every(onlyFullBack, .consecutiveStarts) == nil)
+    }
+
+    @Test func nothingAtHigh() {
+        let p = Player.fixture()
+        let r = run(p, .high, history: starts(p, count: 4))
+        #expect(every(r, .consecutiveStarts) == nil)
+        #expect(noSlotHasAConsecutiveStartsAdjustment(r))
+    }
+
+    @Test func nothingWhenTheStartsWereAWeekApart() {
+        let p = Player.fixture()
+        let r = run(p, .low, history: starts(p, count: 4, spacing: 7))
+        #expect(every(r, .consecutiveStarts) == nil)
+        #expect(noSlotHasAConsecutiveStartsAdjustment(r))
     }
 
     // MARK: Needs sharpness
@@ -240,8 +287,8 @@ import Testing
         let p = Player.fixture(age: 20, familiarity: [.defenderLeft: 12], currentAbility: 100, potentialAbility: 130,
                                sharpness: 0.6, club: "Elsewhere FC")
         let r = run(p, .low, history: starts(p, count: 4), retraining: retrain(p, .defenderLeft), stability: 1)
-        #expect(r.everySlot.map(\.kind) == [.loanedIn, .needsSharpness, .development])
-        #expect(r.bySlot[.D_L]?.map(\.kind) == [.consecutiveStarts, .retraining, .stability])
+        #expect(r.everySlot.map(\.kind) == [.loanedIn, .consecutiveStarts, .needsSharpness, .development])
+        #expect(r.bySlot[.D_L]?.map(\.kind) == [.retraining, .stability])
     }
 
     @Test func aPlayerWithNothingSpecialHasNoAdjustments() {

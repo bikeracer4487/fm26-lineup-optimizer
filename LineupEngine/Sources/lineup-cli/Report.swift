@@ -131,10 +131,10 @@ enum Report {
         }
 
         out.append("")
-        out.append("Left out of the ideal eleven")
+        out.append("Left out")
         if lineup.omissions.isEmpty { out.append("  none") }
         for omission in lineup.omissions {
-            out.append("  \(pad(omission.name, 22)) (ideal slot \(omission.slot.rawValue)) \(omission.reason)")
+            out.append("  \(pad(omission.name, 22)) (expected at \(omission.slot.rawValue)) \(omission.reason)")
         }
         return out
     }

@@ -248,7 +248,7 @@ These restore the intent documented for `main` and expressed in the branch's imp
 
 **User control.** Manual overrides fix a player in a slot. Rejections exclude a player from one fixture. Confirming a fixture locks its lineup, records who actually started including overrides, and removes it from replanning. Unlocking reverses that. Deleting a fixture removes its history entry.
 
-**Explanations.** Every pick carries its factors and plain-language reasons. Every notable omission (a first-choice player left out) carries the reason he was left out.
+**Explanations.** Every pick carries its factors and plain-language reasons. Every notable omission (a first-choice player left out) carries the reason he was left out. A first-choice player is one in the ideal eleven or in the best eleven of the players available for the fixture.
 
 **Assignment.** Lineups are found by solving a players-to-slots assignment exactly. Ties are broken deterministically so the same inputs always give the same lineup.
 

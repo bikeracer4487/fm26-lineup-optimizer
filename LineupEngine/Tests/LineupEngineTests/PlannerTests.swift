@@ -381,6 +381,32 @@ import Testing
         #expect(try consecutive(seededTwice.fixtures[1], .D_L)?.factor == 0.75)
     }
 
+    @Test func aRunOfStartsCannotBeDodgedByChangingSlot() throws {
+        // With no goalkeeper an outfielder must stand in. The first-choice striker has started four in a row, a step
+        // that marks him down up front (×0.80) and would not yet in goal; the run tires him wherever he plays.
+        let players = squad.filter { $0.id != id(.GK) && $0.id != id(.GK, "second") }
+        let striker = id(.ST_C)
+        let confirmed = [1, 3, 5, 7].map { n in
+            ConfirmedLineup(fixture: FixtureID("played\(n)"), date: day(-n), starters: [.ST_C: striker])
+        }
+        let expected = [Adjustment(kind: .consecutiveStarts, factor: 0.80,
+                                   reason: "Has started the last 4 matches in quick succession (×0.80)")]
+        let plan = try planner.plan(request([fixture("a", day: 1)], players: players, confirmed: confirmed))
+        #expect(pick(plan.fixtures[0], .GK)?.player != striker)
+        if let his = plan.fixtures[0].lineup.picks.first(where: { $0.player == striker }) {
+            #expect(his.adjustments.filter { $0.kind == .consecutiveStarts } == expected)
+        }
+
+        // Whichever slot he is fixed in, the run's factor goes with him.
+        for assignment in try tactic.assignments(catalog: RoleCatalog.fm27()) {
+            let fixed = try planner.plan(request([fixture("a", day: 1, overrides: [assignment.slot: striker])],
+                                                 players: players, confirmed: confirmed))
+            let his = try #require(pick(fixed.fixtures[0], assignment.slot))
+            #expect(his.player == striker)
+            #expect(his.adjustments.filter { $0.kind == .consecutiveStarts } == expected, "\(assignment.slot.rawValue)")
+        }
+    }
+
     @Test func aPlannedLineupReplacesAConfirmedOneForTheSameFixture() throws {
         // A stale confirmed lineup for fixture "a" says the cover started it; the plan's own lineup for "a" replaces it.
         let stale = [ConfirmedLineup(fixture: FixtureID("a"), date: day(1), starters: [.D_L: id(.D_L, "second")])]

@@ -581,7 +581,10 @@ import Testing
         #expect(st.warnings == [.overridesRule(.belowConditionFloor(0.80))])
         #expect(st.reasons.last == "Chosen by you, overriding: condition 80% is below the 85% floor")
         #expect(lineup.ignoredOverrides.isEmpty)
-        #expect(lineup.omissions.isEmpty)
+        // Below the floor, the Striker is not available, so the Cover Striker is the first choice among those who are.
+        #expect(lineup.omissions.map(\.player) == [id("Cover Striker")])
+        #expect(lineup.omissions.first?.cause == .displacedByOverride(by: [id("Striker")]))
+        #expect(lineup.omissions.first?.reason == "Left out: you chose Striker for ST (C)")
     }
 
     @Test func anOverrideBeatsARejectionJadednessAndABan() throws {
@@ -976,6 +979,80 @@ import Testing
         let overridden = try selector.select(adjusted(request(squad(rival), overrides: [.ST_C: id("Rival Striker")]),
                                                       every: [id("Striker"): [Adjustment(kind: .savedForLater, factor: 0.99, reason: "x")]]))
         #expect(overridden.omissions.first?.cause == .displacedByOverride(by: [id("Rival Striker")]))
+    }
+
+    // MARK: - The best available eleven
+
+    @Test func aFirstChoiceAmongTheAvailablePlayersWhoIsLeftOutSaysWhy() throws {
+        // The injured Star Playmaker holds AM_C in the ideal eleven. Among the players who can play, the Playmaker is
+        // first choice there, ahead of the Cover Playmaker.
+        let star = natural("Star Playmaker", at: [.attackingMidCentral], all: 14)
+        let cover = natural("Cover Playmaker", at: [.attackingMidCentral], all: 8)
+        let players = changing("Star Playmaker", in: squad(star, cover)) { $0.isInjured = true }
+        try #require(pick(try selector.select(request(players)), .AM_C)?.player == id("Playmaker"))
+
+        let held = Adjustment(kind: .savedForLater, factor: 0.50, reason: "kept fresher for the cup final")
+        let lineup = try selector.select(adjusted(request(players), every: [id("Playmaker"): [held]]))
+        #expect(pick(lineup, .AM_C)?.player == id("Cover Playmaker"))
+        try #require(lineup.omissions.map(\.player) == [id("Star Playmaker"), id("Playmaker")])
+        let injured = lineup.omissions[0]
+        #expect(injured.slot == .AM_C)
+        #expect(injured.cause == .excluded(.injured))
+        #expect(injured.reason == "Left out: injured")
+        let firstChoice = lineup.omissions[1]
+        #expect(firstChoice.slot == .AM_C)
+        #expect(firstChoice.cause == .heldBack([.savedForLater]))
+        #expect(firstChoice.reason == "Left out: kept fresher for the cup final")
+
+        // The ideal eleven's omissions come first, in slot order, then the available eleven's.
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let both = try selector.select(adjusted(request(players + [rival]), every: [id("Playmaker"): [held], id("Striker"): [held]]))
+        #expect(both.omissions.map(\.player) == [id("Star Playmaker"), id("Striker"), id("Playmaker")])
+        #expect(both.omissions.map(\.slot) == [.AM_C, .ST_C, .AM_C])
+
+        // The cause is worked out as for the ideal eleven: here, the manager's choice for his slot.
+        let chosen = try selector.select(request(players, overrides: [.AM_C: id("Cover Playmaker")]))
+        let displaced = try #require(chosen.omissions.first { $0.player == id("Playmaker") })
+        #expect(chosen.omissions.map(\.player) == [id("Star Playmaker"), id("Playmaker")])
+        #expect(displaced.slot == .AM_C)
+        #expect(displaced.cause == .displacedByOverride(by: [id("Cover Playmaker")]))
+        #expect(displaced.reason == "Left out: you chose Cover Playmaker for AM (C)")
+    }
+
+    @Test func withNobodyExcludedTheOmissionsAreAsBefore() throws {
+        // Nobody is excluded (a player out on loan is in neither eleven), so the available eleven is the ideal one:
+        // the Playmaker, second choice behind the held-back Star Playmaker, is not listed although he is held back too.
+        let star = natural("Star Playmaker", at: [.attackingMidCentral], all: 14)
+        let cover = natural("Cover Playmaker", at: [.attackingMidCentral], all: 8)
+        let away = Player.fixture(name: "Away Playmaker", all: 15, familiarity: [.attackingMidCentral: 20], loanedTo: "Wallingford")
+        let held = Adjustment(kind: .savedForLater, factor: 0.50, reason: "kept fresher for the cup final")
+        let lineup = try selector.select(adjusted(request(squad(star, cover, away)),
+                                                  every: [id("Star Playmaker"): [held], id("Playmaker"): [held]]))
+        #expect(pick(lineup, .AM_C)?.player == id("Cover Playmaker"))
+        #expect(lineup.omissions.map(\.player) == [id("Star Playmaker")])
+        #expect(lineup.omissions.first?.cause == .heldBack([.savedForLater]))
+
+        // A fit squad with no adjustments has no omissions.
+        #expect(try selector.select(request(squad(star, cover, away))).omissions.isEmpty)
+    }
+
+    @Test func aPlayerIsNeverListedTwice() throws {
+        // Ideal: Playmaker at AM_C, Versatile at ST_C. With the Playmaker injured, the available eleven moves Versatile
+        // to AM_C. Held back, he plays nowhere, and is listed once, for his slot in the ideal eleven.
+        let versatile = Player.fixture(name: "Versatile", all: 12, familiarity: [.striker: 20, .attackingMidCentral: 20])
+        var players = squad().filter { $0.name != "Striker" && $0.name != "Playmaker" }
+        players += [natural("Playmaker", at: [.attackingMidCentral], all: 14), versatile,
+                    natural("Backup Striker", at: [.striker], all: 10), natural("Cover Playmaker", at: [.attackingMidCentral], all: 8)]
+        try #require(pick(try selector.select(request(players)), .ST_C)?.player == id("Versatile"))
+        let injured = changing("Playmaker", in: players) { $0.isInjured = true }
+        try #require(pick(try selector.select(request(injured)), .AM_C)?.player == id("Versatile"))
+
+        let held = Adjustment(kind: .savedForLater, factor: 0.50, reason: "kept fresher for the cup final")
+        let lineup = try selector.select(adjusted(request(injured), every: [id("Versatile"): [held]]))
+        #expect(!picked(lineup, "Versatile"))
+        #expect(lineup.omissions.map(\.player) == [id("Playmaker"), id("Versatile")])
+        #expect(lineup.omissions.map(\.slot) == [.AM_C, .ST_C])
+        #expect(lineup.omissions.last?.cause == .heldBack([.savedForLater]))
     }
 
     @Test func anOverrideBeatsAnAdjustment() throws {

@@ -65,21 +65,23 @@ public struct Pick: Equatable, Sendable {
 
 public enum OmissionCause: Equatable, Sendable {
     case excluded(Exclusion)
-    /// `ideal` is his full-fitness value in his ideal slot, `today` that value times his fitness product.
+    /// `ideal` is his full-fitness value in his slot (`Omission.slot`), `today` that value times his fitness product.
     case lowerMatchDayValue(ideal: Double, today: Double, limiting: FactorKind)
-    /// He would start without the manager's overrides. `by` is the player chosen for his ideal
-    /// slot when there is one; otherwise every applied override's player, in slot order.
+    /// He would start without the manager's overrides. `by` is the player chosen for his slot
+    /// (`Omission.slot`) when there is one; otherwise every applied override's player, in slot order.
     case displacedByOverride(by: [PlayerID])
-    /// Adjustments that lower his value in his ideal slot (a factor below 1 or a cost above 0), by
+    /// Adjustments that lower his value in his slot (`Omission.slot`; a factor below 1 or a cost above 0), by
     /// distinct kind in `Adjustment.Kind` order.
     case heldBack([Adjustment.Kind])
 }
 
-/// A player in the ideal eleven who is not in the real one.
+/// A first-choice player who is not in the real eleven: one in the ideal eleven (full fitness, nobody excluded),
+/// or one in the best available eleven (the same, without the players excluded for this fixture) who is not
+/// in the ideal one.
 public struct Omission: Equatable, Sendable {
     public let player: PlayerID
     public let name: String
-    /// His slot in the ideal eleven.
+    /// His slot in the ideal eleven, or for a player not in it, his slot in the best available eleven.
     public let slot: SlotID
     public let cause: OmissionCause
     public let reason: String
@@ -99,7 +101,8 @@ public struct Lineup: Equatable, Sendable {
     /// In `SlotID` order.
     public let picks: [Pick]
     public let unfilled: [SlotID]
-    /// In the order of the ideal eleven's slots.
+    /// The ideal eleven's omissions in its slot order, then the best available eleven's in its slot order.
+    /// A player is listed at most once.
     public let omissions: [Omission]
     public let ignoredOverrides: [SlotID: OverrideProblem]
 
@@ -201,14 +204,23 @@ public struct LineupSelector: Sendable {
 
         // The ideal eleven: everyone not out on loan, at full fitness, with no exclusions, overrides or adjustments.
         let ideal = AssignmentSolver.maximise(values: ratings.map { row in row.map { $0?.value } })
+        // The best available eleven: the same, over the players not excluded for this fixture. An injured player
+        // can hold a slot in the ideal eleven; the first choice among those who can play is in this one.
+        let available = AssignmentSolver.maximise(values: ratings.map { row in
+            row.indices.map { i in exclusions[i] == nil ? row[i]?.value : nil }
+        })
         let inLineup = Set(placed.values)
         var omissions: [Omission] = []
-        for (s, choice) in ideal.enumerated() {
-            guard let i = choice, !inLineup.contains(i), let rating = ratings[s][i] else { continue }
-            let displacement: Displacement? = !startsWithoutOverrides.contains(i) ? nil
-                : overridden.contains(s) ? .inHisSlot(by: players[placed[s]!]) : .elsewhere(by: overridePlayers)
-            omissions.append(omission(players[i], assignments[s], rating: rating, fitness: fitness[i], adjustments: applied[s][i],
-                                      excluded: exclusions[i], displacement: displacement, projected: request.fitnessIsProjected))
+        var omitted = Set<Int>()
+        for eleven in [ideal, available] {
+            for (s, choice) in eleven.enumerated() {
+                guard let i = choice, !inLineup.contains(i), !omitted.contains(i), let rating = ratings[s][i] else { continue }
+                let displacement: Displacement? = !startsWithoutOverrides.contains(i) ? nil
+                    : overridden.contains(s) ? .inHisSlot(by: players[placed[s]!]) : .elsewhere(by: overridePlayers)
+                omissions.append(omission(players[i], assignments[s], rating: rating, fitness: fitness[i], adjustments: applied[s][i],
+                                          excluded: exclusions[i], displacement: displacement, projected: request.fitnessIsProjected))
+                omitted.insert(i)
+            }
         }
 
         return Lineup(picks: picks, unfilled: unfilled, omissions: omissions, ignoredOverrides: ignored)
@@ -277,16 +289,16 @@ public struct LineupSelector: Sendable {
                     warnings: warnings, reasons: reasons, adjustments: adjustments)
     }
 
-    /// How the manager's overrides cost an ideal player his place.
+    /// How the manager's overrides cost a first-choice player his place.
     private enum Displacement {
-        /// His ideal slot holds the player chosen for it.
+        /// His slot holds the player chosen for it.
         case inHisSlot(by: Player)
         /// The overrides, in slot order, moved others into his place.
         case elsewhere(by: [Player])
     }
 
     /// The cause, first that applies: an exclusion, a displacement by an override, adjustments that
-    /// lower his value in his ideal slot, his fitness on the day. With `projected`, fitness figures are called projected.
+    /// lower his value in `assignment`'s slot, his fitness on the day. With `projected`, fitness figures are called projected.
     private func omission(_ player: Player, _ assignment: SlotAssignment, rating: SlotRating, fitness: FitnessFactors,
                           adjustments: [Adjustment], excluded: Exclusion?, displacement: Displacement?, projected: Bool) -> Omission {
         let holding = adjustments.filter(\.holdsBack)

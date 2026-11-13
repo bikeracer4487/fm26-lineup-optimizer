@@ -172,6 +172,44 @@ import Testing
         }
     }
 
+    @Test func aRunOfStartsFollowsThePlayerInTheRealPlan() throws {
+        let (plan, fixtures, _) = try realPlan(savingPlayers: 1)
+        let ordered = fixtures.sorted { $0.date < $1.date }
+        let parameters = EngineParameters.fm27
+        var history = StartHistory(try JSONDecoder().decode([ConfirmedLineup].self, from: Fixtures.data("plans/sample-history.json")))
+        var checked = 0
+        for (fixture, planned) in zip(ordered, plan.fixtures) {
+            // A player whose run carries a factor at the slot of his last start carries at least that factor wherever he starts.
+            for pick in planned.lineup.picks where fixture.importance != .high {
+                let run = history.consecutiveStarts(of: pick.player, before: fixture.date,
+                                                    windowDays: parameters.consecutiveStartWindowDays.value)
+                guard let usual = history.recentSlots(of: pick.player, before: fixture.date, limit: 1).first,
+                      let step = parameters.consecutiveStartSteps.value[usual.position]?
+                          .filter({ $0.starts <= run }).max(by: { $0.starts < $1.starts }),
+                      step.factor < 1 else { continue }
+                checked += 1
+                let factor = pick.adjustments.first { $0.kind == .consecutiveStarts }?.factor
+                #expect(factor.map { $0 <= step.factor } == true,
+                        "\(pick.name) at \(pick.slot.rawValue) in \(fixture.id.raw), after \(run) starts, last at \(usual.rawValue)")
+            }
+            history = history.adding(ConfirmedLineup(
+                fixture: fixture.id, date: fixture.date,
+                starters: Dictionary(uniqueKeysWithValues: planned.lineup.picks.map { ($0.slot, $0.player) })))
+        }
+        #expect(checked > 0)
+    }
+
+    @Test func theRegularAttackingMidfielderIsPickedOrToldWhyInTheRealPlan() throws {
+        let (plan, fixtures, book) = try realPlan(savingPlayers: 1)
+        let day = try #require(Day(iso: "2026-11-24"))
+        let index = try #require(fixtures.sorted { $0.date < $1.date }.firstIndex { $0.date == day })
+        let lineup = plan.fixtures[index].lineup
+        let zac = try #require(book.allPlayers.first { $0.name == "Zac McEachran" }).id
+        let picked = lineup.picks.contains { $0.player == zac }
+        let omission = lineup.omissions.first { $0.player == zac }
+        #expect(picked || omission.map { $0.reason.hasPrefix("Left out: ") && $0.reason.count > "Left out: ".count } == true)
+    }
+
     @Test(arguments: ["carried-over", "fm27-engine-tests"])
     func thePostMatchSnapshotFieldsWhoItCan(_ profileID: String) throws {
         var book = SquadBook()
