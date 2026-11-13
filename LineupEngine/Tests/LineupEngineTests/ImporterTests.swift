@@ -91,24 +91,73 @@ private func quoted(_ value: String) -> String { "\"\(value)\"" }
         #expect(!r.warnings.contains(.duplicateName("Brayden Daniel")))
     }
 
-    @Test func twoPlayersWithOneNameBothSurvive() throws {
-        let age = try column("Age")
-        let r = try importU21 { rows in
-            var copy = rows[0]
-            copy[age] = quoted("18")
-            return rows + [copy]
+    // MARK: - Players who share a name in one paste
+
+    /// Brayden Daniel's row (PA 70, England, age 20) followed by copies with the given changes,
+    /// appended after the rest of the paste.
+    private func brayden(copies changes: [(pa: String?, nationality: String?, age: String?)]) throws -> ImportResult {
+        let pa = try column("PA"), nationality = try column("Nationalities"), age = try column("Age")
+        return try importU21 { rows in
+            rows + changes.map { change in
+                var copy = rows[0]
+                if let value = change.pa { copy[pa] = quoted(value) }
+                if let value = change.nationality { copy[nationality] = quoted(value) }
+                if let value = change.age { copy[age] = quoted(value) }
+                return copy
+            }
         }
-        #expect(r.players.count == 7)
-        let keys = r.players.filter { $0.name == "Brayden Daniel" }.map(\.id.key)
-        #expect(keys == ["brayden daniel#20", "brayden daniel#18"])
-        #expect(r.warnings.filter { $0 == .duplicateName("Brayden Daniel") }.count == 1)
     }
 
-    @Test func twoPlayersWithOneNameAndAgeAreSeparatedByRow() throws {
-        let r = try importU21 { $0 + [$0[0]] }
-        let keys = r.players.filter { $0.name == "Brayden Daniel" }.map(\.id.key)
-        #expect(keys == ["brayden daniel#20#1", "brayden daniel#20#7"])
+    private func braydenKeys(_ r: ImportResult) -> [String] {
+        r.players.filter { $0.name == "Brayden Daniel" }.map(\.id.key)
+    }
+
+    @Test func twoPlayersWithOneNameAreToldApartByPotentialAbility() throws {
+        let r = try brayden(copies: [(pa: "60", nationality: nil, age: "18")])
+        #expect(r.players.count == 7)
+        #expect(braydenKeys(r) == ["brayden daniel#70", "brayden daniel#60"])
         #expect(r.warnings == [.outOfContract("Aydin Ulas"), .duplicateName("Brayden Daniel")])
+    }
+
+    @Test func aDuplicatePairKeepsItsKeysWhenTheRowsSwapAndBothAgesRise() throws {
+        let pa = try column("PA"), age = try column("Age")
+        func pair(swapped: Bool, ageOffset: Int) throws -> [Int: String] {
+            let r = try importU21 { rows in
+                var first = rows[0], second = rows[0]
+                first[age] = quoted("\(20 + ageOffset)")
+                second[age] = quoted("\(18 + ageOffset)")
+                second[pa] = quoted("60")
+                let pair = swapped ? [second, first] : [first, second]
+                return pair + rows.dropFirst()
+            }
+            let daniels = r.players.filter { $0.name == "Brayden Daniel" }
+            #expect(daniels.count == 2)
+            return Dictionary(uniqueKeysWithValues: daniels.map { ($0.potentialAbility, $0.id.key) })
+        }
+        let baseline = try pair(swapped: false, ageOffset: 0)
+        #expect(baseline == [70: "brayden daniel#70", 60: "brayden daniel#60"])
+        #expect(try pair(swapped: true, ageOffset: 0) == baseline)
+        #expect(try pair(swapped: false, ageOffset: 1) == baseline)
+        #expect(try pair(swapped: true, ageOffset: 1) == baseline)
+    }
+
+    @Test func equalPotentialIsToldApartByFirstNationality() throws {
+        let r = try brayden(copies: [(pa: nil, nationality: "Wales,England", age: nil)])
+        #expect(braydenKeys(r) == ["brayden daniel#70#england", "brayden daniel#70#wales"])
+        #expect(r.warnings == [.outOfContract("Aydin Ulas"), .duplicateName("Brayden Daniel")])
+    }
+
+    @Test func playersWhoShareNamePotentialAndNationalityAreNumberedAndWarnedAbout() throws {
+        let r = try brayden(copies: [(pa: nil, nationality: nil, age: "18"), (pa: nil, nationality: nil, age: "25")])
+        #expect(braydenKeys(r) == ["brayden daniel#70#england#1", "brayden daniel#70#england#2", "brayden daniel#70#england#3"])
+        #expect(r.warnings == [.outOfContract("Aydin Ulas"), .duplicateName("Brayden Daniel"), .indistinguishable("Brayden Daniel")])
+    }
+
+    @Test func onlyTheStillCollidingRowsAreNumbered() throws {
+        // Three at PA 70: two English, one Welsh. Only the two English are numbered, in paste order.
+        let r = try brayden(copies: [(pa: nil, nationality: "Wales", age: nil), (pa: nil, nationality: nil, age: "18")])
+        #expect(braydenKeys(r) == ["brayden daniel#70#england#1", "brayden daniel#70#wales", "brayden daniel#70#england#2"])
+        #expect(r.warnings.contains(.indistinguishable("Brayden Daniel")))
     }
 
     @Test func blankConditionStopsTheImportAndNamesThePlayer() throws {

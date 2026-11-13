@@ -59,6 +59,100 @@ private func book(_ capture: String, squad: Squad) throws -> SquadBook {
         #expect(change.added == [PlayerID(key: "a")])
     }
 
+    // MARK: - One name in two squads
+
+    private func marsh(_ potential: Int, _ nationalities: [String] = ["England"], age: Int = 25) -> Player {
+        var player = Player.fixture(name: "Tyrone Marsh", age: age, potentialAbility: potential)
+        player.nationalities = nationalities
+        return player
+    }
+
+    private func keys(_ book: SquadBook, _ squad: Squad) -> [String] { (book.current[squad] ?? []).map(\.id.key) }
+
+    @Test func aU21PlayerWhoSharesAFirstTeamNameDoesNotDeleteHim() {
+        var book = SquadBook()
+        book.apply(result([marsh(120), .fixture(name: "B"), .fixture(name: "C")]), to: .firstTeam)
+        let change = book.apply(result([marsh(90, age: 18), .fixture(name: "D")]), to: .u21)
+        #expect(keys(book, .firstTeam) == ["tyrone marsh", "b", "c"])
+        #expect(keys(book, .u21) == ["tyrone marsh#90", "d"])
+        #expect(book.allPlayers.filter { $0.name == "Tyrone Marsh" }.map(\.potentialAbility) == [120, 90])
+        #expect(change.movedIn.isEmpty)
+        #expect(change.added == [PlayerID(key: "tyrone marsh#90"), PlayerID(key: "d")])
+        #expect(book.warnings(override: nil) == [.sharedName("Tyrone Marsh")])
+    }
+
+    @Test(arguments: [true, false])
+    func reimportingEitherSquadKeepsBothKeys(firstTeamFirst: Bool) {
+        let senior = result([marsh(120), .fixture(name: "B")])
+        let junior = result([marsh(90, age: 18), .fixture(name: "D")])
+        var book = SquadBook()
+        if firstTeamFirst {
+            book.apply(senior, to: .firstTeam); book.apply(junior, to: .u21)
+        } else {
+            book.apply(junior, to: .u21); book.apply(senior, to: .firstTeam)
+        }
+        let before = (keys(book, .firstTeam), keys(book, .u21))
+        #expect(before.0.contains(firstTeamFirst ? "tyrone marsh" : "tyrone marsh#120"))
+        #expect(before.1.contains(firstTeamFirst ? "tyrone marsh#90" : "tyrone marsh"))
+        for (squad, paste) in [(Squad.firstTeam, senior), (.u21, junior), (.firstTeam, senior), (.u21, junior)] {
+            let change = book.apply(paste, to: squad)
+            #expect(keys(book, .firstTeam) == before.0 && keys(book, .u21) == before.1)
+            #expect(change.added.isEmpty && change.removed.isEmpty && change.movedIn.isEmpty && change.changed.isEmpty)
+        }
+        // A birthday does not change either key.
+        book.apply(result([marsh(90, age: 19), .fixture(name: "D")]), to: .u21)
+        #expect(keys(book, .firstTeam) == before.0 && keys(book, .u21) == before.1)
+        #expect(book.warnings(override: nil) == [.sharedName("Tyrone Marsh")])
+    }
+
+    @Test func aPlayerWithEqualPotentialAndNationalitiesMoves() {
+        var book = SquadBook()
+        book.apply(result([marsh(90, ["England", "Jamaica"], age: 18), .fixture(name: "B")]), to: .u21)
+        let change = book.apply(result([marsh(90, ["England", "Jamaica"], age: 19)]), to: .firstTeam)
+        #expect(keys(book, .u21) == ["b"])
+        #expect(keys(book, .firstTeam) == ["tyrone marsh"])
+        #expect(change.movedIn == [PlayerID(key: "tyrone marsh")])
+        #expect(book.warnings(override: nil).isEmpty)
+    }
+
+    @Test func aDifferentSecondNationalityMeansADifferentPlayer() {
+        var book = SquadBook()
+        book.apply(result([marsh(90, ["England", "Jamaica"])]), to: .u21)
+        let change = book.apply(result([marsh(90, ["England"])]), to: .firstTeam)
+        #expect(keys(book, .u21) == ["tyrone marsh"])
+        #expect(keys(book, .firstTeam) == ["tyrone marsh#90"])
+        #expect(change.movedIn.isEmpty)
+    }
+
+    @Test func aReKeyTakenBySomeoneElseAddsTheFirstNationality() {
+        var book = SquadBook()
+        book.apply(result([marsh(120)]), to: .firstTeam)
+        book.apply(result([marsh(90, ["Wales"])]), to: .u18)
+        #expect(keys(book, .u18) == ["tyrone marsh#90"])
+        let change = book.apply(result([marsh(90, ["England"])]), to: .u21)
+        #expect(keys(book, .u21) == ["tyrone marsh#90#england"])
+        #expect(keys(book, .firstTeam) == ["tyrone marsh"] && keys(book, .u18) == ["tyrone marsh#90"])
+        #expect(change.movedIn.isEmpty)
+        #expect(book.warnings(override: nil) == [.sharedName("Tyrone Marsh")])
+    }
+
+    @Test func aReKeyHeldByTheSamePlayerElsewhereIsAMove() {
+        var book = SquadBook()
+        book.apply(result([marsh(120)]), to: .firstTeam)
+        book.apply(result([marsh(90, ["Wales"]), .fixture(name: "E")]), to: .u18)
+        let change = book.apply(result([marsh(90, ["Wales"])]), to: .u21)
+        #expect(keys(book, .u21) == ["tyrone marsh#90"])
+        #expect(keys(book, .u18) == ["e"])
+        #expect(change.movedIn == [PlayerID(key: "tyrone marsh#90")])
+    }
+
+    @Test func oneNameWithOneKeyRaisesNoSharedNameWarning() {
+        var book = SquadBook()
+        book.apply(result([marsh(120), .fixture(name: "B")]), to: .firstTeam)
+        book.apply(result([.fixture(name: "C")]), to: .u21)
+        #expect(book.warnings(override: nil).isEmpty)
+    }
+
     @Test func changedListsPlayersWhoseFieldsDiffer() {
         var book = SquadBook()
         book.apply(result([.fixture(name: "A", condition: 1.0), .fixture(name: "B")]), to: .firstTeam)

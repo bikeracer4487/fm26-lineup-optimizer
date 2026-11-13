@@ -22,6 +22,8 @@ public enum LoanStatus: Equatable, Sendable {
 public enum SquadWarning: Equatable, Sendable {
     /// Loans were pasted but the owner's club cannot be told from the squads.
     case ownClubUnknown
+    /// More than one player in the book has this name, each under his own key.
+    case sharedName(String)
 }
 
 /// What one import changed in its squad, each list in the order of the new import
@@ -46,16 +48,28 @@ public struct SquadBook: Equatable, Codable, Sendable {
 
     public init() {}
 
+    /// Replaces the squad with the import. An incoming key already held in another squad is the
+    /// same person, who moves here, only when potential ability and nationalities are equal;
+    /// otherwise the player elsewhere keeps his key and squad and the incoming player is re-keyed
+    /// (see `identity(of:elsewhere:used:)`), and `warnings(override:)` reports the shared name.
     @discardableResult
     public mutating func apply(_ result: ImportResult, to squad: Squad) -> SquadChange {
+        let elsewhere = Dictionary(Squad.allCases.filter { $0 != squad }.flatMap { current[$0] ?? [] }.map { ($0.id, $0) },
+                                   uniquingKeysWith: { first, _ in first })
         var incoming = result.players
-        for i in incoming.indices { incoming[i].squad = squad }
+        var used = Set(incoming.map(\.id))
+        var movedIn: [PlayerID] = []
+        for i in incoming.indices {
+            incoming[i].squad = squad
+            let (id, moves) = Self.identity(of: incoming[i], elsewhere: elsewhere, used: used)
+            used.insert(id)
+            incoming[i].id = id
+            if moves { movedIn.append(id) }
+        }
+
         let old = current[squad] ?? []
         let oldByID = Dictionary(old.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let newIDs = Set(incoming.map(\.id))
-
-        let inOtherSquad = Set(Squad.allCases.filter { $0 != squad }.flatMap { current[$0] ?? [] }.map(\.id))
-        let movedIn = incoming.map(\.id).filter { inOtherSquad.contains($0) }
         let change = SquadChange(
             added: incoming.map(\.id).filter { oldByID[$0] == nil },
             removed: old.map(\.id).filter { !newIDs.contains($0) },
@@ -63,12 +77,41 @@ public struct SquadBook: Equatable, Codable, Sendable {
             changed: incoming.filter { player in oldByID[player.id].map { $0 != player } ?? false }.map(\.id)
         )
 
+        let moved = Set(movedIn)
         for other in Squad.allCases where other != squad {
-            current[other]?.removeAll { newIDs.contains($0.id) }
+            current[other]?.removeAll { moved.contains($0.id) }
         }
         if current[squad] != nil { previous[squad] = old }
         current[squad] = incoming
         return change
+    }
+
+    /// The incoming player's key, and whether he moves from another squad. Keys are tried in
+    /// order: his own, `#<potential ability>`, `#<first nationality>`, then `#1`, `#2` and so on.
+    /// The first key held elsewhere by the same person (a move), or held by no one, wins; a key
+    /// held elsewhere by someone else, or already used by another player in this import, is skipped.
+    private static func identity(of player: Player, elsewhere: [PlayerID: Player], used: Set<PlayerID>) -> (PlayerID, moves: Bool) {
+        func attempt(_ key: String, isOwn: Bool) -> (PlayerID, moves: Bool)? {
+            let id = PlayerID(key: key)
+            if let holder = elsewhere[id] { return isSamePerson(holder, player) ? (id, true) : nil }
+            return isOwn || !used.contains(id) ? (id, false) : nil
+        }
+        if let found = attempt(player.id.key, isOwn: true) { return found }
+        let potential = PlayerID.withPotential(player.id.key, of: player)
+        let nationality = PlayerID.withNationality(potential, of: player)
+        for key in [potential, nationality] {
+            if let found = attempt(key, isOwn: false) { return found }
+        }
+        var position = 1
+        while true {
+            if let found = attempt("\(nationality)#\(position)", isOwn: false) { return found }
+            position += 1
+        }
+    }
+
+    /// Two players with one key are one person when neither potential ability nor nationalities differ.
+    private static func isSamePerson(_ a: Player, _ b: Player) -> Bool {
+        a.potentialAbility == b.potentialAbility && a.nationalities == b.nationalities
     }
 
     /// First team, then U21, then U18, each in import order.
@@ -92,7 +135,21 @@ public struct SquadBook: Equatable, Codable, Sendable {
         LoanStatus.of(player, ownClub: ownClub(override: override))
     }
 
+    /// `ownClubUnknown` first, then one `sharedName` for each name held under more than one key,
+    /// in `allPlayers` order and spelt as first seen there.
     public func warnings(override: String?) -> [SquadWarning] {
-        ownClub(override: override) == nil && allPlayers.contains { $0.loanedTo != nil } ? [.ownClubUnknown] : []
+        var found: [SquadWarning] = []
+        if ownClub(override: override) == nil && allPlayers.contains(where: { $0.loanedTo != nil }) {
+            found.append(.ownClubUnknown)
+        }
+        var keysByName: [String: Set<PlayerID>] = [:]
+        var names: [(normalised: String, spelling: String)] = []
+        for player in allPlayers {
+            let normalised = PlayerID.normalise(player.name)
+            if keysByName[normalised] == nil { names.append((normalised, player.name)) }
+            keysByName[normalised, default: []].insert(player.id)
+        }
+        found += names.filter { keysByName[$0.normalised]!.count > 1 }.map { .sharedName($0.spelling) }
+        return found
     }
 }

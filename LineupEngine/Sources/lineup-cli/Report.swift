@@ -3,7 +3,8 @@ import LineupEngine
 
 /// Plain-words text for the command-line tool.
 enum Report {
-    static func render(imports: [(squad: Squad, result: ImportResult)], book: SquadBook, ownClub: String?, override: String?,
+    static func render(imports: [(squad: Squad, result: ImportResult)], moves: [(name: String, from: Squad, to: Squad)],
+                       book: SquadBook, ownClub: String?, override: String?,
                        tactic: Tactic, importance: Importance, lineup: Lineup) -> String {
         var out: [String] = []
         let players = book.allPlayers
@@ -17,6 +18,7 @@ enum Report {
         for (squad, result) in imports {
             for warning in result.warnings { out.append("Warning (\(squadName(squad))): \(describe(warning))") }
         }
+        for move in moves { out.append("\(move.name) moved from \(squadName(move.from)) to \(squadName(move.to))") }
         for warning in book.warnings(override: override) { out.append("Warning: \(describe(warning))") }
         out.append("Own club: \(ownClub ?? "unknown")")
         let loans = players.compactMap { player -> String? in
@@ -60,7 +62,11 @@ enum Report {
 
     static func describe(_ warning: ImportWarning) -> String {
         switch warning {
-        case .duplicateName(let name): "more than one player is called \(name); they were told apart by age"
+        case .duplicateName(let name):
+            "more than one player is called \(name); they were told apart by potential ability, then nationality"
+        case .indistinguishable(let name):
+            "players called \(name) also share potential ability and nationality, so they were told apart by their order "
+                + "in the paste; re-sorting the grid in FMRTE can swap them"
         case .outOfContract(let name): "\(name) is out of contract"
         }
     }
@@ -68,6 +74,8 @@ enum Report {
     static func describe(_ warning: SquadWarning) -> String {
         switch warning {
         case .ownClubUnknown: "Some players are on loan but your club cannot be told from the pasted squads. Pass --own-club <name>."
+        case .sharedName(let name):
+            "More than one player is called \(name); they are kept as separate players, told apart by potential ability, then nationality."
         }
     }
 

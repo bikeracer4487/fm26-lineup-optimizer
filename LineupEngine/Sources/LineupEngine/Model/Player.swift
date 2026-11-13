@@ -1,7 +1,8 @@
 import Foundation
 
-/// A player's identity across imports: his name, normalised, with an age or row suffix when
-/// two players in one paste share a name.
+/// A player's identity across imports: his name, normalised, with a potential ability, then a
+/// nationality, then (as a last resort) a row suffix when two players share a name. See
+/// `Importer` for one paste and `SquadBook.apply` for a name already used in another squad.
 public struct PlayerID: Hashable, Codable, Sendable {
     public let key: String
 

@@ -16,7 +16,12 @@ public enum ImportError: Error, Equatable {
 }
 
 public enum ImportWarning: Equatable, Sendable {
+    /// More than one player in the paste has this name; they were given keys by potential
+    /// ability, then first nationality.
     case duplicateName(String)
+    /// Players with this name also share potential ability and first nationality, so their keys
+    /// end in their order in the paste, which re-sorting the grid can change.
+    case indistinguishable(String)
     case outOfContract(String)
 }
 
@@ -165,21 +170,45 @@ public enum Importer {
         return ImportResult(grid: layout.key, players: players, warnings: warnings)
     }
 
-    /// Gives players who share a normalised name distinct keys: `<name>#<age>`, and
-    /// `<name>#<age>#<row>` where age does not separate them. One warning per name.
+    /// Gives players who share a normalised name distinct keys that neither a birthday nor a
+    /// re-sorted grid changes: `<name>#<potential ability>`; then, among those still alike,
+    /// `#<first nationality>`; then, as a last resort, `#<position among the still-alike rows>`,
+    /// which warns because the grid's order decides it. One `duplicateName` per name.
     private static func disambiguateDuplicates(_ players: inout [Player]) -> [ImportWarning] {
         var warnings: [ImportWarning] = []
         let groups = Dictionary(grouping: players.indices, by: { players[$0].id.key })
         for key in groups.keys.sorted() {
             let members = groups[key]!
             guard members.count > 1 else { continue }
-            warnings.append(.duplicateName(players[members[0]].name))
-            let byAge = Dictionary(grouping: members, by: { players[$0].age })
-            for i in members {
-                let withAge = "\(key)#\(players[i].age)"
-                players[i].id = PlayerID(key: byAge[players[i].age]!.count > 1 ? "\(withAge)#\(i + 1)" : withAge)
+            let name = players[members[0]].name
+            warnings.append(.duplicateName(name))
+            var keys = Dictionary(uniqueKeysWithValues: members.map { ($0, PlayerID.withPotential(key, of: players[$0])) })
+            for alike in collisions(keys) {
+                for i in alike { keys[i] = PlayerID.withNationality(keys[i]!, of: players[i]) }
             }
+            let stillAlike = collisions(keys)
+            for alike in stillAlike {
+                for (position, i) in alike.enumerated() { keys[i] = "\(keys[i]!)#\(position + 1)" }
+            }
+            if !stillAlike.isEmpty { warnings.append(.indistinguishable(name)) }
+            for i in members { players[i].id = PlayerID(key: keys[i]!) }
         }
         return warnings
+    }
+
+    /// The groups of row indices, each in paste order, that share a key.
+    private static func collisions(_ keys: [Int: String]) -> [[Int]] {
+        Dictionary(grouping: keys.keys.sorted(), by: { keys[$0]! }).values.filter { $0.count > 1 }
+    }
+}
+
+extension PlayerID {
+    /// `key#<potential ability>`: what first tells apart two players who share a name.
+    static func withPotential(_ key: String, of player: Player) -> String { "\(key)#\(player.potentialAbility)" }
+
+    /// `key#<first nationality, normalised>`; `key` unchanged when he has no nationality.
+    static func withNationality(_ key: String, of player: Player) -> String {
+        guard let first = player.nationalities.first.map(PlayerID.normalise), !first.isEmpty else { return key }
+        return "\(key)#\(first)"
     }
 }

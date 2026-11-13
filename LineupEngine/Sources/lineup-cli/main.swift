@@ -77,9 +77,15 @@ var output = ""
 do {
     var book = SquadBook()
     var imports: [(squad: Squad, result: ImportResult)] = []
+    var moves: [(name: String, from: Squad, to: Squad)] = []
     for paste in pastes {
         let result = try Importer.importPlayers(clipboard: paste.text, fmrteConfig: grids, squad: paste.squad)
-        book.apply(result, to: paste.squad)
+        let squadBefore = Dictionary(book.allPlayers.map { ($0.id, $0.squad) }, uniquingKeysWith: { first, _ in first })
+        let change = book.apply(result, to: paste.squad)
+        for id in change.movedIn {
+            let name = book.current[paste.squad]?.first { $0.id == id }?.name ?? id.key
+            if let from = squadBefore[id] { moves.append((name, from, paste.squad)) }
+        }
         imports.append((paste.squad, result))
     }
     let tactic: Tactic
@@ -91,7 +97,7 @@ do {
     let lineup = try selector.select(.init(tactic: tactic, players: book.allPlayers, ownClub: ownClub,
                                            importance: options.importance, isNextFixture: true,
                                            overrides: [:], rejected: []))
-    output = Report.render(imports: imports, book: book, ownClub: ownClub, override: options.ownClub,
+    output = Report.render(imports: imports, moves: moves, book: book, ownClub: ownClub, override: options.ownClub,
                            tactic: tactic, importance: options.importance, lineup: lineup)
 } catch {
     fail(ErrorDescriptions.describe(error))
