@@ -116,6 +116,32 @@ public enum ErrorDescriptions {
         }
     }
 
+    /// Why the player cannot play, as a phrase: "injured", "condition 78% is below the 85% floor". With `projected`, a
+    /// fitness figure is called projected, for a fixture whose fitness is projected from the import rather than read
+    /// from the game.
+    public static func describe(_ exclusion: Exclusion, parameters: EngineParameters, projected: Bool = false) -> String {
+        let figure = projected ? "projected " : ""
+        return switch exclusion {
+        case .injured: "injured"
+        case .outOnLoan(let club): "on loan at \(club)"
+        case .banned: "banned"
+        case .belowConditionFloor(let condition):
+            "\(figure)condition \(Display.percent(condition)) is below the \(Display.percent(parameters.conditionFloor.value)) floor"
+        case .jaded(let jadedness): "\(figure)jadedness \(jadedness) is above \(parameters.jadedThreshold.value)"
+        case .rejected: "rejected for this fixture"
+        }
+    }
+
+    /// Why the manager's choice for a slot was not used, as a phrase that follows the player's name and slot.
+    public static func describe(_ problem: OverrideProblem, parameters: EngineParameters, projected: Bool = false) -> String {
+        switch problem {
+        case .notInSquad: "who is not in the imported squads"
+        case .notAllowed(let exclusion): describe(exclusion, parameters: parameters, projected: projected) + ", which cannot be overruled"
+        case .usedTwice: "because he is fixed in another slot too"
+        case .slotNotInTactic: "because the tactic has no such slot"
+        }
+    }
+
     public static func describe(_ error: DecodingError) -> String {
         func path(_ codingPath: [CodingKey], adding key: CodingKey? = nil) -> String {
             let parts = (codingPath + (key.map { [$0] } ?? [])).map(\.stringValue)

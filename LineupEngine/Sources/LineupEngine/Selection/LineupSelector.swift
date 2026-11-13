@@ -484,16 +484,7 @@ public struct LineupSelector: Sendable {
 
     /// The broken rule, in plain words, as it follows "overriding: ". With `projected`, a fitness figure is called projected.
     private func rule(_ exclusion: Exclusion, projected: Bool) -> String {
-        let figure = projected ? "projected " : ""
-        return switch exclusion {
-        case .injured: "injured"
-        case .outOnLoan(let club): "on loan at \(club)"
-        case .banned: "banned"
-        case .belowConditionFloor(let condition):
-            "\(figure)condition \(percent(condition)) is below the \(percent(parameters.conditionFloor.value)) floor"
-        case .jaded(let jadedness): "\(figure)jadedness \(jadedness) is above \(parameters.jadedThreshold.value)"
-        case .rejected: "rejected for this fixture"
-        }
+        ErrorDescriptions.describe(exclusion, parameters: parameters, projected: projected)
     }
 
     /// The exclusion as it follows "Left out: ". A projected condition leads with the figure, so "projected" sits beside it.

@@ -215,11 +215,12 @@ do {
                     overrides: $0.overrides ?? [:], rejected: Set($0.rejected ?? []))
         }
         let profile = profiles[0]
-        let plan = try Planner(catalog: catalog, profile: profile, parameters: .fm27).plan(PlanRequest(
+        let parameters = EngineParameters.fm27
+        let plan = try Planner(catalog: catalog, profile: profile, parameters: parameters).plan(PlanRequest(
             fixtures: fixtures, players: book.allPlayers, ownClub: ownClub, asOf: options.asOf!, confirmed: history,
             retraining: [], settings: options.settings))
         output = Report.render(header, plan: plan, fixtures: fixtures, history: history, asOf: options.asOf!,
-                               profile: profile, settings: options.settings)
+                               profile: profile, parameters: parameters, settings: options.settings)
     }
 } catch {
     // The library describes FMRTE's configuration without knowing where it was read from.

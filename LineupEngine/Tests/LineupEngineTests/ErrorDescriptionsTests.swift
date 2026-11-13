@@ -184,6 +184,53 @@ import Testing
         expectPlain(text)
     }
 
+    @Test func eachExclusionIsAPhraseNamingItsFigures() {
+        let p = EngineParameters.fm27
+        #expect(ErrorDescriptions.describe(Exclusion.injured, parameters: p) == "injured")
+        #expect(ErrorDescriptions.describe(Exclusion.outOnLoan(to: "Banbury United"), parameters: p) == "on loan at Banbury United")
+        #expect(ErrorDescriptions.describe(Exclusion.banned, parameters: p) == "banned")
+        #expect(ErrorDescriptions.describe(Exclusion.belowConditionFloor(0.78), parameters: p) == "condition 78% is below the 85% floor")
+        #expect(ErrorDescriptions.describe(Exclusion.jaded(450), parameters: p) == "jadedness 450 is above 400")
+        #expect(ErrorDescriptions.describe(Exclusion.rejected, parameters: p) == "rejected for this fixture")
+    }
+
+    @Test func aProjectedFitnessExclusionSaysProjectedAndTheOthersDoNot() {
+        let p = EngineParameters.fm27
+        #expect(ErrorDescriptions.describe(Exclusion.belowConditionFloor(0.78), parameters: p, projected: true)
+            == "projected condition 78% is below the 85% floor")
+        #expect(ErrorDescriptions.describe(Exclusion.jaded(450), parameters: p, projected: true) == "projected jadedness 450 is above 400")
+        #expect(ErrorDescriptions.describe(Exclusion.injured, parameters: p, projected: true) == "injured")
+        #expect(ErrorDescriptions.describe(Exclusion.outOnLoan(to: "Banbury United"), parameters: p, projected: true)
+            == "on loan at Banbury United")
+        #expect(ErrorDescriptions.describe(Exclusion.banned, parameters: p, projected: true) == "banned")
+        #expect(ErrorDescriptions.describe(Exclusion.rejected, parameters: p, projected: true) == "rejected for this fixture")
+    }
+
+    @Test func theConditionFloorIsReadFromTheParametersAndRoundedDown() {
+        var p = EngineParameters.fm27
+        p.conditionFloor = Parameter(0.9, .derived, source: "test")
+        #expect(ErrorDescriptions.describe(Exclusion.belowConditionFloor(0.846), parameters: p) == "condition 84% is below the 90% floor")
+    }
+
+    @Test func eachOverrideProblemSaysWhyTheChoiceWasNotUsed() {
+        let p = EngineParameters.fm27
+        #expect(ErrorDescriptions.describe(OverrideProblem.notInSquad, parameters: p) == "who is not in the imported squads")
+        #expect(ErrorDescriptions.describe(OverrideProblem.notAllowed(.injured), parameters: p) == "injured, which cannot be overruled")
+        #expect(ErrorDescriptions.describe(OverrideProblem.notAllowed(.outOnLoan(to: "Banbury United")), parameters: p)
+            == "on loan at Banbury United, which cannot be overruled")
+        #expect(ErrorDescriptions.describe(OverrideProblem.usedTwice, parameters: p) == "because he is fixed in another slot too")
+        #expect(ErrorDescriptions.describe(OverrideProblem.slotNotInTactic, parameters: p) == "because the tactic has no such slot")
+    }
+
+    @Test func anOverrideProblemCarriesTheProjectedForm() {
+        let p = EngineParameters.fm27
+        #expect(ErrorDescriptions.describe(OverrideProblem.notAllowed(.belowConditionFloor(0.78)), parameters: p, projected: true)
+            == "projected condition 78% is below the 85% floor, which cannot be overruled")
+        #expect(ErrorDescriptions.describe(OverrideProblem.notAllowed(.belowConditionFloor(0.78)), parameters: p)
+            == "condition 78% is below the 85% floor, which cannot be overruled")
+        #expect(ErrorDescriptions.describe(OverrideProblem.notInSquad, parameters: p, projected: true) == "who is not in the imported squads")
+    }
+
     @Test func foreignErrorsGetAGenericLineNotADump() {
         struct Foreign: Error {}
         #expect(ErrorDescriptions.describe(Foreign()).hasPrefix("Unexpected error:"))

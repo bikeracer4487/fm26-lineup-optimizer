@@ -31,7 +31,7 @@ enum Report {
     /// The import summary and the plan's settings, then each planned fixture's lineup under a heading,
     /// then a table of who starts where.
     static func render(_ header: Header, plan: Plan, fixtures: [Fixture], history: [ConfirmedLineup], asOf: Day,
-                       profile: RatingProfile, settings: PlanSettings) -> String {
+                       profile: RatingProfile, parameters: EngineParameters, settings: PlanSettings) -> String {
         var out = ["Tactic: \(header.tactic.name)   Plan as of \(asOf.iso): \(plan.fixtures.count) of \(fixtures.count) fixtures", ""]
         out += summary(header)
         out.append("Rating profile: \(profile.name)")
@@ -50,14 +50,17 @@ enum Report {
 
         let byID = Dictionary(fixtures.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let planned = plan.fixtures.map { (fixture: byID[$0.fixture]!, lineup: $0.lineup) }
-        for (fixture, lineup) in planned {
+        for (index, (fixture, lineup)) in planned.enumerated() {
+            // As the planner decides it: fitness is projected after a match in the plan or a day since the import.
+            let projected = index > 0 || asOf < fixture.date
             out.append("")
             out.append("=== \(fixture.date.iso)  v \(fixture.opponent)  (\(fixture.importance.rawValue)) ===")
             out += render(lineup, book: header.book, tactic: fixture.tactic)
             for slot in SlotID.allCases {
                 guard let problem = lineup.ignoredOverrides[slot] else { continue }
                 let who = fixture.overrides[slot].map { names[$0] ?? $0.key } ?? "?"
-                out.append("Override ignored: \(who) at \(slot.rawValue), \(describe(problem))")
+                out.append("Override ignored: \(who) at \(slot.rawValue), "
+                           + ErrorDescriptions.describe(problem, parameters: parameters, projected: projected))
             }
         }
         out.append("")
@@ -170,27 +173,6 @@ enum Report {
         switch warning {
         case .ownClubUnknown: ErrorDescriptions.describe(warning) + " Pass --own-club <name>."
         case .sharedName: ErrorDescriptions.describe(warning)
-        }
-    }
-
-    static func describe(_ problem: OverrideProblem) -> String {
-        switch problem {
-        case .notInSquad: "who is not in the imported squads"
-        case .notAllowed(let exclusion): "because he \(describe(exclusion)), which the manager cannot overrule"
-        case .usedTwice: "because he is fixed in another slot too"
-        case .slotNotInTactic: "because the tactic has no such slot"
-        }
-    }
-
-    static func describe(_ exclusion: Exclusion) -> String {
-        switch exclusion {
-        case .injured: "is injured"
-        case .outOnLoan(let club): "is out on loan at \(club)"
-        case .banned: "is banned"
-        // Rounded down as the engine does, so 84.6% never reads as the 85% floor.
-        case .belowConditionFloor(let condition): "is at \(Display.percent(condition)) condition"
-        case .jaded(let jadedness): "is jaded (\(jadedness))"
-        case .rejected: "is ruled out of this fixture"
         }
     }
 
