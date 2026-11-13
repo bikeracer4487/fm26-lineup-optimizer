@@ -2,15 +2,15 @@
 
 ## What this project is
 
-The FM26 lineup optimizer is being rebuilt as a native Mac app for Football Manager 27. The Python and Electron code in this repository is the old version. It is kept as reference while the new one is built, and it is removed at the end.
+The FM26 lineup optimizer is being rebuilt as a native Mac app for Football Manager 27: SwiftUI, with the selection engine rewritten in Swift, for one save on this Mac. The Python and Electron code in this repository is the old version. It is kept as reference while the new one is built, and it is removed at the end.
 
-- Spec: `docs/superpowers/specs/2026-11-12-fm27-native-app-design.md`
-- Current plan (engine foundation): `docs/superpowers/plans/2026-11-12-fm27-engine-foundation.md`
-- FM27 research: `docs/Research/fm27-*.md` and `docs/Research/fm27_roles.json`
+- Design: `docs/superpowers/specs/2026-11-12-fm27-native-app-design.md`
+- Engine plan, complete (Tasks 1 to 18): `docs/superpowers/plans/2026-11-12-fm27-engine-foundation.md`. Its last two sections list the plans still to be written (Planner next, then Advisors, the visual design pass, the App, Clean-up) and the notes and known small faults carried into them.
+- Research: `docs/Research/fm27-*.md` and `docs/Research/fm27_roles.json` are FM27; the other files in `docs/Research/` are FM26. Prefer FM27 evidence. Where it is silent, use the FM26 research and label it as carried over (the owner's rule: a lot carries over between game years). An attribute FM27 tested and found to have no effect is a finding, not a gap.
 
 ## New code: `LineupEngine/`
 
-A Swift package (Swift 6, macOS 26, Swift Testing). It holds the domain model, the FMRTE importer, the rating core and lineup selection; the advisors (rest, training, player removal) are not built yet. It has no UI and no file-system dependencies beyond what it is handed. No third-party run-time dependencies.
+A Swift package (Swift 6, macOS 26, Swift Testing, Foundation only). Built so far: the domain model, the FMRTE clipboard importer, the squad book, the FM27 role catalogue and tactics, the rating core, fitness and risk rules, an exact assignment solver, and lineup selection with a reason for every pick and omission. Not built yet: the planner (looking ahead across fixtures), the advisors (First and Second XI, Depth, Rest, Training, Player Removal), persistence and the app. The engine has no UI and reads no files itself; it is handed data.
 
 Test it with:
 
@@ -18,20 +18,40 @@ Test it with:
 
 Run one suite or test with `swift test --filter <name>`. Test output must be clean: no build warnings.
 
-- Ratings come from a `RatingProfile`, which `RatingEngine` and `LineupSelector` take explicitly; there is no default yet. "Carried over from FM26" is the old Python's weights; "FM27 engine tests" is built from `Resources/rating_profile_fm27.json` per `docs/Research/fm27-attribute-weights-and-role-thresholds.md`. Role thresholds apply only in the `.fm26Reference` configuration, which proves the port.
-- `lineup-cli`, in the package, reads a grids snapshot, a tactic and squad pastes, and prints the explained lineup under both profiles with a comparison (`--profile` picks one; usage at the top of `LineupEngine/Sources/lineup-cli/main.swift`).
-- `tools/capture_fmrte_paste.sh` saves the clipboard and FMRTE's grid layouts as test fixtures (how each was taken: `LineupEngine/Tests/LineupEngineTests/Fixtures/captures/README.md`); `tools/export_rating_reference.py` rewrites the rating tables and Python reference data (tracked files).
-- A player's identity comes from FMRTE's `Id` column when the pasted grid has it; without it, players are identified by name, with a warning.
+Try it on the captured squad (prints the lineup with reasons; add `--profile both` to compare rating profiles):
+
+    cd LineupEngine && swift run -q lineup-cli select \
+      --grids Tests/LineupEngineTests/Fixtures/captures/first-team.grids.json \
+      --tactic Tests/LineupEngineTests/Fixtures/tactics/sample-4231.json \
+      --first-team Tests/LineupEngineTests/Fixtures/captures/first-team.tsv \
+      --u21 Tests/LineupEngineTests/Fixtures/captures/u21.tsv --own-club "Oxford City"
+
+Usage is at the top of `LineupEngine/Sources/lineup-cli/main.swift`.
+
+How the engine works, where it is not obvious:
+
+- **Import.** FMRTE copies rows with no header. Column meaning comes from FMRTE's own `config.json` (`ColumnsSettings`), and the importer picks the grid whose column types fit the paste. Squads are imported one at a time (first team, U21, U18).
+- **Identity.** A player's key is FMRTE's `Id` column when the pasted grid has it (`fmrte:<id>`); without it, players are identified by name, with a warning. `SquadBook` keeps keys stable across imports and detects moves between squads.
+- **Rating profiles.** Ratings come from a `RatingProfile`, which `RatingEngine` and `LineupSelector` take explicitly. `RatingProfile.standard()` is "FM27 engine tests", the owner's chosen default: outfield weights and attribute curves from FM27 match-engine tests (`Resources/rating_profile_fm27.json`), with goalkeeper weights and the way weights differ between positions taken from the FM26 tables (`Resources/rating_tables.json`). "Carried over from FM26" is the old Python's weights, kept for comparison. Design section 8.4 has the formulas.
+- **The port check.** The `.fm26Reference` configuration reproduces the old Python (role thresholds, current-ability factor, rounding) and is tested against 594 cases exported from it. Nothing else uses it.
+- **Selection.** Rating times condition, sharpness and jadedness factors, solved exactly as an assignment problem, with manual overrides and risk rules that depend on match importance.
+
+Tools:
+
+- `tools/capture_fmrte_paste.sh <name>` saves the clipboard and FMRTE's player-grid column layouts as a test fixture. How each capture was taken: `LineupEngine/Tests/LineupEngineTests/Fixtures/captures/README.md`.
+- `tools/export_rating_reference.py` regenerates `rating_tables.json` and the Python reference cases from the old code. Both outputs are tracked; do not re-run it without a reason.
 
 Rules for the engine:
 
 - No silent defaults. A missing column, unknown role, or blank or out-of-range value is an error that names the player and the column.
-- Every tunable number for a rating or selection rule lives in `EngineParameters` or a `RatingProfile`, with an evidence label and a source.
+- Every tunable number for a rating or selection rule lives in `EngineParameters` or a `RatingProfile`, with an evidence label (FM27 measured, FM27 official, FM27 observation, carried over from FM26, derived) and a source.
 - Every rule gets a test where it changes an outcome and a test where it does not.
+- The same inputs always give the same lineup: sums run in a fixed order.
+- Errors and warnings become plain-words sentences in `Reporting/ErrorDescriptions.swift`; every `switch` over them is exhaustive, with no `default`.
 
 ## Old code: reference only
 
-Everything in Python (`*.py`, `fm26_parser/`, `tests/`), `ui/` and the `.bat` files is reference only. Read it; do not modify it. It is deleted at the end of the rebuild. The branch `origin/customizable-tactics` is the reference version; `main` has no commits it lacks.
+Everything in Python (`*.py`, `fm26_parser/`, `tests/`), `ui/`, the `.bat` files and the root-level data and notes files is reference only. Read it; do not modify it. It is deleted at the end of the rebuild. `main` and `origin/customizable-tactics` are the same commit, the last version of the old app.
 
 ## What the old Python runs, and what it never connected
 
@@ -52,8 +72,8 @@ The old 155 tests exercise the unconnected modules and parameter helpers. Nothin
 
 ## Data and privacy
 
-This repository is public. Player data and app state never go in it, except test fixtures under `LineupEngine/Tests/LineupEngineTests/Fixtures/`. Never copy anything from `~/Library/Application Support` into it.
+This repository is public. Player data and app state never go in it, except test fixtures under `LineupEngine/Tests/LineupEngineTests/Fixtures/`. The only thing taken from `~/Library/Application Support` is FMRTE's player-grid column layouts, which the capture tool saves beside each fixture; copy nothing else from there.
 
 ## Git
 
-Work on branch `fm27-native`. Say why in commit messages.
+Work on branch `fm27-native`. Say why in commit messages. Leave `main` as it is and do not merge or open a pull request for the rewrite unless asked: the owner may move it to its own repository.

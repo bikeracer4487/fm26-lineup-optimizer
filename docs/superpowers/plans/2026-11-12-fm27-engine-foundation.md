@@ -1450,7 +1450,8 @@ For plan 2 (Planner):
 
 - `LineupSelector` needs an extension point for per-player, per-slot adjustments that carry their own reason line (development, retraining, saving players), and should reuse the rating matrix across a plan's fixtures.
 - `Tactic` needs a stable identifier before it is persisted.
-- The default rating profile is the owner's choice; until it is made, every caller names a profile.
+- The default rating profile is `RatingProfile.standard()` (FM27 engine tests, the owner's choice); callers still pass a profile explicitly.
+- Where FM27 research is silent, use the FM26 research in `docs/Research/`, labelled as carried over (spec 8.4).
 - `FitnessModel.problems` should cover `familiaritySteps` once parameters become editable.
 
 For plan 4 (App):
@@ -1467,4 +1468,6 @@ Small faults left as they are:
 - `PlayerID.fmrteID` accepts "fmrte:+5" and "fmrte:007"; a player whose name is literally "fmrte:123" would read as an id.
 - `SquadWarning.sharedName` says "told apart by potential ability, then nationality" even when numbered keys were used.
 - Money: a comma is always read as a thousands separator, so "€1.234,56" reads as 123456.
+- The FM27 profile's loader ignores keys it does not know, so a stale `positionMultipliers` left in the resource would load without complaint.
+- The FM26 table for DM weights Pace unusually low (0.020), so positional emphasis scales a defensive midfielder's Pace to 0.59 of its FM27 base weight.
 - `RatingProfile.scaled` re-sorts its curve on every read through `FitnessModel.evaluate`; `inFixedOrder` exists in both `RatingProfile` and `RatingEngine`.
