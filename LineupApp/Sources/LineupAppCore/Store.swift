@@ -49,8 +49,30 @@ public struct Loaded<Value> {
 public struct Store: Sendable {
     static let currentVersion = 1
     let directory: URL
+    private let move: @Sendable (URL, URL) throws -> Void
+    private let copy: @Sendable (URL, URL) throws -> Void
 
-    public init(directory: URL) { self.directory = directory }
+    public init(directory: URL) {
+        self.init(
+            directory: directory,
+            move: { try FileManager.default.moveItem(at: $0, to: $1) },
+            copy: { try FileManager.default.copyItem(at: $0, to: $1) })
+    }
+
+    /// File operations are injectable so tests can make them fail.
+    init(
+        directory: URL,
+        move: @escaping @Sendable (URL, URL) throws -> Void,
+        copy: @escaping @Sendable (URL, URL) throws -> Void = { try FileManager.default.copyItem(at: $0, to: $1) }
+    ) {
+        self.directory = directory; self.move = move; self.copy = copy
+    }
+
+    /// The file's name at the start of a sentence.
+    private func subject(_ file: StoreFile) -> String {
+        let text = file.description
+        return text.prefix(1).uppercased() + text.dropFirst()
+    }
 
     private struct Envelope<Value: Codable>: Codable {
         var version: Int
@@ -74,34 +96,33 @@ public struct Store: Sendable {
                 : nil
             return Loaded(value: fresh, notice: notice)
         }
-        let reason: String
+        let newer: Bool
         do {
             let data = try Data(contentsOf: path)
-            if (try? JSONSerialization.jsonObject(with: data)) == nil {
-                reason = "it is not readable; it may have been cut short"
-            } else if let header = try? JSONDecoder().decode(VersionOnly.self, from: data) {
-                if header.version > Self.currentVersion {
-                    reason = "it was saved by a newer version of the app"
-                } else if let envelope = try? JSONDecoder().decode(Envelope<Value>.self, from: data) {
-                    return Loaded(value: envelope.value, notice: nil)
-                } else {
-                    reason = "it does not hold what this version of the app expects"
-                }
+            if let header = try? JSONDecoder().decode(VersionOnly.self, from: data),
+               header.version >= 1, header.version <= Self.currentVersion,
+               let envelope = try? JSONDecoder().decode(Envelope<Value>.self, from: data) {
+                return Loaded(value: envelope.value, notice: nil)
+            }
+            if let header = try? JSONDecoder().decode(VersionOnly.self, from: data) {
+                newer = header.version > Self.currentVersion
             } else {
-                reason = "it is not in the form the app saves"
+                newer = false
             }
         } catch {
-            reason = "the file could not be read"
+            newer = false
         }
-        let keptAs = setAside(path, file: file)
-        let tail = keptAs.map { "The unreadable copy was kept as \($0)." }
-            ?? "The unreadable copy could not be moved aside and stays where it is."
-        return Loaded(
-            value: fresh,
-            notice: "Could not use \(file.description) because \(reason), so \(file.startsWith). \(tail)")
+        let kept = setAside(path, file: file)
+        let tail = kept.map { "The unreadable file was kept as \($0)." }
+            ?? "The unreadable file could not be kept aside and will be replaced the next time that part of the app is saved."
+        let lead = newer
+            ? "The file holding \(file.description) comes from a newer version of the app, so \(file.startsWith)."
+            : "\(subject(file)) could not be read as saved data (the file may have been cut short), so \(file.startsWith)."
+        return Loaded(value: fresh, notice: "\(lead) \(tail)")
     }
 
-    /// Renames the file to `<name>.unreadable-<n>.json` with the first free number; the new name, or nil if it failed.
+    /// Keeps the file as `<name>.unreadable-<n>.json` with the first free number, by moving it or, if that
+    /// fails, copying it; the new name, or nil if neither worked.
     private func setAside(_ path: URL, file: StoreFile) -> String? {
         let fileManager = FileManager.default
         var number = 1
@@ -109,12 +130,9 @@ public struct Store: Sendable {
             let name = "\(file.rawValue).unreadable-\(number).json"
             let target = directory.appendingPathComponent(name)
             if !fileManager.fileExists(atPath: target.path) {
-                do {
-                    try fileManager.moveItem(at: path, to: target)
-                    return name
-                } catch {
-                    return nil
-                }
+                if (try? move(path, target)) != nil { return name }
+                if (try? copy(path, target)) != nil { return name }
+                return nil
             }
             number += 1
         }
@@ -127,8 +145,8 @@ public struct Store: Sendable {
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         let data = try encoder.encode(Envelope(version: Self.currentVersion, value: value))
         let temporary = directory.appendingPathComponent(".\(file.rawValue).\(UUID().uuidString).tmp")
-        try data.write(to: temporary)
         do {
+            try data.write(to: temporary)
             if fileManager.fileExists(atPath: url(file).path) {
                 _ = try fileManager.replaceItemAt(url(file), withItemAt: temporary)
             } else {

@@ -28,6 +28,33 @@ public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
         self.id = id; self.date = date; self.opponent = opponent; self.importance = importance
         self.tacticID = tacticID; self.overrides = overrides; self.rejected = rejected
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, date, opponent, importance, tacticID, overrides, rejected
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(FixtureID.self, forKey: .id)
+        date = try c.decode(Day.self, forKey: .date)
+        opponent = try c.decode(String.self, forKey: .opponent)
+        importance = try c.decode(Importance.self, forKey: .importance)
+        tacticID = try c.decodeIfPresent(UUID.self, forKey: .tacticID)
+        overrides = try c.decode([SlotID: PlayerID].self, forKey: .overrides)
+        rejected = Set(try c.decode([PlayerID].self, forKey: .rejected))
+    }
+
+    /// `rejected` is written as an array in key order, because a set has no fixed order of its own.
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(date, forKey: .date)
+        try c.encode(opponent, forKey: .opponent)
+        try c.encode(importance, forKey: .importance)
+        try c.encodeIfPresent(tacticID, forKey: .tacticID)
+        try c.encode(overrides, forKey: .overrides)
+        try c.encode(rejected.sorted { $0.key < $1.key }, forKey: .rejected)
+    }
 }
 
 /// A lineup the owner confirmed, with the names and tactic as they were at the time.
