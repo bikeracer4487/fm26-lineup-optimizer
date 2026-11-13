@@ -147,6 +147,84 @@ import Testing
         #expect(omission.reason == "Left out: sharpness 50% lowers him from \(oneDecimal(ideal)) to \(oneDecimal(today))")
     }
 
+    // Each factor on its own against a rival at familiarity 17 (factor 0.95, a rating exactly 5% lower).
+
+    @Test func lowSharpnessAloneCostsAStart() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        // Sharpness 50% is a factor of 0.78, below the rival's 0.95.
+        let lineup = try selector.select(request(changing("Striker", in: squad(rival)) { $0.sharpness = 0.50 }))
+        #expect(pick(lineup, .ST_C)?.player == id("Rival Striker"))
+        let omission = try #require(lineup.omissions.first)
+        #expect(omission.reason.hasPrefix("Left out: sharpness 50% lowers him from"))
+    }
+
+    @Test func slightlyLowSharpnessDoesNotCostAStart() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        // Sharpness 90% is a factor of 0.968, above the rival's 0.95.
+        let lineup = try selector.select(request(changing("Striker", in: squad(rival)) { $0.sharpness = 0.90 }))
+        let st = try #require(pick(lineup, .ST_C))
+        #expect(st.player == id("Striker"))
+        #expect(abs(st.fitness.sharpness - 0.968) < 1e-9)
+        #expect(lineup.omissions.isEmpty)
+    }
+
+    @Test func jadednessAloneCostsAStart() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        // Jadedness 300 is a factor of 0.90, below the rival's 0.95, and under the 400 threshold.
+        let lineup = try selector.select(request(changing("Striker", in: squad(rival)) { $0.jadedness = 300 }))
+        #expect(pick(lineup, .ST_C)?.player == id("Rival Striker"))
+        let omission = try #require(lineup.omissions.first)
+        #expect(omission.reason.hasPrefix("Left out: jadedness 300 lowers him from"))
+    }
+
+    @Test func jadednessAgainstAWeakerRivalDoesNotCostAStart() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 10])
+        // Jadedness 300 (0.90) still beats a rival at familiarity 10 (0.80).
+        let lineup = try selector.select(request(changing("Striker", in: squad(rival)) { $0.jadedness = 300 }))
+        let st = try #require(pick(lineup, .ST_C))
+        #expect(st.player == id("Striker"))
+        #expect(st.fitness.jadedness == 0.90)
+        #expect(lineup.omissions.isEmpty)
+    }
+
+    // MARK: - Thresholds come from the parameters
+
+    func selector(_ change: (inout EngineParameters) -> Void) throws -> LineupSelector {
+        var parameters = EngineParameters.fm27
+        change(&parameters)
+        return LineupSelector(catalog: try RoleCatalog.fm27(), tables: try RatingTables.bundled(), parameters: parameters)
+    }
+
+    @Test func aRaisedConditionFloorKeepsOutAPlayerTheDefaultLetsStart() throws {
+        let cover = Player.fixture(name: "Cover Striker", familiarity: [.striker: 10])
+        let players = changing("Striker", in: squad(cover)) { $0.condition = 0.88 }
+        #expect(pick(try selector.select(request(players)), .ST_C)?.player == id("Striker"))
+
+        let strict = try selector { $0.conditionFloor = Parameter(0.90, .derived, source: "test: raised floor") }
+        let lineup = try strict.select(request(players))
+        #expect(pick(lineup, .ST_C)?.player == id("Cover Striker"))
+        let omission = try #require(lineup.omissions.first)
+        #expect(omission.cause == .excluded(.belowConditionFloor(0.88)))
+        #expect(omission.reason == "Left out: below the 90% condition floor at 88%")
+        let chosen = try strict.select(request(players, overrides: [.ST_C: id("Striker")]))
+        #expect(pick(chosen, .ST_C)?.reasons.last == "Chosen by you, overriding: condition 88% is below the 90% floor")
+    }
+
+    @Test func aLoweredJadedThresholdKeepsOutAPlayerTheDefaultLetsStart() throws {
+        let cover = Player.fixture(name: "Cover Striker", familiarity: [.striker: 9])
+        let players = changing("Striker", in: squad(cover)) { $0.jadedness = 350 }
+        #expect(pick(try selector.select(request(players, importance: .medium)), .ST_C)?.player == id("Striker"))
+
+        let strict = try selector { $0.jadedThreshold = Parameter(300, .derived, source: "test: lowered threshold") }
+        let lineup = try strict.select(request(players, importance: .medium))
+        #expect(pick(lineup, .ST_C)?.player == id("Cover Striker"))
+        let omission = try #require(lineup.omissions.first)
+        #expect(omission.cause == .excluded(.jaded(350)))
+        #expect(omission.reason == "Left out: jadedness 350 is above 300")
+        // A high-importance fixture ignores the jaded rule whatever its threshold.
+        #expect(pick(try strict.select(request(players, importance: .high)), .ST_C)?.player == id("Striker"))
+    }
+
     // MARK: - Risk rules
 
     @Test(arguments: Importance.allCases)

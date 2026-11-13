@@ -147,7 +147,7 @@ public struct LineupSelector: Sendable {
         let fixedPlayers = Set(placed.values)
         let candidates = players.indices.filter { !fixedPlayers.contains($0) }
         let values: [[Double?]] = openSlots.map { s in
-            candidates.map { i in exclusions[i] == nil ? ratings[s][i].map { $0.value * fitness[i].product } : nil }
+            candidates.map { i in exclusions[i] == nil ? ratings[s][i].map { matchDayValue($0, fitness[i]) } : nil }
         }
         for (row, choice) in AssignmentSolver.maximise(values: values).enumerated() {
             if let c = choice { placed[openSlots[row]] = candidates[c] }
@@ -174,6 +174,12 @@ public struct LineupSelector: Sendable {
         }
 
         return Lineup(picks: picks, unfilled: unfilled, omissions: omissions, ignoredOverrides: ignored)
+    }
+
+    /// What the solver maximises and every explanation reports: the slot rating scaled by condition,
+    /// sharpness and jadedness on the day.
+    private func matchDayValue(_ rating: SlotRating, _ fitness: FitnessFactors) -> Double {
+        rating.value * fitness.condition * fitness.sharpness * fitness.jadedness
     }
 
     /// A risk rule's exclusion, else `.rejected` if the manager rejected him, else nil.
@@ -204,7 +210,7 @@ public struct LineupSelector: Sendable {
         if isOverride { reasons.append("Chosen by you" + (broken.map { ", overriding: \(rule($0))" } ?? "")) }
 
         return Pick(slot: assignment.slot, player: player.id, name: player.name, rating: rating, fitness: fitness,
-                    value: rating.value * fitness.product, isOverride: isOverride, warnings: warnings, reasons: reasons)
+                    value: matchDayValue(rating, fitness), isOverride: isOverride, warnings: warnings, reasons: reasons)
     }
 
     /// `chosenInstead` is the manager's override in his ideal slot, if there is one.
@@ -219,7 +225,7 @@ public struct LineupSelector: Sendable {
             cause = .displacedByOverride(by: chosenInstead.id)
             reason = "Left out: you chose \(chosenInstead.name) for \(assignment.ipPosition.rawValue)"
         } else {
-            let today = rating.value * fitness.product
+            let today = matchDayValue(rating, fitness)
             let limiting = limitingFactor(fitness)
             cause = .lowerMatchDayValue(ideal: rating.value, today: today, limiting: limiting)
             if fitness.condition == 1 && fitness.sharpness == 1 && fitness.jadedness == 1 {
