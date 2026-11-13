@@ -1,0 +1,1800 @@
+{
+  "IP": {
+    "D(L/R)": {
+      "Full Back": {
+        "key": [
+          "Marking",
+          "Tackling",
+          "Concentration",
+          "Anticipation",
+          "Positioning",
+          "Teamwork",
+          "Acceleration"
+        ],
+        "important": [
+          "Crossing",
+          "Dribbling",
+          "Passing",
+          "Technique",
+          "Decisions",
+          "Work Rate",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Wing Back": {
+        "key": [
+          "Crossing",
+          "Marking",
+          "Tackling",
+          "Teamwork",
+          "Work Rate",
+          "Acceleration",
+          "Stamina",
+          "Pace"
+        ],
+        "important": [
+          "Dribbling",
+          "First Touch",
+          "Passing",
+          "Technique",
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Off The Ball",
+          "Positioning",
+          "Agility",
+          "Balance",
+          "Marking",
+          "Tackling",
+          "Positioning"
+        ]
+      },
+      "Inside Wing-Back": {
+        "key": [
+          "Passing",
+          "Tackling",
+          "Anticipation",
+          "Composure",
+          "Decisions",
+          "Positioning",
+          "Teamwork",
+          "Acceleration"
+        ],
+        "important": [
+          "First Touch",
+          "Marking",
+          "Technique",
+          "Concentration",
+          "Work Rate",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Inside Full-Back": {
+        "key": [
+          "Heading",
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Positioning",
+          "Strength"
+        ],
+        "important": [
+          "Dribbling",
+          "Aggression",
+          "Bravery",
+          "Composure",
+          "Concentration",
+          "Decisions",
+          "Work Rate",
+          "Acceleration",
+          "Agility",
+          "Jumping Reach",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Playmaking Wing-Back": {
+        "key": [
+          "First Touch",
+          "Passing",
+          "Tackling",
+          "Technique",
+          "Composure",
+          "Decisions",
+          "Teamwork",
+          "Vision",
+          "Acceleration"
+        ],
+        "important": [
+          "Crossing",
+          "Dribbling",
+          "Marking",
+          "Anticipation",
+          "Concentration",
+          "Off The Ball",
+          "Positioning",
+          "Work Rate",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      }
+    },
+    "D(C)": {
+      "No-Nonsense Centre-Back": {
+        "key": [
+          "Heading",
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Positioning",
+          "Jumping Reach",
+          "Strength"
+        ],
+        "important": [
+          "Aggression",
+          "Bravery",
+          "Concentration",
+          "Pace"
+        ]
+      },
+      "Ball-Playing Centre-Back": {
+        "key": [
+          "Heading",
+          "Marking",
+          "Passing",
+          "Tackling",
+          "Anticipation",
+          "Composure",
+          "Positioning",
+          "Jumping Reach",
+          "Strength"
+        ],
+        "important": [
+          "First Touch",
+          "Technique",
+          "Aggression",
+          "Bravery",
+          "Decisions",
+          "Vision",
+          "Pace"
+        ]
+      },
+      "Overlapping Centre-Back": {
+        "key": [
+          "Crossing",
+          "Heading",
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Work Rate",
+          "Jumping Reach",
+          "Pace",
+          "Stamina",
+          "Strength"
+        ],
+        "important": [
+          "Dribbling",
+          "Technique",
+          "Aggression",
+          "Bravery",
+          "Composure",
+          "Concentration",
+          "Decisions",
+          "Off The Ball",
+          "Positioning",
+          "Acceleration",
+          "Agility"
+        ]
+      },
+      "Advanced Centre-Back": {
+        "key": [
+          "Heading",
+          "Marking",
+          "Passing",
+          "Tackling",
+          "Technique",
+          "Anticipation",
+          "Composure",
+          "Decisions",
+          "Positioning",
+          "Teamwork",
+          "Jumping Reach",
+          "Strength"
+        ],
+        "important": [
+          "Dribbling",
+          "First Touch",
+          "Aggression",
+          "Bravery",
+          "Concentration",
+          "Vision",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Centre-Back": {
+        "key": [
+          "Heading",
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Positioning",
+          "Jumping Reach",
+          "Strength"
+        ],
+        "important": [
+          "Aggression",
+          "Bravery",
+          "Composure",
+          "Concentration",
+          "Decisions",
+          "Pace"
+        ]
+      },
+      "Wide Centre-Back": {
+        "key": [
+          "Heading",
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Positioning",
+          "Jumping Reach",
+          "Strength"
+        ],
+        "important": [
+          "Aggression",
+          "Bravery",
+          "Concentration",
+          "Decisions",
+          "Acceleration",
+          "Agility",
+          "Pace",
+          "Dribbling",
+          "Composure",
+          "Work Rate",
+          "Stamina"
+        ]
+      }
+    },
+    "WB(L/R)": {
+      "Wing-Back": {
+        "key": [
+          "Crossing",
+          "Marking",
+          "Tackling",
+          "Teamwork",
+          "Work Rate",
+          "Acceleration",
+          "Pace",
+          "Stamina"
+        ],
+        "important": [
+          "Dribbling",
+          "First Touch",
+          "Passing",
+          "Technique",
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Off The Ball",
+          "Positioning",
+          "Agility",
+          "Balance"
+        ]
+      },
+      "Inside Wing-Back": {
+        "key": [
+          "Passing",
+          "Tackling",
+          "Anticipation",
+          "Composure",
+          "Decisions",
+          "Positioning",
+          "Teamwork",
+          "Acceleration"
+        ],
+        "important": [
+          "First Touch",
+          "Marking",
+          "Technique",
+          "Concentration",
+          "Work Rate",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Advanced Wing-Back": {
+        "key": [
+          "Crossing",
+          "Dribbling",
+          "Technique",
+          "Off The Ball",
+          "Teamwork",
+          "Work Rate",
+          "Acceleration",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ],
+        "important": [
+          "First Touch",
+          "Marking",
+          "Passing",
+          "Tackling",
+          "Anticipation",
+          "Decisions",
+          "Flair",
+          "Positioning",
+          "Balance"
+        ]
+      },
+      "Playmaking Wing-Back": {
+        "key": [
+          "First Touch",
+          "Passing",
+          "Tackling",
+          "Technique",
+          "Composure",
+          "Decisions",
+          "Teamwork",
+          "Vision",
+          "Acceleration"
+        ],
+        "important": [
+          "Crossing",
+          "Dribbling",
+          "Marking",
+          "Anticipation",
+          "Concentration",
+          "Off The Ball",
+          "Positioning",
+          "Work Rate",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      }
+    },
+    "DM": {
+      "Defensive Midfielder": {
+        "key": [
+          "Tackling",
+          "Anticipation",
+          "Concentration",
+          "Positioning",
+          "Teamwork"
+        ],
+        "important": [
+          "First Touch",
+          "Marking",
+          "Passing",
+          "Aggression",
+          "Composure",
+          "Decisions",
+          "Work Rate",
+          "Stamina",
+          "Strength"
+        ]
+      },
+      "Deep-Lying Playmaker": {
+        "key": [
+          "First Touch",
+          "Passing",
+          "Technique",
+          "Composure",
+          "Decisions",
+          "Teamwork",
+          "Vision"
+        ],
+        "important": [
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Concentration",
+          "Off The Ball",
+          "Positioning",
+          "Work Rate",
+          "Balance",
+          "Stamina"
+        ]
+      },
+      "Box-to-Box Midfielder": {
+        "key": [
+          "Passing",
+          "Tackling",
+          "Off The Ball",
+          "Teamwork",
+          "Work Rate",
+          "Stamina"
+        ],
+        "important": [
+          "Dribbling",
+          "Finishing",
+          "First Touch",
+          "Long Shots",
+          "Technique",
+          "Aggression",
+          "Anticipation",
+          "Composure",
+          "Decisions",
+          "Positioning",
+          "Acceleration",
+          "Balance",
+          "Pace",
+          "Strength"
+        ]
+      },
+      "Half Back": {
+        "key": [
+          "Heading",
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Concentration",
+          "Positioning",
+          "Teamwork",
+          "Jumping Reach",
+          "Strength"
+        ],
+        "important": [
+          "First Touch",
+          "Passing",
+          "Aggression",
+          "Bravery",
+          "Composure",
+          "Decisions",
+          "Work Rate",
+          "Stamina"
+        ]
+      },
+      "Box-To-Box Playmaker": {
+        "key": [
+          "First Touch",
+          "Passing",
+          "Technique",
+          "Composure",
+          "Decisions",
+          "Off The Ball",
+          "Teamwork",
+          "Vision",
+          "Work Rate",
+          "Stamina"
+        ],
+        "important": [
+          "Dribbling",
+          "Long Shots",
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Positioning",
+          "Acceleration",
+          "Agility",
+          "Balance",
+          "Pace"
+        ]
+      }
+    },
+    "M (L/R)": {
+      "Inside Winger": {
+        "key": [
+          "Dribbling",
+          "First Touch",
+          "Technique",
+          "Composure",
+          "Teamwork",
+          "Acceleration",
+          "Agility"
+        ],
+        "important": [
+          "Crossing",
+          "Long Shots",
+          "Passing",
+          "Anticipation",
+          "Flair",
+          "Off The Ball",
+          "Vision",
+          "Work Rate",
+          "Balance",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Playmaking Winger": {
+        "key": [
+          "Crossing",
+          "Dribbling",
+          "First Touch",
+          "Passing",
+          "Technique",
+          "Composure",
+          "Decisions",
+          "Off The Ball",
+          "Teamwork",
+          "Vision",
+          "Acceleration"
+        ],
+        "important": [
+          "Anticipation",
+          "Flair",
+          "Work Rate",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Winger": {
+        "key": [
+          "Crossing",
+          "Dribbling",
+          "Technique",
+          "Teamwork",
+          "Acceleration",
+          "Agility",
+          "Pace"
+        ],
+        "important": [
+          "First Touch",
+          "Passing",
+          "Anticipation",
+          "Flair",
+          "Off The Ball",
+          "Work Rate",
+          "Balance",
+          "Stamina"
+        ]
+      },
+      "Wide Midfielder": {
+        "key": [
+          "Crossing",
+          "Passing",
+          "Technique",
+          "Decisions",
+          "Teamwork",
+          "Work Rate",
+          "Pace",
+          "Stamina"
+        ],
+        "important": [
+          "Dribbling",
+          "First Touch",
+          "Anticipation",
+          "Composure",
+          "Off The Ball",
+          "Vision",
+          "Acceleration",
+          "Agility"
+        ]
+      }
+    },
+    "M(C)": {
+      "Advanced Playmaker": {
+        "key": [
+          "First Touch",
+          "Passing",
+          "Technique",
+          "Composure",
+          "Decisions",
+          "Off The Ball",
+          "Teamwork",
+          "Vision"
+        ],
+        "important": [
+          "Crossing",
+          "Dribbling",
+          "Anticipation",
+          "Flair",
+          "Acceleration",
+          "Agility"
+        ]
+      },
+      "Midfield Playmaker": {
+        "key": [
+          "First Touch",
+          "Passing",
+          "Technique",
+          "Composure",
+          "Decisions",
+          "Off The Ball",
+          "Teamwork",
+          "Vision"
+        ],
+        "important": [
+          "Dribbling",
+          "Tackling",
+          "Anticipation",
+          "Flair",
+          "Positioning",
+          "Work Rate",
+          "Agility",
+          "Stamina"
+        ]
+      },
+      "Wide Central Midfielder": {
+        "key": [
+          "First Touch",
+          "Passing",
+          "Tackling",
+          "Decisions",
+          "Teamwork"
+        ],
+        "important": [
+          "Crossing",
+          "Dribbling",
+          "Technique",
+          "Anticipation",
+          "Composure",
+          "Concentration",
+          "Off The Ball",
+          "Positioning",
+          "Vision",
+          "Work Rate",
+          "Agility",
+          "Stamina"
+        ]
+      },
+      "Central Midfielder": {
+        "key": [
+          "First Touch",
+          "Passing",
+          "Tackling",
+          "Decisions",
+          "Teamwork"
+        ],
+        "important": [
+          "Technique",
+          "Anticipation",
+          "Composure",
+          "Concentration",
+          "Off The Ball",
+          "Positioning",
+          "Vision",
+          "Work Rate",
+          "Stamina"
+        ]
+      },
+      "Channel Midfielder": {
+        "key": [
+          "Crossing",
+          "First Touch",
+          "Passing",
+          "Technique",
+          "Composure",
+          "Off The Ball",
+          "Work Rate",
+          "Acceleration"
+        ],
+        "important": [
+          "Dribbling",
+          "Long Shots",
+          "Anticipation",
+          "Decisions",
+          "Flair",
+          "Vision",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Attacking Midfielder": {
+        "key": [
+          "First Touch",
+          "Long Shots",
+          "Passing",
+          "Technique",
+          "Composure",
+          "Flair",
+          "Off The Ball"
+        ],
+        "important": [
+          "Crossing",
+          "Dribbling",
+          "Finishing",
+          "Anticipation",
+          "Decisions",
+          "Vision",
+          "Acceleration",
+          "Agility"
+        ]
+      }
+    },
+    "AM (L/R)": {
+      "Winger": {
+        "key": [
+          "Crossing",
+          "Dribbling",
+          "Technique",
+          "Teamwork",
+          "Acceleration",
+          "Agility",
+          "Pace"
+        ],
+        "important": [
+          "First Touch",
+          "Passing",
+          "Anticipation",
+          "Flair",
+          "Off The Ball",
+          "Work Rate",
+          "Balance",
+          "Stamina"
+        ]
+      },
+      "Inside Forward": {
+        "key": [
+          "Dribbling",
+          "First Touch",
+          "Technique",
+          "Anticipation",
+          "Composure",
+          "Off The Ball",
+          "Acceleration",
+          "Agility"
+        ],
+        "important": [
+          "Crossing",
+          "Finishing",
+          "Long Shots",
+          "Passing",
+          "Flair",
+          "Vision",
+          "Work Rate",
+          "Balance",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Playmaking Winger": {
+        "key": [
+          "Crossing",
+          "Dribbling",
+          "First Touch",
+          "Passing",
+          "Technique",
+          "Composure",
+          "Decisions",
+          "Off The Ball",
+          "Teamwork",
+          "Vision",
+          "Acceleration"
+        ],
+        "important": [
+          "Anticipation",
+          "Flair",
+          "Work Rate",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Wide Forward": {
+        "key": [
+          "Dribbling",
+          "First Touch",
+          "Technique",
+          "Anticipation",
+          "Off The Ball",
+          "Acceleration",
+          "Agility",
+          "Pace"
+        ],
+        "important": [
+          "Crossing",
+          "Finishing",
+          "Passing",
+          "Composure",
+          "Flair",
+          "Work Rate",
+          "Balance",
+          "Stamina"
+        ]
+      },
+      "Inside Winger": {
+        "key": [
+          "Dribbling",
+          "First Touch",
+          "Technique",
+          "Composure",
+          "Teamwork",
+          "Acceleration",
+          "Agility"
+        ],
+        "important": [
+          "Crossing",
+          "Long Shots",
+          "Passing",
+          "Anticipation",
+          "Flair",
+          "Off The Ball",
+          "Vision",
+          "Work Rate",
+          "Balance",
+          "Pace",
+          "Stamina"
+        ]
+      }
+    },
+    "AM (C)": {
+      "Attacking Midfielder": {
+        "key": [
+          "First Touch",
+          "Long Shots",
+          "Passing",
+          "Technique",
+          "Composure",
+          "Flair",
+          "Off The Ball"
+        ],
+        "important": [
+          "Crossing",
+          "Dribbling",
+          "Finishing",
+          "Anticipation",
+          "Decisions",
+          "Vision",
+          "Acceleration",
+          "Agility"
+        ]
+      },
+      "Advanced Playmaker": {
+        "key": [
+          "First Touch",
+          "Passing",
+          "Technique",
+          "Composure",
+          "Decisions",
+          "Off The Ball",
+          "Teamwork",
+          "Vision"
+        ],
+        "important": [
+          "Crossing",
+          "Dribbling",
+          "Anticipation",
+          "Flair",
+          "Acceleration",
+          "Agility"
+        ]
+      },
+      "Free Role": {
+        "key": [
+          "Dribbling",
+          "First Touch",
+          "Long Shots",
+          "Passing",
+          "Technique",
+          "Composure",
+          "Flair",
+          "Off The Ball",
+          "Vision"
+        ],
+        "important": [
+          "Crossing",
+          "Finishing",
+          "Anticipation",
+          "Decisions",
+          "Acceleration",
+          "Agility"
+        ]
+      },
+      "Second Striker": {
+        "key": [
+          "Finishing",
+          "First Touch",
+          "Anticipation",
+          "Composure",
+          "Off The Ball",
+          "Acceleration"
+        ],
+        "important": [
+          "Dribbling",
+          "Long Shots",
+          "Passing",
+          "Technique",
+          "Concentration",
+          "Decisions",
+          "Work Rate",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Channel Midfielder": {
+        "key": [
+          "Crossing",
+          "First Touch",
+          "Passing",
+          "Technique",
+          "Composure",
+          "Off The Ball",
+          "Work Rate",
+          "Acceleration"
+        ],
+        "important": [
+          "Dribbling",
+          "Long Shots",
+          "Anticipation",
+          "Decisions",
+          "Flair",
+          "Vision",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      }
+    },
+    "ST": {
+      "Deep-Lying Forward": {
+        "key": [
+          "Finishing",
+          "First Touch",
+          "Technique",
+          "Composure",
+          "Off The Ball",
+          "Strength"
+        ],
+        "important": [
+          "Dribbling",
+          "Passing",
+          "Anticipation",
+          "Decisions",
+          "Teamwork",
+          "Vision",
+          "Balance"
+        ]
+      },
+      "Centre Forward": {
+        "key": [
+          "Finishing",
+          "First Touch",
+          "Heading",
+          "Technique",
+          "Composure",
+          "Off The Ball",
+          "Acceleration",
+          "Strength"
+        ],
+        "important": [
+          "Dribbling",
+          "Passing",
+          "Anticipation",
+          "Decisions",
+          "Agility",
+          "Balance",
+          "Jumping Reach",
+          "Pace"
+        ]
+      },
+      "Target Forward": {
+        "key": [
+          "Finishing",
+          "Heading",
+          "Aggression",
+          "Bravery",
+          "Composure",
+          "Off The Ball",
+          "Balance",
+          "Jumping Reach",
+          "Strength"
+        ],
+        "important": [
+          "First Touch",
+          "Anticipation",
+          "Decisions",
+          "Teamwork"
+        ]
+      },
+      "Poacher": {
+        "key": [
+          "Finishing",
+          "Heading",
+          "Anticipation",
+          "Composure",
+          "Concentration",
+          "Off The Ball",
+          "Acceleration"
+        ],
+        "important": [
+          "First Touch",
+          "Technique",
+          "Decisions",
+          "Balance"
+        ]
+      },
+      "Channel Forward": {
+        "key": [
+          "Dribbling",
+          "Finishing",
+          "First Touch",
+          "Technique",
+          "Composure",
+          "Off The Ball",
+          "Work Rate",
+          "Acceleration"
+        ],
+        "important": [
+          "Crossing",
+          "Heading",
+          "Passing",
+          "Anticipation",
+          "Decisions",
+          "Agility",
+          "Balance",
+          "Pace",
+          "Stamina"
+        ]
+      }
+    },
+    "GK": {
+      "Goalkeeper": {
+        "key": [
+          "Aerial Reach",
+          "Command Of Area",
+          "Communication",
+          "Handling",
+          "Reflexes",
+          "Concentration",
+          "Positioning",
+          "Agility"
+        ],
+        "important": [
+          "Kicking",
+          "One On Ones",
+          "Throwing",
+          "Anticipation",
+          "Decisions"
+        ]
+      },
+      "Ball-Playing Goalkeeper": {
+        "key": [
+          "Aerial Reach",
+          "Command Of Area",
+          "Communication",
+          "Handling",
+          "Kicking",
+          "Reflexes",
+          "Concentration",
+          "Positioning",
+          "Agility"
+        ],
+        "important": [
+          "Eccentricity",
+          "One On Ones",
+          "Passing",
+          "Throwing",
+          "Anticipation",
+          "Composure",
+          "Decisions"
+        ]
+      },
+      "No-Nonsense Goalkeeper": {
+        "key": [
+          "Aerial Reach",
+          "Command Of Area",
+          "Communication",
+          "Handling",
+          "Reflexes",
+          "Concentration",
+          "Positioning",
+          "Agility"
+        ],
+        "important": [
+          "One On Ones",
+          "Anticipation",
+          "Decisions"
+        ]
+      }
+    }
+  },
+  "OOP": {
+    "D(L/R)": {
+      "Pressing Full-Back": {
+        "key": [
+          "Marking",
+          "Tackling",
+          "Aggression",
+          "Anticipation",
+          "Positioning",
+          "Teamwork",
+          "Work Rate",
+          "Acceleration",
+          "Bravery"
+        ],
+        "important": [
+          "Concentration",
+          "Decisions",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Holding Full-Back": {
+        "key": [
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Positioning",
+          "Acceleration",
+          "Teamwork"
+        ],
+        "important": [
+          "Agility",
+          "Pace",
+          "Marking",
+          "Tackling",
+          "Positioning"
+        ]
+      },
+      "Full-Back": {
+        "key": [
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Positioning",
+          "Teamwork",
+          "Acceleration",
+          "Aggression"
+        ],
+        "important": [
+          "Concentration",
+          "Decisions",
+          "Work Rate",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      }
+    },
+    "D(C)": {
+      "Stopping Centre-Back": {
+        "key": [
+          "Heading",
+          "Marking",
+          "Tackling",
+          "Aggression",
+          "Anticipation",
+          "Bravery",
+          "Positioning",
+          "Jumping Reach",
+          "Strength",
+          "Concentration"
+        ],
+        "important": [
+          "Decisions",
+          "Pace"
+        ]
+      },
+      "Stopping Wide Centre-Back": {
+        "key": [
+          "Heading",
+          "Marking",
+          "Tackling",
+          "Aggression",
+          "Anticipation",
+          "Bravery",
+          "Positioning",
+          "Jumping Reach",
+          "Strength",
+          "Concentration"
+        ],
+        "important": [
+          "Decisions",
+          "Acceleration",
+          "Agility",
+          "Pace"
+        ]
+      },
+      "Covering Centre-Back": {
+        "key": [
+          "Heading",
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Positioning",
+          "Jumping Reach",
+          "Pace",
+          "Strength",
+          "Bravery"
+        ],
+        "important": [
+          "Acceleration"
+        ]
+      },
+      "Covering Wide Centre-Back": {
+        "key": [
+          "Heading",
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Positioning",
+          "Jumping Reach",
+          "Pace",
+          "Strength",
+          "Bravery"
+        ],
+        "important": [
+          "Acceleration",
+          "Agility"
+        ]
+      },
+      "Centre-Back": {
+        "key": [
+          "Heading",
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Positioning",
+          "Jumping Reach",
+          "Strength",
+          "Aggression"
+        ],
+        "important": [
+          "Bravery",
+          "Composure",
+          "Concentration",
+          "Decisions",
+          "Pace"
+        ]
+      },
+      "Wide Centre-Back": {
+        "key": [
+          "Heading",
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Positioning",
+          "Jumping Reach",
+          "Strength",
+          "Aggression"
+        ],
+        "important": [
+          "Bravery",
+          "Concentration",
+          "Decisions",
+          "Acceleration",
+          "Agility",
+          "Pace"
+        ]
+      }
+    },
+    "WB(L/R)": {
+      "Wing-Back": {
+        "key": [
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Positioning",
+          "Teamwork",
+          "Acceleration",
+          "Stamina",
+          "Aggression"
+        ],
+        "important": [
+          "Concentration",
+          "Decisions",
+          "Work Rate",
+          "Agility",
+          "Pace"
+        ]
+      },
+      "Pressing Wing-Back": {
+        "key": [
+          "Marking",
+          "Tackling",
+          "Aggression",
+          "Anticipation",
+          "Positioning",
+          "Teamwork",
+          "Work Rate",
+          "Acceleration",
+          "Stamina",
+          "Bravery"
+        ],
+        "important": [
+          "Concentration",
+          "Decisions",
+          "Agility",
+          "Pace"
+        ]
+      },
+      "Holding Wing-Back": {
+        "key": [
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Positioning",
+          "Acceleration",
+          "Teamwork"
+        ],
+        "important": [
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      }
+    },
+    "DM": {
+      "Defensive Midfielder": {
+        "key": [
+          "Tackling",
+          "Anticipation",
+          "Decisions",
+          "Positioning",
+          "Teamwork",
+          "Work Rate",
+          "Marking"
+        ],
+        "important": [
+          "Aggression",
+          "Concentration",
+          "Stamina",
+          "Strength"
+        ]
+      },
+      "Pressing Defensive Midfielder": {
+        "key": [
+          "Tackling",
+          "Aggression",
+          "Anticipation",
+          "Decisions",
+          "Positioning",
+          "Teamwork",
+          "Work Rate",
+          "Stamina",
+          "Marking"
+        ],
+        "important": [
+          "Concentration",
+          "Pace",
+          "Strength"
+        ]
+      },
+      "Wide Covering Defensive Midfielder": {
+        "key": [
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Decisions",
+          "Positioning",
+          "Teamwork",
+          "Work Rate",
+          "Agility",
+          "Stamina",
+          "Aggression"
+        ],
+        "important": [
+          "Concentration",
+          "Pace",
+          "Strength"
+        ]
+      },
+      "Dropping Defensive Midfielder": {
+        "key": [
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Positioning",
+          "Teamwork",
+          "Work Rate",
+          "Jumping Reach",
+          "Strength",
+          "Aggression"
+        ],
+        "important": [
+          "Stamina"
+        ]
+      },
+      "Screening Defensive Midfielder": {
+        "key": [
+          "Marking",
+          "Tackling",
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Positioning",
+          "Teamwork"
+        ],
+        "important": [
+          "Work Rate",
+          "Stamina",
+          "Strength"
+        ]
+      }
+    },
+    "M (L/R)": {
+      "Wide Midfielder": {
+        "key": [
+          "Decisions",
+          "Teamwork",
+          "Work Rate",
+          "Acceleration",
+          "Marking"
+        ],
+        "important": [
+          "Aggression",
+          "Anticipation",
+          "Off The Ball",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Tracking Wide Midfielder": {
+        "key": [
+          "Aggression",
+          "Anticipation",
+          "Decisions",
+          "Teamwork",
+          "Work Rate",
+          "Acceleration",
+          "Stamina",
+          "Marking"
+        ],
+        "important": [
+          "Tackling",
+          "Off The Ball",
+          "Positioning",
+          "Agility",
+          "Pace"
+        ]
+      },
+      "Wide Outlet Wide Midfielder": {
+        "key": [
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Off The Ball",
+          "Teamwork",
+          "Pace",
+          "Dribbling"
+        ],
+        "important": [
+          "First Touch",
+          "Marking",
+          "Composure",
+          "Acceleration",
+          "Agility"
+        ]
+      }
+    },
+    "M(C)": {
+      "Central Midfielder": {
+        "key": [
+          "Tackling",
+          "Decisions",
+          "Teamwork",
+          "Work Rate",
+          "Marking"
+        ],
+        "important": [
+          "Aggression",
+          "Anticipation",
+          "Concentration",
+          "Positioning",
+          "Stamina"
+        ]
+      },
+      "Wide Covering Central Midfielder": {
+        "key": [
+          "Marking",
+          "Tackling",
+          "Decisions",
+          "Teamwork",
+          "Work Rate",
+          "Agility",
+          "Stamina",
+          "Aggression"
+        ],
+        "important": [
+          "Anticipation",
+          "Concentration",
+          "Positioning",
+          "Pace"
+        ]
+      },
+      "Pressing Central Midfielder": {
+        "key": [
+          "Tackling",
+          "Aggression",
+          "Anticipation",
+          "Decisions",
+          "Teamwork",
+          "Work Rate",
+          "Stamina",
+          "Marking"
+        ],
+        "important": [
+          "Concentration",
+          "Positioning",
+          "Pace",
+          "Strength"
+        ]
+      },
+      "Screening Central Midfielder": {
+        "key": [
+          "Marking",
+          "Tackling",
+          "Concentration",
+          "Decisions",
+          "Positioning",
+          "Anticipation"
+        ],
+        "important": [
+          "Teamwork",
+          "Work Rate",
+          "Stamina"
+        ]
+      }
+    },
+    "AM (L/R)": {
+      "Inside Outlet Winger": {
+        "key": [
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Off The Ball",
+          "Teamwork",
+          "Balance",
+          "Dribbling"
+        ],
+        "important": [
+          "First Touch",
+          "Marking",
+          "Composure",
+          "Acceleration",
+          "Strength"
+        ]
+      },
+      "Winger": {
+        "key": [
+          "Anticipation",
+          "Decisions",
+          "Teamwork",
+          "Work Rate",
+          "Acceleration",
+          "Marking"
+        ],
+        "important": [
+          "Aggression",
+          "Off The Ball",
+          "Agility",
+          "Pace",
+          "Stamina"
+        ]
+      },
+      "Tracking Winger": {
+        "key": [
+          "Aggression",
+          "Anticipation",
+          "Decisions",
+          "Teamwork",
+          "Work Rate",
+          "Acceleration",
+          "Stamina",
+          "Off The Ball"
+        ],
+        "important": [
+          "Positioning",
+          "Agility",
+          "Pace"
+        ]
+      },
+      "Wide Outlet Winger": {
+        "key": [
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Off The Ball",
+          "Teamwork",
+          "Pace",
+          "Dribbling"
+        ],
+        "important": [
+          "First Touch",
+          "Marking",
+          "Composure",
+          "Acceleration",
+          "Agility"
+        ]
+      }
+    },
+    "AM (C)": {
+      "Central Outlet Attacking Midfielder": {
+        "key": [
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Off The Ball",
+          "Teamwork",
+          "Balance",
+          "First Touch"
+        ],
+        "important": [
+          "Marking",
+          "Composure",
+          "Strength"
+        ]
+      },
+      "Tracking Attacking Midfielder": {
+        "key": [
+          "Aggression",
+          "Anticipation",
+          "Decisions",
+          "Teamwork",
+          "Work Rate",
+          "Stamina",
+          "Marking"
+        ],
+        "important": [
+          "Off The Ball",
+          "Positioning"
+        ]
+      },
+      "Attacking Midfielder": {
+        "key": [
+          "Anticipation",
+          "Decisions",
+          "Work Rate",
+          "Marking"
+        ],
+        "important": [
+          "Aggression",
+          "Off The Ball",
+          "Teamwork",
+          "Stamina"
+        ]
+      },
+      "Splitting Outlet Attacking Midfielder": {
+        "key": [
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Off The Ball",
+          "Teamwork",
+          "Pace",
+          "First Touch"
+        ],
+        "important": [
+          "Marking",
+          "Composure",
+          "Acceleration"
+        ]
+      }
+    },
+    "ST": {
+      "Central Outlet Centre Forward": {
+        "key": [
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Off The Ball",
+          "Teamwork",
+          "Balance",
+          "First Touch"
+        ],
+        "important": [
+          "Marking",
+          "Composure",
+          "Strength"
+        ]
+      },
+      "Tracking Centre Forward": {
+        "key": [
+          "Aggression",
+          "Anticipation",
+          "Decisions",
+          "Teamwork",
+          "Work Rate",
+          "Stamina",
+          "Marking"
+        ],
+        "important": [
+          "Off The Ball",
+          "Positioning"
+        ]
+      },
+      "Centre Forward": {
+        "key": [
+          "Anticipation",
+          "Decisions",
+          "Work Rate",
+          "Marking"
+        ],
+        "important": [
+          "Aggression",
+          "Off The Ball",
+          "Teamwork",
+          "Stamina"
+        ]
+      },
+      "Splitting Outlet Centre Forward": {
+        "key": [
+          "Anticipation",
+          "Concentration",
+          "Decisions",
+          "Off The Ball",
+          "Teamwork",
+          "Pace",
+          "First Touch"
+        ],
+        "important": [
+          "Marking",
+          "Composure",
+          "Acceleration"
+        ]
+      }
+    },
+    "GK": {
+      "Goalkeeper": {
+        "key": [
+          "Aerial Reach",
+          "Command Of Area",
+          "Communication",
+          "Handling",
+          "Reflexes",
+          "Concentration",
+          "Positioning",
+          "Agility",
+          "One On Ones"
+        ],
+        "important": [
+          "Rushing Out (Tendency)",
+          "Anticipation",
+          "Decisions"
+        ]
+      },
+      "Sweeper Keeper": {
+        "key": [
+          "Aerial Reach",
+          "Command Of Area",
+          "Communication",
+          "Handling",
+          "One On Ones",
+          "Reflexes",
+          "Rushing Out (Tendency)",
+          "Anticipation",
+          "Decisions",
+          "Agility",
+          "Eccentricity"
+        ],
+        "important": [
+          "Concentration",
+          "Positioning",
+          "Acceleration"
+        ]
+      },
+      "Line-Holding Goalkeeper": {
+        "key": [
+          "Aerial Reach",
+          "Command Of Area",
+          "Communication",
+          "Handling",
+          "Reflexes",
+          "Concentration",
+          "Positioning",
+          "Agility",
+          "One On Ones"
+        ],
+        "important": [
+          "Anticipation",
+          "Decisions"
+        ]
+      }
+    }
+  }
+}
