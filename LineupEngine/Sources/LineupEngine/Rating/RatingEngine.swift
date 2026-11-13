@@ -3,21 +3,27 @@ import Foundation
 public struct RatingConfiguration: Sendable, Equatable {
     public var appliesCurrentAbilityFactor: Bool
     public var roundsLikeThePythonReference: Bool
+    /// FM26's role thresholds: no FM27 engine test supports them, so only the reference applies them.
+    public var appliesRoleThresholds: Bool
 
-    public init(appliesCurrentAbilityFactor: Bool, roundsLikeThePythonReference: Bool) {
+    public init(appliesCurrentAbilityFactor: Bool, roundsLikeThePythonReference: Bool, appliesRoleThresholds: Bool) {
         self.appliesCurrentAbilityFactor = appliesCurrentAbilityFactor
         self.roundsLikeThePythonReference = roundsLikeThePythonReference
+        self.appliesRoleThresholds = appliesRoleThresholds
     }
 
-    public static let fm27 = RatingConfiguration(appliesCurrentAbilityFactor: false, roundsLikeThePythonReference: false)
+    public static let fm27 = RatingConfiguration(appliesCurrentAbilityFactor: false, roundsLikeThePythonReference: false,
+                                                 appliesRoleThresholds: false)
     /// Reproduces `rating_calculator.py` exactly, for the test that proves the port.
-    public static let fm26Reference = RatingConfiguration(appliesCurrentAbilityFactor: true, roundsLikeThePythonReference: true)
+    public static let fm26Reference = RatingConfiguration(appliesCurrentAbilityFactor: true, roundsLikeThePythonReference: true,
+                                                          appliesRoleThresholds: true)
 }
 
 public struct PhaseRating: Equatable, Sendable {
     public let positionScore: Double
     public let roleScore: Double
     public let consensusBonus: Double
+    /// 1.0 unless the configuration applies role thresholds.
     public let thresholdFactor: Double
     /// 0...100 before familiarity.
     public let base: Double
@@ -47,12 +53,12 @@ public struct RatingEngine: Sendable {
     private static let currentAbilityFloor = 0.85
     private static let currentAbilityCeiling = 1.15
 
-    private let tables: RatingTables
+    private let profile: RatingProfile
     private let parameters: EngineParameters
     private let configuration: RatingConfiguration
 
-    public init(tables: RatingTables, parameters: EngineParameters, configuration: RatingConfiguration) {
-        self.tables = tables
+    public init(profile: RatingProfile, parameters: EngineParameters, configuration: RatingConfiguration) {
+        self.profile = profile
         self.parameters = parameters
         self.configuration = configuration
     }
@@ -71,8 +77,8 @@ public struct RatingEngine: Sendable {
         let roleScore = try roleScore(player, role)
         let consensus = try consensusBonus(player, position, role)
         let thresholdFactor = try thresholdFactor(player, role)
-        var base = (parameters.positionShare.value * positionScore + parameters.roleShare.value * roleScore
-                    + parameters.consensusShare.value * consensus) * thresholdFactor
+        var base = (profile.positionShare.value * positionScore + profile.roleShare.value * roleScore
+                    + profile.consensusShare.value * consensus) * thresholdFactor
         if configuration.appliesCurrentAbilityFactor { base *= currentAbilityFactor(player.currentAbility) }
         if configuration.roundsLikeThePythonReference { base = roundedToOneDecimal(base) }
         guard let familiarity = player.familiarity[position] else {
@@ -96,43 +102,62 @@ public struct RatingEngine: Sendable {
         return value
     }
 
-    private func normalised(_ player: Player, _ attribute: Attribute) throws -> Double {
-        (Double(try value(player, attribute)) - 1) / 19
+    /// The attribute on the profile's 0...1 scale.
+    private func scaled(_ player: Player, _ attribute: Attribute) throws -> Double {
+        profile.scaled(try value(player, attribute), for: attribute)
     }
 
     private func positionScore(_ player: Player, _ position: Position) throws -> Double {
-        // `RatingTables` guarantees a non-empty, positive-sum table for every position.
-        let weights = tables.positionWeights[position] ?? [:]
+        // Both profiles have a non-empty, positive-sum table for every position.
+        let weights = profile.tables.positionWeights[position] ?? [:]
         let total = Self.inFixedOrder(weights).reduce(0) { $0 + $1.value }
         var sum = 0.0
-        for (attribute, weight) in Self.inFixedOrder(weights) { sum += try normalised(player, attribute) * weight }
+        for (attribute, weight) in Self.inFixedOrder(weights) { sum += try scaled(player, attribute) * weight }
         return 100 * sum / total
     }
 
+    /// Sums run in the role's own attribute order, which is fixed by the catalogue.
     private func roleScore(_ player: Player, _ role: Role) throws -> Double {
-        let weighted = role.key.map { ($0, parameters.keyWeight.value) }
-            + role.preferable.filter { !role.key.contains($0) }.map { ($0, parameters.preferableWeight.value) }
-        guard !weighted.isEmpty else { return parameters.emptyRoleScore.value }
-        var sum = 0.0
-        for (attribute, weight) in weighted { sum += try normalised(player, attribute) * weight }
-        return 100 * sum / weighted.reduce(0) { $0 + $1.1 }
+        let preferable = role.preferable.filter { !role.key.contains($0) }
+        switch profile.roleScoreRule.value {
+        case .weightedUnion(let keyWeight, let preferableWeight):
+            let weighted = role.key.map { ($0, keyWeight) } + preferable.map { ($0, preferableWeight) }
+            guard !weighted.isEmpty else { return parameters.emptyRoleScore.value }
+            var sum = 0.0
+            for (attribute, weight) in weighted { sum += try scaled(player, attribute) * weight }
+            return 100 * sum / weighted.reduce(0) { $0 + $1.1 }
+        case .keyWithPreferableTieBreak(let preferableShare):
+            func mean(_ attributes: [Attribute]) throws -> Double {
+                var sum = 0.0
+                for attribute in attributes { sum += try scaled(player, attribute) }
+                return sum / Double(attributes.count)
+            }
+            switch (role.key.isEmpty, preferable.isEmpty) {
+            case (true, true): return parameters.emptyRoleScore.value
+            case (false, true): return 100 * (try mean(role.key))
+            case (true, false): return 100 * (try mean(preferable))
+            case (false, false): return 100 * ((1 - preferableShare) * (try mean(role.key)) + preferableShare * (try mean(preferable)))
+            }
+        }
     }
 
     private func consensusBonus(_ player: Player, _ position: Position, _ role: Role) throws -> Double {
         let flagged = Set(role.key).union(role.preferable)
         var bonus = 0.0
-        for (attribute, weight) in Self.inFixedOrder(tables.consensusBonuses["\(position.tableKey)|\(role.name)"] ?? [:]) where !flagged.contains(attribute) {
-            bonus += try normalised(player, attribute) * weight
+        for (attribute, weight) in Self.inFixedOrder(profile.tables.consensusBonuses["\(position.tableKey)|\(role.name)"] ?? [:])
+        where !flagged.contains(attribute) {
+            bonus += try scaled(player, attribute) * weight
         }
         if !flagged.contains(.balance), position != .goalkeeper {
-            bonus += try normalised(player, .balance) * parameters.balanceBonus.value
+            bonus += try scaled(player, .balance) * parameters.balanceBonus.value
         }
         return min(bonus * 100, parameters.consensusCap.value)
     }
 
     private func thresholdFactor(_ player: Player, _ role: Role) throws -> Double {
+        guard configuration.appliesRoleThresholds else { return 1.0 }
         var factor = 1.0
-        for (attribute, minimum) in Self.inFixedOrder(tables.thresholds[role.name] ?? [:]) {
+        for (attribute, minimum) in Self.inFixedOrder(profile.tables.thresholds[role.name] ?? [:]) {
             let have = try value(player, attribute)
             if have < minimum { factor *= 1 - parameters.thresholdPenaltyPerPoint.value * Double(minimum - have) }
         }

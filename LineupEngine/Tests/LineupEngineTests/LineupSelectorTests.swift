@@ -3,7 +3,7 @@ import Testing
 @testable import LineupEngine
 
 @Suite struct LineupSelectorTests {
-    let selector = LineupSelector(catalog: try! RoleCatalog.fm27(), tables: try! RatingTables.bundled(), parameters: .fm27)
+    let selector = LineupSelector(catalog: try! RoleCatalog.fm27(), profile: try! RatingProfile.carriedOver(), parameters: .fm27)
     let tactic = try! JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
 
     /// One natural player per slot of the sample tactic: familiarity 20 at the positions the slot
@@ -207,7 +207,7 @@ import Testing
     func selector(_ change: (inout EngineParameters) -> Void) throws -> LineupSelector {
         var parameters = EngineParameters.fm27
         change(&parameters)
-        return LineupSelector(catalog: try RoleCatalog.fm27(), tables: try RatingTables.bundled(), parameters: parameters)
+        return LineupSelector(catalog: try RoleCatalog.fm27(), profile: try RatingProfile.carriedOver(), parameters: parameters)
     }
 
     @Test func aRaisedConditionFloorKeepsOutAPlayerTheDefaultLetsStart() throws {
@@ -678,7 +678,7 @@ import Testing
         parameters.familiaritySteps = Parameter(
             parameters.familiaritySteps.value.dropLast() + [FamiliarityStep(minimum: 0, factor: 0)],
             .derived, source: "test: zero lowest familiarity step")
-        let zeroing = LineupSelector(catalog: try RoleCatalog.fm27(), tables: try RatingTables.bundled(), parameters: parameters)
+        let zeroing = LineupSelector(catalog: try RoleCatalog.fm27(), profile: try RatingProfile.carriedOver(), parameters: parameters)
         let spareDefender = natural("Spare Defender", at: [.defenderCentral])
         let players = changing("Goalkeeper", in: squad(spareDefender)) { $0.isInjured = true }
         let lineup = try zeroing.select(request(players))
@@ -748,6 +748,29 @@ import Testing
         var req = request(squad())
         req.tactic = broken
         #expect(throws: TacticError.self) { try selector.select(req) }
+    }
+
+    // MARK: - Profiles
+
+    @Test func theSelectorUsesTheProfileItIsGiven() throws {
+        // Two strikers: one fast and a poor finisher, one slow and a fine finisher, otherwise equal.
+        let fast = Player.fixture(name: "Fast Striker", attributes: [.pace: 17, .acceleration: 17, .finishing: 6, .composure: 6,
+                                                                      .firstTouch: 6, .technique: 6],
+                                  familiarity: [.striker: 20])
+        let finisher = Player.fixture(name: "Finishing Striker", attributes: [.pace: 6, .acceleration: 6, .finishing: 17, .composure: 17,
+                                                                               .firstTouch: 17, .technique: 17],
+                                      familiarity: [.striker: 20])
+        let players = squad(fast, finisher).filter { $0.name != "Striker" }
+        let carried = try selector.select(request(players))
+        let fm27 = try LineupSelector(catalog: RoleCatalog.fm27(), profile: RatingProfile.fm27EngineTests(), parameters: .fm27)
+            .select(request(players))
+        #expect(pick(carried, .ST_C)?.player == id("Finishing Striker"))
+        #expect(pick(fm27, .ST_C)?.player == id("Fast Striker"))
+        // The rest of the eleven is the same under both.
+        for slot in carried.picks.map(\.slot) where slot != .ST_C {
+            #expect(pick(carried, slot)?.player == pick(fm27, slot)?.player, "\(slot)")
+        }
+        #expect(pick(carried, .GK)?.rating != pick(fm27, .GK)?.rating)
     }
 
     @Test func missingPlayerDataThrows() throws {

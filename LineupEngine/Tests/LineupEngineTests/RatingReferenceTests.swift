@@ -56,7 +56,7 @@ struct RatingReference: Decodable {
     @Test func matchesThePythonOnTheFM26Data() throws {
         let ref = try RatingReference.load()
         let catalog = try RoleCatalog(fm26JSON: Fixtures.data("reference/fm26_roles.json"))
-        let engine = RatingEngine(tables: try RatingTables.bundled(), parameters: .fm27, configuration: .fm26Reference)
+        let engine = RatingEngine(profile: try RatingProfile.carriedOver(), parameters: .fm27, configuration: .fm26Reference)
         #expect(ref.cases.count > 400)
         for c in ref.cases {
             let r = try engine.rating(for: try c.builtPlayer, in: try c.assignment(catalog))

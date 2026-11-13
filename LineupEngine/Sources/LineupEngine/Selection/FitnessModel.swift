@@ -1,4 +1,5 @@
-/// One point of a fitness curve: at `x` (a fraction of 1) the player's rating is multiplied by `factor`.
+/// One point of a curve: at `x` the curve's value is `factor`. In a fitness curve `x` is a fraction of 1 and `factor`
+/// multiplies the rating; in a rating profile's attribute curve `x` is the attribute value and `factor` its 0...1 scale.
 public struct CurvePoint: Sendable, Equatable {
     public let x: Double
     public let factor: Double

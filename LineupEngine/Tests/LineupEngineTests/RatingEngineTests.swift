@@ -3,8 +3,12 @@ import Testing
 @testable import LineupEngine
 
 @Suite struct RatingEngineTests {
-    let engine = RatingEngine(tables: try! RatingTables.bundled(), parameters: .fm27, configuration: .fm27)
-    let reference = RatingEngine(tables: try! RatingTables.bundled(), parameters: .fm27, configuration: .fm26Reference)
+    static let carried = try! RatingProfile.carriedOver()
+    static let fm27 = try! RatingProfile.fm27EngineTests()
+    let engine = RatingEngine(profile: Self.carried, parameters: .fm27, configuration: .fm27)
+    let reference = RatingEngine(profile: Self.carried, parameters: .fm27, configuration: .fm26Reference)
+    let thresholdsOn = RatingEngine(profile: Self.carried, parameters: .fm27, configuration: .thresholdsOn)
+    let fm27Engine = RatingEngine(profile: Self.fm27, parameters: .fm27, configuration: .fm27)
     let dc = Position.defenderCentral, aml = Position.attackingMidLeft, ml = Position.midfielderLeft
 
     func slot(_ id: SlotID) throws -> SlotAssignment {
@@ -59,9 +63,121 @@ import Testing
         let met = Player.fixture(attributes: [.acceleration: 14, .pace: 14, .offTheBall: 13], familiarity: [st: 20])
         let short = Player.fixture(attributes: [.acceleration: 12, .pace: 14, .offTheBall: 13], familiarity: [st: 20])
         let broken = Player.fixture(attributes: [.acceleration: 1, .pace: 1, .offTheBall: 1], familiarity: [st: 20])
-        #expect((try engine.rating(for: met, in: s)).inPossession.thresholdFactor == 1.0)
-        #expect(abs((try engine.rating(for: short, in: s)).inPossession.thresholdFactor - 0.96) < 1e-9)
-        #expect(abs((try engine.rating(for: broken, in: s)).inPossession.thresholdFactor - 0.80) < 1e-9)
+        #expect((try thresholdsOn.rating(for: met, in: s)).inPossession.thresholdFactor == 1.0)
+        #expect(abs((try thresholdsOn.rating(for: short, in: s)).inPossession.thresholdFactor - 0.96) < 1e-9)
+        #expect(abs((try thresholdsOn.rating(for: broken, in: s)).inPossession.thresholdFactor - 0.80) < 1e-9)
+    }
+
+    @Test func thresholdsDoNotApplyInTheFM27Configuration() throws {
+        // Channel Forward, Acceleration 12 against a threshold of 14.
+        let short = Player.fixture(attributes: [.acceleration: 12, .pace: 14, .offTheBall: 13], familiarity: [.striker: 20])
+        let s = try slot(.ST_C)
+        #expect(RatingConfiguration.fm27.appliesRoleThresholds == false)
+        #expect(RatingConfiguration.fm26Reference.appliesRoleThresholds == true)
+        let off = try engine.rating(for: short, in: s), on = try thresholdsOn.rating(for: short, in: s)
+        #expect(off.inPossession.thresholdFactor == 1.0)
+        #expect(abs(on.inPossession.thresholdFactor - 0.96) < 1e-9)
+        #expect(abs(on.inPossession.base - off.inPossession.base * 0.96) < 1e-9)
+        // The FM27 profile has no thresholds to apply even when they are switched on.
+        let fm27On = RatingEngine(profile: Self.fm27, parameters: .fm27, configuration: .thresholdsOn)
+        #expect(try fm27On.rating(for: short, in: s).inPossession.thresholdFactor == 1.0)
+    }
+
+    @Test func aPlayerBelowAThresholdNoLongerLosesHisPlaceBecauseOfIt() throws {
+        // ST_C: Channel Forward (Acceleration 14, Pace 14, Off The Ball 13) in possession,
+        // Centre Forward (Finishing 14, Off The Ball 13) out of it.
+        let s = try slot(.ST_C)
+        let meets = Player.fixture(name: "Meets", all: 10, attributes: [.acceleration: 14, .pace: 14, .offTheBall: 13, .finishing: 14],
+                                   familiarity: [.striker: 20])
+        let below = Player.fixture(name: "Below", all: 12, attributes: [.acceleration: 12, .pace: 12, .offTheBall: 12, .finishing: 12],
+                                   familiarity: [.striker: 20])
+        #expect(try engine.rating(for: below, in: s).inPossession.positionScore > engine.rating(for: meets, in: s).inPossession.positionScore)
+        #expect(try engine.rating(for: below, in: s).inPossession.roleScore > engine.rating(for: meets, in: s).inPossession.roleScore)
+        #expect(try engine.rating(for: below, in: s).value > engine.rating(for: meets, in: s).value)
+        #expect(try thresholdsOn.rating(for: below, in: s).value < thresholdsOn.rating(for: meets, in: s).value)
+    }
+
+    @Test func keyOnlyRoleScoreIgnoresPreferableExceptAsATieBreak() throws {
+        let catalog = try RoleCatalog.fm27()
+        let dlp = try catalog.role(named: "Deep-Lying Playmaker", phase: .inPossession, at: .defensiveMidfielder)
+        let s = SlotAssignment(slot: .DM_L, ipPosition: .defensiveMidfielder, ipRole: dlp, oopSlot: .DM_L,
+                               oopPosition: .defensiveMidfielder,
+                               oopRole: try catalog.role(named: "Defensive Midfielder", phase: .outOfPossession, at: .defensiveMidfielder))
+        func roleScore(_ attributes: [Attribute: Int]) throws -> Double {
+            try fm27Engine.rating(for: Player.fixture(attributes: attributes, familiarity: [.defensiveMidfielder: 20]), in: s)
+                .inPossession.roleScore
+        }
+        let base = try roleScore([:])
+        let preferableUp = try roleScore(Dictionary(uniqueKeysWithValues: dlp.preferable.map { ($0, 20) }))
+        let keyUp = try roleScore(Dictionary(uniqueKeysWithValues: dlp.key.map { ($0, 20) }))
+        #expect(preferableUp > base)
+        #expect(preferableUp - base <= 5)
+        #expect(keyUp - base > 5)
+        // Equal on key attributes: the preferable attributes decide.
+        let better = try roleScore(Dictionary(uniqueKeysWithValues: dlp.preferable.map { ($0, 14) }))
+        let worse = try roleScore(Dictionary(uniqueKeysWithValues: dlp.preferable.map { ($0, 11) }))
+        #expect(better > worse)
+        // The carried-over rule gives preferable attributes far more than a tie-break.
+        let carriedBase = try engine.rating(for: Player.fixture(familiarity: [.defensiveMidfielder: 20]), in: s).inPossession.roleScore
+        let carriedUp = try engine.rating(for: Player.fixture(attributes: Dictionary(uniqueKeysWithValues: dlp.preferable.map { ($0, 20) }),
+                                                              familiarity: [.defensiveMidfielder: 20]), in: s).inPossession.roleScore
+        #expect(carriedUp - carriedBase > 5)
+    }
+
+    @Test func theTieBreakRuleFallsBackWhenAListIsEmpty() throws {
+        let p = Player.fixture(attributes: [.passing: 20, .vision: 1], familiarity: [.attackingMidLeft: 20])
+        func score(key: [Attribute], preferable: [Attribute]) throws -> Double {
+            try fm27Engine.rating(for: p, in: probe(.attackingMidLeft, key: key, preferable: preferable)).inPossession.roleScore
+        }
+        #expect(try score(key: [.passing], preferable: []) == 100)          // key mean alone
+        #expect(try score(key: [], preferable: [.passing]) == 100)          // preferable mean alone
+        #expect(try score(key: [], preferable: []) == 50)                   // the empty-role score
+        #expect(abs(try score(key: [.passing], preferable: [.vision]) - 95) < 1e-9)   // 0.95 × 100 + 0.05 × 0
+        // A preferable attribute that is also key counts once, as key.
+        #expect(try score(key: [.passing], preferable: [.passing]) == 100)
+    }
+
+    @Test func theTwoProfilesRateAFastWeakPasserDifferently() throws {
+        let catalog = try RoleCatalog.fm27()
+        let s = SlotAssignment(
+            slot: .DM_L, ipPosition: .defensiveMidfielder,
+            ipRole: try catalog.role(named: "Deep-Lying Playmaker", phase: .inPossession, at: .defensiveMidfielder),
+            oopSlot: .DM_L, oopPosition: .defensiveMidfielder,
+            oopRole: try catalog.role(named: "Defensive Midfielder", phase: .outOfPossession, at: .defensiveMidfielder))
+        let fast = Player.fixture(name: "Fast", attributes: [.pace: 18, .acceleration: 18, .passing: 5, .technique: 5],
+                                  familiarity: [.defensiveMidfielder: 20])
+        let passer = Player.fixture(name: "Passer", attributes: [.pace: 5, .acceleration: 5, .passing: 18, .technique: 18],
+                                    familiarity: [.defensiveMidfielder: 20])
+        let fm27Gap = try fm27Engine.rating(for: fast, in: s).value - fm27Engine.rating(for: passer, in: s).value
+        let carriedGap = try engine.rating(for: fast, in: s).value - engine.rating(for: passer, in: s).value
+        #expect(fm27Gap > 0)
+        #expect(carriedGap < fm27Gap)
+    }
+
+    @Test func curvesScaleThePositionScore() throws {
+        // Pace 9 sits higher on the FM27 Pace curve than on the straight line; with the curve removed the score falls.
+        let p = Player.fixture(attributes: [.pace: 9], familiarity: [dc: 20])
+        let s = try slot(.D_CL)
+        let curved = try fm27Engine.rating(for: p, in: s).inPossession.positionScore
+        var curves = Self.fm27.curves
+        curves[.pace] = nil
+        let straight = try RatingEngine(profile: Self.fm27.with(curves: curves), parameters: .fm27, configuration: .fm27)
+            .rating(for: p, in: s).inPossession.positionScore
+        #expect(Self.fm27.scaled(9, for: .pace) != 8.0 / 19)
+        #expect(curved != straight)
+        // An attribute the position does not weigh changes nothing, curve or not.
+        let q = Player.fixture(attributes: [.passing: 18], familiarity: [dc: 20])
+        #expect(try fm27Engine.rating(for: q, in: s).inPossession.positionScore
+            == fm27Engine.rating(for: Player.fixture(familiarity: [dc: 20]), in: s).inPossession.positionScore)
+    }
+
+    @Test func theProfileSharesBlendTheScores() throws {
+        let p = Player.fixture(attributes: [.pace: 15, .passing: 6], familiarity: [dc: 20])
+        let s = try slot(.D_CL)
+        let r = try fm27Engine.rating(for: p, in: s).inPossession
+        #expect(abs(r.base - (0.70 * r.positionScore + 0.30 * r.roleScore)) < 1e-9)
+        let c = try engine.rating(for: p, in: s).inPossession
+        #expect(abs(c.base - (0.60 * c.positionScore + 0.35 * c.roleScore + 0.05 * c.consensusBonus)) < 1e-9)
     }
 
     @Test func currentAbilityDoesNotChangeAnFM27Rating() throws {
@@ -129,9 +245,11 @@ import Testing
         let blended = 0.60 * exact.positionScore + 0.35 * exact.roleScore + 0.05 * exact.consensusBonus
         #expect(abs(exact.base - blended * exact.thresholdFactor) < 1e-12)
         #expect(exact.base != (exact.base * 10).rounded() / 10)
+        // The reference also applies thresholds (and the current-ability factor, 1 at CA 100): compare like with like.
+        let unrounded = try thresholdsOn.rating(for: p, in: s).inPossession
         let rounded = try reference.rating(for: p, in: s).inPossession
-        #expect(rounded.base == (exact.base * 10).rounded(.toNearestOrEven) / 10)
-        #expect(rounded.base != exact.base)
+        #expect(rounded.base == (unrounded.base * 10).rounded(.toNearestOrEven) / 10)
+        #expect(rounded.base != unrounded.base)
         let combined = try engine.rating(for: p, in: s).value
         #expect(combined != (combined * 10).rounded() / 10)
     }
@@ -159,7 +277,7 @@ import Testing
         let tables = RatingTables(
             positionWeights: [.attackingMidCentral: [.passing: 1]],
             consensusBonuses: ["AM(C)|Probe": [.pace: 0.5]], thresholds: [:])
-        let capped = RatingEngine(tables: tables, parameters: .fm27, configuration: .fm27)
+        let capped = RatingEngine(profile: Self.carried.with(tables: tables), parameters: .fm27, configuration: .fm27)
         func bonus(pace: Int) throws -> Double {
             let p = Player.fixture(attributes: [.pace: pace, .balance: 1], familiarity: [.attackingMidCentral: 20])
             return try capped.rating(for: p, in: probe(.attackingMidCentral)).inPossession.consensusBonus
@@ -179,15 +297,29 @@ import Testing
     @Test func theEmptyRoleScoreComesFromTheParameters() throws {
         var parameters = EngineParameters.fm27
         parameters.emptyRoleScore = Parameter(40, .derived, source: "test: lowered empty-role score")
-        let lowered = RatingEngine(tables: try RatingTables.bundled(), parameters: parameters, configuration: .fm27)
+        let lowered = RatingEngine(profile: Self.carried, parameters: parameters, configuration: .fm27)
         let p = Player.fixture(attributes: [.passing: 20], familiarity: [.attackingMidLeft: 20])
         #expect(try lowered.rating(for: p, in: probe(.attackingMidLeft, key: [])).inPossession.roleScore == 40)
         // A role with attributes does not read it.
         #expect(try lowered.rating(for: p, in: probe(.attackingMidLeft)).inPossession.roleScore == 100)
     }
 
-    @Test func ratingsDoNotDependOnDictionaryOrder() throws {
-        let tables = try RatingTables.bundled()
+    @Test func balanceHasNoEffectUnderTheFM27ProfileBeyondThePositionScore() throws {
+        // The Balance bonus is part of the consensus bonus, whose share is 0 in the FM27 profile.
+        func rating(balance: Int) throws -> PhaseRating {
+            let p = Player.fixture(attributes: [.balance: balance], familiarity: [.attackingMidLeft: 20])
+            return try fm27Engine.rating(for: p, in: probe(.attackingMidLeft)).inPossession
+        }
+        let low = try rating(balance: 1), high = try rating(balance: 20)
+        #expect(high.consensusBonus > low.consensusBonus)
+        #expect(high.roleScore == low.roleScore)
+        #expect(abs((high.base - low.base) - 0.70 * (high.positionScore - low.positionScore)) < 1e-9)
+    }
+
+    @Test(arguments: ["carried-over", "fm27-engine-tests"])
+    func ratingsDoNotDependOnDictionaryOrder(_ profileID: String) throws {
+        let profile = try #require(try RatingProfile.all().first { $0.id == profileID })
+        let tables = profile.tables
         func reversed<V>(_ table: [Attribute: V]) -> [Attribute: V] {
             var out: [Attribute: V] = [:]
             for (k, v) in table.sorted(by: { $0.key.rawValue > $1.key.rawValue }) { out[k] = v }
@@ -202,8 +334,11 @@ import Testing
             positionWeights: Dictionary(uniqueKeysWithValues: tables.positionWeights.sorted { $0.key.rawValue > $1.key.rawValue }.map { ($0.key, reversed($0.value)) }),
             consensusBonuses: reversedOuter(tables.consensusBonuses, reversed),
             thresholds: reversedOuter(tables.thresholds, reversed))
-        let a = RatingEngine(tables: tables, parameters: .fm27, configuration: .fm27)
-        let b = RatingEngine(tables: rebuilt, parameters: .fm27, configuration: .fm27)
+        let rebuiltCurves = Dictionary(uniqueKeysWithValues: profile.curves.sorted { $0.key.rawValue > $1.key.rawValue }
+            .map { ($0.key, Array($0.value.reversed())) })
+        // Thresholds on, so the reversed threshold table is read too.
+        let a = RatingEngine(profile: profile, parameters: .fm27, configuration: .thresholdsOn)
+        let b = RatingEngine(profile: profile.with(tables: rebuilt).with(curves: rebuiltCurves), parameters: .fm27, configuration: .thresholdsOn)
         let assignments = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
             .assignments(catalog: RoleCatalog.fm27())
         var seed: UInt64 = 12345

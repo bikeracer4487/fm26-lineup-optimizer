@@ -1,0 +1,34 @@
+{
+  "version": "FM27-v1 (harvestgreen22 preview-build data; Fm-Match-Lab cross-check), from docs/Research/fm27-attribute-weights-and-role-thresholds.md, recommendation D",
+  "outfieldBaseWeights": {
+    "Pace": 0.1668, "Acceleration": 0.1351, "Stamina": 0.1219, "Jumping Reach": 0.0938,
+    "Anticipation": 0.0691, "Strength": 0.0657, "Work Rate": 0.0618, "Concentration": 0.0500,
+    "Natural Fitness": 0.0432, "Balance": 0.0399, "Dribbling": 0.0292, "Finishing": 0.0281,
+    "Long Shots": 0.0275, "Determination": 0.0247, "Agility": 0.0242, "Heading": 0.0191
+  },
+  "curveSlopesPerPoint": {
+    "Pace": [2.64, 4.47, 3.23], "Acceleration": [2.52, 3.57, 2.35], "Stamina": [2.36, 2.93, 2.33],
+    "Jumping Reach": [1.16, 2.03, 2.57], "Anticipation": [2.20, 1.47, 0.80], "Strength": [2.00, 1.47, 0.77],
+    "Work Rate": [3.16, 1.03, 0.00], "Concentration": [1.56, 0.93, 0.73], "Natural Fitness": [1.72, 0.67, 0.47],
+    "Balance": [1.20, 1.37, 0.00], "Dribbling": [0.60, 0.63, 0.60], "Finishing": [0.60, 0.80, 0.37],
+    "Long Shots": [1.04, 0.77, 0.00], "Determination": [1.20, 0.00, 0.47], "Agility": [1.04, 0.53, 0.03],
+    "Heading": [1.04, 0.27, 0.00]
+  },
+  "curveBands": [[1, 6], [6, 12], [12, 18]],
+  "positionMultipliers": {
+    "D (C)": {"Jumping Reach": 1.5, "Heading": 1.5, "Strength": 1.25, "Finishing": 0, "Long Shots": 0, "Dribbling": 0.5},
+    "D (L)": {"Stamina": 1.25, "Finishing": 0.5, "Long Shots": 0.5, "Heading": 0.5},
+    "D (R)": {"Stamina": 1.25, "Finishing": 0.5, "Long Shots": 0.5, "Heading": 0.5},
+    "WB (L)": {"Stamina": 1.25, "Finishing": 0.5, "Long Shots": 0.5, "Heading": 0.5},
+    "WB (R)": {"Stamina": 1.25, "Finishing": 0.5, "Long Shots": 0.5, "Heading": 0.5},
+    "DM": {"Finishing": 0.5, "Heading": 0.75},
+    "M (C)": {"Finishing": 0.5, "Heading": 0.75},
+    "M (L)": {"Jumping Reach": 0.75, "Heading": 0.5, "Dribbling": 1.5, "Finishing": 1.25},
+    "M (R)": {"Jumping Reach": 0.75, "Heading": 0.5, "Dribbling": 1.5, "Finishing": 1.25},
+    "AM (L)": {"Jumping Reach": 0.75, "Heading": 0.5, "Dribbling": 1.5, "Finishing": 1.25},
+    "AM (C)": {"Jumping Reach": 0.75, "Heading": 0.5, "Dribbling": 1.5, "Finishing": 1.25},
+    "AM (R)": {"Jumping Reach": 0.75, "Heading": 0.5, "Dribbling": 1.5, "Finishing": 1.25},
+    "ST (C)": {"Finishing": 2.0, "Dribbling": 1.25, "Heading": 1.25}
+  },
+  "goalkeeper": {"carriedOverTableWithout": ["Kicking"]}
+}

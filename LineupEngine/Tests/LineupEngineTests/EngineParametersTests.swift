@@ -13,6 +13,18 @@ import Testing
         #expect(Set(EngineParameters.fm27.all.map(\.name)).count == stored)
     }
 
+    @Test func theProfileNumbersAreNotEngineParameters() {
+        // The shares and the key and preferable weights belong to a rating profile.
+        let names = Set(EngineParameters.fm27.all.map(\.name))
+        for moved in ["positionShare", "roleShare", "consensusShare", "keyWeight", "preferableWeight"] {
+            #expect(!names.contains(moved), "\(moved)")
+        }
+        for kept in ["consensusCap", "balanceBonus", "thresholdPenaltyPerPoint", "thresholdPenaltyFloor", "emptyRoleScore",
+                     "familiaritySteps", "defensivePhaseWeightIP", "otherPhaseWeightIP"] {
+            #expect(names.contains(kept), "\(kept)")
+        }
+    }
+
     @Test func theEmptyRoleScoreIsCarriedOverFromCalculateRoleScore() {
         let p = EngineParameters.fm27.emptyRoleScore
         #expect(p.value == 50)

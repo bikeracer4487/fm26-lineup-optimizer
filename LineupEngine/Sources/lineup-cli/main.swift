@@ -8,8 +8,17 @@ let usage = """
 usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tactic.json>
                          [--first-team <paste.tsv>] [--u21 <paste.tsv>] [--u18 <paste.tsv>]
                          [--importance high|medium|low|sharpness] [--own-club <name>]
+                         [--profile carried-over|fm27|both]
        At least one of --first-team, --u21, --u18 is required.
+       --profile picks the rating profile; the default, both, prints the lineup under each and compares them.
 """
+
+/// The rating profiles `--profile` can name, by the ids `RatingProfile` gives them.
+let profileChoices: [String: [String]] = [
+    "carried-over": ["carried-over"],
+    "fm27": ["fm27-engine-tests"],
+    "both": ["carried-over", "fm27-engine-tests"],
+]
 
 struct Options {
     var grids: String?
@@ -17,6 +26,7 @@ struct Options {
     var pastes: [(squad: Squad, path: String)] = []
     var importance = Importance.high
     var ownClub: String?
+    var profileIDs = profileChoices["both"]!
 }
 
 struct UsageError: Error { let reason: String }
@@ -27,7 +37,7 @@ func parse(_ arguments: [String]) throws -> Options {
     var options = Options()
     while let flag = args.popFirst() {
         let squads: [String: Squad] = ["--first-team": .firstTeam, "--u21": .u21, "--u18": .u18]
-        guard ["--grids", "--tactic", "--importance", "--own-club"].contains(flag) || squads[flag] != nil else {
+        guard ["--grids", "--tactic", "--importance", "--own-club", "--profile"].contains(flag) || squads[flag] != nil else {
             throw UsageError(reason: "unknown option \(flag)")
         }
         guard let value = args.popFirst() else { throw UsageError(reason: "\(flag) needs a value") }
@@ -40,6 +50,11 @@ func parse(_ arguments: [String]) throws -> Options {
                 throw UsageError(reason: "unknown importance '\(value)' (use high, medium, low or sharpness)")
             }
             options.importance = importance
+        case "--profile":
+            guard let ids = profileChoices[value] else {
+                throw UsageError(reason: "unknown profile '\(value)' (use carried-over, fm27 or both)")
+            }
+            options.profileIDs = ids
         default: options.pastes.append((squads[flag]!, value))
         }
     }
@@ -93,12 +108,15 @@ do {
         fail("The tactic file \(options.tactic!) is not valid: \(ErrorDescriptions.describe(error))")
     }
     let ownClub = book.ownClub(override: options.ownClub)
-    let selector = LineupSelector(catalog: try .fm27(), tables: try .bundled(), parameters: .fm27)
-    let lineup = try selector.select(.init(tactic: tactic, players: book.allPlayers, ownClub: ownClub,
-                                           importance: options.importance, isNextFixture: true,
-                                           overrides: [:], rejected: []))
+    let catalog = try RoleCatalog.fm27()
+    let profiles = try RatingProfile.all().filter { options.profileIDs.contains($0.id) }
+    let request = SelectionRequest(tactic: tactic, players: book.allPlayers, ownClub: ownClub, importance: options.importance,
+                                   isNextFixture: true, overrides: [:], rejected: [])
+    let results = try profiles.map { profile in
+        (profile: profile, lineup: try LineupSelector(catalog: catalog, profile: profile, parameters: .fm27).select(request))
+    }
     output = Report.render(imports: imports, moves: moves, book: book, ownClub: ownClub, override: options.ownClub,
-                           tactic: tactic, importance: options.importance, lineup: lineup)
+                           tactic: tactic, importance: options.importance, results: results)
 } catch {
     // The library describes FMRTE's configuration without knowing where it was read from.
     let isConfigError = switch error as? ImportError {

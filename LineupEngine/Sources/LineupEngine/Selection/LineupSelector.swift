@@ -97,9 +97,9 @@ public struct LineupSelector: Sendable {
     private let engine: RatingEngine
     private let parameters: EngineParameters
 
-    public init(catalog: RoleCatalog, tables: RatingTables, parameters: EngineParameters, configuration: RatingConfiguration = .fm27) {
+    public init(catalog: RoleCatalog, profile: RatingProfile, parameters: EngineParameters, configuration: RatingConfiguration = .fm27) {
         self.catalog = catalog
-        self.engine = RatingEngine(tables: tables, parameters: parameters, configuration: configuration)
+        self.engine = RatingEngine(profile: profile, parameters: parameters, configuration: configuration)
         self.parameters = parameters
     }
 

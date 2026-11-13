@@ -17,13 +17,9 @@ protocol ParameterProtocol {
 
 extension Parameter: ParameterProtocol {}
 
-/// Every number a rating or selection rule uses, each with its evidence level and source.
+/// Every number a rating or selection rule uses, each with its evidence level and source, apart from the
+/// weights, curves and shares that belong to a `RatingProfile`.
 public struct EngineParameters: Sendable {
-    public var positionShare: Parameter<Double>
-    public var roleShare: Parameter<Double>
-    public var consensusShare: Parameter<Double>
-    public var keyWeight: Parameter<Double>
-    public var preferableWeight: Parameter<Double>
     public var consensusCap: Parameter<Double>
     public var balanceBonus: Parameter<Double>
     public var thresholdPenaltyPerPoint: Parameter<Double>
@@ -54,11 +50,6 @@ public struct EngineParameters: Sendable {
     public static let fm27: EngineParameters = {
         func carried(_ value: Double) -> Parameter<Double> { Parameter(value, .carriedOverFM26, source: pythonSource) }
         return EngineParameters(
-            positionShare: carried(0.60),
-            roleShare: carried(0.35),
-            consensusShare: carried(0.05),
-            keyWeight: carried(1.5),
-            preferableWeight: carried(1.2),
             consensusCap: carried(10),
             balanceBonus: carried(0.01),
             thresholdPenaltyPerPoint: carried(0.02),

@@ -18,15 +18,15 @@ Test it with:
 
 Run one suite or test with `swift test --filter <name>`. Test output must be clean: no build warnings.
 
-- `lineup-cli`, in the package, reads a grids snapshot, a tactic and squad pastes, and prints the explained lineup (`swift run lineup-cli select ...`; usage at the top of `LineupEngine/Sources/lineup-cli/main.swift`).
-- `tools/capture_fmrte_paste.sh` saves the clipboard and FMRTE's grid layouts as test fixtures; `tools/export_rating_reference.py` rewrites the rating tables and Python reference data (tracked files).
-- How each captured paste was taken: `LineupEngine/Tests/LineupEngineTests/Fixtures/captures/README.md`.
+- Ratings come from a `RatingProfile`, which `RatingEngine` and `LineupSelector` take explicitly; there is no default yet. "Carried over from FM26" is the old Python's weights; "FM27 engine tests" is built from `Resources/rating_profile_fm27.json` per `docs/Research/fm27-attribute-weights-and-role-thresholds.md`. Role thresholds apply only in the `.fm26Reference` configuration, which proves the port.
+- `lineup-cli`, in the package, reads a grids snapshot, a tactic and squad pastes, and prints the explained lineup under both profiles with a comparison (`--profile` picks one; usage at the top of `LineupEngine/Sources/lineup-cli/main.swift`).
+- `tools/capture_fmrte_paste.sh` saves the clipboard and FMRTE's grid layouts as test fixtures (how each was taken: `LineupEngine/Tests/LineupEngineTests/Fixtures/captures/README.md`); `tools/export_rating_reference.py` rewrites the rating tables and Python reference data (tracked files).
 - A player's identity comes from FMRTE's `Id` column when the pasted grid has it; without it, players are identified by name, with a warning.
 
 Rules for the engine:
 
 - No silent defaults. A missing column, unknown role, or blank or out-of-range value is an error that names the player and the column.
-- Every tunable number for a rating or selection rule lives in `EngineParameters`, with an evidence label and a source.
+- Every tunable number for a rating or selection rule lives in `EngineParameters` or a `RatingProfile`, with an evidence label and a source.
 - Every rule gets a test where it changes an outcome and a test where it does not.
 
 ## Old code: reference only
