@@ -190,6 +190,28 @@ import Testing
         #expect(high.omissions.isEmpty)
     }
 
+    @Test func justBelowTheFloorIsShownBelowTheFloor() throws {
+        // 0.8499 fails the 0.85 floor, so the text must not show 85%.
+        let cover = Player.fixture(name: "Cover Striker", familiarity: [.striker: 10])
+        let players = changing("Striker", in: squad(cover)) { $0.condition = 0.8499 }
+
+        let left = try selector.select(request(players))
+        let omission = try #require(left.omissions.first)
+        #expect(omission.cause == .excluded(.belowConditionFloor(0.8499)))
+        #expect(omission.reason == "Left out: below the 85% condition floor at 84%")
+
+        let chosen = try selector.select(request(players, overrides: [.ST_C: id("Striker")]))
+        let st = try #require(pick(chosen, .ST_C))
+        #expect(st.reasons.contains { $0.hasPrefix("Condition 84% (×") })
+        #expect(st.reasons.last == "Chosen by you, overriding: condition 84% is below the 85% floor")
+    }
+
+    @Test func percentagesAreRoundedDownSoNoneReachesAHundredUnlessItIs() throws {
+        let lineup = try selector.select(request(changing("Striker", in: squad()) { $0.condition = 0.995; $0.sharpness = 0.999 }))
+        let st = try #require(pick(lineup, .ST_C))
+        #expect(Array(st.reasons.dropFirst()) == ["Condition 99% (×1.00)", "Sharpness 99% (×1.00)"])
+    }
+
     @Test func atTheJadedThresholdHeStillStarts() throws {
         let cover = Player.fixture(name: "Cover Striker", familiarity: [.striker: 9])
         let lineup = try selector.select(request(changing("Striker", in: squad(cover)) { $0.jadedness = 400 }, importance: .medium))
@@ -296,11 +318,91 @@ import Testing
         #expect(lineup.ignoredOverrides.isEmpty)
         let omission = try #require(lineup.omissions.first)
         #expect(omission.player == id("Striker"))
+        #expect(omission.cause == .displacedByOverride(by: id("Rival Striker")))
+    }
+
+    @Test func aFitPlayerSqueezedOutElsewhereHearsThatOthersFitBetter() throws {
+        // Ideal: Striker (all 12, natural at ST and AM (C)) at ST_C, Playmaker at AM_C. Overriding the
+        // rival into ST_C moves the Striker to AM_C, so the fit Playmaker, whose own slot was not
+        // overridden, loses his place to a better player.
+        let striker = Player.fixture(name: "Striker", all: 12, familiarity: [.striker: 20, .attackingMidCentral: 20])
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let players = squad().filter { $0.name != "Striker" } + [striker, rival]
+        try #require(pick(try selector.select(request(players)), .ST_C)?.player == id("Striker"))
+
+        let lineup = try selector.select(request(players, overrides: [.ST_C: id("Rival Striker")]))
+        try #require(pick(lineup, .AM_C)?.player == id("Striker"))
+        #expect(lineup.omissions.map(\.player) == [id("Playmaker")])
+        let omission = try #require(lineup.omissions.first)
         guard case .lowerMatchDayValue(let ideal, let today, let limiting) = omission.cause else {
             Issue.record("expected lowerMatchDayValue, got \(omission.cause)"); return
         }
         #expect(ideal == today && limiting == .condition)
         #expect(omission.reason == "Left out: others are a better fit today")
+    }
+
+    @Test func aPlayerDisplacedByYourOverrideIsToldSo() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let players = changing("Striker", in: squad(rival)) { $0.condition = 0.95 }
+        let lineup = try selector.select(request(players, overrides: [.ST_C: id("Rival Striker")]))
+        let omission = try #require(lineup.omissions.first)
+        #expect(lineup.omissions.count == 1)
+        #expect(omission.player == id("Striker") && omission.slot == .ST_C)
+        #expect(omission.cause == .displacedByOverride(by: id("Rival Striker")))
+        #expect(omission.reason == "Left out: you chose Rival Striker for ST (C)")
+
+        // Without the override he starts: his condition factor (0.97) beats the rival's familiarity (0.95).
+        let free = try selector.select(request(players))
+        #expect(pick(free, .ST_C)?.player == id("Striker"))
+    }
+
+    @Test func aPlayerWhoLosesOnMeritWithoutAnOverrideIsBlamedOnFitness() throws {
+        // A rival a little weaker than the striker at full fitness, but stronger than him at condition 0.95.
+        let rival = natural("Rival Striker", at: [.striker])
+        let players = changing("Striker", in: squad(rival)) { $0.condition = 0.95; $0.attributes[.finishing] = 11 }
+        let lineup = try selector.select(request(players))
+        #expect(pick(lineup, .ST_C)?.player == id("Rival Striker"))
+        let omission = try #require(lineup.omissions.first)
+        #expect(omission.player == id("Striker"))
+        guard case .lowerMatchDayValue(let ideal, let today, let limiting) = omission.cause else {
+            Issue.record("expected lowerMatchDayValue, got \(omission.cause)"); return
+        }
+        #expect(limiting == .condition)
+        #expect(omission.reason == "Left out: condition 95% lowers him from \(oneDecimal(ideal)) to \(oneDecimal(today))")
+    }
+
+    @Test func anExcludedPlayerWhoseSlotWasOverriddenKeepsHisExclusion() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let lineup = try selector.select(request(squad(rival), overrides: [.ST_C: id("Rival Striker")], rejected: [id("Striker")]))
+        #expect(lineup.omissions.first?.cause == .excluded(.rejected))
+    }
+
+    @Test func anOverriddenPlayerIsNotAlsoPlacedByTheSolver() throws {
+        let lineup = try selector.select(request(squad(), overrides: [.ST_C: id("Playmaker")]))
+        #expect(lineup.picks.filter { $0.player == id("Playmaker") }.count == 1)
+        #expect(pick(lineup, .ST_C)?.player == id("Playmaker"))
+        let amc = try #require(pick(lineup, .AM_C))
+        #expect(amc.player != id("Playmaker"))
+        #expect(!lineup.omissions.contains { $0.player == id("Playmaker") })
+        #expect(Set(lineup.picks.map(\.player)).count == 11)
+    }
+
+    @Test func twoPlayersOverriddenIntoEachOthersSlotsAreBothPlaced() throws {
+        let full = try selector.select(request(squad(), overrides: [.D_L: id("Right Back"), .D_R: id("Left Back")]))
+        #expect(full.ignoredOverrides.isEmpty)
+        #expect(pick(full, .D_L)?.player == id("Right Back"))
+        #expect(pick(full, .D_R)?.player == id("Left Back"))
+        #expect(pick(full, .D_L)?.isOverride == true && pick(full, .D_R)?.isOverride == true)
+        #expect(Set(full.picks.map(\.player)).count == 11)
+        #expect(full.picks.count == 11)
+
+        // Ten players: an overridden full-back left among the candidates would also fill the empty ST_C.
+        let short = try selector.select(request(squad().filter { $0.name != "Striker" },
+                                                overrides: [.D_L: id("Right Back"), .D_R: id("Left Back")]))
+        #expect(short.ignoredOverrides.isEmpty)
+        #expect(short.picks.count == 10)
+        #expect(Set(short.picks.map(\.player)).count == 10)
+        #expect(short.unfilled == [.ST_C])
     }
 
     @Test func anOverrideBeatsTheConditionFloorAndIsMarked() throws {
@@ -402,6 +504,22 @@ import Testing
         #expect(gk.warnings.contains(.outOfPosition(.inPossession, familiarity: 1)))
         #expect(gk.warnings == [.outOfPosition(.inPossession, familiarity: 1), .outOfPosition(.outOfPossession, familiarity: 1)])
         #expect(gk.player != id("Goalkeeper") && gk.player != id("Spare Goalkeeper"))
+    }
+
+    @Test func aPairingWorthZeroStillFillsASlot() throws {
+        // With the lowest familiarity step at factor 0, an outfielder in goal is worth exactly 0.
+        var parameters = EngineParameters.fm27
+        parameters.familiaritySteps = Parameter(
+            parameters.familiaritySteps.value.dropLast() + [FamiliarityStep(minimum: 0, factor: 0)],
+            .derived, source: "test: zero lowest familiarity step")
+        let zeroing = LineupSelector(catalog: try RoleCatalog.fm27(), tables: try RatingTables.bundled(), parameters: parameters)
+        let spareDefender = natural("Spare Defender", at: [.defenderCentral])
+        let players = changing("Goalkeeper", in: squad(spareDefender)) { $0.isInjured = true }
+        let lineup = try zeroing.select(request(players))
+        let gk = try #require(pick(lineup, .GK))
+        #expect(gk.rating.value == 0 && gk.value == 0)
+        #expect(lineup.unfilled.isEmpty)
+        #expect(lineup.picks.count == 11)
     }
 
     @Test func aCoverAtTheCompetentStepIsNotFlagged() throws {

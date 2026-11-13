@@ -53,6 +53,8 @@ public enum OmissionCause: Equatable, Sendable {
     case excluded(Exclusion)
     /// `ideal` is his full-fitness value in his ideal slot, `today` that value times his fitness product.
     case lowerMatchDayValue(ideal: Double, today: Double, limiting: FactorKind)
+    /// His ideal slot holds the player the manager chose for it.
+    case displacedByOverride(by: PlayerID)
 }
 
 /// A player in the ideal eleven who is not in the real one.
@@ -120,7 +122,6 @@ public struct LineupSelector: Sendable {
             try players.indices.map { loanedOut[$0] ? nil : try engine.rating(for: players[$0], in: assignment) }
         }
 
-        // Overrides
         // Overrides, first problem wins: slot not in the tactic, not in the squad, used twice, not allowed.
         // An override for a slot the tactic does not use does not count as a use.
         let slotIndex = Dictionary(uniqueKeysWithValues: assignments.enumerated().map { ($1.slot, $0) })
@@ -167,8 +168,9 @@ public struct LineupSelector: Sendable {
         var omissions: [Omission] = []
         for (s, choice) in ideal.enumerated() {
             guard let i = choice, !inLineup.contains(i), let rating = ratings[s][i] else { continue }
-            omissions.append(omission(players[i], slot: assignments[s].slot, rating: rating,
-                                      fitness: fitness[i], excluded: exclusions[i]))
+            let chosenInstead = overridden.contains(s) ? placed[s].map { players[$0] } : nil
+            omissions.append(omission(players[i], assignments[s], rating: rating, fitness: fitness[i],
+                                      excluded: exclusions[i], chosenInstead: chosenInstead))
         }
 
         return Lineup(picks: picks, unfilled: unfilled, omissions: omissions, ignoredOverrides: ignored)
@@ -205,13 +207,17 @@ public struct LineupSelector: Sendable {
                     value: rating.value * fitness.product, isOverride: isOverride, warnings: warnings, reasons: reasons)
     }
 
-    private func omission(_ player: Player, slot: SlotID, rating: SlotRating, fitness: FitnessFactors,
-                          excluded: Exclusion?) -> Omission {
+    /// `chosenInstead` is the manager's override in his ideal slot, if there is one.
+    private func omission(_ player: Player, _ assignment: SlotAssignment, rating: SlotRating, fitness: FitnessFactors,
+                          excluded: Exclusion?, chosenInstead: Player?) -> Omission {
         let cause: OmissionCause
         let reason: String
         if let excluded {
             cause = .excluded(excluded)
             reason = "Left out: " + leftOutText(excluded)
+        } else if let chosenInstead {
+            cause = .displacedByOverride(by: chosenInstead.id)
+            reason = "Left out: you chose \(chosenInstead.name) for \(assignment.ipPosition.rawValue)"
         } else {
             let today = rating.value * fitness.product
             let limiting = limitingFactor(fitness)
@@ -227,7 +233,7 @@ public struct LineupSelector: Sendable {
                 reason = "Left out: \(input) lowers him from \(oneDecimal(rating.value)) to \(oneDecimal(today))"
             }
         }
-        return Omission(player: player.id, name: player.name, slot: slot, cause: cause, reason: reason)
+        return Omission(player: player.id, name: player.name, slot: assignment.slot, cause: cause, reason: reason)
     }
 
     /// The smallest factor; ties go to condition, then sharpness, then jadedness.
@@ -263,7 +269,12 @@ public struct LineupSelector: Sendable {
         }
     }
 
-    private func percent(_ fraction: Double) -> String { "\(Int((fraction * 100).rounded()))%" }
+    /// Absorbs binary floating-point error (0.84 × 100 is 83.999…) before rounding down; far below
+    /// the importer's 1/10,000 resolution.
+    private static let displayNoise = 1e-9
+
+    /// A whole percentage rounded down, so a value shown never reaches a threshold or 100% it has not reached.
+    private func percent(_ fraction: Double) -> String { "\(Int((fraction * 100 + Self.displayNoise).rounded(.down)))%" }
     private func oneDecimal(_ x: Double) -> String { String(format: "%.1f", x) }
     private func twoDecimals(_ x: Double) -> String { String(format: "%.2f", x) }
 }
