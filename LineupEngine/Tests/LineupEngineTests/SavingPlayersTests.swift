@@ -37,8 +37,10 @@ import Testing
     }
 
     func later(_ id: String, _ importance: Importance, inDays days: Int, opponent: String? = nil,
-               tiers: SquadTiers? = nil) -> LaterFixture {
-        LaterFixture(fixture: fixture(id, importance, inDays: days, opponent: opponent), tiers: tiers ?? self.tiers)
+               tiers: SquadTiers? = nil, rejected: Set<PlayerID> = []) -> LaterFixture {
+        var later = fixture(id, importance, inDays: days, opponent: opponent)
+        later.rejected = rejected
+        return LaterFixture(fixture: later, tiers: tiers ?? self.tiers)
     }
 
     func adjustment(_ player: Player, at slot: SlotID, today importance: Importance, _ later: [LaterFixture],
@@ -116,6 +118,29 @@ import Testing
         let second = player(.ST_C, "second")
         #expect(try adjustment(first, at: .ST_C, today: .low, [later("big", .high, inDays: 2, tiers: thereTiers)]) == nil)
         #expect(try adjustment(second, at: .ST_C, today: .low, [later("big", .high, inDays: 2, tiers: thereTiers)]) != nil)
+    }
+
+    @Test func aPlayerRejectedForTheLaterFixtureCostsNothingThere() throws {
+        let p = player(.ST_C)
+        #expect(try adjustment(p, at: .ST_C, today: .low, [later("big", .high, inDays: 2)]) != nil)
+        #expect(try adjustment(p, at: .ST_C, today: .low, [later("big", .high, inDays: 2, rejected: [p.id])]) == nil)
+        // Rejecting someone else changes nothing.
+        let other = PlannerFixture.id(.GK, "first")
+        #expect(try adjustment(p, at: .ST_C, today: .low, [later("big", .high, inDays: 2, rejected: [other])])
+            == adjustment(p, at: .ST_C, today: .low, [later("big", .high, inDays: 2)]))
+    }
+
+    @Test func whenRejectedForOneOfTwoLaterFixturesOnlyTheOtherCounts() throws {
+        let p = player(.ST_C)
+        let near = try byHand(p, at: .ST_C, days: 2)
+        let far = try byHand(p, at: .ST_C, days: 5)
+        try #require(near.ratingTimesDrop < near.advantage && far.ratingTimesDrop < far.advantage)
+        let fixtures = [later("wealdstone", .high, inDays: 2, opponent: "Wealdstone", rejected: [p.id]),
+                        later("barnet", .high, inDays: 5, opponent: "Barnet")]
+        let a = try #require(try adjustment(p, at: .ST_C, today: .low, fixtures))
+        #expect(abs(a.cost - far.ratingTimesDrop * 3.75) < 1e-9)
+        #expect(a.reason == "Kept fresher for Barnet on \(today.adding(days: 5).iso): "
+            + "starting today would cost about \(oneDecimal(far.ratingTimesDrop)) there")
     }
 
     // MARK: - Importance
@@ -251,6 +276,33 @@ import Testing
                                               settings: PlanSettings(savingPlayers: 2)))
         #expect(abs(two.cost - 2 * one.cost) < 1e-9)
         #expect(two.reason == one.reason)
+    }
+
+    @Test func aCostAboveTheCeilingComesBackAsTheCeiling() throws {
+        // A start puts him below the floor the next day, so each later fixture costs his whole advantage.
+        let p = player(.D_L) { $0.condition = 0.86 }
+        let cover = PlannerFixture.id(.D_L, "second")
+        func handBuilt(advantage: Double) -> SquadTiers {
+            SquadTiers(first: [.D_L: p.id], second: [.D_L: cover], ratings: [p.id: [.D_L: 200], cover: [.D_L: 200 - advantage]])
+        }
+        let ceiling = parameters.savingCostCeiling.value
+        // 200 × (3.0 / 0.1) × 10 = 60,000.
+        let capped = try #require(try adjustment(p, at: .D_L, today: .sharpness, [later("big", .high, inDays: 1, tiers: handBuilt(advantage: 200))],
+                                                 settings: PlanSettings(savingPlayers: 10)))
+        #expect(capped.cost == ceiling)
+        #expect(capped.reason.hasSuffix("would cost about 200.0 there"))
+        // 20 × (3.0 / 0.8) = 75, below the ceiling: unchanged.
+        let below = try #require(try adjustment(p, at: .D_L, today: .low, [later("big", .high, inDays: 1, tiers: handBuilt(advantage: 20))]))
+        #expect(abs(below.cost - 75) < 1e-9)
+    }
+
+    @Test func theCeilingIsListedWithEvidenceAndSource() {
+        let c = parameters.savingCostCeiling
+        #expect(c.value == 1_000)
+        #expect(c.evidence == .derived)
+        #expect(c.source == "five times the highest possible rating: at that cost a player starts only when nobody else can, "
+            + "and values stay far below the assignment solver's empty-slot cost")
+        #expect(parameters.all.contains { $0.name == "savingCostCeiling" })
     }
 
     // MARK: - Several fixtures and the reason

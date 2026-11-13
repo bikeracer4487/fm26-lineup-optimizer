@@ -63,7 +63,7 @@ public struct PlanSettings: Equatable, Codable, Sendable {
     public var stability: Double
     /// 0 turns saving players for later fixtures off.
     public var savingPlayers: Double
-    /// How many fixtures ahead to plan.
+    /// How many fixtures ahead to plan, 1 to 20.
     public var horizon: Int
 
     public init(
@@ -89,6 +89,10 @@ public struct PlanSettings: Equatable, Codable, Sendable {
         }
         if horizon < 1 {
             found.append("Horizon must be at least 1 fixture, but is \(horizon)")
+        }
+        // A cap on the number of later fixtures a saving cost can add up; `savingCostCeiling` caps the cost itself.
+        if horizon > 20 {
+            found.append("Horizon must be at most 20 fixtures, but is \(horizon)")
         }
         return found
     }

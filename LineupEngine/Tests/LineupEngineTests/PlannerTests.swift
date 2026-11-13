@@ -407,6 +407,35 @@ import Testing
         }
     }
 
+    @Test func historyThatNoLongerMatchesTheSquadOrTacticIsHandled() throws {
+        // The latest confirmed lineup names a player who has left at D_L and the first-choice AM (C) at M_C, a slot the
+        // tactic does not use. Before it, he started twice at AM_C. His cover is too weak to rotate in.
+        let players = try PlannerFixture.squad(first: 14, second: 6)
+        let gone = PlayerID(key: "gone")
+        let playmaker = id(.AM_C)
+        try #require(!players.contains { $0.id == gone })
+        try #require(try tactic.assignments(catalog: RoleCatalog.fm27()).allSatisfy { $0.slot != .M_C })
+        let confirmed = [
+            ConfirmedLineup(fixture: FixtureID("played5"), date: day(-5), starters: [.AM_C: playmaker]),
+            ConfirmedLineup(fixture: FixtureID("played3"), date: day(-3), starters: [.AM_C: playmaker]),
+            ConfirmedLineup(fixture: FixtureID("played1"), date: day(-1), starters: [.D_L: gone, .M_C: playmaker]),
+        ]
+        let plan = try planner.plan(request([fixture("a", day: 1)], players: players, confirmed: confirmed))
+        let planned = try #require(plan.fixtures.first)
+
+        // No slot of the tactic is M_C, so no stability adjustment can refer to it: nobody carries one.
+        #expect(planned.lineup.picks.allSatisfy { pick in !pick.adjustments.contains { $0.kind == .stability } })
+        for omission in planned.lineup.omissions {
+            if case .heldBack(let kinds) = omission.cause { #expect(!kinds.contains(.stability), "\(omission.name)") }
+        }
+        #expect(!planned.lineup.picks.contains { $0.player == gone })
+
+        // The M_C start still extends his run: three in a row, the step that marks an attacking midfielder down.
+        let his = try #require(planned.lineup.picks.first { $0.player == playmaker })
+        #expect(his.adjustments.filter { $0.kind == .consecutiveStarts }
+            == [Adjustment(kind: .consecutiveStarts, factor: 0.90, reason: "Has started the last 3 matches in quick succession (×0.90)")])
+    }
+
     @Test func aPlannedLineupReplacesAConfirmedOneForTheSameFixture() throws {
         // A stale confirmed lineup for fixture "a" says the cover started it; the plan's own lineup for "a" replaces it.
         let stale = [ConfirmedLineup(fixture: FixtureID("a"), date: day(1), starters: [.D_L: id(.D_L, "second")])]

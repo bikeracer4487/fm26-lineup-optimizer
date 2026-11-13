@@ -39,6 +39,12 @@ import Foundation
         #expect(PlanSettings(savingPlayers: -1).problems() == ["Saving players must be between 0 and 10, but is -1.0"])
     }
 
+    @Test func horizonIsAtMostTwenty() {
+        #expect(PlanSettings(horizon: 20).problems().isEmpty)
+        #expect(PlanSettings(horizon: 21).problems() == ["Horizon must be at most 20 fixtures, but is 21"])
+        #expect(PlanSettings(horizon: 1).problems().isEmpty)
+    }
+
     @Test func confirmedLineupAndRetrainingRoundTripThroughJSON() throws {
         let day = try #require(Day(iso: "2026-11-14"))
         let lineup = ConfirmedLineup(
@@ -49,6 +55,9 @@ import Foundation
         let text = String(decoding: data, as: UTF8.self)
         #expect(text.contains(#""fmrte:7""#))
         #expect(!text.contains(#""key""#))
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let starters = try #require(object["starters"] as? [String: String])
+        #expect(starters == [SlotID.allCases[0].rawValue: "fmrte:7", SlotID.allCases[1].rawValue: "some name"])
 
         let retraining = Retraining(player: .fmrte(9), position: Position.allCases[0], acceptedOn: day)
         let data2 = try JSONEncoder().encode(retraining)

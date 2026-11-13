@@ -126,6 +126,8 @@ public struct EngineParameters: Sendable {
     public var stabilityRecentBonus: Parameter<Double>
     /// How much each match importance counts when a start today is weighed against a more important fixture later.
     public var importanceWeights: Parameter<[Importance: Double]>
+    /// The most saving a player for later fixtures can cost him in one fixture, in rating points.
+    public var savingCostCeiling: Parameter<Double>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -266,7 +268,11 @@ public struct EngineParameters: Sendable {
                 0.02, .derived, source: "rescaled from ui/api/stability.py (branch customizable-tactics), which moved a rating by up to about 2 to 5 points"),
             importanceWeights: Parameter(
                 [.high: 3.0, .medium: 1.5, .low: 0.8, .sharpness: 0.1], .carriedOverFM26,
-                source: "scoring_parameters.py IMPORTANCE_WEIGHTS, branch customizable-tactics"))
+                source: "scoring_parameters.py IMPORTANCE_WEIGHTS, branch customizable-tactics"),
+            savingCostCeiling: Parameter(
+                1_000, .derived,
+                source: "five times the highest possible rating: at that cost a player starts only when nobody else can, "
+                    + "and values stay far below the assignment solver's empty-slot cost"))
     }()
 
     /// Every stored parameter, found by reflection so a new one cannot be left out.

@@ -17,7 +17,8 @@ public struct LaterFixture: Sendable {
 /// the loss is his rating in his slot there times the fall in his fitness factors that today's start causes by
 /// then, at most his advantage over the second-eleven player in that slot. A start that would break a risk rule
 /// there which resting would not costs the whole advantage. Each loss is weighted by the ratio of importance
-/// weights; the sum, scaled by the saving-players setting, is the cost.
+/// weights; the sum, scaled by the saving-players setting and capped at `savingCostCeiling`, is the cost. A later
+/// fixture the manager has rejected him for counts for nothing.
 public enum SavingPlayers {
     /// The cost, in rating points, of starting `player` today at `position`, given the fixtures still to come.
     /// nil when there is none.
@@ -38,7 +39,9 @@ public enum SavingPlayers {
         for item in ordered {
             let m = item.fixture
             let gap = today.date.days(to: m.date)
-            guard gap > 0, let weight = usable(weights[m.importance]), weight > todayWeight else { continue }
+            // The manager has already ruled him out of that fixture: nothing to save him for.
+            guard gap > 0, !m.rejected.contains(player.id),
+                  let weight = usable(weights[m.importance]), weight > todayWeight else { continue }
             guard let (slot, tier) = item.tiers.slot(of: player.id), tier == 1,
                   let rating = item.tiers.ratings[player.id]?[slot],
                   let advantage = item.tiers.advantage(of: player.id) else { continue }
@@ -67,7 +70,8 @@ public enum SavingPlayers {
             }
         }
 
-        let cost = settings.savingPlayers * total
+        // Capped, so a match-day value stays far inside the range the assignment solver accepts.
+        let cost = min(settings.savingPlayers * total, parameters.savingCostCeiling.value)
         guard cost > 0, let largest else { return nil }
         let figure = String(format: "%.1f", largest.loss)
         return Adjustment(
