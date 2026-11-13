@@ -171,6 +171,65 @@ import Testing
             == fm27Engine.rating(for: Player.fixture(familiarity: [dc: 20]), in: s).inPossession.positionScore)
     }
 
+    @Test func aGoalkeeperIsRatedWithoutCurves() throws {
+        // Agility is a key attribute of the Goalkeeper and Sweeper Keeper roles in GK, and has an outfield curve.
+        let s = try slot(.GK)
+        try #require(s.ipRole.key.contains(.agility) && s.oopRole.key.contains(.agility))
+        let p12 = Player.fixture(attributes: [.agility: 12], familiarity: [.goalkeeper: 20])
+        let p18 = Player.fixture(attributes: [.agility: 18], familiarity: [.goalkeeper: 20])
+        let a = try fm27Engine.rating(for: p12, in: s).inPossession, b = try fm27Engine.rating(for: p18, in: s).inPossession
+        let weight = try #require(Self.fm27.tables.positionWeights[.goalkeeper]?[.agility])
+        #expect(abs((b.positionScore - a.positionScore) - weight * 6 / 19 * 100) < 1e-9)
+        // Role score: key mean over the role's key attributes, linear in goal.
+        let keys = Double(s.ipRole.key.count)
+        #expect(abs((b.roleScore - a.roleScore) - 0.95 * 100 * (6.0 / 19) / keys) < 1e-9)
+        // The curve would have given a different step.
+        #expect(abs((Self.fm27.scaled(18, for: .agility) - Self.fm27.scaled(12, for: .agility)) - 6.0 / 19) > 0.01)
+    }
+
+    @Test func anOutfielderStillFollowsTheCurves() throws {
+        let s = try slot(.D_CL)
+        let p12 = Player.fixture(attributes: [.agility: 12], familiarity: [dc: 20])
+        let p18 = Player.fixture(attributes: [.agility: 18], familiarity: [dc: 20])
+        let a = try fm27Engine.rating(for: p12, in: s).inPossession, b = try fm27Engine.rating(for: p18, in: s).inPossession
+        let weight = try #require(Self.fm27.tables.positionWeights[dc]?[.agility])
+        let curved = weight * (Self.fm27.scaled(18, for: .agility) - Self.fm27.scaled(12, for: .agility)) * 100
+        #expect(abs((b.positionScore - a.positionScore) - curved) < 1e-9)
+        #expect(abs((b.positionScore - a.positionScore) - weight * 6 / 19 * 100) > 1e-3)
+    }
+
+    @Test func curvesScaleTheRoleScore() throws {
+        // Channel Forward in possession: Work Rate is a key attribute with a curve (flat above 12).
+        let s = try slot(.ST_C)
+        try #require(s.ipRole.key.contains(.workRate))
+        let p = Player.fixture(attributes: [.workRate: 6], familiarity: [.striker: 20])
+        let curved = try fm27Engine.rating(for: p, in: s).inPossession.roleScore
+        var curves = Self.fm27.curves
+        curves[.workRate] = nil
+        let straight = try RatingEngine(profile: Self.fm27.with(curves: curves), parameters: .fm27, configuration: .fm27)
+            .rating(for: p, in: s).inPossession.roleScore
+        // Only Work Rate's scale moved: (curve - line) at 6, over the key count, at the key share.
+        let expected = 0.95 * 100 * (Self.fm27.scaled(6, for: .workRate) - 5.0 / 19) / Double(s.ipRole.key.count)
+        #expect(abs((curved - straight) - expected) < 1e-9)
+        #expect(curved > straight)
+        // Where the curve meets the line (at 20) removing it changes nothing.
+        let top = Player.fixture(attributes: [.workRate: 20], familiarity: [.striker: 20])
+        #expect(try fm27Engine.rating(for: top, in: s).inPossession.roleScore
+            == RatingEngine(profile: Self.fm27.with(curves: curves), parameters: .fm27, configuration: .fm27)
+                .rating(for: top, in: s).inPossession.roleScore)
+    }
+
+    @Test func curvesScaleTheConsensusBonus() throws {
+        // Neither shipped profile reaches this (FM27 has no bonuses, carried-over no curves), so a constructed one.
+        let tables = RatingTables(positionWeights: [.attackingMidCentral: [.passing: 1]],
+                                  consensusBonuses: ["AM(C)|Probe": [.pace: 0.1]], thresholds: [:])
+        let engine = RatingEngine(profile: Self.fm27.with(tables: tables), parameters: .fm27, configuration: .fm27)
+        let p = Player.fixture(attributes: [.pace: 9, .balance: 1], familiarity: [.attackingMidCentral: 20])
+        let bonus = try engine.rating(for: p, in: probe(.attackingMidCentral)).inPossession.consensusBonus
+        #expect(abs(bonus - 100 * 0.1 * Self.fm27.scaled(9, for: .pace)) < 1e-9)
+        #expect(abs(bonus - 100 * 0.1 * 8 / 19) > 1e-3)
+    }
+
     @Test func theProfileSharesBlendTheScores() throws {
         let p = Player.fixture(attributes: [.pace: 15, .passing: 6], familiarity: [dc: 20])
         let s = try slot(.D_CL)

@@ -152,9 +152,51 @@ import Testing
         var base = try #require(object["outfieldBaseWeights"] as? [String: Double])
         base["JumpingReach"] = 0.1
         object["outfieldBaseWeights"] = base
-        #expect(throws: CatalogError.unknownAttribute(role: "FM27 rating profile, outfieldBaseWeights", name: "JumpingReach")) {
+        let expected = CatalogError.malformed(
+            reason: "rating_profile_fm27.json names an attribute the engine does not know in outfieldBaseWeights: JumpingReach")
+        #expect(throws: expected) { try load(object) }
+        #expect(ErrorDescriptions.describe(expected) == "The role or rating data is damaged: rating_profile_fm27.json names an "
+            + "attribute the engine does not know in outfieldBaseWeights: JumpingReach")
+    }
+
+    @Test func aNegativeMultiplierFailsToLoad() throws {
+        var object = try bundledObject()
+        var multipliers = try #require(object["positionMultipliers"] as? [String: [String: Double]])
+        multipliers["DM"]?["Heading"] = -0.5
+        object["positionMultipliers"] = multipliers
+        #expect(throws: CatalogError.malformed(reason: "the FM27 rating profile gives Heading a negative multiplier at DM")) {
             try load(object)
         }
+    }
+
+    @Test func aMultiplierForAnAttributeWithNoBaseWeightFailsToLoad() throws {
+        var object = try bundledObject()
+        var multipliers = try #require(object["positionMultipliers"] as? [String: [String: Double]])
+        multipliers["ST (C)"]?["Passing"] = 1.5
+        object["positionMultipliers"] = multipliers
+        #expect(throws: CatalogError.malformed(
+            reason: "the FM27 rating profile has a ST (C) multiplier for Passing, which has no outfield base weight")) {
+            try load(object)
+        }
+    }
+
+    @Test func aMultiplierOfZeroDropsTheAttributeAtThatPositionOnly() throws {
+        var object = try bundledObject()
+        var multipliers = try #require(object["positionMultipliers"] as? [String: [String: Double]])
+        multipliers["DM"]?["Pace"] = 0
+        object["positionMultipliers"] = multipliers
+        let loaded = try load(object)
+        #expect(loaded.tables.positionWeights[.defensiveMidfielder]?[.pace] == nil)
+        #expect(loaded.tables.positionWeights[.midfielderCentral]?[.pace] != nil)
+        #expect(fm27.tables.positionWeights[.defensiveMidfielder]?[.pace] != nil)
+    }
+
+    @Test func goalkeepersAreScaledWithoutCurves() {
+        for v in 1...20 {
+            #expect(fm27.scaled(v, for: .agility, at: .goalkeeper) == (Double(v) - 1) / 19)
+            #expect(fm27.scaled(v, for: .agility, at: .defenderCentral) == fm27.scaled(v, for: .agility))
+        }
+        #expect(fm27.scaled(9, for: .agility) != 8.0 / 19)
     }
 
     @Test func anUnknownPositionFailsToLoadAndNamesIt() throws {

@@ -74,7 +74,7 @@ public struct RatingEngine: Sendable {
 
     private func phaseRating(_ player: Player, position: Position, role: Role) throws -> PhaseRating {
         let positionScore = try positionScore(player, position)
-        let roleScore = try roleScore(player, role)
+        let roleScore = try roleScore(player, role, at: position)
         let consensus = try consensusBonus(player, position, role)
         let thresholdFactor = try thresholdFactor(player, role)
         var base = (profile.positionShare.value * positionScore + profile.roleShare.value * roleScore
@@ -102,9 +102,9 @@ public struct RatingEngine: Sendable {
         return value
     }
 
-    /// The attribute on the profile's 0...1 scale.
-    private func scaled(_ player: Player, _ attribute: Attribute) throws -> Double {
-        profile.scaled(try value(player, attribute), for: attribute)
+    /// The attribute on the profile's 0...1 scale as rated at `position` (no curves in goal; see `RatingProfile`).
+    private func scaled(_ player: Player, _ attribute: Attribute, at position: Position) throws -> Double {
+        profile.scaled(try value(player, attribute), for: attribute, at: position)
     }
 
     private func positionScore(_ player: Player, _ position: Position) throws -> Double {
@@ -112,24 +112,24 @@ public struct RatingEngine: Sendable {
         let weights = profile.tables.positionWeights[position] ?? [:]
         let total = Self.inFixedOrder(weights).reduce(0) { $0 + $1.value }
         var sum = 0.0
-        for (attribute, weight) in Self.inFixedOrder(weights) { sum += try scaled(player, attribute) * weight }
+        for (attribute, weight) in Self.inFixedOrder(weights) { sum += try scaled(player, attribute, at: position) * weight }
         return 100 * sum / total
     }
 
     /// Sums run in the role's own attribute order, which is fixed by the catalogue.
-    private func roleScore(_ player: Player, _ role: Role) throws -> Double {
+    private func roleScore(_ player: Player, _ role: Role, at position: Position) throws -> Double {
         let preferable = role.preferable.filter { !role.key.contains($0) }
         switch profile.roleScoreRule.value {
         case .weightedUnion(let keyWeight, let preferableWeight):
             let weighted = role.key.map { ($0, keyWeight) } + preferable.map { ($0, preferableWeight) }
             guard !weighted.isEmpty else { return parameters.emptyRoleScore.value }
             var sum = 0.0
-            for (attribute, weight) in weighted { sum += try scaled(player, attribute) * weight }
+            for (attribute, weight) in weighted { sum += try scaled(player, attribute, at: position) * weight }
             return 100 * sum / weighted.reduce(0) { $0 + $1.1 }
         case .keyWithPreferableTieBreak(let preferableShare):
             func mean(_ attributes: [Attribute]) throws -> Double {
                 var sum = 0.0
-                for attribute in attributes { sum += try scaled(player, attribute) }
+                for attribute in attributes { sum += try scaled(player, attribute, at: position) }
                 return sum / Double(attributes.count)
             }
             switch (role.key.isEmpty, preferable.isEmpty) {
@@ -146,10 +146,10 @@ public struct RatingEngine: Sendable {
         var bonus = 0.0
         for (attribute, weight) in Self.inFixedOrder(profile.tables.consensusBonuses["\(position.tableKey)|\(role.name)"] ?? [:])
         where !flagged.contains(attribute) {
-            bonus += try scaled(player, attribute) * weight
+            bonus += try scaled(player, attribute, at: position) * weight
         }
         if !flagged.contains(.balance), position != .goalkeeper {
-            bonus += try scaled(player, .balance) * parameters.balanceBonus.value
+            bonus += try scaled(player, .balance, at: position) * parameters.balanceBonus.value
         }
         return min(bonus * 100, parameters.consensusCap.value)
     }

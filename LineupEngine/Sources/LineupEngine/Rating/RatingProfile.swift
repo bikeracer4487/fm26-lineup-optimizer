@@ -30,6 +30,13 @@ public struct RatingProfile: Sendable {
         return FitnessModel.evaluate(curve, at: Double(value))
     }
 
+    /// The attribute value as rated at `position`. The curves were measured on outfield players only, so a player
+    /// rated at the goalkeeper position is rated without them: every attribute on the straight line (v - 1) / 19,
+    /// under every profile. Outfield positions use `scaled(_:for:)`.
+    public func scaled(_ value: Int, for attribute: Attribute, at position: Position) -> Double {
+        position == .goalkeeper ? (Double(value) - 1) / 19 : scaled(value, for: attribute)
+    }
+
     /// Both profiles, carried over first.
     public static func all() throws -> [RatingProfile] {
         let carried = try carriedOver()
@@ -102,7 +109,18 @@ public struct RatingProfile: Sendable {
             guard let position = Position(rawValue: code), position != .goalkeeper else {
                 throw CatalogError.malformed(reason: "the FM27 rating profile has a multiplier for an unknown position, \(code)")
             }
-            multipliers[position] = try attributes(table, in: "positionMultipliers \(code)")
+            let factors = try attributes(table, in: "positionMultipliers \(code)")
+            // A multiplier of 0 is legal: it drops the attribute at that position.
+            for (attribute, factor) in inFixedOrder(factors) {
+                guard base[attribute] != nil else {
+                    throw CatalogError.malformed(reason: "the FM27 rating profile has a \(code) multiplier for \(attribute.rawValue), "
+                                                     + "which has no outfield base weight")
+                }
+                guard factor >= 0 else {
+                    throw CatalogError.malformed(reason: "the FM27 rating profile gives \(attribute.rawValue) a negative multiplier at \(code)")
+                }
+            }
+            multipliers[position] = factors
         }
 
         var weights: [Position: [Attribute: Double]] = [:]
@@ -116,7 +134,7 @@ public struct RatingProfile: Sendable {
         }
         let dropped = try Set(file.goalkeeper.carriedOverTableWithout.map { name in
             guard let attribute = Attribute(catalogName: name) else {
-                throw CatalogError.unknownAttribute(role: "FM27 rating profile, goalkeeper", name: name)
+                throw unknownAttribute(name, in: "goalkeeper")
             }
             return attribute
         })
@@ -193,11 +211,16 @@ public struct RatingProfile: Sendable {
         var result: [Attribute: V] = [:]
         for (name, value) in table.sorted(by: { $0.key < $1.key }) {
             guard let attribute = Attribute(catalogName: name) else {
-                throw CatalogError.unknownAttribute(role: "FM27 rating profile, \(owner)", name: name)
+                throw unknownAttribute(name, in: owner)
             }
             result[attribute] = value
         }
         return result
+    }
+
+    /// Names the resource and the section, so the sentence does not read as though a role were at fault.
+    private static func unknownAttribute(_ name: String, in section: String) -> CatalogError {
+        .malformed(reason: "rating_profile_fm27.json names an attribute the engine does not know in \(section): \(name)")
     }
 
     /// Divides each weight by the total, summed in the order given (a fixed order, so the result is reproducible).

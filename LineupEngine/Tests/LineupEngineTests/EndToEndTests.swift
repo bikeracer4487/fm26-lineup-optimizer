@@ -36,11 +36,11 @@ import Testing
         expectSound(lineup, book)
         // Three picks pinned from the real data, without role thresholds. With them, Taylor (Acceleration and Pace 8)
         // fell to the 0.80 floor as a Channel Forward, Marsh led the line and Taylor went in goal. Without them Taylor
-        // rates 90.7 up front to Marsh's 89.7, so he leads the line and Clark stands in as goalkeeper.
+        // rates 90.7 up front to Marsh's 89.7, so he leads the line. The stand-in goalkeeper is a near tie between
+        // outfielders, so it is not pinned; `expectSound` checks that he is flagged out of position.
         let bySlot = Dictionary(uniqueKeysWithValues: lineup.picks.map { ($0.slot, $0.name) })
         #expect(bySlot[.AM_C] == "Zac McEachran")
         #expect(bySlot[.D_L] == "Evan Humphries")
-        #expect(bySlot[.GK] == "Ewan Clark")
         #expect(bySlot[.ST_C] == "Matty Taylor")
     }
 
@@ -48,11 +48,12 @@ import Testing
         let (lineup, book) = try realLineup(try RatingProfile.fm27EngineTests())
         expectSound(lineup, book)
         // Three picks pinned from the real data. Pace and Acceleration weigh heavily here, so the quicker Marsh
-        // (12 and 12) leads the line over Taylor (8 and 8), who stands in as goalkeeper.
+        // (12 and 12) leads the line over Taylor (8 and 8). Humphries, the natural left back, leads D_L clearly
+        // (match-day value 86.1 to Nelson's 74.2). The stand-in goalkeeper is a near tie, so it is not pinned.
         let bySlot = Dictionary(uniqueKeysWithValues: lineup.picks.map { ($0.slot, $0.name) })
         #expect(bySlot[.AM_C] == "Zac McEachran")
         #expect(bySlot[.ST_C] == "Tyrone Marsh")
-        #expect(bySlot[.GK] == "Matty Taylor")
+        #expect(bySlot[.D_L] == "Evan Humphries")
     }
 
     @Test(arguments: ["carried-over", "fm27-engine-tests"])
