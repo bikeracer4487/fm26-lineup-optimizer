@@ -28,6 +28,11 @@ import LineupEngine
         #expect(AppSettings.conditionFloorPercentRange == 50...100)
     }
 
+    @Test func theConditionFloorSaysWhatItDoes() {
+        #expect(AppSettings.conditionFloorExplanation
+            == "Players below this condition are left out of every match unless you pick them yourself.")
+    }
+
     @Test func usingTheEnginesFloorAgainForgetsTheOwnersAndTurningItOffStartsFromTheEngines() {
         var settings = AppSettings(currentDate: today)
         settings.conditionFloorPercent = 70
@@ -70,5 +75,27 @@ import LineupEngine
         settings.clubNameText = "  "
         settings.fmrteConfigPathText = ""
         #expect(settings.clubName == nil && settings.fmrteConfigPath == nil)
+    }
+
+    @Test func theClubHandedOnIsTrimmedAndABlankNameIsNone() {
+        var settings = AppSettings(currentDate: today)
+        #expect(settings.clubOverride == nil)
+        settings.clubName = "  Oxford City "
+        #expect(settings.clubOverride == "Oxford City")
+        settings.clubName = "   "
+        #expect(settings.clubOverride == nil)
+        settings.clubName = ""
+        #expect(settings.clubOverride == nil)
+    }
+
+    @MainActor @Test func theModelsClubIsTheTrimmedNameOrTheOneWorkedOut() throws {
+        let t = try TestModel()
+        var settings = t.model.settings
+        settings.clubName = " Oxford City  "
+        t.model.update(settings)
+        #expect(t.model.ownClub == "Oxford City")
+        settings.clubName = "  "
+        t.model.update(settings)
+        #expect(t.model.ownClub == nil)
     }
 }

@@ -12,12 +12,18 @@ extension AppModel {
     }
 
     /// Replaces the saved fixture with the same id, keeping the list in date order; a fixture no longer saved is
-    /// left out.
+    /// left out. A lineup confirmed for the fixture moves to its new date, so the history's dates stay those of
+    /// its fixtures; its starters, names and tactic name stay as confirmed, being what was played.
     public func update(_ fixture: StoredFixture) {
         guard let index = fixtures.firstIndex(where: { $0.id == fixture.id }) else { return }
+        let moved = fixtures[index].date != fixture.date
         fixtures[index] = fixture
         fixtures.sort(by: Self.dateOrder)
         save(.fixtures)
+        if moved, let record = history.firstIndex(where: { $0.lineup.fixture == fixture.id }) {
+            history[record].lineup.date = fixture.date
+            save(.history)
+        }
     }
 
     /// Removes the fixture and any lineup confirmed for it.

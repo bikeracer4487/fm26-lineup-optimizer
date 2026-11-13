@@ -27,6 +27,10 @@ extension AppSettings {
         }
     }
 
+    /// The line under the condition floor.
+    public static let conditionFloorExplanation =
+        "Players below this condition are left out of every match unless you pick them yourself."
+
     /// The floor in use, in whole percent; setting it keeps it within `conditionFloorPercentRange`.
     public var conditionFloorPercent: Int {
         get { Self.percent(conditionFloor ?? Self.engineConditionFloor) }
@@ -56,6 +60,12 @@ extension AppSettings {
     public var clubNameText: String {
         get { clubName ?? "" }
         set { clubName = Self.blankIsNil(newValue) }
+    }
+
+    /// The club name as handed to the engine: trimmed, and nil when it is empty or only spaces, so the club is
+    /// then worked out from the squad.
+    public var clubOverride: String? {
+        clubName.flatMap(Self.blankIsNil)?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// The path to FMRTE's settings file as typed; empty means FMRTE's usual place.

@@ -216,7 +216,7 @@ extension AppModel {
         return players
             .filter { squad == nil || $0.squad == squad }
             .filter { wanted.isEmpty || PlayerID.normalise($0.name).contains(wanted) }
-            .map { SquadRow($0, loan: self.squad.book.loanStatus(of: $0, override: settings.clubName)) }
+            .map { SquadRow($0, loan: self.squad.book.loanStatus(of: $0, override: settings.clubOverride)) }
     }
 
     /// "imported 13 Nov", or "not imported yet".
@@ -252,7 +252,7 @@ extension AppModel {
 
     /// The squad warnings listed under the club line: all but the unknown club, which the club line says.
     public var listedSquadWarnings: [String] {
-        squad.book.warnings(override: settings.clubName)
+        squad.book.warnings(override: settings.clubOverride)
             .filter { $0 != .ownClubUnknown }
             .map(ErrorDescriptions.describe)
     }

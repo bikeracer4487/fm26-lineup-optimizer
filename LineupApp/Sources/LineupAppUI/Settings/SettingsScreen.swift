@@ -113,7 +113,7 @@ public struct SettingsScreen: View {
     }
 
     private var conditionFloor: some View {
-        SettingRow("Condition floor", "Players below this condition are never picked, whatever the match.") {
+        SettingRow("Condition floor", AppSettings.conditionFloorExplanation) {
             HStack(alignment: .center, spacing: Theme.Spacing.s) {
                 number("\(model.settings.conditionFloorPercent)%")
                     .foregroundStyle(model.settings.usesEngineConditionFloor ? .secondary : .primary)

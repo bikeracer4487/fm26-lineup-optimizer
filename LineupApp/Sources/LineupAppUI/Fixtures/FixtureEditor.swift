@@ -18,17 +18,21 @@ struct FixtureEditor: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             Text(draft.isNew ? "Add a fixture" : "Change the fixture")
                 .font(Theme.Typeface.title(Theme.TypeSize.step3))
+            if let note = model.confirmedNote(for: draft) {
+                Text(note)
+                    .font(Theme.Typeface.text())
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Form {
                 DayPicker("Date", day: $draft.date)
-                TextField("Opponent", text: $draft.opponent, prompt: Text("Who the match is against"))
-                if let problem = draft.problem {
-                    // An empty label, so the sentence sits under the field it is about.
-                    LabeledContent {
-                        Text(problem)
-                            .font(Theme.Typeface.text())
-                            .foregroundStyle(.secondary)
-                    } label: {
-                        Text("")
+                LabeledContent("Opponent") {
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                        TextField("Opponent", text: $draft.opponent, prompt: Text("Who the match is against"))
+                            .labelsHidden()
+                        if let problem = draft.shownProblem {
+                            MarkedText(problem, colour: Theme.Colour.amber)
+                        }
                     }
                 }
                 Picker("Importance", selection: $draft.importance) {
@@ -49,10 +53,10 @@ struct FixtureEditor: View {
                 Button("Cancel", role: .cancel, action: close)
                     .keyboardShortcut(.cancelAction)
                 Button(draft.saveButtonTitle) {
+                    draft.noteSaveAttempt()
                     if model.save(draft) != nil { close() }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(draft.problem != nil)
             }
         }
         .padding(Theme.Spacing.xl)

@@ -150,7 +150,7 @@ public enum Theme {
         /// The height of a row of controls, kept whether it holds menus or a sentence, so what is below it stays put.
         public static let controlRowHeight: CGFloat = 24
         /// The sheet that adds or edits a fixture.
-        public static let fixtureEditorSize = CGSize(width: 460, height: 300)
+        public static let fixtureEditorSize = CGSize(width: 460, height: 360)
         /// The widest a setting's control runs, so a slider is not stretched across a wide window.
         public static let settingControlWidth: CGFloat = 360
         /// The field for the club's name or the path to FMRTE's settings file.

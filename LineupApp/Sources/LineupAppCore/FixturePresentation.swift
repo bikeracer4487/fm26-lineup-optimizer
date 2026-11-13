@@ -46,7 +46,11 @@ public struct FixtureDraft: Equatable, Sendable {
     /// Nil for a fixture not saved yet.
     public let id: FixtureID?
     public var date: Day
-    public var opponent: String
+    public var opponent: String {
+        didSet {
+            if !Self.isBlank(oldValue) && Self.isBlank(opponent) { problemIsDue = true }
+        }
+    }
     public var importance: Importance
     /// Nil: the primary tactic.
     public var tacticID: UUID?
@@ -65,9 +69,26 @@ public struct FixtureDraft: Equatable, Sendable {
 
     public var saveButtonTitle: String { isNew ? "Add fixture" : "Save changes" }
 
+    /// Whether the owner has tried to save, or typed an opponent and cleared it. Until then a blank opponent is not
+    /// yet a mistake, so it is not pointed out.
+    public private(set) var problemIsDue = false
+
     /// Why the draft cannot be saved, or nil when it can. Two fixtures on one day are allowed; the planner says so.
     public var problem: String? {
-        opponent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Say who the match is against." : nil
+        Self.isBlank(opponent) ? "Say who the match is against." : nil
+    }
+
+    /// `problem`, once it is due.
+    public var shownProblem: String? {
+        problemIsDue ? problem : nil
+    }
+
+    public mutating func noteSaveAttempt() {
+        problemIsDue = true
+    }
+
+    private static func isBlank(_ text: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
@@ -80,6 +101,13 @@ extension AppModel {
     /// Deleting a confirmed fixture deletes its confirmed lineup too, so the owner is asked first.
     public func asksBeforeDeleting(_ fixture: StoredFixture) -> Bool {
         state(of: fixture) == .confirmed
+    }
+
+    /// For a fixture with a confirmed lineup, what editing it does to that lineup; nil for any other.
+    public func confirmedNote(for draft: FixtureDraft) -> String? {
+        guard let id = draft.id, history.contains(where: { $0.lineup.fixture == id }) else { return nil }
+        return "A lineup is confirmed for this match. A new date moves it too; to pick the eleven again, "
+            + "unlock it in Match Selection."
     }
 
     /// "Primary: <name>", or what is missing when there is no tactic.

@@ -16,7 +16,7 @@
 //                                              selected, and "tactics-…" with an unsaved change. The Fixtures
 //                                              screen is drawn empty ("fixtures-empty-…"), five days on with one
 //                                              past fixture confirmed and one not ("fixtures-past-…"), and its
-//                                              editor on its own for a new fixture ("fixtures-editor-…").
+//                                              editor on its own for the confirmed fixture ("fixtures-editor-…").
 
 import AppKit
 import Foundation
@@ -115,7 +115,10 @@ enum SampleState {
                                      screens: [.squad, .tactics, .fixtures])
             try ScreenPictures.write(model: sampleModel(root, .pastFixtures), to: directory, size: size,
                                      variant: "past", screens: [.fixtures])
-            try ScreenPictures.writeFixtureEditor(model: sampleModel(root), to: directory)
+            // The editor for the confirmed fixture, so the note about its confirmed lineup is shown.
+            let past = sampleModel(root, .pastFixtures)
+            guard let confirmed = past.fixtures.first else { fail("The sample model has no fixtures.") }
+            try ScreenPictures.writeFixtureEditor(model: past, draft: FixtureDraft(confirmed), to: directory)
             // The striker nothing turns into, selected out of possession.
             try ScreenPictures.write(model: sampleModel(root, .tacticProblem), to: directory, size: size,
                                      variant: "problem", screens: [.tactics],

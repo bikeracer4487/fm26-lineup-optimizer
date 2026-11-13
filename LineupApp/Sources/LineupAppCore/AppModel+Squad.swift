@@ -9,11 +9,11 @@ extension AppModel {
 
     /// The club named in Settings, or else the one the squads show most.
     public var ownClub: String? {
-        squad.book.ownClub(override: settings.clubName)
+        squad.book.ownClub(override: settings.clubOverride)
     }
 
     public var squadWarnings: [String] {
-        squad.book.warnings(override: settings.clubName).map(ErrorDescriptions.describe)
+        squad.book.warnings(override: settings.clubOverride).map(ErrorDescriptions.describe)
     }
 
     /// Imports the rows on the clipboard as `squad`. On success the book takes them and `lastImport` summarises
@@ -46,7 +46,7 @@ extension AppModel {
         save(.squad)
 
         let onLoan = (state.book.current[target] ?? []).filter { player in
-            switch state.book.loanStatus(of: player, override: settings.clubName) {
+            switch state.book.loanStatus(of: player, override: settings.clubOverride) {
             case .loanedOut: true
             case .own, .loanedIn: false
             }

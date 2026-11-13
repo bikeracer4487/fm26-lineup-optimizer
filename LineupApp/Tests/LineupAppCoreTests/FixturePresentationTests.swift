@@ -111,6 +111,24 @@ import LineupEngine
         #expect(draft.problem == nil)
     }
 
+    @Test func theProblemShowsOnlyOnceTheOwnerHasTriedToSave() {
+        var draft = FixtureDraft(date: day("2026-11-14"))
+        #expect(draft.problem != nil)
+        #expect(draft.shownProblem == nil)
+        draft.noteSaveAttempt()
+        #expect(draft.shownProblem == "Say who the match is against.")
+        draft.opponent = "Rovers"
+        #expect(draft.shownProblem == nil)
+    }
+
+    @Test func theProblemShowsOnceTheOpponentIsTypedAndCleared() {
+        var draft = FixtureDraft(date: day("2026-11-14"))
+        draft.opponent = "R"
+        #expect(draft.shownProblem == nil)
+        draft.opponent = " "
+        #expect(draft.shownProblem == "Say who the match is against.")
+    }
+
     @Test func aDraftWithAProblemIsNotSaved() throws {
         let t = try TestModel()
         #expect(t.model.save(FixtureDraft(date: day("2026-11-14"))) == nil)
@@ -171,6 +189,61 @@ import LineupEngine
         draft.opponent = "B"
         #expect(t.model.save(draft) == nil)
         #expect(t.model.fixtures.isEmpty)
+    }
+
+    // MARK: A confirmed fixture
+
+    /// A model with two fixtures, the first confirmed with a record whose starters and tactic name are set.
+    private func confirmedModel() throws -> (TestModel, confirmed: FixtureID, other: FixtureID, record: ConfirmedRecord) {
+        let t = try TestModel()
+        let confirmed = t.model.addFixture(date: day("2026-11-14"), opponent: "A", importance: .low)
+        let other = t.model.addFixture(date: day("2026-11-17"), opponent: "B", importance: .low)
+        let record = ConfirmedRecord(
+            lineup: ConfirmedLineup(fixture: confirmed, date: day("2026-11-14"), starters: [.GK: PlayerID(key: "jonny maxted")]),
+            names: [PlayerID(key: "jonny maxted"): "Jonny Maxted"], tacticName: "4-2-3-1")
+        t.model.history = [record]
+        t.model.save(.history)
+        return (t, confirmed, other, record)
+    }
+
+    @Test func aConfirmedFixturesNewDateMovesItsLineup() throws {
+        let (t, confirmed, _, record) = try confirmedModel()
+        var fixture = try #require(t.model.fixtures.first { $0.id == confirmed })
+        fixture.date = day("2026-11-15")
+        t.model.update(fixture)
+        var expected = record
+        expected.lineup.date = day("2026-11-15")
+        #expect(t.model.history == [expected])
+        #expect(t.reopened().history == [expected])
+    }
+
+    @Test func aConfirmedFixturesOtherChangesLeaveItsLineupAsConfirmed() throws {
+        let (t, confirmed, _, record) = try confirmedModel()
+        let cup = t.model.addTactic(named: "Cup 4-4-2")
+        var draft = FixtureDraft(try #require(t.model.fixtures.first { $0.id == confirmed }))
+        draft.opponent = "Rovers"
+        draft.importance = .high
+        draft.tacticID = cup
+        #expect(t.model.save(draft) == confirmed)
+        #expect(t.model.history == [record])
+        #expect(t.reopened().history == [record])
+    }
+
+    @Test func movingAnUnconfirmedFixtureTouchesNoLineup() throws {
+        let (t, _, other, record) = try confirmedModel()
+        var fixture = try #require(t.model.fixtures.first { $0.id == other })
+        fixture.date = day("2026-11-20")
+        t.model.update(fixture)
+        #expect(t.model.history == [record])
+    }
+
+    @Test func theEditorSaysWhenALineupIsConfirmed() throws {
+        let (t, confirmed, other, _) = try confirmedModel()
+        let note = "A lineup is confirmed for this match. A new date moves it too; to pick the eleven again, "
+            + "unlock it in Match Selection."
+        #expect(t.model.confirmedNote(for: FixtureDraft(try #require(t.model.fixtures.first { $0.id == confirmed }))) == note)
+        #expect(t.model.confirmedNote(for: FixtureDraft(try #require(t.model.fixtures.first { $0.id == other }))) == nil)
+        #expect(t.model.confirmedNote(for: t.model.newFixtureDraft()) == nil)
     }
 
     // MARK: Sample
