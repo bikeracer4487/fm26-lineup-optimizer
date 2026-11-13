@@ -26,7 +26,7 @@ extension AppModel {
         tactics[index] = tactic
         save(.tactics)
         if tacticDrafts[tactic.id]?.tactic == tactic.tactic {
-            tacticDrafts[tactic.id] = nil
+            changeDrafts { $0[tactic.id] = nil }
         }
         replan()
     }
@@ -43,15 +43,18 @@ extension AppModel {
         let copyID = UUID()
         var copy = shown.tactic
         copy.name = name
-        if problems(saving: StoredTactic(id: copyID, tactic: copy)).isEmpty {
+        let canBeSaved = problems(saving: StoredTactic(id: copyID, tactic: copy)).isEmpty
+        if canBeSaved {
             tactics.append(StoredTactic(id: copyID, tactic: copy))
         } else {
             var saved = original.tactic
             saved.name = name
             tactics.append(StoredTactic(id: copyID, tactic: saved))
-            tacticDrafts[copyID] = TacticDraft(copy)
         }
         save(.tactics)
+        if !canBeSaved {
+            changeDrafts { $0[copyID] = TacticDraft(copy) }
+        }
         replan()
         return copyID
     }
@@ -69,7 +72,7 @@ extension AppModel {
     /// the saved tactic, or for a tactic not saved, is not kept.
     public func setDraft(_ draft: TacticDraft, for id: UUID) {
         guard let saved = tactics.first(where: { $0.id == id }) else { return }
-        tacticDrafts[id] = draft.tactic == saved.tactic ? nil : draft
+        changeDrafts { $0[id] = draft.tactic == saved.tactic ? nil : draft }
     }
 
     public func hasUnsavedChanges(_ id: UUID) -> Bool {
@@ -89,14 +92,14 @@ extension AppModel {
         tactic.name = tactic.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let stored = StoredTactic(id: id, tactic: tactic)
         guard problems(saving: stored).isEmpty else { return false }
-        tacticDrafts[id] = nil
+        changeDrafts { $0[id] = nil }
         update(stored)
         return true
     }
 
     /// Drops the tactic's unsaved changes.
     public func revertDraft(_ id: UUID) {
-        tacticDrafts[id] = nil
+        changeDrafts { $0[id] = nil }
     }
 
     /// The tactic's name as the tactics menu lists it, marked "(primary)" and "— unsaved changes" where they
@@ -115,9 +118,9 @@ extension AppModel {
     /// primary. Fixtures that used it fall back to the primary, and a notice names them.
     public func deleteTactic(_ id: UUID) {
         guard let deleted = tactics.first(where: { $0.id == id }) else { return }
-        tacticDrafts[id] = nil
         tactics.removeAll { $0.id == id }
         save(.tactics)
+        changeDrafts { $0[id] = nil }
         if settings.primaryTacticID == id {
             settings.primaryTacticID = tactics.first?.id
             save(.settings)

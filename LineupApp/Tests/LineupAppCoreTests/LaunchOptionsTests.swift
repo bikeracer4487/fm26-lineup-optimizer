@@ -57,7 +57,7 @@ import LineupEngine
         let model = try SampleData.modelWithFailedImport(repositoryRoot: Captures.repositoryRoot)
         #expect(model.players == sample.players)
         #expect(model.notices.isEmpty)
-        guard case .failed(let reason)? = model.lastImport else {
+        guard case .failed(_, let reason)? = model.lastImport else {
             Issue.record("expected a failed import, got \(String(describing: model.lastImport))")
             return
         }

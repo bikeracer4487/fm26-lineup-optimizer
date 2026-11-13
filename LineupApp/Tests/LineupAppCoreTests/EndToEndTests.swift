@@ -106,10 +106,13 @@ import LineupEngine
         let noteAfterConfirming = try #require(model.fitnessNote)
         #expect(noteAfterConfirming.hasPrefix("The match against Opponent A was confirmed after "))
 
+        /// Rested from the plan's starting day: today until an import, then the day it is dated, which confirming
+        /// moved up to the match's.
         func rested(_ id: PlayerID) throws -> ProjectedFitness {
             let player = try #require(model.players.first { $0.id == id })
+            let start = try #require(model.planStartDay)
             return try FitnessProjection.afterDays(
-                TestModel.today.days(to: model.fixtures[1].date), ProjectedFitness(player), player: player,
+                start.days(to: model.fixtures[1].date), ProjectedFitness(player), player: player,
                 intensity: model.settings.plan.trainingIntensity, parameters: model.planParameters)
         }
         let squadOf = Dictionary(uniqueKeysWithValues: model.players.map { ($0.id, $0.squad) })

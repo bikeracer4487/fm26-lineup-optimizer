@@ -9,6 +9,24 @@ extension AppModel {
         changeFixture(fixture) { $0.overrides[slot] = player }
     }
 
+    /// Fixes `player` in `slot` for the fixture and returns the selection of that slot as now planned, so the detail
+    /// shows whoever the plan put there: him, unless the engine could not use the choice.
+    public func choose(_ player: PlayerID, at slot: SlotID, in fixture: FixtureID) -> PickSelection? {
+        setOverride(player, at: slot, in: fixture)
+        return selection(at: slot, in: fixture)
+    }
+
+    /// Clears the owner's choice for `slot` and returns the selection of whoever now holds the slot.
+    public func clearChoice(at slot: SlotID, in fixture: FixtureID) -> PickSelection? {
+        setOverride(nil, at: slot, in: fixture)
+        return selection(at: slot, in: fixture)
+    }
+
+    /// The pick in `slot` of the fixture's planned lineup, as a selection; nil when there is none.
+    func selection(at slot: SlotID, in fixture: FixtureID) -> PickSelection? {
+        fixturePlans.first { $0.id == fixture }.flatMap { MatchPresentation.selection(at: slot, in: $0) }
+    }
+
     /// Leaves the player out of this fixture only.
     public func reject(_ player: PlayerID, in fixture: FixtureID) {
         changeFixture(fixture) { $0.rejected.insert(player) }
@@ -20,9 +38,9 @@ extension AppModel {
     }
 
     /// Whether `confirm` would record the fixture: it is the earliest fixture with a planned lineup, since confirming
-    /// says the match has been played and matches are played in order.
+    /// says the match has been played and matches are played in order; or it is missed and has a remembered eleven.
     public func canConfirm(_ fixture: FixtureID) -> Bool {
-        nextToPlay?.id == fixture
+        nextToPlay?.id == fixture || rememberedEleven(fixture) != nil
     }
 
     /// Why a planned fixture cannot be confirmed yet; nil when it can be, or when it has no planned lineup.
@@ -33,25 +51,118 @@ extension AppModel {
     }
 
     /// Records the fixture's planned lineup as played: the starters by slot, their names as the squad has them now,
-    /// and the tactic's name, with every squad imported so far awaiting an import that includes the match. Nothing
-    /// happens unless `canConfirm` allows it.
+    /// and the tactic's name, with every squad imported so far awaiting an import that includes the match. A missed
+    /// fixture is confirmed as `confirmMissed` does. Nothing happens unless `canConfirm` allows it.
     public func confirm(_ fixture: FixtureID) {
+        if rememberedEleven(fixture) != nil { return confirmMissed(fixture) }
         guard canConfirm(fixture), let plan = nextToPlay, case .planned(let lineup, _) = plan.body else { return }
         let starters = Dictionary(uniqueKeysWithValues: lineup.picks.map { ($0.slot, $0.player) })
         let names = Dictionary(uniqueKeysWithValues: lineup.picks.map { ($0.player, $0.name) })
-        history.append(ConfirmedRecord(
+        record(ConfirmedRecord(
             lineup: ConfirmedLineup(fixture: fixture, date: plan.fixture.date, starters: starters),
             names: names, tacticName: plan.tacticName, awaitingImport: Set(squad.importedOn.keys)))
+    }
+
+    /// Records a missed fixture's remembered eleven as played. Only a squad imported before the match day still awaits
+    /// an import that includes it: one imported since already has its load. Nothing happens unless the fixture is
+    /// missed and has a remembered eleven.
+    public func confirmMissed(_ fixture: FixtureID) {
+        guard let eleven = rememberedEleven(fixture), let stored = fixtures.first(where: { $0.id == fixture }) else { return }
+        let awaiting = squad.importedOn.filter { $0.value < stored.date }.keys
+        record(ConfirmedRecord(
+            lineup: ConfirmedLineup(fixture: fixture, date: stored.date, starters: eleven.starters),
+            names: eleven.names, tacticName: eleven.tacticName, awaitingImport: Set(awaiting)))
+    }
+
+    /// Adds the record, moves the game's current date up to the match's when it is earlier, since a match confirmed
+    /// as played means the game has reached its day, and replans.
+    private func record(_ record: ConfirmedRecord) {
+        history.append(record)
+        save(.history)
+        if settings.currentDate < record.lineup.date {
+            settings.currentDate = record.lineup.date
+            save(.settings)
+        }
+        replan()
+    }
+
+    /// Removes the fixture's confirmed lineup, keeping its eleven as the fixture's last planned one. A fixture from the
+    /// plan's starting day on is planned again with its saved choices; an earlier one shows as missed with that eleven.
+    public func unlock(_ fixture: FixtureID) {
+        guard let record = history.first(where: { $0.lineup.fixture == fixture }) else { return }
+        if let index = fixtures.firstIndex(where: { $0.id == fixture }) {
+            fixtures[index].lastPlanned = PlannedEleven(starters: record.lineup.starters, names: record.names,
+                                                        tacticName: record.tacticName)
+            save(.fixtures)
+        }
+        history.removeAll { $0.lineup.fixture == fixture }
         save(.history)
         replan()
     }
 
-    /// Removes the fixture's confirmed lineup, so it is planned again with its saved choices.
-    public func unlock(_ fixture: FixtureID) {
-        guard history.contains(where: { $0.lineup.fixture == fixture }) else { return }
-        history.removeAll { $0.lineup.fixture == fixture }
-        save(.history)
-        replan()
+    /// What unlocking the fixture's lineup will do, as the question that asks for it.
+    public func unlockNote(for fixture: FixtureID) -> String {
+        let date = fixtures.first { $0.id == fixture }?.date ?? history.first { $0.lineup.fixture == fixture }?.lineup.date
+        if let date, let start = planStartDay, date < start {
+            return "Unlock this lineup? The squad has been imported since this match, so it cannot be planned again. "
+                + "You can change who started and confirm it again."
+        }
+        return "Unlock this lineup? The match will be planned again."
+    }
+
+    // MARK: A missed fixture's remembered eleven
+
+    /// The remembered eleven of a missed fixture; nil for any other fixture, or a missed one with none.
+    private func rememberedEleven(_ fixture: FixtureID) -> PlannedEleven? {
+        guard let plan = fixturePlans.first(where: { $0.id == fixture }), case .missed(let eleven?) = plan.body else {
+            return nil
+        }
+        return eleven
+    }
+
+    /// The players not out on loan.
+    private var playersNotOnLoan: [Player] {
+        let club = ownClub
+        return squad.book.allPlayers.filter {
+            if case .loanedOut = LoanStatus.of($0, ownClub: club) { false } else { true }
+        }
+    }
+
+    /// Puts a squad player not out on loan in `slot` of a missed fixture's remembered eleven. If he is already in it at
+    /// another slot, he and the one in `slot` swap; otherwise the one in `slot` leaves the eleven. Nothing happens for
+    /// any other player or fixture.
+    public func setRemembered(_ player: PlayerID, at slot: SlotID, in fixture: FixtureID) {
+        guard var eleven = rememberedEleven(fixture),
+              let chosen = playersNotOnLoan.first(where: { $0.id == player }),
+              let index = fixtures.firstIndex(where: { $0.id == fixture }) else { return }
+        let replaced = eleven.starters[slot]
+        if let from = SlotID.allCases.first(where: { $0 != slot && eleven.starters[$0] == player }) {
+            eleven.starters[from] = replaced
+        } else if let replaced {
+            eleven.names[replaced] = nil
+        }
+        eleven.starters[slot] = player
+        if eleven.names[player] == nil { eleven.names[player] = chosen.name }
+        guard eleven != fixtures[index].lastPlanned else { return }
+        fixtures[index].lastPlanned = eleven
+        save(.fixtures)
+        // A missed fixture is not planned, so only its own entry in the plan changes.
+        if case .ready(let plans) = planState {
+            planState = .ready(plans.map { $0.id == fixture ? missedPlan(fixtures[index]) : $0 })
+        }
+    }
+
+    /// Everyone who could have started in `slot` of a missed fixture's remembered eleven: every squad player not out on
+    /// loan, those already in the eleven last, each group by name, then key. Empty for any other fixture.
+    public func rememberedCandidates(for slot: SlotID, in fixture: FixtureID) -> [Candidate] {
+        guard let eleven = rememberedEleven(fixture) else { return [] }
+        let inEleven = Set(eleven.starters.values)
+        let byName = playersNotOnLoan.sorted { ($0.name, $0.id.key) < ($1.name, $1.id.key) }
+        func candidate(_ player: Player) -> Candidate {
+            Candidate(player: player.id, name: player.name, squad: player.squad, rating: nil, unavailable: nil)
+        }
+        return byName.filter { !inEleven.contains($0.id) }.map(candidate)
+            + byName.filter { inEleven.contains($0.id) }.map(candidate)
     }
 
     /// Every player not out on loan, with his full-fitness rating in the slot for the fixture's tactic, those who can
@@ -153,12 +264,9 @@ extension AppModel {
                 return FixturePlan(fixture: fixture, tacticName: record.tacticName, usesPrimaryBecauseItsTacticWasDeleted: false,
                                    body: .confirmed(record), fitnessIsProjected: false, ignoredOverrides: [])
             }
+            if fixture.date < asOf { return missedPlan(fixture) }
             let tacticName = tactic(for: fixture)?.tactic.name ?? ""
             let tacticGone = fixture.tacticID.map { id in !tactics.contains { $0.id == id } } ?? false
-            if fixture.date < asOf {
-                return FixturePlan(fixture: fixture, tacticName: tacticName, usesPrimaryBecauseItsTacticWasDeleted: tacticGone,
-                                   body: .missed, fitnessIsProjected: false, ignoredOverrides: [])
-            }
             guard let item = planned[fixture.id] else { return nil }
             let projected = item.fitnessIsProjected
             let ignored = SlotID.allCases.compactMap { slot in
@@ -167,7 +275,7 @@ extension AppModel {
                         IgnoredOverride(slot: slot, sentence: "\(name) at \(slot.longName): "
                             + ErrorDescriptions.describe(problem, parameters: parameters, projected: projected) + ".")
                     } else {
-                        IgnoredOverride(slot: slot, sentence: "The player chosen for \(slot.longName) is no longer in the squad.")
+                        IgnoredOverride(slot: slot, sentence: "The player chosen for \(slot.longName) is no longer in the squads.")
                     }
                 }
             }
@@ -176,6 +284,44 @@ extension AppModel {
                                ignoredOverrides: ignored)
         }
         return .ready(result)
+    }
+
+    /// A fixture before the plan's starting day with no confirmed lineup, with its remembered eleven if it has one.
+    func missedPlan(_ fixture: StoredFixture) -> FixturePlan {
+        let tacticName = fixture.lastPlanned?.tacticName ?? tactic(for: fixture)?.tactic.name ?? ""
+        let tacticGone = fixture.lastPlanned == nil
+            && (fixture.tacticID.map { id in !tactics.contains { $0.id == id } } ?? false)
+        return FixturePlan(fixture: fixture, tacticName: tacticName, usesPrimaryBecauseItsTacticWasDeleted: tacticGone,
+                           body: .missed(fixture.lastPlanned), fitnessIsProjected: false, ignoredOverrides: [])
+    }
+
+    /// Writes each planned lineup's eleven into its fixture's `lastPlanned`, saving the fixtures once if any changed,
+    /// and returns the plan with the fixtures as saved.
+    func rememberingElevens(_ state: PlanState) -> PlanState {
+        guard case .ready(let plans) = state else { return state }
+        var changed = false
+        for plan in plans {
+            guard case .planned(let lineup, _) = plan.body, let index = fixtures.firstIndex(where: { $0.id == plan.id })
+            else { continue }
+            let eleven = PlannedEleven(
+                starters: Dictionary(uniqueKeysWithValues: lineup.picks.map { ($0.slot, $0.player) }),
+                names: Dictionary(uniqueKeysWithValues: lineup.picks.map { ($0.player, $0.name) }),
+                tacticName: plan.tacticName)
+            if fixtures[index].lastPlanned != eleven {
+                fixtures[index].lastPlanned = eleven
+                changed = true
+            }
+        }
+        guard changed else { return state }
+        save(.fixtures)
+        let saved = Dictionary(uniqueKeysWithValues: fixtures.map { ($0.id, $0) })
+        return .ready(plans.map { plan in
+            guard let fixture = saved[plan.id], fixture != plan.fixture else { return plan }
+            return FixturePlan(fixture: fixture, tacticName: plan.tacticName,
+                               usesPrimaryBecauseItsTacticWasDeleted: plan.usesPrimaryBecauseItsTacticWasDeleted,
+                               body: plan.body, fitnessIsProjected: plan.fitnessIsProjected,
+                               ignoredOverrides: plan.ignoredOverrides)
+        })
     }
 
     /// A confirmed match whose load the imported fitness does not include, as the planner is handed it.
@@ -213,13 +359,7 @@ extension AppModel {
                 ?? "an opponent on \(DayText.short(match.lineup.date))"
         }
         let awaited = Squad.allCases.filter { squad in counted.contains { $0.squads.contains(squad) } }
-        let squads = awaited.map { squad in
-            switch squad {
-            case .firstTeam: "the first team"
-            case .u21: "the U21s"
-            case .u18: "the U18s"
-            }
-        }
+        let squads = awaited.map(\.inSentence)
         let matches = opponents.count == 1
             ? "The match against \(opponents[0]) was"
             : "The matches against \(Self.listed(opponents)) were"
@@ -286,7 +426,7 @@ extension AppModel {
     }
 
     /// The fixtures in the plan, or none when there is no plan.
-    private var fixturePlans: [FixturePlan] {
+    var fixturePlans: [FixturePlan] {
         if case .ready(let plans) = planState { plans } else { [] }
     }
 

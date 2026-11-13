@@ -31,7 +31,7 @@ struct ImportPanel: View {
             EmptyView()
         case .imported(let summary):
             ImportReportView(report: model.report(of: summary))
-        case .failed(let reason):
+        case .failed(_, let reason):
             Text(reason)
                 .font(Theme.Typeface.text())
                 .foregroundStyle(Theme.Colour.claret)

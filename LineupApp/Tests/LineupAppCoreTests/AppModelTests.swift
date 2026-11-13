@@ -53,6 +53,29 @@ import LineupEngine
         #expect(t.reopened().settings.currentDate == day("2026-12-01"))
     }
 
+    @Test func aFileKeptAsideIsWrittenAfreshSoTheNextStartFindsIt() throws {
+        let t = try TestModel()
+        t.model.addFixture(date: day("2026-11-14"), opponent: "Rovers", importance: .high)
+        try Data("{".utf8).write(to: t.directory.appendingPathComponent("fixtures.json"))
+        #expect(t.reopened().notices.count == 1)
+        // The start that set it aside wrote an empty list in its place, so the next start has nothing to report.
+        #expect(t.reopened().notices.isEmpty)
+    }
+
+    @Test func aFileKeptAsideByACopyIsNotCopiedAgainAtTheNextStart() throws {
+        let t = try TestModel()
+        t.model.addFixture(date: day("2026-11-14"), opponent: "Rovers", importance: .high)
+        try Data("{".utf8).write(to: t.directory.appendingPathComponent("fixtures.json"))
+        struct Refused: Error {}
+        func start() -> AppModel {
+            AppModel(store: Store(directory: t.directory, move: { _, _ in throw Refused() }), environment: t.input.environment)
+        }
+        #expect(start().notices.count == 1)
+        #expect(start().notices.isEmpty)
+        let names = try FileManager.default.contentsOfDirectory(atPath: t.directory.path)
+        #expect(names.filter { $0.hasPrefix("fixtures.unreadable-") } == ["fixtures.unreadable-1.json"])
+    }
+
     @Test func anUnreadableFileIsNoticedAndCanBeDismissed() throws {
         let t = try TestModel()
         try Data("{".utf8).write(to: t.directory.appendingPathComponent("fixtures.json"))
@@ -144,7 +167,7 @@ import LineupEngine
         for empty in [nil, "", "  \r\n\t\n"] as [String?] {
             t.input.clipboard = empty
             t.model.importSquad(.firstTeam)
-            #expect(t.model.lastImport == .failed("The clipboard is empty. Copy the rows in FMRTE first."))
+            #expect(t.model.lastImport == .failed(.firstTeam, reason: "The clipboard is empty. Copy the rows in FMRTE first."))
             #expect(t.model.squad == before)
         }
         #expect(t.reopened().squad == before)
@@ -156,7 +179,7 @@ import LineupEngine
         let before = t.model.squad
         t.input.clipboard = "Dear manager, the board would like a word."
         t.model.importSquad(.u21)
-        #expect(t.model.lastImport == .failed(ErrorDescriptions.describe(
+        #expect(t.model.lastImport == .failed(.u21, reason: ErrorDescriptions.describe(
             ImportError.notAnFMRTEGrid(reason: "first line has no tab separators"))))
         #expect(t.model.squad == before)
         #expect(t.reopened().squad == before)
@@ -169,7 +192,7 @@ import LineupEngine
         let usual = t.directory.appendingPathComponent("FMRTE27/config.json").path
         t.input.config = .readFile(otherwise: usual)
         t.model.importSquad(.firstTeam)
-        #expect(t.model.lastImport == .failed(
+        #expect(t.model.lastImport == .failed(.firstTeam, reason:
             "FMRTE's settings file was not found at \(usual). Open FMRTE once, or set its location in Settings."))
         #expect(t.model.squad == before)
 
@@ -178,7 +201,7 @@ import LineupEngine
         settings.fmrteConfigPath = chosen
         t.model.update(settings)
         t.model.importSquad(.firstTeam)
-        #expect(t.model.lastImport == .failed(
+        #expect(t.model.lastImport == .failed(.firstTeam, reason:
             "FMRTE's settings file was not found at \(chosen). Open FMRTE once, or set its location in Settings."))
         #expect(t.model.squad == before)
     }
@@ -189,8 +212,58 @@ import LineupEngine
         t.input.clipboard = try Captures.firstTeam
         t.input.config = .failure(Locked())
         t.model.importSquad(.firstTeam)
-        #expect(t.model.lastImport == .failed(ErrorDescriptions.describe(ImportError.configUnreadable(reason: "the file is locked"))))
+        #expect(t.model.lastImport == .failed(.firstTeam, reason: ErrorDescriptions.describe(ImportError.configUnreadable(reason: "the file is locked"))))
         #expect(t.model.squad == SquadState())
+    }
+
+    @Test func aFailedImportSaysWhichSquadWasNotImported() {
+        #expect(ImportReport.notImportedLine(.firstTeam) == "The first team was not imported; the squad is as it was.")
+        #expect(ImportReport.notImportedLine(.u21) == "The U21s were not imported; the squad is as it was.")
+        #expect(ImportReport.notImportedLine(.u18) == "The U18s were not imported; the squad is as it was.")
+    }
+
+    @Test func theImportSummaryCanBeDismissed() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        #expect(t.model.lastImport != nil)
+        t.model.dismissImport()
+        #expect(t.model.lastImport == nil)
+    }
+
+    @Test func anImportIsDatedWithTheCurrentDateAndSaysSo() throws {
+        let t = try TestModel()
+        t.model.moveToday(by: 1)
+        try t.importFirstTeam()
+        let summary = try #require(summary(t.model.lastImport))
+        #expect(summary.date == day("2026-11-14"))
+        #expect(t.model.report(of: summary).heading == "First team imported, dated Sat 14 Nov")
+        #expect(ImportReport.datingLine == "Each import is dated with this day. Set it to the day in the game before you import.")
+    }
+
+    @Test func anImportListsTheMatchesBeforeTodayWithNoConfirmedLineup() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        t.model.addTactic(named: "Main")
+        t.model.addFixture(date: day("2026-11-14"), opponent: "Opponent A", importance: .medium)
+        let confirmed = t.model.addFixture(date: day("2026-11-15"), opponent: "Opponent B", importance: .medium)
+        t.model.addFixture(date: day("2026-11-16"), opponent: "Opponent C", importance: .medium)
+        t.model.addFixture(date: day("2026-11-20"), opponent: "Opponent D", importance: .medium)
+        let engine = try #require(summary(t.model.lastImport)).warnings
+        // Opponent B is confirmed; Opponent A was confirmed and then unlocked, so it is not.
+        let first = t.model.fixtures[0].id
+        t.model.confirm(first)
+        t.model.confirm(confirmed)
+        t.model.unlock(first)
+        #expect(t.model.history.map(\.lineup.fixture) == [confirmed])
+        var settings = t.model.settings
+        settings.currentDate = day("2026-11-17")
+        t.model.update(settings)
+        try t.importFirstTeam()
+        let summary = try #require(summary(t.model.lastImport))
+        #expect(summary.warnings == engine + [
+            "The match against Opponent A on Sat 14 Nov has no confirmed lineup. Confirm it in Match Selection so its starts count.",
+            "The match against Opponent C on Mon 16 Nov has no confirmed lineup. Confirm it in Match Selection so its starts count.",
+        ])
     }
 
     @Test func theClubNameSettingOverridesTheSquads() throws {
@@ -416,7 +489,7 @@ import LineupEngine
         #expect(t.model.notices.count == 1)
         let text = try #require(t.model.notices.first?.text)
         #expect(text.hasPrefix("Your saved fixtures could not be saved"))
-        #expect(text.hasSuffix("The change is kept while the app is open and is saved with the next change that succeeds."))
+        #expect(text.hasSuffix("The change is kept while the app is open and is saved the next time that part of the app changes."))
     }
 
     // MARK: Sample data

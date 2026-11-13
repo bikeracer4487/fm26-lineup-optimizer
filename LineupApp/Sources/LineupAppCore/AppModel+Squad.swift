@@ -24,24 +24,25 @@ extension AppModel {
 
     private func attemptImport(_ target: Squad) -> ImportOutcome {
         guard let text = environment.clipboard(), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return .failed("The clipboard is empty. Copy the rows in FMRTE first.")
+            return .failed(target, reason: "The clipboard is empty. Copy the rows in FMRTE first.")
         }
         let config: Data
         do {
             config = try environment.fmrteConfig(settings.fmrteConfigPath)
         } catch {
-            return .failed(describeConfigFailure(error))
+            return .failed(target, reason: describeConfigFailure(error))
         }
         let result: ImportResult
         do {
             result = try Importer.importPlayers(clipboard: text, fmrteConfig: config, squad: target)
         } catch {
-            return .failed(ErrorDescriptions.describe(error))
+            return .failed(target, reason: ErrorDescriptions.describe(error))
         }
 
         var state = squad
         let change = state.book.apply(result, to: target)
-        state.importedOn[target] = settings.currentDate
+        let date = settings.currentDate
+        state.importedOn[target] = date
         squad = state
         save(.squad)
         // The new figures include every match played before the import, for this squad's players.
@@ -58,8 +59,17 @@ extension AppModel {
             }
         }.map(\.name)
         return .imported(ImportSummary(
-            squad: target, grid: result.grid, playerCount: result.players.count, onLoan: onLoan,
-            warnings: result.warnings.map(ErrorDescriptions.describe), change: change))
+            squad: target, date: date, grid: result.grid, playerCount: result.players.count, onLoan: onLoan,
+            warnings: result.warnings.map(ErrorDescriptions.describe) + unconfirmedBeforeToday, change: change))
+    }
+
+    /// A sentence for each fixture before the game's current date with no confirmed lineup, in date order.
+    private var unconfirmedBeforeToday: [String] {
+        let confirmed = Set(history.map(\.lineup.fixture))
+        return fixtures.filter { $0.date < settings.currentDate && !confirmed.contains($0.id) }.map { fixture in
+            "The match against \(fixture.opponent) on \(DayText.short(fixture.date)) has no confirmed lineup. "
+                + "Confirm it in Match Selection so its starts count."
+        }
     }
 
     /// A file that is not there names the path looked at; any other failure is the engine's sentence for an

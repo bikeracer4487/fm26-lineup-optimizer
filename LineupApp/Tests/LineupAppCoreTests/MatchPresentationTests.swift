@@ -113,7 +113,7 @@ import LineupEngine
     }
 
     private func missed(_ fixture: StoredFixture) -> FixturePlan {
-        FixturePlan(fixture: fixture, tacticName: "", usesPrimaryBecauseItsTacticWasDeleted: false, body: .missed,
+        FixturePlan(fixture: fixture, tacticName: "", usesPrimaryBecauseItsTacticWasDeleted: false, body: .missed(nil),
                     fitnessIsProjected: false, ignoredOverrides: [])
     }
 
@@ -172,7 +172,7 @@ import LineupEngine
     @Test func aDeletedTacticGetsAQuietLine() {
         let fixture = fixture("p", "2026-11-14", "Opponent A")
         let plan = FixturePlan(fixture: fixture, tacticName: "4-2-3-1", usesPrimaryBecauseItsTacticWasDeleted: true,
-                               body: .missed, fitnessIsProjected: false, ignoredOverrides: [])
+                               body: .missed(nil), fitnessIsProjected: false, ignoredOverrides: [])
         #expect(MatchPresentation.deletedTacticLine(plan) == "This match's tactic was deleted, so the primary tactic is used.")
         #expect(MatchPresentation.deletedTacticLine(planned(fixture)) == nil)
     }
@@ -463,9 +463,20 @@ import LineupEngine
     @Test func theSampleWithAMissedFixtureShowsItAndChoosesTheFirstPlannedOne() throws {
         let model = try SampleData.modelWithMissedFixture(repositoryRoot: Captures.repositoryRoot)
         guard case .ready(let plans) = model.planState else { Issue.record("not ready: \(model.planState)"); return }
-        #expect(plans.first?.body == .missed)
+        #expect(plans.first?.body == .missed(nil))
         #expect(plans.first?.fixture.opponent == "Opponent Z")
         #expect(MatchPresentation.initialFixture(in: plans) == plans.dropFirst().first?.id)
+    }
+
+    @Test func theSampleWithAMissedElevenHasTheFirstFixtureMissedWithItsElevenAndNothingCountedTwice() throws {
+        let sample = try SampleData.model(repositoryRoot: Captures.repositoryRoot)
+        let model = try SampleData.modelWithMissedEleven(repositoryRoot: Captures.repositoryRoot)
+        guard case .ready(let plans) = model.planState else { Issue.record("not ready: \(model.planState)"); return }
+        let first = try #require(plans.first)
+        #expect(first.id == sample.fixtures.first?.id)
+        #expect(first.body == .missed(sample.fixtures.first?.lastPlanned))
+        #expect(model.canConfirm(first.id))
+        #expect(model.notices.isEmpty)
     }
 
     @Test func theSampleWithTwoMatchesOnOneDayFailsWithAWayToFixtures() throws {

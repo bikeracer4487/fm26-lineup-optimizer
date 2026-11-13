@@ -22,7 +22,8 @@ import LineupEngine
     }
     private var fixture: StoredFixture {
         StoredFixture(id: FixtureID("f1"), date: day, opponent: "Rovers", importance: .high,
-                      tacticID: tacticID, overrides: [.GK: alice], rejected: [bob])
+                      tacticID: tacticID, overrides: [.GK: alice], rejected: [bob],
+                      lastPlanned: PlannedEleven(starters: [.GK: bob], names: [bob: "Bob"], tacticName: "Test"))
     }
     private var record: ConfirmedRecord {
         ConfirmedRecord(lineup: ConfirmedLineup(fixture: FixtureID("f1"), date: day, starters: [.GK: alice]),
@@ -68,7 +69,8 @@ import LineupEngine
             var names: [PlayerID: String] = [:]
             for (slot, id) in slots { overrides[slot] = id; names[id] = "P\(id.key)" }
             let fixture = StoredFixture(id: FixtureID("f1"), date: day, opponent: "Rovers", importance: .high,
-                                        overrides: overrides, rejected: Set(rejected))
+                                        overrides: overrides, rejected: Set(rejected),
+                                        lastPlanned: PlannedEleven(starters: overrides, names: names, tacticName: "T"))
             let awaited: [Squad] = reversed ? [.u18, .u21, .firstTeam] : [.firstTeam, .u21, .u18]
             let record = ConfirmedRecord(
                 lineup: ConfirmedLineup(fixture: FixtureID("f1"), date: day, starters: overrides),
@@ -118,6 +120,66 @@ import LineupEngine
             var expected = record
             expected.awaitingImport = []
             #expect(loaded.value == [expected])
+        }
+    }
+
+    @Test func aFixturesFileWithoutRememberedElevensLoadsWithNone() throws {
+        try withStore { store, dir in
+            let saved = #"""
+            {"version": 1, "value": [{"id": "f1", "date": "2026-11-13", "opponent": "Rovers", "importance": "high",
+              "overrides": {"GK": "fmrte:1"}, "rejected": ["fmrte:2"]}]}
+            """#
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data(saved.utf8).write(to: dir.appendingPathComponent("fixtures.json"))
+            let loaded = store.load(.fixtures, as: [StoredFixture].self, otherwise: [])
+            #expect(loaded.notice == nil)
+            var expected = fixture
+            expected.tacticID = nil
+            expected.lastPlanned = nil
+            #expect(loaded.value == [expected])
+        }
+    }
+
+    @Test func unsavedTacticChangesRoundTripInTheirOwnFile() throws {
+        try withStore { store, dir in
+            let drafts = [StoredTactic(id: tacticID, tactic: tactic)]
+            try store.save(drafts, to: .drafts)
+            #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("drafts.json").path))
+            let loaded = store.load(.drafts, as: [StoredTactic].self, otherwise: [])
+            #expect(loaded.value == drafts)
+            #expect(loaded.notice == nil)
+        }
+    }
+
+    @Test func aMissingDraftsFileIsNotNoticedBesideOthers() throws {
+        // A missing drafts file means no unsaved changes, as for every app saved before the file existed.
+        try withStore { store, _ in
+            try store.save(settings, to: .settings)
+            let loaded = store.load(.drafts, as: [StoredTactic].self, otherwise: [])
+            #expect(loaded.value.isEmpty)
+            #expect(loaded.notice == nil)
+            #expect(loaded.replaceOnDisk)
+        }
+    }
+
+    @Test func aLoadSaysWhenTheFileOnDiskShouldBeReplaced() throws {
+        struct Refused: Error {}
+        try withStore { store, dir in
+            // Missing: write it. Read: leave it.
+            #expect(store.load(.fixtures, as: [StoredFixture].self, otherwise: []).replaceOnDisk)
+            try store.save([fixture], to: .fixtures)
+            #expect(!store.load(.fixtures, as: [StoredFixture].self, otherwise: []).replaceOnDisk)
+            // Unreadable and kept aside: write it.
+            try Data("{".utf8).write(to: dir.appendingPathComponent("fixtures.json"))
+            #expect(store.load(.fixtures, as: [StoredFixture].self, otherwise: []).replaceOnDisk)
+            // Unreadable and kept aside by a copy: write it.
+            try Data("{".utf8).write(to: dir.appendingPathComponent("tactics.json"))
+            let copying = Store(directory: dir, move: { _, _ in throw Refused() })
+            #expect(copying.load(.tactics, as: [StoredTactic].self, otherwise: []).replaceOnDisk)
+            // Unreadable and nowhere to keep it: leave it, since writing would lose it.
+            try Data("{".utf8).write(to: dir.appendingPathComponent("history.json"))
+            let stuck = Store(directory: dir, move: { _, _ in throw Refused() }, copy: { _, _ in throw Refused() })
+            #expect(!stuck.load(.history, as: [ConfirmedRecord].self, otherwise: []).replaceOnDisk)
         }
     }
 

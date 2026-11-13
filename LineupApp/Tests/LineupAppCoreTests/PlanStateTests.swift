@@ -266,7 +266,7 @@ import LineupEngine
         model.setOverride(gone, at: .D_L, in: id)
         #expect(model.fixtures[0].overrides[.D_L] == gone)
         #expect(plan(model, id)?.ignoredOverrides
-            == [IgnoredOverride(slot: .D_L, sentence: "The player chosen for left back is no longer in the squad.")])
+            == [IgnoredOverride(slot: .D_L, sentence: "The player chosen for left back is no longer in the squads.")])
         #expect(pick(at: .D_L, plan(model, id)) == before)
     }
 
@@ -284,7 +284,7 @@ import LineupEngine
         model.setOverride(PlayerID(key: "nobody of that name"), at: .D_L, in: id)
         #expect(plan(model, id)?.ignoredOverrides == [
             IgnoredOverride(slot: .GK, sentence: "Jonny Maxted at goalkeeper: injured, which cannot be overruled."),
-            IgnoredOverride(slot: .D_L, sentence: "The player chosen for left back is no longer in the squad."),
+            IgnoredOverride(slot: .D_L, sentence: "The player chosen for left back is no longer in the squads."),
             IgnoredOverride(slot: .AM_C,
                             sentence: "Tyrone Marsh at central attacking midfield: because he is fixed in another slot too."),
             IgnoredOverride(slot: .ST_C, sentence: "Tyrone Marsh at striker: because he is fixed in another slot too."),
@@ -431,17 +431,17 @@ import LineupEngine
 
         let plans = plans(model)
         #expect(plans.map(\.id) == ids)
-        #expect(plans[0].body == .missed)
+        // It was planned before the import, so its eleven is remembered.
+        #expect(model.fixtures[0].lastPlanned != nil)
+        #expect(plans[0].body == .missed(model.fixtures[0].lastPlanned))
         #expect(plans[0].tacticName == model.primaryTactic?.tactic.name)
-        #expect(plans[0].missedNote == "This match is before the squad was last imported and no lineup was confirmed for "
-            + "it, so it does not count towards runs of starts. Delete it, or correct its date, on the Fixtures screen.")
+        #expect(plans[0].missedNote?.hasPrefix("This match is before the squad was last imported and its lineup was never confirmed.") == true)
         #expect(lineup(plans[1])?.picks.count == 11)
         #expect(plans[1].missedNote == nil)
 
-        // The missed match is not the next to play, is not played, and offers no one to choose.
-        #expect(!model.canConfirm(ids[0]) && model.whyNotConfirm(ids[0]) == nil)
-        model.confirm(ids[0])
-        #expect(model.history.isEmpty)
+        // The missed match is not planned, so it offers no one to choose by rating; its eleven can be confirmed, and so
+        // can the next to play.
+        #expect(model.canConfirm(ids[0]) && model.whyNotConfirm(ids[0]) == nil)
         #expect(model.candidates(for: .GK, in: ids[0]).isEmpty)
         #expect(model.canConfirm(ids[1]))
 
@@ -753,15 +753,18 @@ import LineupEngine
         #expect(first.picks.contains { $0.player == youngster.player })
         model.confirm(ids[0])
 
-        func rested(_ id: PlayerID) throws -> ProjectedFitness {
+        // Confirming moved the game's date up to the match's, so the import after it is dated that day.
+        #expect(model.settings.currentDate == model.fixtures[0].date)
+        func rested(_ id: PlayerID, from day: Day) throws -> ProjectedFitness {
             let player = try #require(model.players.first { $0.id == id })
             return try FitnessProjection.afterDays(
-                TestModel.today.days(to: model.fixtures[1].date), ProjectedFitness(player), player: player,
+                day.days(to: model.fixtures[1].date), ProjectedFitness(player), player: player,
                 intensity: model.settings.plan.trainingIntensity, parameters: model.planParameters)
         }
-        let restedSenior = try rested(senior.player)
-        let restedYoungster = try rested(youngster.player)
-        #expect(try #require(fitness(plan(model, ids[1]))[senior.player]).condition < restedSenior.condition)
+        #expect(try #require(fitness(plan(model, ids[1]))[senior.player]).condition
+            < rested(senior.player, from: TestModel.today).condition)
+        let restedSenior = try rested(senior.player, from: model.fixtures[0].date)
+        let restedYoungster = try rested(youngster.player, from: model.fixtures[0].date)
 
         try t.importFirstTeam()
         #expect(model.history.first?.awaitingImport == [.u21])
@@ -897,5 +900,267 @@ import LineupEngine
         let candidate = model.candidates(for: floored.slot, in: replay).first { $0.player == floored.player }
         #expect(candidate?.unavailable.map { "Left out: " + $0 } == floored.reason)
         #expect(candidate?.unavailable?.hasPrefix("projected condition") == true)
+    }
+
+    // MARK: The weekly routine: remembered elevens
+
+    private func eleven(_ plan: FixturePlan?) -> PlannedEleven? {
+        guard let plan, let lineup = lineup(plan) else { return nil }
+        return PlannedEleven(starters: Dictionary(uniqueKeysWithValues: lineup.picks.map { ($0.slot, $0.player) }),
+                             names: Dictionary(uniqueKeysWithValues: lineup.picks.map { ($0.player, $0.name) }),
+                             tacticName: plan.tacticName)
+    }
+
+    /// Three fixtures planned from today; then the game moved on two days and both squads imported, so the first
+    /// fixture, on 14 November, is before the plan's starting day with its eleven remembered.
+    private func missedWithEleven(_ t: TestModel) throws -> (model: AppModel, ids: [FixtureID], remembered: PlannedEleven) {
+        let model = try squad(fixtures: 3, t)
+        let ids = model.fixtures.map(\.id)
+        let remembered = try #require(eleven(plan(model, ids[0])))
+        model.moveToday(by: 2)
+        try t.importFirstTeam()
+        try t.importU21()
+        return (model, ids, remembered)
+    }
+
+    @Test func eachPlannedFixtureRemembersTheElevenLastPlannedForIt() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        for plan in plans(model) {
+            let stored = try #require(model.fixtures.first { $0.id == plan.id })
+            #expect(stored.lastPlanned != nil)
+            #expect(stored.lastPlanned == eleven(plan))
+            // The plan carries the fixture as it is saved now.
+            #expect(plan.fixture == stored)
+        }
+
+        // It follows the plan, and writing it down does not plan again.
+        let id = model.fixtures[0].id
+        let keeper = try #require(pick(at: .GK, plan(model, id))?.player)
+        let planned = model.timesPlanned
+        model.reject(keeper, in: id)
+        #expect(model.timesPlanned == planned + 1)
+        #expect(model.fixtures[0].lastPlanned == eleven(plan(model, id)))
+        #expect(model.fixtures[0].lastPlanned?.starters.values.contains(keeper) == false)
+
+        // It survives a reload, and confirming keeps it.
+        #expect(t.reopened().fixtures == model.fixtures)
+        let remembered = model.fixtures[0].lastPlanned
+        model.confirm(id)
+        #expect(model.fixtures[0].lastPlanned == remembered)
+        #expect(t.reopened().fixtures[0].lastPlanned == remembered)
+    }
+
+    @Test func aMissedFixtureWithARememberedElevenCanBeConfirmedAndItsStartsThenCount() throws {
+        let t = try TestModel()
+        let (model, ids, remembered) = try missedWithEleven(t)
+        let missed = plan(model, ids[0])
+        #expect(missed?.body == .missed(remembered))
+        #expect(missed?.tacticName == remembered.tacticName)
+        #expect(missed?.missedNote == "This match is before the squad was last imported and its lineup was never "
+            + "confirmed. This is the eleven last planned for it. Change anyone who did not start, then confirm it as played.")
+        #expect(model.canConfirm(ids[0]) && model.whyNotConfirm(ids[0]) == nil)
+        // Its tokens are the remembered eleven's surnames, without values.
+        let tokens = try model.tokens(for: #require(missed))
+        #expect(tokens.map(\.slot) == SlotID.allCases.filter { remembered.starters[$0] != nil })
+        #expect(tokens.allSatisfy { $0.value == nil && $0.marks.isEmpty })
+        #expect(tokens.map(\.name) == tokens.map { remembered.names[$0.player] ?? "" })
+
+        /// The players picked in the next fixture for having held their slot in their last start.
+        func heldTheirSlot() -> Set<PlayerID> {
+            Set((lineup(plan(model, ids[1]))?.picks ?? []).filter { pick in
+                pick.reasons.contains { $0.hasPrefix("Held this slot in his last start") }
+            }.map(\.player))
+        }
+        #expect(heldTheirSlot().isEmpty)
+        model.confirmMissed(ids[0])
+        guard let record = record(plan(model, ids[0])) else { return }
+        #expect(record.lineup.starters == remembered.starters)
+        #expect(record.lineup.date == model.fixtures[0].date)
+        #expect(record.names == remembered.names)
+        #expect(record.tacticName == remembered.tacticName)
+        // Both squads were imported after the match, so their figures already hold its load.
+        #expect(record.awaitingImport.isEmpty)
+        #expect(model.fitnessNote == nil)
+        #expect(t.reopened().history == model.history)
+
+        // The next fixture now counts the match: starters who keep their slot are marked as having held it.
+        let held = heldTheirSlot()
+        #expect(!held.isEmpty)
+        #expect(held.isSubset(of: Set(remembered.starters.values)))
+    }
+
+    @Test func aSquadImportedBeforeTheMissedMatchStillAwaitsAnImport() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        let ids = model.fixtures.map(\.id)
+        model.moveToday(by: 2)
+        try t.importFirstTeam()   // the U21s were last imported on 13 November, the day before the match
+        model.confirmMissed(ids[0])
+        #expect(record(plan(model, ids[0]))?.awaitingImport == [.u21])
+    }
+
+    @Test func aPlayerPutInTheRememberedElevenSwapsWithHisOldSlot() throws {
+        let t = try TestModel()
+        let (model, ids, remembered) = try missedWithEleven(t)
+        let keeper = try #require(remembered.starters[.GK])
+        let leftBack = try #require(remembered.starters[.D_L])
+
+        model.setRemembered(leftBack, at: .GK, in: ids[0])
+        #expect(model.fixtures[0].lastPlanned?.starters[.GK] == leftBack)
+        #expect(model.fixtures[0].lastPlanned?.starters[.D_L] == keeper)
+        #expect(model.fixtures[0].lastPlanned?.starters.count == remembered.starters.count)
+        #expect(plan(model, ids[0])?.body == .missed(model.fixtures[0].lastPlanned))
+
+        // Someone from outside the eleven takes the slot, and the one he replaces leaves it.
+        let striker = try #require(remembered.starters[.ST_C])
+        let candidates = model.rememberedCandidates(for: .ST_C, in: ids[0])
+        let outsider = try #require(candidates.first)
+        #expect(!remembered.starters.values.contains(outsider.player))
+        model.setRemembered(outsider.player, at: .ST_C, in: ids[0])
+        let changed = try #require(model.fixtures[0].lastPlanned)
+        #expect(changed.starters[.ST_C] == outsider.player)
+        #expect(changed.names[outsider.player] == outsider.name)
+        #expect(changed.names[striker] == nil)
+        #expect(t.reopened().fixtures[0].lastPlanned == changed)
+
+        // Nobody outside the squads, and nobody out on loan, can be put in it; nor in a fixture that is not missed.
+        let loaned = model.players.filter {
+            if case .loanedOut = LoanStatus.of($0, ownClub: model.ownClub) { true } else { false }
+        }
+        #expect(!loaned.isEmpty)
+        model.setRemembered(PlayerID(key: "nobody"), at: .GK, in: ids[0])
+        model.setRemembered(loaned[0].id, at: .GK, in: ids[0])
+        #expect(model.fixtures[0].lastPlanned == changed)
+        let next = model.fixtures[1].lastPlanned
+        model.setRemembered(keeper, at: .ST_C, in: ids[1])
+        #expect(model.fixtures[1].lastPlanned == next)
+        #expect(model.rememberedCandidates(for: .GK, in: ids[1]).isEmpty)
+    }
+
+    @Test func theCandidatesForARememberedSlotAreTheSquadWithTheElevenLast() throws {
+        let t = try TestModel()
+        let (model, ids, remembered) = try missedWithEleven(t)
+        let candidates = model.rememberedCandidates(for: .GK, in: ids[0])
+        let available = model.players.filter {
+            if case .loanedOut = LoanStatus.of($0, ownClub: model.ownClub) { false } else { true }
+        }
+        #expect(Set(candidates.map(\.player)) == Set(available.map(\.id)))
+        let inEleven = Set(remembered.starters.values)
+        let outside = candidates.prefix { !inEleven.contains($0.player) }
+        let inside = candidates.dropFirst(outside.count)
+        #expect(inside.count == inEleven.count)
+        #expect(inside.allSatisfy { inEleven.contains($0.player) })
+        #expect(outside.map(\.name) == outside.map(\.name).sorted())
+        #expect(inside.map(\.name) == inside.map(\.name).sorted())
+        #expect(candidates.allSatisfy { $0.rating == nil && $0.unavailable == nil })
+        // As rows: the one in the slot now is marked, and those elsewhere in the eleven say where.
+        let rows = model.rememberedCandidateRows(for: .GK, in: ids[0])
+        #expect(rows.map(\.player) == candidates.map(\.player))
+        #expect(rows.filter(\.isCurrent).map(\.player) == [remembered.starters[.GK]])
+        #expect(rows.allSatisfy { $0.ratingText == nil })
+        let leftBack = try #require(rows.first { $0.player == remembered.starters[.D_L] })
+        #expect(leftBack.note == "At left back in this eleven")
+    }
+
+    @Test func aMissedFixtureWithNothingRememberedCannotBeConfirmed() throws {
+        let t = try TestModel()
+        let (model, _, _) = try missedWithEleven(t)
+        let bare = model.addFixture(date: TestModel.today, opponent: "Opponent Z", importance: .low)
+        let missed = plan(model, bare)
+        #expect(missed?.body == .missed(nil))
+        #expect(missed?.missedNote == "This match is before the squad was last imported and no lineup was ever planned "
+            + "for it, so there is nothing to confirm. Delete it, or correct its date, on the Fixtures screen.")
+        #expect(!model.canConfirm(bare) && model.whyNotConfirm(bare) == nil)
+        let history = model.history
+        model.confirmMissed(bare)
+        model.confirm(bare)
+        #expect(model.history == history)
+        #expect(try model.tokens(for: #require(missed)).isEmpty)
+        #expect(model.rememberedCandidates(for: .GK, in: bare).isEmpty)
+    }
+
+    @Test func unlockingALaterMatchKeepsItsElevenAndPlansItAgain() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        let id = model.fixtures[0].id
+        #expect(model.unlockNote(for: id) == "Unlock this lineup? The match will be planned again.")
+        model.confirm(id)
+        guard let record = record(plan(model, id)) else { return }
+        #expect(model.unlockNote(for: id) == "Unlock this lineup? The match will be planned again.")
+        model.unlock(id)
+        #expect(model.history.isEmpty)
+        #expect(lineup(plan(model, id)) != nil)
+        #expect(model.fixtures[0].lastPlanned == eleven(plan(model, id)))
+        #expect(model.fixtures[0].lastPlanned?.starters == record.lineup.starters)
+    }
+
+    @Test func unlockingAMatchBeforeTheLastImportLeavesItMissedWithItsEleven() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 3, t)
+        let ids = model.fixtures.map(\.id)
+        model.confirm(ids[0])
+        guard let record = record(plan(model, ids[0])) else { return }
+        model.moveToday(by: 2)
+        try t.importFirstTeam()
+        try t.importU21()
+        #expect(model.unlockNote(for: ids[0]) == "Unlock this lineup? The squad has been imported since this match, so it "
+            + "cannot be planned again. You can change who started and confirm it again.")
+
+        model.unlock(ids[0])
+        let kept = PlannedEleven(starters: record.lineup.starters, names: record.names, tacticName: record.tacticName)
+        #expect(model.fixtures[0].lastPlanned == kept)
+        #expect(plan(model, ids[0])?.body == .missed(kept))
+        #expect(t.reopened().fixtures[0].lastPlanned == kept)
+        #expect(model.canConfirm(ids[0]))
+
+        model.confirmMissed(ids[0])
+        #expect(self.record(plan(model, ids[0]))?.lineup.starters == record.lineup.starters)
+    }
+
+    @Test func confirmingAMatchMovesTodayUpToItsDate() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        let ids = model.fixtures.map(\.id)
+        #expect(model.settings.currentDate == TestModel.today)
+        model.confirm(ids[0])
+        #expect(model.settings.currentDate == model.fixtures[0].date)
+        #expect(t.reopened().settings.currentDate == model.fixtures[0].date)
+
+        // A later current date is left alone.
+        model.moveToday(by: 10)
+        let later = model.settings.currentDate
+        model.confirm(ids[1])
+        #expect(model.history.count == 2)
+        #expect(model.settings.currentDate == later)
+    }
+
+    @Test func confirmingAMissedMatchLeavesALaterCurrentDateAlone() throws {
+        let t = try TestModel()
+        let (model, ids, _) = try missedWithEleven(t)
+        let today = model.settings.currentDate
+        model.confirmMissed(ids[0])
+        #expect(model.settings.currentDate == today)
+    }
+
+    // MARK: The selection follows the owner's choice
+
+    @Test func choosingSomeoneElseSelectsHimInThatSlot() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 1, t)
+        let id = model.fixtures[0].id
+        let candidate = try #require(model.candidates(for: .D_L, in: id).first {
+            $0.unavailable == nil && $0.player != pick(at: .D_L, plan(model, id))?.player
+        })
+        let chosen = model.choose(candidate.player, at: .D_L, in: id)
+        #expect(chosen == PickSelection(fixture: id, slot: .D_L, player: candidate.player))
+        #expect(pick(at: .D_L, plan(model, id))?.player == candidate.player)
+        #expect(try MatchPresentation.selectedSlot(chosen, in: #require(plan(model, id))) == .D_L)
+
+        let cleared = model.clearChoice(at: .D_L, in: id)
+        let now = try #require(pick(at: .D_L, plan(model, id))?.player)
+        #expect(model.fixtures[0].overrides[.D_L] == nil)
+        #expect(cleared == PickSelection(fixture: id, slot: .D_L, player: now))
+        #expect(try MatchPresentation.selectedSlot(cleared, in: #require(plan(model, id))) == .D_L)
     }
 }

@@ -179,7 +179,7 @@ public struct RejectedRow: Identifiable, Equatable, Sendable {
         let known = rejected.compactMap { id in names[id].map { RejectedRow(player: id, name: $0) } }
             .sorted { ($0.name, $0.player.key) < ($1.name, $1.player.key) }
         let gone = rejected.filter { names[$0] == nil }.sorted { $0.key < $1.key }
-            .map { RejectedRow(player: $0, name: "A player no longer in the squads") }
+            .map { RejectedRow(player: $0, name: MatchText.unknownPlayer) }
         return known + gone
     }
 }
@@ -190,13 +190,22 @@ public struct CandidateRow: Identifiable, Equatable, Sendable {
     public let player: PlayerID
     public let name: String
     public let squadText: String
-    /// His full-fitness rating to one decimal place, or a dash when it cannot be worked out.
-    public let ratingText: String
+    /// His full-fitness rating to one decimal place, or a dash when it cannot be worked out; nil when the picker shows
+    /// no ratings, as for a missed fixture's remembered eleven.
+    public let ratingText: String?
     /// Why he cannot play, in the engine's words.
     public let unavailable: String?
     /// He is the pick in the slot now.
     public let isCurrent: Bool
+    /// Where he is in the eleven now, when that is another slot.
+    public let note: String?
     public var canChoose: Bool { unavailable == nil }
+
+    public init(player: PlayerID, name: String, squadText: String, ratingText: String?, unavailable: String?,
+                isCurrent: Bool, note: String? = nil) {
+        self.player = player; self.name = name; self.squadText = squadText; self.ratingText = ratingText
+        self.unavailable = unavailable; self.isCurrent = isCurrent; self.note = note
+    }
 
     public static func rows(_ candidates: [Candidate], current: PlayerID?) -> [CandidateRow] {
         candidates.map { candidate in
@@ -204,6 +213,40 @@ public struct CandidateRow: Identifiable, Equatable, Sendable {
                          ratingText: candidate.rating.map(MatchText.oneDecimal) ?? "—",
                          unavailable: candidate.unavailable, isCurrent: candidate.player == current)
         }
+    }
+
+    /// Rows for a remembered eleven: no ratings; the one in `slot` marked, and those elsewhere in the eleven saying where.
+    public static func rows(_ candidates: [Candidate], in eleven: PlannedEleven, slot: SlotID) -> [CandidateRow] {
+        let slotOf = Dictionary(eleven.starters.map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        return candidates.map { candidate in
+            let at = slotOf[candidate.player]
+            return CandidateRow(player: candidate.player, name: candidate.name, squadText: candidate.squad.displayName,
+                                ratingText: nil, unavailable: nil, isCurrent: at == slot,
+                                note: at.flatMap { $0 == slot ? nil : "At \($0.longName) in this eleven" })
+        }
+    }
+}
+
+/// What the candidate picker says above its list.
+public struct PickerText: Equatable, Sendable {
+    public let title: String
+    public let explanation: String
+    /// The heading over the ratings; nil when the picker shows none.
+    public let ratingHeading: String?
+
+    /// For a planned lineup: who can play, best first at full fitness.
+    public static func planned(_ slot: SlotID) -> PickerText {
+        PickerText(title: MatchPresentation.pickerTitle(slot),
+                   explanation: "Those who can play, best first at full fitness; then those who cannot, with the reason. "
+                       + "Choosing a player fixes him here for this match.",
+                   ratingHeading: "Rating at full fitness")
+    }
+
+    /// For a missed fixture's remembered eleven: who really started there.
+    public static func remembered(_ slot: SlotID) -> PickerText {
+        PickerText(title: "Who started at \(slot.longName)?",
+                   explanation: "Choose who played here. If he is elsewhere in this eleven, the two swap.",
+                   ratingHeading: nil)
     }
 }
 
@@ -298,13 +341,14 @@ public struct StartsGrid: Equatable, Sendable {
             }
         }
         let order = Dictionary(uniqueKeysWithValues: SlotID.allCases.enumerated().map { ($1, $0) })
+        /// The name the lineups recorded, else the squads' name, else the words for a player no longer in the squads.
         func name(_ player: PlayerID) -> String { names[player] ?? known[player] ?? MatchText.unknownPlayer }
         let players = firstSlot.keys.sorted {
             (order[firstSlot[$0]!]!, name($0), $0.key) < (order[firstSlot[$1]!]!, name($1), $1.key)
         }
         rows = players.map { player in
             let slots = lineups.map { starters in SlotID.allCases.first { starters[$0] == player } }
-            return Row(player: player, name: names[player] ?? known[player] ?? MatchText.unknownPlayer,
+            return Row(player: player, name: name(player),
                        cells: slots.map { Cell(text: $0?.displayName ?? Self.noStart, isStart: $0 != nil) },
                        starts: slots.compactMap { $0 }.count)
         }
@@ -426,11 +470,18 @@ public enum MatchPresentation {
 
     /// The line under "Confirm this lineup".
     public static let confirmExplanation = "Locks this eleven as played. Later fixtures count it."
+
+    /// The button that confirms a missed fixture's remembered eleven.
+    public static let confirmMissedTitle = "Confirm this eleven as played"
+
+    /// The line beside a remembered eleven's pitch.
+    public static let rememberedHint = "Click a player on the pitch to change who started there."
 }
 
 extension AppModel {
-    /// A token for each starter: a planned lineup's picks with their values and marks, or a confirmed lineup's
-    /// starters with the names it was confirmed with; in `SlotID` order. None for a missed fixture.
+    /// A token for each starter: a planned lineup's picks with their values and marks, or a confirmed lineup's or a
+    /// missed fixture's remembered starters with the names recorded; in `SlotID` order. None for a missed fixture with
+    /// no remembered eleven.
     public func tokens(for plan: FixturePlan) -> [TokenContent] {
         switch plan.body {
         case .planned(let lineup, _):
@@ -442,19 +493,27 @@ extension AppModel {
                                                     squad: squads[pick.player]))
             }
         case .confirmed(let record):
-            let current = namesByPlayer
-            return SlotID.allCases.compactMap { slot in
-                record.lineup.starters[slot].map { player in
-                    if let name = record.names[player] ?? current[player] {
-                        return TokenContent(slot: slot, player: player, name: name, surname: MatchText.surname(name),
-                                            value: nil, marks: [])
-                    }
-                    return TokenContent(slot: slot, player: player, name: MatchText.unknownPlayer,
-                                        surname: MatchText.unknownSurname, value: nil, marks: [])
-                }
-            }
-        case .missed:
+            return namedTokens(record.lineup.starters, names: record.names)
+        case .missed(let eleven?):
+            return namedTokens(eleven.starters, names: eleven.names)
+        case .missed(nil):
             return []
+        }
+    }
+
+    /// Tokens with names only, in `SlotID` order: the recorded name, else the squads' name, else the words for a
+    /// player no longer in the squads.
+    private func namedTokens(_ starters: [SlotID: PlayerID], names: [PlayerID: String]) -> [TokenContent] {
+        let current = namesByPlayer
+        return SlotID.allCases.compactMap { slot in
+            starters[slot].map { player in
+                if let name = names[player] ?? current[player] {
+                    return TokenContent(slot: slot, player: player, name: name, surname: MatchText.surname(name),
+                                        value: nil, marks: [])
+                }
+                return TokenContent(slot: slot, player: player, name: MatchText.unknownPlayer,
+                                    surname: MatchText.unknownSurname, value: nil, marks: [])
+            }
         }
     }
 
@@ -511,6 +570,12 @@ extension AppModel {
             return lineup.picks.first { $0.slot == slot }?.player
         }()
         return CandidateRow.rows(candidates(for: slot, in: fixture), current: current)
+    }
+
+    /// The candidates for a slot of a missed fixture's remembered eleven, as the picker lists them.
+    public func rememberedCandidateRows(for slot: SlotID, in fixture: FixtureID) -> [CandidateRow] {
+        guard let eleven = fixtures.first(where: { $0.id == fixture })?.lastPlanned else { return [] }
+        return CandidateRow.rows(rememberedCandidates(for: slot, in: fixture), in: eleven, slot: slot)
     }
 
     private var namesByPlayer: [PlayerID: String] {

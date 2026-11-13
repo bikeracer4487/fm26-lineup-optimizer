@@ -170,7 +170,7 @@ private func player(
         let t = try TestModel()
         try t.importFirstTeam()
         let report = t.model.report(of: try summary(t))
-        #expect(report.heading == "First team imported")
+        #expect(report.heading == "First team imported, dated Fri 13 Nov")
         #expect(report.lines == [
             "Recognised as FMRTE's squad grid.",
             "18 players.",
@@ -226,7 +226,7 @@ private func player(
 
     @Test func aPlayerFromAnotherSquadIsReportedAsMovedInNotAdded() {
         let summary = ImportSummary(
-            squad: .u21, grid: "SearchPlayersColumns", playerCount: 3, onLoan: [], warnings: [],
+            squad: .u21, date: TestModel.today, grid: "SearchPlayersColumns", playerCount: 3, onLoan: [], warnings: [],
             change: SquadChange(added: [PlayerID(key: "a"), PlayerID(key: "b")], removed: [], movedIn: [PlayerID(key: "b")], changed: []))
         let names = [PlayerID(key: "a"): "Ann Able", PlayerID(key: "b"): "Ben Best"]
         #expect(ImportReport.changeLine(summary.change, firstImport: false, name: { names[$0] ?? $0.key })

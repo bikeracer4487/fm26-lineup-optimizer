@@ -83,8 +83,10 @@ struct CandidateRowView: View {
                 }
             }
             Spacer(minLength: Theme.Spacing.m)
-            Text(row.ratingText)
-                .font(Theme.Typeface.number(Theme.TypeSize.step1))
+            if let rating = row.ratingText {
+                Text(rating)
+                    .font(Theme.Typeface.number(Theme.TypeSize.step1))
+            }
         }
         .padding(.vertical, Theme.Spacing.s)
         .foregroundStyle(row.canChoose ? .primary : .secondary)

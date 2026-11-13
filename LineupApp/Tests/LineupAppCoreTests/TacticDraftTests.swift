@@ -321,15 +321,74 @@ import Testing
         #expect(!t.model.hasUnsavedChanges(main))
     }
 
-    @Test func draftsAreNotWrittenToDisk() throws {
+    @Test func unsavedChangesSurviveQuitting() throws {
         let t = try TestModel()
         let id = t.model.addTactic(named: "Main")
-        t.model.setDraft(try changedDraft(t.model, id), for: id)
-        // Saving another file does not carry the draft with it either.
-        t.model.addTactic(named: "Cup")
+        let changed = try changedDraft(t.model, id)
+        t.model.setDraft(changed, for: id)
         let reopened = t.reopened()
-        #expect(reopened.tacticsWithUnsavedChanges.isEmpty)
+        #expect(reopened.tacticsWithUnsavedChanges == [id])
+        #expect(reopened.draft(for: id) == changed)
+        #expect(reopened.notices.isEmpty)
+        // The saved tactic stays as it was.
         #expect(reopened.tactics.first { $0.id == id }?.tactic.inPossession[.AM_L] == "Inside Forward")
+
+        // Reverting, saving and deleting are kept too.
+        t.model.revertDraft(id)
+        #expect(t.reopened().tacticsWithUnsavedChanges.isEmpty)
+        t.model.setDraft(changed, for: id)
+        #expect(t.model.saveDraft(id))
+        #expect(t.reopened().tacticsWithUnsavedChanges.isEmpty)
+        let cup = t.model.addTactic(named: "Cup")
+        t.model.setDraft(try changedDraft(t.model, cup), for: cup)
+        #expect(t.reopened().tacticsWithUnsavedChanges == [cup])
+        t.model.deleteTactic(cup)
+        #expect(t.reopened().tacticsWithUnsavedChanges.isEmpty)
+    }
+
+    @Test func aDraftForATacticNoLongerSavedIsDroppedAtLoad() throws {
+        let t = try TestModel()
+        let id = t.model.addTactic(named: "Main")
+        let changed = try changedDraft(t.model, id)
+        let stray = UUID()
+        try Store(directory: t.directory).save([StoredTactic(id: stray, tactic: changed.tactic),
+                                                StoredTactic(id: id, tactic: changed.tactic)], to: .drafts)
+        let reopened = t.reopened()
+        #expect(reopened.tacticsWithUnsavedChanges == [id])
+        #expect(reopened.draft(for: stray) == nil)
+        #expect(reopened.notices.isEmpty)
+        let onDisk = Store(directory: t.directory).load(.drafts, as: [StoredTactic].self, otherwise: []).value
+        #expect(onDisk.map(\.id) == [id])
+    }
+
+    // MARK: The editor's words
+
+    @Test func theEditorsWordsAreWorkedOutFromTheDraft() throws {
+        var draft = TacticDraft(try sample())
+        #expect(draft.filledText(in: .inPossession) == "11 of 11 slots filled")
+        #expect(Phase.inPossession.title == "In possession")
+        #expect(Phase.outOfPossession.title == "Out of possession")
+        #expect(TacticDraft.inspectorTitle(TacticSlot(.AM_L, in: .inPossession)) == "AM L, in possession")
+        #expect(TacticDraft.inspectorTitle(TacticSlot(.M_L, in: .outOfPossession)) == "M L, out of possession")
+        #expect(draft.targetName(.M_L) == "M L")
+        #expect(draft.targetName(.M_C) == "M C (empty)")
+        #expect(TacticDraft.slotHelp(.AM_L, role: "Winger") == "AM L: Winger")
+        #expect(TacticDraft.slotHelp(.AM_L, role: nil) == "Add a slot at AM L")
+
+        // Remove the left inside forward: one fewer in possession, and M L has nothing turning into it.
+        draft.toggle(.AM_L, in: .inPossession, catalog: catalog)
+        #expect(draft.filledText(in: .inPossession) == "10 of 11 slots filled")
+        #expect(draft.targetName(.M_L) == "M L (nothing turns into it yet)")
+    }
+
+    @Test func theRoleMenuListsTheAllowedRolesWithTheCurrentOneFirstWhenItIsNotAllowed() throws {
+        var draft = TacticDraft(try sample())
+        let place = TacticSlot(.AM_L, in: .inPossession)
+        let allowed = catalog.roles(phase: .inPossession, at: SlotID.AM_L.position).map(\.name)
+        #expect(draft.roleChoices(at: place, catalog: catalog) == allowed)
+        draft.setRole("Not A Role", at: .AM_L, in: .inPossession)
+        #expect(draft.roleChoices(at: place, catalog: catalog) == ["Not A Role"] + allowed)
+        #expect(draft.roleChoices(at: TacticSlot(.M_C, in: .inPossession), catalog: catalog).isEmpty)
     }
 
     @Test func duplicatingCopiesTheDraftAndSavesItWhenItHasNoProblems() throws {

@@ -2,6 +2,8 @@ import Foundation
 
 public enum StoreFile: String, CaseIterable, Sendable {
     case settings, tactics, fixtures, history, squad
+    /// Unsaved changes to saved tactics.
+    case drafts
 
     /// How a notice refers to the file, in the owner's words.
     var description: String {
@@ -11,6 +13,7 @@ public enum StoreFile: String, CaseIterable, Sendable {
         case .fixtures: "your saved fixtures"
         case .history: "the confirmed lineups"
         case .squad: "the squad"
+        case .drafts: "your unsaved tactic changes"
         }
     }
 
@@ -22,6 +25,7 @@ public enum StoreFile: String, CaseIterable, Sendable {
         case .fixtures: "the list starts empty"
         case .history: "the list starts empty"
         case .squad: "the squad starts empty"
+        case .drafts: "the tactics start with no unsaved changes"
         }
     }
 
@@ -32,6 +36,16 @@ public enum StoreFile: String, CaseIterable, Sendable {
         case .fixtures: "saved fixtures"
         case .history: "confirmed lineups"
         case .squad: "saved squad"
+        case .drafts: "unsaved tactic changes"
+        }
+    }
+
+    /// Whether the file not being there beside the others is worth a notice. Without the drafts file there are simply
+    /// no unsaved changes, as for an app saved before the file existed.
+    var isNoticedWhenMissing: Bool {
+        switch self {
+        case .settings, .tactics, .fixtures, .history, .squad: true
+        case .drafts: false
         }
     }
 }
@@ -39,9 +53,12 @@ public enum StoreFile: String, CaseIterable, Sendable {
 public struct Loaded<Value> {
     public let value: Value
     public let notice: String?
+    /// The file was missing, or unreadable and kept aside, so it should be written from `value`; false when it was
+    /// read, or when an unreadable file could not be kept aside and writing over it would lose it.
+    public let replaceOnDisk: Bool
 
-    public init(value: Value, notice: String?) {
-        self.value = value; self.notice = notice
+    public init(value: Value, notice: String?, replaceOnDisk: Bool = false) {
+        self.value = value; self.notice = notice; self.replaceOnDisk = replaceOnDisk
     }
 }
 
@@ -96,10 +113,10 @@ public struct Store: Sendable {
         guard fileManager.fileExists(atPath: path.path) else {
             let others = StoreFile.allCases.filter { $0 != file }
             let beside = others.contains { fileManager.fileExists(atPath: url($0).path) }
-            let notice = beside
+            let notice = beside && file.isNoticedWhenMissing
                 ? "No \(file.missingSubject) were found, so \(file.startsWith)."
                 : nil
-            return Loaded(value: fresh, notice: notice)
+            return Loaded(value: fresh, notice: notice, replaceOnDisk: true)
         }
         let newer: Bool
         do {
@@ -123,7 +140,7 @@ public struct Store: Sendable {
         let lead = newer
             ? "The file holding \(file.description) comes from a newer version of the app, so \(file.startsWith)."
             : "\(subject(file)) could not be read as saved data (the file may have been cut short), so \(file.startsWith)."
-        return Loaded(value: fresh, notice: "\(lead) \(tail)")
+        return Loaded(value: fresh, notice: "\(lead) \(tail)", replaceOnDisk: kept != nil)
     }
 
     /// Keeps the file as `<name>.unreadable-<n>.json` with the first free number, by moving it or, if that

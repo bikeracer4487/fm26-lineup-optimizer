@@ -11,6 +11,18 @@ public struct StoredTactic: Identifiable, Equatable, Codable, Sendable {
     }
 }
 
+/// An eleven as it was last planned for a fixture, or as it was confirmed before being unlocked: the starters by
+/// slot, their names then, and the tactic's name. Kept so a match that was played but never confirmed can be put right.
+public struct PlannedEleven: Equatable, Codable, Sendable {
+    public var starters: [SlotID: PlayerID]
+    public var names: [PlayerID: String]
+    public var tacticName: String
+
+    public init(starters: [SlotID: PlayerID], names: [PlayerID: String], tacticName: String) {
+        self.starters = starters; self.names = names; self.tacticName = tacticName
+    }
+}
+
 /// A match to plan for, as saved. The tactic is referred to by id; nil means the primary tactic.
 public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
     public var id: FixtureID
@@ -20,17 +32,19 @@ public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
     public var tacticID: UUID?
     public var overrides: [SlotID: PlayerID]
     public var rejected: Set<PlayerID>
+    /// The eleven last planned for it; nil until it has been planned.
+    public var lastPlanned: PlannedEleven?
 
     public init(
         id: FixtureID, date: Day, opponent: String, importance: Importance, tacticID: UUID? = nil,
-        overrides: [SlotID: PlayerID] = [:], rejected: Set<PlayerID> = []
+        overrides: [SlotID: PlayerID] = [:], rejected: Set<PlayerID> = [], lastPlanned: PlannedEleven? = nil
     ) {
         self.id = id; self.date = date; self.opponent = opponent; self.importance = importance
-        self.tacticID = tacticID; self.overrides = overrides; self.rejected = rejected
+        self.tacticID = tacticID; self.overrides = overrides; self.rejected = rejected; self.lastPlanned = lastPlanned
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, date, opponent, importance, tacticID, overrides, rejected
+        case id, date, opponent, importance, tacticID, overrides, rejected, lastPlanned
     }
 
     public init(from decoder: any Decoder) throws {
@@ -42,6 +56,8 @@ public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
         tacticID = try c.decodeIfPresent(UUID.self, forKey: .tacticID)
         overrides = try c.decode([SlotID: PlayerID].self, forKey: .overrides)
         rejected = Set(try c.decode([PlayerID].self, forKey: .rejected))
+        // A fixture saved before elevens were remembered has none.
+        lastPlanned = try c.decodeIfPresent(PlannedEleven.self, forKey: .lastPlanned)
     }
 
     /// `rejected` is written as an array in key order, because a set has no fixed order of its own.
@@ -54,6 +70,7 @@ public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
         try c.encodeIfPresent(tacticID, forKey: .tacticID)
         try c.encode(overrides, forKey: .overrides)
         try c.encode(rejected.sorted { $0.key < $1.key }, forKey: .rejected)
+        try c.encodeIfPresent(lastPlanned, forKey: .lastPlanned)
     }
 }
 

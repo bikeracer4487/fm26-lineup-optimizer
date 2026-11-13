@@ -87,7 +87,7 @@ public enum SampleData {
         input.clipboard = String(decoding: try fixture("captures/first-team-with-id.tsv", under: repositoryRoot), as: UTF8.self)
         input.config = .data(try fixture("captures/first-team-with-id.grids.json", under: repositoryRoot))
         model.importSquad(.firstTeam)
-        if case .failed(let reason)? = model.lastImport {
+        if case .failed(_, let reason)? = model.lastImport {
             throw SampleDataError(description: "The sample first-team-with-id.tsv could not be imported: \(reason)")
         }
         return model
@@ -172,12 +172,33 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model two days on, on 15 November, with both squads imported again that day and the first fixture,
+    /// on 14 November, never confirmed: a missed fixture with the eleven last planned for it remembered.
+    @MainActor public static func modelWithMissedEleven(repositoryRoot: URL) throws -> AppModel {
+        let (model, input) = try build(repositoryRoot: repositoryRoot)
+        model.moveToday(by: 2)
+        for (squad, paste, grids) in samplePastes {
+            input.clipboard = String(decoding: try fixture("captures/\(paste)", under: repositoryRoot), as: UTF8.self)
+            input.config = .data(try fixture("captures/\(grids)", under: repositoryRoot))
+            model.importSquad(squad)
+            if case .failed(_, let reason)? = model.lastImport {
+                throw SampleDataError(description: "The sample \(paste) could not be imported: \(reason)")
+            }
+        }
+        model.dismissImport()
+        return model
+    }
+
     /// The sample model with a second fixture on 17 November, so the plan stops: a club plays one match a day.
     @MainActor public static func modelWithTwoMatchesOnOneDay(repositoryRoot: URL) throws -> AppModel {
         let model = try build(repositoryRoot: repositoryRoot).model
         model.addFixture(date: Day(year: 2026, month: 11, day: 17)!, opponent: "Opponent F", importance: .low)
         return model
     }
+
+    /// The sample squads' pastes and grid layouts, in the order they are imported.
+    private static let samplePastes = [(Squad.firstTeam, "first-team.tsv", "first-team.grids.json"),
+                                       (Squad.u21, "u21.tsv", "u21.grids.json")]
 
     /// A model with nothing in it, on a new temporary directory, whose clipboard is empty.
     @MainActor public static func emptyModel() -> AppModel {
@@ -236,12 +257,11 @@ public enum SampleData {
         let input = ScriptedInput(today: date)
         let model = AppModel(store: store, environment: input.environment)
 
-        for (squad, paste, grids) in [(Squad.firstTeam, "first-team.tsv", "first-team.grids.json"),
-                                      (.u21, "u21.tsv", "u21.grids.json")] {
+        for (squad, paste, grids) in samplePastes {
             input.clipboard = String(decoding: try data("captures/\(paste)"), as: UTF8.self)
             input.config = .data(try data("captures/\(grids)"))
             model.importSquad(squad)
-            if case .failed(let reason)? = model.lastImport {
+            if case .failed(_, let reason)? = model.lastImport {
                 throw SampleDataError(description: "The sample \(paste) could not be imported: \(reason)")
             }
         }

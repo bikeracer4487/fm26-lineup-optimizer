@@ -11,6 +11,15 @@ extension Squad {
         }
     }
 
+    /// The squad in the middle of a sentence: "the first team", "the U21s".
+    public var inSentence: String {
+        switch self {
+        case .firstTeam: "the first team"
+        case .u21: "the U21s"
+        case .u18: "the U18s"
+        }
+    }
+
     /// The button that imports the clipboard as this squad.
     public var importButtonTitle: String {
         switch self {
@@ -148,6 +157,15 @@ public struct ImportReport: Equatable, Sendable {
     /// The engine's sentences, as written.
     public let warnings: [String]
 
+    /// Under the game's date on the Squad screen.
+    public static let datingLine = "Each import is dated with this day. Set it to the day in the game before you import."
+
+    /// What a failed import says first, before the reason: "The U21s were not imported; the squad is as it was."
+    public static func notImportedLine(_ squad: Squad) -> String {
+        let subject = squad.inSentence.prefix(1).uppercased() + squad.inSentence.dropFirst()
+        return "\(subject) \(squad == .firstTeam ? "was" : "were") not imported; the squad is as it was."
+    }
+
     /// How many names a list in the report shows before it says how many more there are.
     static let namesShown = 5
 
@@ -235,7 +253,7 @@ extension AppModel {
             ? "No one is out on loan."
             : "Out on loan: \(summary.onLoan.joined(separator: ", "))."
         return ImportReport(
-            heading: "\(summary.squad.displayName) imported",
+            heading: "\(summary.squad.displayName) imported, dated \(DayText.short(summary.date))",
             lines: [
                 ImportReport.gridLine(summary.grid),
                 ImportReport.playerCountLine(summary.playerCount),

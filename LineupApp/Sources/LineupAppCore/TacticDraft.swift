@@ -97,6 +97,45 @@ public struct TacticDraft: Equatable, Sendable {
         return SlotID.allCases.filter { tactic.outOfPossession[$0] != nil || $0 == current }
     }
 
+    // MARK: The editor's words
+
+    /// "11 of 11 slots filled".
+    public func filledText(in phase: Phase) -> String {
+        "\(filled(in: phase)) of \(Self.slotsPerSide) slots filled"
+    }
+
+    /// The selected slot above the role menu: "AM L, in possession".
+    public static func inspectorTitle(_ place: TacticSlot) -> String {
+        "\(place.slot.displayName), \(place.phase.inSentence)"
+    }
+
+    /// What the editor says while no slot is selected.
+    public static let inspectorHint = "Click a place on either pitch to add a slot there, or a filled slot to change its role."
+
+    /// The menu entry while an in-possession slot turns into nothing.
+    public static let noTargetYet = "Nothing yet"
+
+    /// An out-of-possession slot in the "becomes" menu: its code, marked "(empty)" when it has no role and "(nothing
+    /// turns into it yet)" when no in-possession slot maps to it.
+    public func targetName(_ target: SlotID) -> String {
+        let label = target.displayName
+        if role(at: target, in: .outOfPossession) == nil { return "\(label) (empty)" }
+        return unmappedTargets.contains(target) ? "\(label) (nothing turns into it yet)" : label
+    }
+
+    /// The roles the role menu offers at a filled slot: those the catalogue allows there, with the current role first
+    /// when the catalogue does not list it, so the menu can show it. Empty for an empty slot.
+    public func roleChoices(at place: TacticSlot, catalog: RoleCatalog) -> [String] {
+        guard let current = role(at: place.slot, in: place.phase) else { return [] }
+        let allowed = catalog.roles(phase: place.phase, at: place.slot.position).map(\.name)
+        return allowed.contains(current) ? allowed : [current] + allowed
+    }
+
+    /// A slot's help on the pitch: "AM L: Winger", or "Add a slot at AM L" when it is empty.
+    public static func slotHelp(_ slot: SlotID, role: String?) -> String {
+        role.map { "\(slot.displayName): \($0)" } ?? "Add a slot at \(slot.displayName)"
+    }
+
     private func roles(in phase: Phase) -> [SlotID: String] {
         switch phase {
         case .inPossession: tactic.inPossession
@@ -108,6 +147,24 @@ public struct TacticDraft: Equatable, Sendable {
         switch phase {
         case .inPossession: change(&tactic.inPossession)
         case .outOfPossession: change(&tactic.outOfPossession)
+        }
+    }
+}
+
+extension Phase {
+    /// The heading over a phase's pitch: "In possession".
+    public var title: String {
+        switch self {
+        case .inPossession: "In possession"
+        case .outOfPossession: "Out of possession"
+        }
+    }
+
+    /// The phase in the middle of a sentence: "in possession".
+    public var inSentence: String {
+        switch self {
+        case .inPossession: "in possession"
+        case .outOfPossession: "out of possession"
         }
     }
 }
