@@ -1,0 +1,7 @@
+[
+  { "id": "2026-11-14-opponent-a", "date": "2026-11-14", "opponent": "Opponent A", "importance": "low" },
+  { "id": "2026-11-17-opponent-b", "date": "2026-11-17", "opponent": "Opponent B", "importance": "medium" },
+  { "id": "2026-11-21-opponent-c", "date": "2026-11-21", "opponent": "Opponent C", "importance": "high" },
+  { "id": "2026-11-24-opponent-d", "date": "2026-11-24", "opponent": "Opponent D", "importance": "sharpness" },
+  { "id": "2026-11-28-opponent-e", "date": "2026-11-28", "opponent": "Opponent E", "importance": "medium" }
+]

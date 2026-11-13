@@ -1,0 +1,36 @@
+[
+  {
+    "fixture": "2026-11-07-played",
+    "date": "2026-11-07",
+    "starters": {
+      "GK": "jonny maxted",
+      "D_L": "evan humphries",
+      "D_CL": "darnell johnson",
+      "D_CR": "ludwig francillette",
+      "D_R": "deago nelson",
+      "DM_L": "canice carroll",
+      "DM_R": "dejan tetek",
+      "AM_L": "dillon de silva",
+      "AM_C": "zac mceachran",
+      "AM_R": "alfie potter",
+      "ST_C": "tyrone marsh"
+    }
+  },
+  {
+    "fixture": "2026-11-10-played",
+    "date": "2026-11-10",
+    "starters": {
+      "GK": "jonny maxted",
+      "D_L": "evan humphries",
+      "D_CL": "darnell johnson",
+      "D_CR": "ludwig francillette",
+      "D_R": "keegan bloom",
+      "DM_L": "josh ashby",
+      "DM_R": "dejan tetek",
+      "AM_L": "ewan clark",
+      "AM_C": "scott pollock",
+      "AM_R": "ellis brown",
+      "ST_C": "matty taylor"
+    }
+  }
+]

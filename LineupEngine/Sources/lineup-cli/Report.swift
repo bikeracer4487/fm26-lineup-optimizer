@@ -3,41 +3,102 @@ import LineupEngine
 
 /// Plain-words text for the command-line tool.
 enum Report {
+    /// What both commands print first: the import summary.
+    struct Header {
+        let imports: [(squad: Squad, result: ImportResult)]
+        let moves: [(name: String, from: Squad, to: Squad)]
+        let book: SquadBook
+        let ownClub: String?
+        let override: String?
+        let tactic: Tactic
+    }
+
     /// The import summary, then each profile's lineup under its name, then a comparison when there are two.
-    static func render(imports: [(squad: Squad, result: ImportResult)], moves: [(name: String, from: Squad, to: Squad)],
-                       book: SquadBook, ownClub: String?, override: String?,
-                       tactic: Tactic, importance: Importance, results: [(profile: RatingProfile, lineup: Lineup)]) -> String {
-        var out = header(imports: imports, moves: moves, book: book, ownClub: ownClub, override: override,
-                         tactic: tactic, importance: importance)
+    static func render(_ header: Header, importance: Importance, results: [(profile: RatingProfile, lineup: Lineup)]) -> String {
+        var out = ["Tactic: \(header.tactic.name)   Importance: \(importance.rawValue)", ""] + summary(header)
         for (profile, lineup) in results {
             out.append("")
             out.append("=== Rating profile: \(profile.name) ===")
-            out += render(lineup, book: book, tactic: tactic)
+            out += render(lineup, book: header.book, tactic: header.tactic)
         }
         if results.count == 2 {
             out.append("")
-            out += comparison(results[0], results[1], tactic: tactic)
+            out += comparison(results[0], results[1], tactic: header.tactic)
         }
         return out.joined(separator: "\n") + "\n"
     }
 
-    private static func header(imports: [(squad: Squad, result: ImportResult)], moves: [(name: String, from: Squad, to: Squad)],
-                               book: SquadBook, ownClub: String?, override: String?,
-                               tactic: Tactic, importance: Importance) -> [String] {
+    /// The import summary and the plan's settings, then each planned fixture's lineup under a heading,
+    /// then a table of who starts where.
+    static func render(_ header: Header, plan: Plan, fixtures: [Fixture], history: [ConfirmedLineup], asOf: Day,
+                       profile: RatingProfile, settings: PlanSettings) -> String {
+        var out = ["Tactic: \(header.tactic.name)   Plan as of \(asOf.iso): \(plan.fixtures.count) of \(fixtures.count) fixtures", ""]
+        out += summary(header)
+        out.append("Rating profile: \(profile.name)")
+        out.append("Training \(settings.trainingIntensity.rawValue), stability \(number(settings.stability)), "
+                   + "saving players \(number(settings.savingPlayers)), horizon \(settings.horizon)")
+        let played = history.sorted { ($0.date, $0.fixture.raw) < ($1.date, $1.fixture.raw) }
+        out.append("Confirmed lineups: " + (played.isEmpty ? "none" : played.map { "\($0.fixture.raw) (\($0.date.iso))" }.joined(separator: ", ")))
+        let names = Dictionary(header.book.allPlayers.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        for lineup in played {
+            for slot in SlotID.allCases {
+                guard let id = lineup.starters[slot], names[id] == nil else { continue }
+                out.append("Warning: the confirmed lineup \(lineup.fixture.raw) has '\(id.key)' at \(slot.rawValue), "
+                           + "who is not in the imported squads; his starts count for nobody here")
+            }
+        }
+
+        let byID = Dictionary(fixtures.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let planned = plan.fixtures.map { (fixture: byID[$0.fixture]!, lineup: $0.lineup) }
+        for (fixture, lineup) in planned {
+            out.append("")
+            out.append("=== \(fixture.date.iso)  v \(fixture.opponent)  (\(fixture.importance.rawValue)) ===")
+            out += render(lineup, book: header.book, tactic: fixture.tactic)
+            for slot in SlotID.allCases {
+                guard let problem = lineup.ignoredOverrides[slot] else { continue }
+                let who = fixture.overrides[slot].map { names[$0] ?? $0.key } ?? "?"
+                out.append("Override ignored: \(who) at \(slot.rawValue), \(describe(problem))")
+            }
+        }
+        out.append("")
+        out += table(planned.map { ($0.fixture, $0.lineup) }, names: names)
+        return out.joined(separator: "\n") + "\n"
+    }
+
+    /// One row per player who starts at least once, in the order of his first start (slot order within a fixture),
+    /// with his slot or "-" for each fixture.
+    private static func table(_ planned: [(fixture: Fixture, lineup: Lineup)], names: [PlayerID: String]) -> [String] {
+        var rows: [PlayerID] = []
+        for (_, lineup) in planned {
+            for pick in lineup.picks where !rows.contains(pick.player) { rows.append(pick.player) }
+        }
+        let width = 12
+        var out = ["Who starts where"]
+        out.append("  \(pad("", 26))" + planned.map { pad($0.fixture.date.iso, width) }.joined().trimmingTrailingSpaces)
+        out.append("  \(pad("", 26))" + planned.map { pad($0.fixture.importance.rawValue, width) }.joined().trimmingTrailingSpaces)
+        for id in rows {
+            let cells = planned.map { item in
+                pad(item.lineup.picks.first { $0.player == id }?.slot.rawValue ?? "-", width)
+            }
+            out.append(("  \(pad(names[id] ?? id.key, 26))" + cells.joined()).trimmingTrailingSpaces)
+        }
+        return out
+    }
+
+    private static func summary(_ header: Header) -> [String] {
         var out: [String] = []
+        let book = header.book, override = header.override
         let players = book.allPlayers
 
-        out.append("Tactic: \(tactic.name)   Importance: \(importance.rawValue)")
-        out.append("")
-        for (squad, result) in imports {
+        for (squad, result) in header.imports {
             out.append("\(squadName(squad)): grid \(result.grid), \(result.players.count) players")
         }
-        for (squad, result) in imports {
+        for (squad, result) in header.imports {
             for warning in result.warnings { out.append("Warning (\(squadName(squad))): \(describe(warning))") }
         }
-        for move in moves { out.append("\(move.name) moved from \(squadName(move.from)) to \(squadName(move.to))") }
+        for move in header.moves { out.append("\(move.name) moved from \(squadName(move.from)) to \(squadName(move.to))") }
         for warning in book.warnings(override: override) { out.append("Warning: \(describe(warning))") }
-        out.append("Own club: \(ownClub ?? "unknown")")
+        out.append("Own club: \(header.ownClub ?? "unknown")")
         let loans = players.compactMap { player -> String? in
             if case .loanedOut(let club) = book.loanStatus(of: player, override: override) { "\(player.name) (at \(club))" } else { nil }
         }
@@ -112,6 +173,26 @@ enum Report {
         }
     }
 
+    static func describe(_ problem: OverrideProblem) -> String {
+        switch problem {
+        case .notInSquad: "who is not in the imported squads"
+        case .notAllowed(let exclusion): "because he \(describe(exclusion)), which the manager cannot overrule"
+        case .usedTwice: "because he is fixed in another slot too"
+        case .slotNotInTactic: "because the tactic has no such slot"
+        }
+    }
+
+    static func describe(_ exclusion: Exclusion) -> String {
+        switch exclusion {
+        case .injured: "is injured"
+        case .outOnLoan(let club): "is out on loan at \(club)"
+        case .banned: "is banned"
+        case .belowConditionFloor(let condition): "is at \(Int((condition * 100).rounded()))% condition"
+        case .jaded(let jadedness): "is jaded (\(jadedness))"
+        case .rejected: "is ruled out of this fixture"
+        }
+    }
+
     static func describe(_ warning: PickWarning) -> String {
         switch warning {
         case .outOfPosition(let phase, let familiarity):
@@ -119,6 +200,9 @@ enum Report {
         case .overridesRule: "overrides a selection rule"
         }
     }
+
+    /// A setting as typed: no decimals when it is whole.
+    private static func number(_ x: Double) -> String { x == x.rounded() ? String(format: "%.0f", x) : String(x) }
 
     private static func pad(_ s: String, _ n: Int) -> String { s.count >= n ? s : s + String(repeating: " ", count: n - s.count) }
     private static func fixed(_ x: Double, _ digits: Int) -> String { String(format: "%.\(digits)f", x) }

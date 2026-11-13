@@ -6,12 +6,12 @@ The FM26 lineup optimizer is being rebuilt as a native Mac app for Football Mana
 
 - Design: `docs/superpowers/specs/2026-11-12-fm27-native-app-design.md`
 - Engine plan, complete (Tasks 1 to 18): `docs/superpowers/plans/2026-11-12-fm27-engine-foundation.md`. Its last two sections list the later plans (Planner, Advisors, the visual design pass, the App, Clean-up) and the notes and known small faults carried into them.
-- Planner plan, written and awaiting the owner's review; nothing in it is built: `docs/superpowers/plans/2026-11-13-fm27-planner.md`.
+- Planner plan, complete (Tasks 1 to 9): `docs/superpowers/plans/2026-11-13-fm27-planner.md`. Its last section lists the known limits of the planner and what follows it.
 - Research: `docs/Research/fm27-*.md` and `docs/Research/fm27_roles.json` are FM27; the other files in `docs/Research/` are FM26. Prefer FM27 evidence. Where it is silent, use the FM26 research and label it as carried over (the owner's rule: a lot carries over between game years). An attribute FM27 tested and found to have no effect is a finding, not a gap.
 
 ## New code: `LineupEngine/`
 
-A Swift package (Swift 6, macOS 26, Swift Testing, Foundation only). Built so far: the domain model, the FMRTE clipboard importer, the squad book, the FM27 role catalogue and tactics, the rating core, fitness and risk rules, an exact assignment solver, and lineup selection with a reason for every pick and omission. Not built yet: the planner (looking ahead across fixtures), the advisors (First and Second XI, Depth, Rest, Training, Player Removal), persistence and the app. The engine has no UI and reads no files itself; it is handed data.
+A Swift package (Swift 6, macOS 26, Swift Testing, Foundation only). Built so far: the domain model, the FMRTE clipboard importer, the squad book, the FM27 role catalogue and tactics, the rating core, fitness and risk rules, an exact assignment solver, lineup selection with a reason for every pick and omission, and the planner (looking ahead across fixtures). Not built yet: the advisors (First and Second XI, Depth, Rest, Training, Player Removal), persistence and the app. The engine has no UI and reads no files itself; it is handed data.
 
 Test it with:
 
@@ -27,6 +27,16 @@ Try it on the captured squad (prints the lineup with reasons; add `--profile bot
       --first-team Tests/LineupEngineTests/Fixtures/captures/first-team.tsv \
       --u21 Tests/LineupEngineTests/Fixtures/captures/u21.tsv --own-club "Oxford City"
 
+Plan the next five fixtures for the same squad (prints each lineup with reasons, then who starts where; add `--saving 0` to turn off saving players for bigger fixtures):
+
+    cd LineupEngine && swift run -q lineup-cli plan \
+      --grids Tests/LineupEngineTests/Fixtures/captures/first-team.grids.json \
+      --tactic Tests/LineupEngineTests/Fixtures/tactics/sample-4231.json \
+      --first-team Tests/LineupEngineTests/Fixtures/captures/first-team.tsv \
+      --u21 Tests/LineupEngineTests/Fixtures/captures/u21.tsv --own-club "Oxford City" \
+      --fixtures Tests/LineupEngineTests/Fixtures/plans/sample-fixtures.json \
+      --history Tests/LineupEngineTests/Fixtures/plans/sample-history.json --as-of 2026-11-13
+
 Usage is at the top of `LineupEngine/Sources/lineup-cli/main.swift`.
 
 How the engine works, where it is not obvious:
@@ -36,6 +46,7 @@ How the engine works, where it is not obvious:
 - **Rating profiles.** Ratings come from a `RatingProfile`, which `RatingEngine` and `LineupSelector` take explicitly. `RatingProfile.standard()` is "FM27 engine tests", the owner's chosen default: outfield weights and attribute curves from FM27 match-engine tests (`Resources/rating_profile_fm27.json`), with goalkeeper weights and the way weights differ between positions taken from the FM26 tables (`Resources/rating_tables.json`). "Carried over from FM26" is the old Python's weights, kept for comparison. Design section 8.4 has the formulas.
 - **The port check.** The `.fm26Reference` configuration reproduces the old Python (role thresholds, current-ability factor, rounding) and is tested against 594 cases exported from it. Nothing else uses it.
 - **Selection.** Rating times condition, sharpness and jadedness factors, solved exactly as an assignment problem, with manual overrides and risk rules that depend on match importance.
+- **Planning.** `Planner` picks the lineups for the next fixtures in date order. Each player's value is adjusted, with a reason, by the importance rules (consecutive starts, sharpness, development, loans, retraining, stability) and by a cost for starting him when a bigger fixture follows soon. Condition, sharpness and jadedness are projected from one fixture to the next; starters are assumed to play 90 minutes and nobody else plays.
 
 Tools:
 

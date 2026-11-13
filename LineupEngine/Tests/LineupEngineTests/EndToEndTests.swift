@@ -3,14 +3,23 @@ import Testing
 @testable import LineupEngine
 
 @Suite struct EndToEndTests {
-    /// The first-team and U21 captures taken without the Id column, selected for the sample tactic under `profile`.
-    private func realLineup(_ profile: RatingProfile) throws -> (lineup: Lineup, book: SquadBook) {
+    /// The first-team and U21 captures taken without the Id column.
+    private func realBook() throws -> SquadBook {
         var book = SquadBook()
         let grids = try Fixtures.data("captures/first-team.grids.json")
         book.apply(try Importer.importPlayers(clipboard: Fixtures.text("captures/first-team.tsv"), fmrteConfig: grids, squad: .firstTeam), to: .firstTeam)
         book.apply(try Importer.importPlayers(clipboard: Fixtures.text("captures/u21.tsv"),
                                               fmrteConfig: Fixtures.data("captures/u21.grids.json"), squad: .u21), to: .u21)
-        let ownClub = book.ownClub(override: "Oxford City")      // the first-team capture is from the team grid, which has no club column
+        return book
+    }
+
+    /// The first-team capture is from the team grid, which has no club column, so the club is named.
+    private let ownClubName = "Oxford City"
+
+    /// The real squads selected for the sample tactic under `profile`.
+    private func realLineup(_ profile: RatingProfile) throws -> (lineup: Lineup, book: SquadBook) {
+        let book = try realBook()
+        let ownClub = book.ownClub(override: ownClubName)
         let tactic = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
         let selector = LineupSelector(catalog: try .fm27(), profile: profile, parameters: .fm27)
         let lineup = try selector.select(.init(tactic: tactic, players: book.allPlayers, ownClub: ownClub,
@@ -23,6 +32,9 @@ import Testing
         #expect(Set(lineup.picks.map(\.player)).count == lineup.picks.count, sourceLocation: sourceLocation)
         let names = Set(lineup.picks.map(\.name))
         #expect(!names.contains("Max Treml"), sourceLocation: sourceLocation)                // out on loan
+        for p in book.allPlayers {
+            if case .loanedOut = book.loanStatus(of: p, override: ownClubName) { #expect(!names.contains(p.name), sourceLocation: sourceLocation) }
+        }
         for p in book.allPlayers where p.isInjured { #expect(!names.contains(p.name), sourceLocation: sourceLocation) }
         #expect(lineup.picks.allSatisfy { !$0.reasons.isEmpty }, sourceLocation: sourceLocation)
         // Both goalkeepers are unavailable (Maxted injured, Treml on loan), so an outfield player stands in.
@@ -56,6 +68,108 @@ import Testing
         #expect(bySlot[.AM_C] == "Zac McEachran")
         #expect(bySlot[.ST_C] == "Tyrone Marsh")
         #expect(bySlot[.D_L] == "Evan Humphries")
+    }
+
+    /// One entry of a fixtures file, in the shape the command-line tool reads.
+    private struct FixtureEntry: Decodable {
+        let id: FixtureID
+        let date: Day
+        let opponent: String
+        let importance: Importance
+        let overrides: [SlotID: PlayerID]?
+        let rejected: [PlayerID]?
+    }
+
+    /// The sample fixtures, each with the sample tactic, and the sample history, planned for the real squads as of
+    /// 2026-11-13 under the FM27 profile.
+    private func realPlan(savingPlayers: Double) throws -> (plan: Plan, fixtures: [Fixture], book: SquadBook) {
+        let book = try realBook()
+        let tactic = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
+        let entries = try JSONDecoder().decode([FixtureEntry].self, from: Fixtures.data("plans/sample-fixtures.json"))
+        let fixtures = entries.map {
+            Fixture(id: $0.id, date: $0.date, opponent: $0.opponent, importance: $0.importance, tactic: tactic,
+                    overrides: $0.overrides ?? [:], rejected: Set($0.rejected ?? []))
+        }
+        let history = try JSONDecoder().decode([ConfirmedLineup].self, from: Fixtures.data("plans/sample-history.json"))
+        let planner = Planner(catalog: try .fm27(), profile: try RatingProfile.standard(), parameters: .fm27)
+        let plan = try planner.plan(PlanRequest(
+            fixtures: fixtures, players: book.allPlayers, ownClub: book.ownClub(override: ownClubName),
+            asOf: try #require(Day(iso: "2026-11-13")), confirmed: history, retraining: [],
+            settings: PlanSettings(savingPlayers: savingPlayers)))
+        return (plan, fixtures, book)
+    }
+
+    @Test func theRealSquadPlansFiveFixtures() throws {
+        let (plan, fixtures, book) = try realPlan(savingPlayers: 1)
+        let ordered = fixtures.sorted { $0.date < $1.date }
+        #expect(ordered.count == 5)
+        #expect(plan.fixtures.map(\.fixture) == ordered.map(\.id))
+        for planned in plan.fixtures { expectSound(planned.lineup, book) }
+
+        // The history names real players of the first-team capture.
+        let history = try JSONDecoder().decode([ConfirmedLineup].self, from: Fixtures.data("plans/sample-history.json"))
+        let firstTeam = Set(book.allPlayers.filter { $0.squad == .firstTeam }.map(\.id))
+        for lineup in history { #expect(lineup.starters.count == 11 && Set(lineup.starters.values).isSubset(of: firstTeam)) }
+
+        let high = try #require(ordered.firstIndex { $0.importance == .high })
+        let strength = plan.fixtures.map { $0.lineup.picks.reduce(0.0) { $0 + $1.rating.value } }
+        for (index, total) in strength.enumerated() {
+            #expect(strength[high] >= total, "\(ordered[index].id.raw) totals \(total), more than the high fixture's \(strength[high])")
+        }
+
+        // Saving players changes no pick before the high fixture on this squad.
+        let unsaved = try realPlan(savingPlayers: 0).plan
+        func picks(_ plan: Plan, _ index: Int) -> [SlotID: PlayerID] {
+            Dictionary(uniqueKeysWithValues: plan.fixtures[index].lineup.picks.map { ($0.slot, $0.player) })
+        }
+        for index in 0..<high { #expect(picks(plan, index) == picks(unsaved, index), "\(ordered[index].id.raw)") }
+
+        // Why: the first team is at 49 to 59% sharpness, the U21 players at 69 to 73%. Before the high fixture, for every player in the first eleven
+        // (the same for every fixture: one tactic), in any slot, starting gains more sharpness by each later fixture that
+        // weighs more than today than it costs in condition, so he is fitter there than if he rested. Saving him would
+        // lose nothing, so no saving cost is put on anyone, and the plans are the same.
+        let parameters = EngineParameters.fm27
+        let catalog = try RoleCatalog.fm27()
+        let intensity = PlanSettings.standard.trainingIntensity
+        let tiers = try SquadTiers.compute(tactic: ordered[high].tactic, players: book.allPlayers,
+                                           ownClub: book.ownClub(override: ownClubName), catalog: catalog,
+                                           profile: try RatingProfile.standard(), parameters: parameters)
+        let assignments = try ordered[high].tactic.assignments(catalog: catalog)
+        let byID = Dictionary(uniqueKeysWithValues: book.allPlayers.map { ($0.id, $0) })
+        let weights = parameters.importanceWeights.value
+        func product(_ f: ProjectedFitness) -> Double {
+            FitnessModel.factors(condition: f.condition, sharpness: f.sharpness, jadedness: Int(f.jadedness.rounded()),
+                                 parameters: parameters).product
+        }
+        for index in 0..<high {
+            let fixture = ordered[index]
+            let later = ordered[(index + 1)...]
+            for heavier in later where weights[heavier.importance]! > weights[fixture.importance]! {
+                let gap = fixture.date.days(to: heavier.date)
+                for id in tiers.first.values.sorted(by: { $0.key < $1.key }) {
+                    let player = try #require(byID[id])
+                    let today = try #require(plan.fixtures[index].fitness[id])
+                    let rest = try FitnessProjection.afterDays(gap, today, player: player, intensity: intensity, parameters: parameters)
+                    for assignment in assignments {
+                        let played = try FitnessProjection.afterMatch(today, player: player, position: assignment.ipPosition,
+                                                                      parameters: parameters)
+                        let play = try FitnessProjection.afterDays(gap, played, player: player, intensity: intensity,
+                                                                   parameters: parameters)
+                        #expect(product(play) > product(rest),
+                                "\(player.name) at \(assignment.slot.rawValue) in \(fixture.id.raw), for \(heavier.id.raw)")
+                    }
+                }
+            }
+            for player in book.allPlayers.sorted(by: { $0.id.key < $1.id.key }) {
+                let today = try #require(plan.fixtures[index].fitness[player.id])
+                for assignment in assignments {
+                    let cost = try SavingPlayers.adjustment(
+                        for: player, fitness: today, position: assignment.ipPosition, today: fixture,
+                        later: later.map { LaterFixture(fixture: $0, tiers: tiers) }, settings: .standard, parameters: parameters)
+                    #expect(cost == nil, "\(player.name) at \(assignment.slot.rawValue) in \(fixture.id.raw)")
+                }
+            }
+        }
     }
 
     @Test(arguments: ["carried-over", "fm27-engine-tests"])
