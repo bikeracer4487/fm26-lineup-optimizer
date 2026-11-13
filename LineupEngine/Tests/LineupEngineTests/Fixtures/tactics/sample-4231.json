@@ -1,0 +1,42 @@
+{
+  "name": "Sample 4-2-3-1",
+  "inPossession": {
+    "GK": "Goalkeeper",
+    "D_L": "Wing-Back",
+    "D_R": "Wing-Back",
+    "D_CL": "Ball-Playing Centre-Back",
+    "D_CR": "Ball-Playing Centre-Back",
+    "DM_L": "Defensive Midfielder",
+    "DM_R": "Defensive Midfielder",
+    "AM_L": "Inside Forward",
+    "AM_R": "Inside Forward",
+    "AM_C": "Attacking Midfielder",
+    "ST_C": "Channel Forward"
+  },
+  "outOfPossession": {
+    "GK": "Sweeper Keeper",
+    "D_L": "Pressing Full-Back",
+    "D_R": "Pressing Full-Back",
+    "D_CL": "Centre-Back",
+    "D_CR": "Centre-Back",
+    "DM_L": "Defensive Midfielder",
+    "DM_R": "Defensive Midfielder",
+    "M_L": "Wide Midfielder",
+    "M_R": "Wide Midfielder",
+    "AM_C": "Attacking Midfielder",
+    "ST_C": "Centre Forward"
+  },
+  "mapping": {
+    "GK": "GK",
+    "D_L": "D_L",
+    "D_R": "D_R",
+    "D_CL": "D_CL",
+    "D_CR": "D_CR",
+    "DM_L": "DM_L",
+    "DM_R": "DM_R",
+    "AM_L": "M_L",
+    "AM_R": "M_R",
+    "AM_C": "AM_C",
+    "ST_C": "ST_C"
+  }
+}

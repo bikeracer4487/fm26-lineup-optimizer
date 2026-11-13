@@ -118,3 +118,9 @@ extension Position: CodingKeyRepresentable {
     public var codingKey: any CodingKey { RawStringCodingKey(rawValue) }
     public init?<T: CodingKey>(codingKey: T) { self.init(rawValue: codingKey.stringValue) }
 }
+
+/// Lets `[SlotID: V]` encode as a JSON object keyed by the slot id strings.
+extension SlotID: CodingKeyRepresentable {
+    public var codingKey: any CodingKey { RawStringCodingKey(rawValue) }
+    public init?<T: CodingKey>(codingKey: T) { self.init(rawValue: codingKey.stringValue) }
+}
