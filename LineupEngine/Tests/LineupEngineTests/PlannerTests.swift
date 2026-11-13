@@ -24,9 +24,21 @@ import Testing
     }
 
     func request(_ fixtures: [Fixture], players: [Player]? = nil, asOf: Int = 0, confirmed: [ConfirmedLineup] = [],
-                 retraining: [Retraining] = [], settings: PlanSettings = .standard) -> PlanRequest {
+                 played: [ConfirmedLineup] = [], retraining: [Retraining] = [], settings: PlanSettings = .standard) -> PlanRequest {
         PlanRequest(fixtures: fixtures, players: players ?? squad, ownClub: "Oxford City", asOf: day(asOf),
-                    confirmed: confirmed, retraining: retraining, settings: settings)
+                    confirmed: confirmed, played: played, retraining: retraining, settings: settings)
+    }
+
+    func played(_ id: String, day n: Int, _ starters: [SlotID: PlayerID]) -> ConfirmedLineup {
+        ConfirmedLineup(fixture: FixtureID(id), date: day(n), starters: starters)
+    }
+
+    func expectClose(_ a: ProjectedFitness?, _ b: ProjectedFitness, sourceLocation: SourceLocation = #_sourceLocation) {
+        guard let a else { Issue.record("no fitness", sourceLocation: sourceLocation); return }
+        #expect(abs(a.condition - b.condition) < 1e-9, sourceLocation: sourceLocation)
+        #expect(abs(a.sharpness - b.sharpness) < 1e-9, sourceLocation: sourceLocation)
+        #expect(abs(a.jadedness - b.jadedness) < 1e-9, sourceLocation: sourceLocation)
+        #expect(a.daysSinceMatch == b.daysSinceMatch, sourceLocation: sourceLocation)
     }
 
     func id(_ slot: SlotID, _ tier: String = "first") -> PlayerID { PlannerFixture.id(slot, tier) }
@@ -441,5 +453,147 @@ import Testing
         let stale = [ConfirmedLineup(fixture: FixtureID("a"), date: day(1), starters: [.D_L: id(.D_L, "second")])]
         let plan = try threeInARow(confirmed: stale)
         #expect(plan == (try threeInARow()))
+    }
+
+    // MARK: - Matches played since the import
+
+    @Test func aMatchPlayedSinceTheImportLeavesItsStartersLessFresh() throws {
+        let players = try PlannerFixture.squad(first: 14, second: 6)
+        let starter = id(.ST_C)
+        let match = played("p", day: 1, [.ST_C: starter])
+        let plan = try planner.plan(request([fixture("a", day: 4)], players: players, played: [match]))
+        let without = try planner.plan(request([fixture("a", day: 4)], players: players))
+
+        // By hand: one day from the import, the match at the slot's position, three days to the fixture.
+        let player = try #require(players.first { $0.id == starter })
+        let before = try FitnessProjection.afterDays(1, ProjectedFitness(player), player: player, intensity: .medium,
+                                                     parameters: parameters)
+        let after = try FitnessProjection.afterMatch(before, player: player, position: SlotID.ST_C.position, parameters: parameters)
+        let byHand = try FitnessProjection.afterDays(3, after, player: player, intensity: .medium, parameters: parameters)
+        expectClose(plan.fixtures[0].fitness[starter], byHand)
+        #expect(byHand.daysSinceMatch == 3)
+        #expect(try #require(plan.fixtures[0].fitness[starter]).condition
+            < (try #require(without.fixtures[0].fitness[starter])).condition)
+
+        // Everyone who did not start it is as he would be without it.
+        for other in players where other.id != starter {
+            #expect(plan.fixtures[0].fitness[other.id] == without.fixtures[0].fitness[other.id], "\(other.name)")
+        }
+    }
+
+    @Test func aPlayedMatchBeforeTheImportDayIsAppliedOnThatDay() throws {
+        let players = try PlannerFixture.squad(first: 14, second: 6)
+        let starter = id(.AM_C)
+        let early = try planner.plan(request([fixture("a", day: 2)], players: players, played: [played("p", day: -3, [.AM_C: starter])]))
+        let onTheDay = try planner.plan(request([fixture("a", day: 2)], players: players, played: [played("p", day: 0, [.AM_C: starter])]))
+        #expect(early == onTheDay)
+
+        let player = try #require(players.first { $0.id == starter })
+        let after = try FitnessProjection.afterMatch(ProjectedFitness(player), player: player, position: SlotID.AM_C.position,
+                                                     parameters: parameters)
+        expectClose(early.fixtures[0].fitness[starter],
+                    try FitnessProjection.afterDays(2, after, player: player, intensity: .medium, parameters: parameters))
+    }
+
+    @Test func aPlayedMatchOnAFixturesDayComesFirst() throws {
+        let players = try PlannerFixture.squad(first: 14, second: 6)
+        let starter = id(.D_L)
+        let plan = try planner.plan(request([fixture("a", day: 2), fixture("b", day: 5)], players: players,
+                                            played: [played("p", day: 2, [.D_L: starter])]))
+        let player = try #require(players.first { $0.id == starter })
+        let before = try FitnessProjection.afterDays(2, ProjectedFitness(player), player: player, intensity: .medium,
+                                                     parameters: parameters)
+        let after = try FitnessProjection.afterMatch(before, player: player, position: SlotID.D_L.position, parameters: parameters)
+        // The fixture's figure is from before its own match, so it already includes the played one.
+        expectClose(plan.fixtures[0].fitness[starter], after)
+        #expect(plan.fixtures[0].fitness[starter]?.daysSinceMatch == 0)
+    }
+
+    @Test func aPlayedStarterWhoHasLeftIsIgnored() throws {
+        let players = try PlannerFixture.squad(first: 14, second: 6)
+        let gone = PlayerID(key: "gone")
+        let fixtures = [fixture("a", day: 3), fixture("b", day: 6)]
+        let withGone = try planner.plan(request(fixtures, players: players,
+                                                played: [played("p", day: 1, [.ST_C: gone, .AM_C: id(.AM_C)])]))
+        let withoutGone = try planner.plan(request(fixtures, players: players, played: [played("p", day: 1, [.AM_C: id(.AM_C)])]))
+        #expect(withGone == withoutGone)
+        #expect(withGone.fixtures.allSatisfy { $0.fitness[gone] == nil })
+
+        // A match whose only starter has left changes nobody's fitness.
+        let onlyGone = try planner.plan(request(fixtures, players: players, played: [played("p", day: 1, [.ST_C: gone])]))
+        #expect(onlyGone == (try planner.plan(request(fixtures, players: players))))
+    }
+
+    @Test func playedMatchesDoNotChangeRunsOfStarts() throws {
+        // As `threeInARow`, with the first-choice left back having started a match the day before the first fixture.
+        let players = try PlannerFixture.squad(first: 14, second: 6)
+        let fixtures = [fixture("a", day: 1), fixture("b", day: 3), fixture("c", day: 5)]
+        let plan = try planner.plan(request(fixtures, players: players, played: [played("p", day: 0, [.D_L: id(.D_L)])],
+                                            settings: PlanSettings(trainingIntensity: .low)))
+        #expect(try consecutive(plan.fixtures[0], .D_L) == nil)
+        #expect(try consecutive(plan.fixtures[1], .D_L) == nil)
+        #expect(try consecutive(plan.fixtures[2], .D_L)?.factor == 0.90)
+        // The same lineup confirmed does start the run.
+        let confirmed = try planner.plan(request(fixtures, players: players, confirmed: [played("p", day: 0, [.D_L: id(.D_L)])],
+                                                 settings: PlanSettings(trainingIntensity: .low)))
+        #expect(try consecutive(confirmed.fixtures[1], .D_L)?.factor == 0.90)
+    }
+
+    @Test func aFixtureAfterAPlayedMatchHasProjectedFitnessEvenOnTheImportDay() throws {
+        let players = changing(.ST_C) { $0.condition = 0.80 }
+        let fixtures = [fixture("a", day: 0), fixture("b", day: 3)]
+        let without = try planner.plan(request(fixtures, players: players))
+        #expect(without.fixtures.map(\.fitnessIsProjected) == [false, true])
+        let reason = without.fixtures[0].lineup.omissions.first { $0.player == id(.ST_C) }?.reason
+        #expect(reason == "Left out: below the 85% condition floor at 80%")
+
+        let match = played("p", day: -2, [.AM_C: id(.AM_C)])
+        let with = try planner.plan(request(fixtures, players: players, played: [match]))
+        #expect(with.fixtures.map(\.fitnessIsProjected) == [true, true])
+        // The selector was told the same: the striker's figure is called projected.
+        let projected = try #require(with.fixtures[0].lineup.omissions.first { $0.player == id(.ST_C) }?.reason)
+        #expect(projected != reason && projected.contains("projected"))
+
+        // A played match after a fixture does not make that fixture's fitness projected.
+        let later = try planner.plan(request(fixtures, players: players, played: [played("p", day: 1, [.AM_C: id(.AM_C)])]))
+        #expect(later.fixtures.map(\.fitnessIsProjected) == [false, true])
+    }
+
+    @Test func inputOrderOfPlayedMatchesDoesNotMatter() throws {
+        let players = try PlannerFixture.squad(first: 14, second: 6)
+        let fixtures = [fixture("a", day: 2), fixture("b", day: 5)]
+        let matches = [
+            played("p1", day: -1, [.ST_C: id(.ST_C), .AM_C: id(.AM_C)]),
+            played("p2", day: 0, [.ST_C: id(.ST_C, "second")]),
+            played("p3", day: 0, [.ST_C: id(.ST_C), .D_L: id(.D_L)]),
+            played("p4", day: 3, [.GK: id(.GK)]),
+        ]
+        let base = try planner.plan(request(fixtures, players: players, played: matches))
+        #expect(try planner.plan(request(fixtures, players: players, played: matches.reversed())) == base)
+        #expect(try planner.plan(request(fixtures, players: players, played: [matches[2], matches[0], matches[3], matches[1]])) == base)
+        #expect(base != (try planner.plan(request(fixtures, players: players))))
+        // The keeper's match between the fixtures counts towards the second.
+        let keeper = try #require(base.fixtures[1].fitness[id(.GK)])
+        #expect(keeper.daysSinceMatch == 2)
+
+        // A match id given twice is refused, as for confirmed lineups.
+        #expect(throws: PlanError.duplicateFixtureID(FixtureID("p2"))) {
+            try planner.plan(request(fixtures, players: players, played: matches + [matches[1]]))
+        }
+    }
+
+    @Test func withNothingPlayedThePlanIsAsBefore() throws {
+        let players = try PlannerFixture.squad(first: 14, second: 6)
+        let fixtures = [fixture("a", day: 0), fixture("b", day: 2), fixture("c", day: 5)]
+        let base = try planner.plan(request(fixtures, players: players))
+        #expect(try planner.plan(request(fixtures, players: players, played: [])) == base)
+        // Fitness is projected after the first fixture, or once a day has passed since the import.
+        #expect(base.fixtures.map(\.fitnessIsProjected) == [false, true, true])
+        let later = try planner.plan(request([fixture("a", day: 1)], players: players))
+        #expect(later.fixtures.map(\.fitnessIsProjected) == [true])
+        // A match played after the last fixture planned changes nothing.
+        let beyond = try planner.plan(request(fixtures, players: players, played: [played("p", day: 9, [.ST_C: id(.ST_C)])],
+                                              settings: PlanSettings(horizon: 3)))
+        #expect(beyond == base)
     }
 }

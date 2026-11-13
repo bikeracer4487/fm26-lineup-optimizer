@@ -49,10 +49,8 @@ enum Report {
         }
 
         let byID = Dictionary(fixtures.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let planned = plan.fixtures.map { (fixture: byID[$0.fixture]!, lineup: $0.lineup) }
-        for (index, (fixture, lineup)) in planned.enumerated() {
-            // As the planner decides it: fitness is projected after a match in the plan or a day since the import.
-            let projected = index > 0 || asOf < fixture.date
+        let planned = plan.fixtures.map { (fixture: byID[$0.fixture]!, lineup: $0.lineup, projected: $0.fitnessIsProjected) }
+        for (fixture, lineup, projected) in planned {
             out.append("")
             out.append("=== \(fixture.date.iso)  v \(fixture.opponent)  (\(fixture.importance.rawValue)) ===")
             out += render(lineup, book: header.book, tactic: fixture.tactic)

@@ -9,13 +9,17 @@ public struct PlanRequest: Sendable {
     /// The day the squad was imported.
     public var asOf: Day
     public var confirmed: [ConfirmedLineup]
+    /// Matches played since the squad was imported, which the imported fitness does not include; any order. Each one's
+    /// starters take a match in the projection, on its date or on `asOf` if it is earlier. They do not count as starts:
+    /// a played match that should count towards runs of starts belongs in `confirmed` too.
+    public var played: [ConfirmedLineup]
     public var retraining: [Retraining]
     public var settings: PlanSettings
 
     public init(fixtures: [Fixture], players: [Player], ownClub: String?, asOf: Day, confirmed: [ConfirmedLineup],
-                retraining: [Retraining], settings: PlanSettings) {
+                played: [ConfirmedLineup] = [], retraining: [Retraining], settings: PlanSettings) {
         self.fixtures = fixtures; self.players = players; self.ownClub = ownClub; self.asOf = asOf
-        self.confirmed = confirmed; self.retraining = retraining; self.settings = settings
+        self.confirmed = confirmed; self.played = played; self.retraining = retraining; self.settings = settings
     }
 }
 
@@ -24,6 +28,9 @@ public struct PlannedFixture: Equatable, Sendable {
     public let lineup: Lineup
     /// Every player, on that day, before the match.
     public let fitness: [PlayerID: ProjectedFitness]
+    /// What the selector was told: true once a day has passed since the import or a match, played or planned, comes
+    /// before this fixture; false when the fitness is the imported figures.
+    public let fitnessIsProjected: Bool
 }
 
 public struct Plan: Equatable, Sendable {
@@ -35,7 +42,7 @@ public enum PlanError: Error, Equatable {
     case fixtureBeforeSnapshot(FixtureID, date: Day, asOf: Day)
     /// The two fixtures in fixture-id order.
     case fixturesOnTheSameDay(FixtureID, FixtureID, Day)
-    /// Two fixtures to plan, or two confirmed lineups, share this id (the lowest such id).
+    /// Two fixtures to plan, two confirmed lineups, or two played matches share this id (the lowest such id).
     case duplicateFixtureID(FixtureID)
     case badSettings([String])
     /// `FitnessModel.problems(in:)` found these in the engine parameters.
@@ -58,9 +65,10 @@ public struct Planner: Sendable {
     }
 
     /// Checks, in order: the settings and the parameters (`PlanError`), two players with one identity
-    /// (`DuplicatePlayerError`), then a repeated fixture id and the dates of every fixture given (`PlanError`). A fixture
-    /// to plan may share its id with one confirmed lineup, which its planned lineup then replaces. Then plans the first
-    /// `settings.horizon` fixtures. Throws `TacticError` for an unusable tactic and `RatingError` for a player
+    /// (`DuplicatePlayerError`), then a fixture id repeated among the fixtures, among the confirmed lineups or among the
+    /// played matches, and the dates of every fixture given (`PlanError`). A fixture to plan may share its id with one
+    /// confirmed lineup, which its planned lineup then replaces. Then plans the first `settings.horizon` fixtures, with
+    /// the played matches in the fitness projection. Throws `TacticError` for an unusable tactic and `RatingError` for a player
     /// with missing data.
     public func plan(_ request: PlanRequest) throws -> Plan {
         let settingsProblems = request.settings.problems()
@@ -70,11 +78,12 @@ public struct Planner: Sendable {
         try DuplicatePlayerError.check(request.players)
         try Self.checkUnique(request.fixtures.map(\.id))
         try Self.checkUnique(request.confirmed.map(\.fixture))
+        try Self.checkUnique(request.played.map(\.fixture))
         let ordered = request.fixtures.sorted { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }
         try Self.checkDates(ordered, asOf: request.asOf)
 
         let fixtures = Array(ordered.prefix(request.settings.horizon))
-        guard let firstDate = fixtures.first?.date else { return Plan(fixtures: []) }
+        guard !fixtures.isEmpty else { return Plan(fixtures: []) }
 
         let players = request.players.sorted { $0.id.key < $1.id.key }
         let assignmentsByFixture = try fixtures.map { try $0.tactic.assignments(catalog: catalog) }
@@ -83,15 +92,36 @@ public struct Planner: Sendable {
         let settings = request.settings
         let retraining = Self.latestRetraining(request.retraining)
         var history = StartHistory(request.confirmed)
-        var fitness: [PlayerID: ProjectedFitness] = [:]
-        for player in players {
-            fitness[player.id] = try FitnessProjection.afterDays(
-                request.asOf.days(to: firstDate), ProjectedFitness(player), player: player,
-                intensity: settings.trainingIntensity, parameters: parameters)
-        }
+        var fitness = Dictionary(uniqueKeysWithValues: players.map { ($0.id, ProjectedFitness($0)) })
+        var projectedTo = request.asOf
+        var anyMatchSoFar = false
+        let known = Set(players.map(\.id))
 
+        // Played matches and planned fixtures in one walk, so both take the days between them alike.
         var planned: [PlannedFixture] = []
-        for (index, fixture) in fixtures.enumerated() {
+        for event in Self.events(fixtures, played: request.played, asOf: request.asOf) {
+            fitness = try advance(fitness, players: players, days: projectedTo.days(to: event.date),
+                                  intensity: settings.trainingIntensity)
+            projectedTo = event.date
+            let index: Int
+            switch event {
+            case .played(let match, _):
+                // Starters take the match at their slot's position: the lowest slot, in `SlotID` order, for a player
+                // named twice. A starter not in the squad is ignored, and a match with none left moves nothing.
+                var positionOf: [PlayerID: Position] = [:]
+                for slot in SlotID.allCases {
+                    guard let player = match.starters[slot], known.contains(player), positionOf[player] == nil else { continue }
+                    positionOf[player] = slot.position
+                }
+                if !positionOf.isEmpty {
+                    fitness = try afterMatch(fitness, players: players, positionOf: positionOf)
+                    anyMatchSoFar = true
+                }
+                continue
+            case .fixture(let position, _):
+                index = position
+            }
+            let fixture = fixtures[index]
             let onTheDay = players.map { Self.withFitness($0, fitness[$0.id]!) }
             let assignments = assignmentsByFixture[index]
             let later = fixtures.indices.dropFirst(index + 1).map {
@@ -117,12 +147,12 @@ public struct Planner: Sendable {
                 if slots.values.contains(where: { !$0.isEmpty }) { bySlot[player.id] = slots }
             }
 
-            let projected = index > 0 || request.asOf < fixture.date
+            let projected = anyMatchSoFar || request.asOf < fixture.date
             let lineup = try selector.select(SelectionRequest(
                 tactic: fixture.tactic, players: onTheDay, ownClub: request.ownClub, importance: fixture.importance,
                 isNextFixture: index == 0, overrides: fixture.overrides, rejected: fixture.rejected,
                 adjustments: everySlot, slotAdjustments: bySlot, fitnessIsProjected: projected))
-            planned.append(PlannedFixture(fixture: fixture.id, lineup: lineup, fitness: fitness))
+            planned.append(PlannedFixture(fixture: fixture.id, lineup: lineup, fitness: fitness, fitnessIsProjected: projected))
 
             // A fixture id already confirmed is replaced by this lineup.
             history = history.adding(ConfirmedLineup(
@@ -130,32 +160,76 @@ public struct Planner: Sendable {
                 starters: Dictionary(uniqueKeysWithValues: lineup.picks.map { ($0.slot, $0.player) })))
 
             guard index + 1 < fixtures.count else { break }
-            fitness = try projectToNext(fitness, players: players, lineup: lineup, assignments: assignments,
-                                        days: fixture.date.days(to: fixtures[index + 1].date), intensity: settings.trainingIntensity)
+            // Starters take the match at their slot's in-possession position.
+            let assignmentOf = Dictionary(uniqueKeysWithValues: assignments.map { ($0.slot, $0) })
+            var positionOf: [PlayerID: Position] = [:]
+            for pick in lineup.picks {
+                guard let assignment = assignmentOf[pick.slot] else {
+                    preconditionFailure("A pick at \(pick.slot.rawValue) is not in the fixture's tactic; the selector only picks for the tactic's slots")
+                }
+                positionOf[pick.player] = assignment.ipPosition
+            }
+            fitness = try afterMatch(fitness, players: players, positionOf: positionOf)
+            anyMatchSoFar = true
         }
         return Plan(fixtures: planned)
     }
 
-    /// Starters take a match at their slot's in-possession position; then everyone takes the days to the next fixture.
-    private func projectToNext(_ fitness: [PlayerID: ProjectedFitness], players: [Player], lineup: Lineup,
-                               assignments: [SlotAssignment], days: Int, intensity: TrainingIntensity) throws
-        -> [PlayerID: ProjectedFitness] {
-        let assignmentOf = Dictionary(uniqueKeysWithValues: assignments.map { ($0.slot, $0) })
-        var positionOf: [PlayerID: Position] = [:]
-        for pick in lineup.picks {
-            guard let assignment = assignmentOf[pick.slot] else {
-                preconditionFailure("A pick at \(pick.slot.rawValue) is not in the fixture's tactic; the selector only picks for the tactic's slots")
+    /// Something that moves fitness on a day: a fixture to plan, by its index in the planned fixtures, or a match played
+    /// since the import.
+    private enum Event {
+        case fixture(Int, Day)
+        case played(ConfirmedLineup, Day)
+
+        var date: Day {
+            switch self {
+            case .fixture(_, let day), .played(_, let day): day
             }
-            positionOf[pick.player] = assignment.ipPosition
         }
-        var next: [PlayerID: ProjectedFitness] = [:]
-        for player in players {
-            var current = fitness[player.id]!
-            if let position = positionOf[player.id] {
-                current = try FitnessProjection.afterMatch(current, player: player, position: position, parameters: parameters)
+    }
+
+    /// The fixtures and the played matches in date order, a played match before a fixture on the same day and played
+    /// matches on one day in id order. A played match before `asOf` is dated `asOf`; those after the last fixture are left
+    /// out, since nothing is planned after them.
+    private static func events(_ fixtures: [Fixture], played: [ConfirmedLineup], asOf: Day) -> [Event] {
+        guard let last = fixtures.last?.date else { return [] }
+        let matches = played
+            .map { (match: $0, date: max($0.date, asOf)) }
+            .filter { $0.date <= last }
+            .sorted { ($0.date, $0.match.fixture.raw) < ($1.date, $1.match.fixture.raw) }
+            .map { Event.played($0.match, $0.date) }
+        let planned = fixtures.indices.map { Event.fixture($0, fixtures[$0].date) }
+        var merged: [Event] = []
+        var next = 0
+        for match in matches {
+            while next < planned.count, planned[next].date < match.date {
+                merged.append(planned[next]); next += 1
             }
-            next[player.id] = try FitnessProjection.afterDays(days, current, player: player, intensity: intensity,
+            merged.append(match)
+        }
+        return merged + planned[next...]
+    }
+
+    /// Everyone takes `days` nights without a match.
+    private func advance(_ fitness: [PlayerID: ProjectedFitness], players: [Player], days: Int,
+                         intensity: TrainingIntensity) throws -> [PlayerID: ProjectedFitness] {
+        guard days > 0 else { return fitness }
+        var next = fitness
+        for player in players {
+            next[player.id] = try FitnessProjection.afterDays(days, fitness[player.id]!, player: player, intensity: intensity,
                                                               parameters: parameters)
+        }
+        return next
+    }
+
+    /// Each player in `positionOf` takes a match at his position; everyone else is unchanged.
+    private func afterMatch(_ fitness: [PlayerID: ProjectedFitness], players: [Player],
+                            positionOf: [PlayerID: Position]) throws -> [PlayerID: ProjectedFitness] {
+        var next = fitness
+        for player in players {
+            guard let position = positionOf[player.id] else { continue }
+            next[player.id] = try FitnessProjection.afterMatch(fitness[player.id]!, player: player, position: position,
+                                                               parameters: parameters)
         }
         return next
     }
