@@ -63,6 +63,8 @@ public struct AppEnvironment: Sendable {
     public internal(set) var settings: AppSettings
     public internal(set) var notices: [Notice]
     public internal(set) var lastImport: ImportOutcome?
+    /// Unsaved changes to saved tactics, by tactic id: held only while the app is open, never written to disk.
+    var tacticDrafts: [UUID: TacticDraft] = [:]
     public let catalog: RoleCatalog
 
     @ObservationIgnored let store: Store

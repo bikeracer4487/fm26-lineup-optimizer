@@ -189,4 +189,202 @@ import Testing
         t.model.addTactic(named: "New tactic 2")
         #expect(t.model.unusedTacticName("New tactic") == "New tactic 3")
     }
+
+    @Test func aSideHasTheEnginesNumberOfSlots() throws {
+        // The engine reports a wrong count exactly when a side does not have `slotsPerSide` slots.
+        var draft = TacticDraft(try sample())
+        #expect(draft.filled(in: .inPossession) == TacticDraft.slotsPerSide)
+        #expect(!draft.tactic.problems(catalog: catalog).contains(.wrongSlotCount(.inPossession, TacticDraft.slotsPerSide)))
+        draft.toggle(.M_C, in: .inPossession, catalog: catalog)
+        #expect(draft.tactic.problems(catalog: catalog).contains(.wrongSlotCount(.inPossession, TacticDraft.slotsPerSide + 1)))
+    }
+
+    // MARK: Unsaved drafts
+
+    /// The model's draft of `id` with AM L in possession made a winger.
+    func changedDraft(_ model: AppModel, _ id: UUID) throws -> TacticDraft {
+        var draft = try #require(model.draft(for: id))
+        draft.setRole("Winger", at: .AM_L, in: .inPossession)
+        return draft
+    }
+
+    @Test func aDraftIsTheSavedTacticUntilChanged() throws {
+        let t = try TestModel()
+        let id = t.model.addTactic(named: "Main")
+        let saved = try #require(t.model.tactics.first { $0.id == id })
+        #expect(t.model.draft(for: id) == TacticDraft(saved.tactic))
+        #expect(t.model.draft(for: UUID()) == nil)
+        #expect(!t.model.hasUnsavedChanges(id))
+        #expect(t.model.tacticsWithUnsavedChanges.isEmpty)
+    }
+
+    @Test func aDraftSurvivesChoosingAnotherTacticAndComingBack() throws {
+        let t = try TestModel()
+        let main = t.model.addTactic(named: "Main")
+        let cup = t.model.addTactic(named: "Cup")
+        let changed = try changedDraft(t.model, main)
+        t.model.setDraft(changed, for: main)
+        // Looking at the other tactic leaves the first one's changes alone.
+        #expect(t.model.draft(for: cup) == TacticDraft(try #require(t.model.tactics.first { $0.id == cup }).tactic))
+        #expect(t.model.draft(for: main) == changed)
+        #expect(t.model.hasUnsavedChanges(main))
+        #expect(!t.model.hasUnsavedChanges(cup))
+        #expect(t.model.tacticsWithUnsavedChanges == [main])
+        // The saved tactic is unchanged until the draft is saved.
+        #expect(t.model.tactics.first { $0.id == main }?.tactic.inPossession[.AM_L] == "Inside Forward")
+    }
+
+    @Test func anIdenticalDraftIsNotKept() throws {
+        let t = try TestModel()
+        let id = t.model.addTactic(named: "Main")
+        let original = try #require(t.model.draft(for: id))
+        t.model.setDraft(try changedDraft(t.model, id), for: id)
+        #expect(t.model.hasUnsavedChanges(id))
+        // Changing it back is the same as having no changes.
+        t.model.setDraft(original, for: id)
+        #expect(!t.model.hasUnsavedChanges(id))
+        #expect(t.model.tacticsWithUnsavedChanges.isEmpty)
+        // A draft for a tactic that is not saved is not kept.
+        let stray = UUID()
+        t.model.setDraft(original, for: stray)
+        #expect(t.model.draft(for: stray) == nil)
+    }
+
+    @Test func savingRefusesADraftWithAProblemAndSavesOneWithout() throws {
+        let t = try TestModel()
+        let id = t.model.addTactic(named: "Main")
+        var broken = try changedDraft(t.model, id)
+        broken.toggle(.ST_C, in: .inPossession, catalog: catalog)
+        t.model.setDraft(broken, for: id)
+        #expect(t.model.saveDraft(id) == false)
+        #expect(t.model.hasUnsavedChanges(id))
+        #expect(t.model.tactics.first { $0.id == id }?.tactic.inPossession[.ST_C] == "Channel Forward")
+
+        let fixed = try changedDraft(t.model, id)
+        var mended = try #require(t.model.draft(for: id))
+        mended.toggle(.ST_C, in: .inPossession, catalog: catalog)
+        mended.map(.ST_C, to: .ST_C)
+        t.model.setDraft(mended, for: id)
+        #expect(t.model.saveDraft(id))
+        #expect(!t.model.hasUnsavedChanges(id))
+        let saved = try #require(t.model.tactics.first { $0.id == id })
+        #expect(saved.tactic.inPossession[.AM_L] == fixed.tactic.inPossession[.AM_L])
+        #expect(saved.tactic.inPossession[.AM_L] == "Winger")
+        #expect(t.reopened().tactics.first { $0.id == id }?.tactic.inPossession[.AM_L] == "Winger")
+        // With nothing to save, nothing is saved.
+        #expect(t.model.saveDraft(id) == false)
+    }
+
+    @Test func savingTrimsTheName() throws {
+        let t = try TestModel()
+        let id = t.model.addTactic(named: "Main")
+        var draft = try #require(t.model.draft(for: id))
+        draft.tactic.name = "  Cup run "
+        t.model.setDraft(draft, for: id)
+        #expect(t.model.saveDraft(id))
+        #expect(t.model.tactics.first { $0.id == id }?.tactic.name == "Cup run")
+        #expect(!t.model.hasUnsavedChanges(id))
+    }
+
+    @Test func aNameWithSpacesAroundItIsKeptAndSavedTrimmed() throws {
+        let t = try TestModel()
+        let id = t.model.addTactic(named: "Main")
+        var draft = try #require(t.model.draft(for: id))
+        draft.tactic.name = "Main "
+        t.model.setDraft(draft, for: id)
+        // Kept, so the field shows what was typed, and saving gives back the saved tactic.
+        #expect(t.model.hasUnsavedChanges(id))
+        #expect(t.model.saveDraft(id))
+        #expect(t.model.tactics.first { $0.id == id }?.tactic.name == "Main")
+        #expect(!t.model.hasUnsavedChanges(id))
+    }
+
+    @Test func revertingDropsTheDraft() throws {
+        let t = try TestModel()
+        let id = t.model.addTactic(named: "Main")
+        let saved = try #require(t.model.tactics.first { $0.id == id })
+        t.model.setDraft(try changedDraft(t.model, id), for: id)
+        t.model.revertDraft(id)
+        #expect(!t.model.hasUnsavedChanges(id))
+        #expect(t.model.draft(for: id) == TacticDraft(saved.tactic))
+        #expect(t.model.tactics.first { $0.id == id } == saved)
+    }
+
+    @Test func deletingATacticDropsItsDraft() throws {
+        let t = try TestModel()
+        let main = t.model.addTactic(named: "Main")
+        let cup = t.model.addTactic(named: "Cup")
+        t.model.setDraft(try changedDraft(t.model, cup), for: cup)
+        t.model.deleteTactic(cup)
+        #expect(t.model.tacticsWithUnsavedChanges.isEmpty)
+        #expect(t.model.draft(for: cup) == nil)
+        #expect(!t.model.hasUnsavedChanges(main))
+    }
+
+    @Test func draftsAreNotWrittenToDisk() throws {
+        let t = try TestModel()
+        let id = t.model.addTactic(named: "Main")
+        t.model.setDraft(try changedDraft(t.model, id), for: id)
+        // Saving another file does not carry the draft with it either.
+        t.model.addTactic(named: "Cup")
+        let reopened = t.reopened()
+        #expect(reopened.tacticsWithUnsavedChanges.isEmpty)
+        #expect(reopened.tactics.first { $0.id == id }?.tactic.inPossession[.AM_L] == "Inside Forward")
+    }
+
+    @Test func duplicatingCopiesTheDraftAndSavesItWhenItHasNoProblems() throws {
+        let t = try TestModel()
+        let id = t.model.addTactic(named: "Main")
+        var draft = try changedDraft(t.model, id)
+        draft.tactic.name = "Cup"
+        t.model.setDraft(draft, for: id)
+        let copy = try #require(t.model.duplicateTactic(id))
+        let saved = try #require(t.model.tactics.first { $0.id == copy })
+        // Named after what the owner is looking at, and saved as it is.
+        #expect(saved.tactic.name == "Cup copy")
+        #expect(saved.tactic.inPossession[.AM_L] == "Winger")
+        #expect(!t.model.hasUnsavedChanges(copy))
+        // The original keeps its unsaved changes.
+        #expect(t.model.draft(for: id) == draft)
+        #expect(t.model.tactics.first { $0.id == id }?.tactic.name == "Main")
+    }
+
+    @Test func duplicatingADraftWithAProblemSavesTheSavedTacticAndKeepsTheChangesUnsaved() throws {
+        let t = try TestModel()
+        let id = t.model.addTactic(named: "Main")
+        var draft = try changedDraft(t.model, id)
+        draft.toggle(.ST_C, in: .inPossession, catalog: catalog)
+        t.model.setDraft(draft, for: id)
+        let copy = try #require(t.model.duplicateTactic(id))
+        let saved = try #require(t.model.tactics.first { $0.id == copy })
+        let original = try #require(t.model.tactics.first { $0.id == id })
+        #expect(saved.tactic.name == "Main copy")
+        #expect(saved.tactic.inPossession == original.tactic.inPossession)
+        // The copy opens with the draft's changes, unsaved.
+        #expect(t.model.hasUnsavedChanges(copy))
+        var expected = draft
+        expected.tactic.name = "Main copy"
+        #expect(t.model.draft(for: copy) == expected)
+    }
+
+    @Test func aTacticsMenuTitleMarksThePrimaryAndUnsavedChanges() throws {
+        let t = try TestModel()
+        let main = t.model.addTactic(named: "Main")
+        let cup = t.model.addTactic(named: "Cup")
+        #expect(t.model.menuTitle(of: main) == "Main (primary)")
+        #expect(t.model.menuTitle(of: cup) == "Cup")
+        t.model.setDraft(try changedDraft(t.model, main), for: main)
+        t.model.setDraft(try changedDraft(t.model, cup), for: cup)
+        #expect(t.model.menuTitle(of: main) == "Main (primary) — unsaved changes")
+        #expect(t.model.menuTitle(of: cup) == "Cup — unsaved changes")
+        #expect(t.model.menuTitle(of: UUID()) == "")
+    }
+
+    @Test func theSampleWithAnUnsavedChangeHasOne() throws {
+        let model = try SampleData.modelWithUnsavedTacticChange(repositoryRoot: Captures.repositoryRoot)
+        let id = try #require(model.tactics.first?.id)
+        #expect(model.tacticsWithUnsavedChanges == [id])
+        #expect(model.draft(for: id)?.tactic.inPossession[.AM_L] == "Winger")
+        #expect(model.problems(saving: StoredTactic(id: id, tactic: try #require(model.draft(for: id)).tactic)).isEmpty)
+    }
 }

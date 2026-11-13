@@ -18,35 +18,101 @@ extension AppModel {
         return stored.id
     }
 
-    /// Replaces the saved tactic with the same id; a tactic no longer saved is left out.
+    /// Replaces the saved tactic with the same id; a tactic no longer saved is left out. An unsaved draft that
+    /// now matches the saved tactic is dropped.
     public func update(_ tactic: StoredTactic) {
         guard let index = tactics.firstIndex(where: { $0.id == tactic.id }) else { return }
         tactics[index] = tactic
         save(.tactics)
-    }
-
-    /// A copy named "<name> copy" (or "copy 2" and on, if taken), added after the others; nil if `id` is not saved.
-    public func duplicateTactic(_ id: UUID) -> UUID? {
-        guard let original = tactics.first(where: { $0.id == id }) else { return nil }
-        let names = Set(tactics.map(\.tactic.name))
-        var name = "\(original.tactic.name) copy"
-        var number = 2
-        while names.contains(name) {
-            name = "\(original.tactic.name) copy \(number)"
-            number += 1
+        if tacticDrafts[tactic.id]?.tactic == tactic.tactic {
+            tacticDrafts[tactic.id] = nil
         }
-        var copy = original
-        copy.id = UUID()
-        copy.tactic.name = name
-        tactics.append(copy)
-        save(.tactics)
-        return copy.id
     }
 
-    /// Removes the tactic. If it was the primary, the first remaining tactic becomes the primary. Fixtures that
-    /// used it fall back to the primary, and a notice names them.
+    /// A copy of what the owner is looking at, the unsaved draft if there is one, named "<name> copy" (or
+    /// "copy 2" and on, if taken) and added after the others; nil if `id` is not saved. The name is the draft's,
+    /// or the saved one when the draft's is blank. A draft with no problems is copied and saved as it is; one with
+    /// problems cannot be saved, so the saved tactic is copied and the draft's changes become the copy's
+    /// unsaved draft. The original keeps its draft.
+    public func duplicateTactic(_ id: UUID) -> UUID? {
+        guard let original = tactics.first(where: { $0.id == id }), let shown = draft(for: id) else { return nil }
+        let shownName = shown.tactic.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = unusedTacticName("\(shownName.isEmpty ? original.tactic.name : shownName) copy")
+        let copyID = UUID()
+        var copy = shown.tactic
+        copy.name = name
+        if problems(saving: StoredTactic(id: copyID, tactic: copy)).isEmpty {
+            tactics.append(StoredTactic(id: copyID, tactic: copy))
+        } else {
+            var saved = original.tactic
+            saved.name = name
+            tactics.append(StoredTactic(id: copyID, tactic: saved))
+            tacticDrafts[copyID] = TacticDraft(copy)
+        }
+        save(.tactics)
+        return copyID
+    }
+
+    // MARK: Unsaved changes
+
+    /// The unsaved draft of the tactic, or a draft of the saved tactic when it has no unsaved changes; nil if
+    /// `id` is not saved.
+    public func draft(for id: UUID) -> TacticDraft? {
+        guard let saved = tactics.first(where: { $0.id == id }) else { return nil }
+        return tacticDrafts[id] ?? TacticDraft(saved.tactic)
+    }
+
+    /// Keeps `draft` as the tactic's unsaved changes while it differs from the saved tactic; a draft identical to
+    /// the saved tactic, or for a tactic not saved, is not kept.
+    public func setDraft(_ draft: TacticDraft, for id: UUID) {
+        guard let saved = tactics.first(where: { $0.id == id }) else { return }
+        tacticDrafts[id] = draft.tactic == saved.tactic ? nil : draft
+    }
+
+    public func hasUnsavedChanges(_ id: UUID) -> Bool {
+        tacticDrafts[id] != nil
+    }
+
+    /// The tactics with unsaved changes, in the order the tactics are listed.
+    public var tacticsWithUnsavedChanges: [UUID] {
+        tactics.map(\.id).filter { tacticDrafts[$0] != nil }
+    }
+
+    /// Saves the tactic's draft, its name trimmed, and drops the draft. Refuses, and returns false, when there is
+    /// no draft or while `problems(saving:)` lists anything for it.
+    @discardableResult public func saveDraft(_ id: UUID) -> Bool {
+        guard let draft = tacticDrafts[id] else { return false }
+        var tactic = draft.tactic
+        tactic.name = tactic.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stored = StoredTactic(id: id, tactic: tactic)
+        guard problems(saving: stored).isEmpty else { return false }
+        tacticDrafts[id] = nil
+        update(stored)
+        return true
+    }
+
+    /// Drops the tactic's unsaved changes.
+    public func revertDraft(_ id: UUID) {
+        tacticDrafts[id] = nil
+    }
+
+    /// The tactic's name as the tactics menu lists it, marked "(primary)" and "— unsaved changes" where they
+    /// apply; empty if `id` is not saved.
+    public func menuTitle(of id: UUID) -> String {
+        guard let stored = tactics.first(where: { $0.id == id }) else { return "" }
+        var title = stored.tactic.name
+        if id == settings.primaryTacticID { title += " (primary)" }
+        if hasUnsavedChanges(id) { title += " — unsaved changes" }
+        return title
+    }
+
+    // MARK: Removing
+
+    /// Removes the tactic and its unsaved changes. If it was the primary, the first remaining tactic becomes the
+    /// primary. Fixtures that used it fall back to the primary, and a notice names them.
     public func deleteTactic(_ id: UUID) {
         guard let deleted = tactics.first(where: { $0.id == id }) else { return }
+        tacticDrafts[id] = nil
         tactics.removeAll { $0.id == id }
         save(.tactics)
         if settings.primaryTacticID == id {

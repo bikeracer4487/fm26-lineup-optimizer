@@ -3,23 +3,32 @@ import LineupEngine
 import SwiftUI
 
 /// One tactic being changed: its name, the two shapes on pitches side by side, the selected slot's role and what it
-/// turns into, and the problems that stop it being saved. Changes are kept in a draft until saved; leaving the
-/// tactic discards them.
+/// turns into, and the problems that stop it being saved. Changes are the model's unsaved draft of the tactic,
+/// kept until saved or reverted, whichever tactic or screen is shown meanwhile.
 struct TacticEditor: View {
     let model: AppModel
     let stored: StoredTactic
-    @State private var draft: TacticDraft
     @State private var selected: TacticSlot?
 
     /// - Parameter selected: the slot selected when the editor opens.
     init(model: AppModel, stored: StoredTactic, selected: TacticSlot? = nil) {
         self.model = model
         self.stored = stored
-        _draft = State(initialValue: TacticDraft(stored.tactic))
         _selected = State(initialValue: selected)
     }
 
-    private var hasChanges: Bool { draft.tactic != stored.tactic }
+    private var draft: TacticDraft {
+        model.draft(for: stored.id) ?? TacticDraft(stored.tactic)
+    }
+
+    /// Applies `edit` to the model's draft of the tactic.
+    private func change(_ edit: (inout TacticDraft) -> Void) {
+        var changed = draft
+        edit(&changed)
+        model.setDraft(changed, for: stored.id)
+    }
+
+    private var hasChanges: Bool { model.hasUnsavedChanges(stored.id) }
 
     private var problems: [String] {
         model.problems(saving: StoredTactic(id: stored.id, tactic: draft.tactic))
@@ -51,7 +60,7 @@ struct TacticEditor: View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
             Text("Name")
                 .font(Theme.Typeface.text())
-            TextField("Name", text: $draft.tactic.name)
+            TextField("Name", text: Binding(get: { draft.tactic.name }, set: { name in change { $0.tactic.name = name } }))
                 .textFieldStyle(.roundedBorder)
                 .labelsHidden()
                 .frame(width: Theme.Layout.nameFieldWidth)
@@ -61,21 +70,12 @@ struct TacticEditor: View {
                     .font(Theme.Typeface.text())
                     .foregroundStyle(.secondary)
             }
-            Button("Revert") {
-                draft = TacticDraft(stored.tactic)
-            }
-            .disabled(!hasChanges)
-            Button("Save changes", action: save)
+            Button("Revert") { model.revertDraft(stored.id) }
+                .disabled(!hasChanges)
+            Button("Save changes") { model.saveDraft(stored.id) }
                 .buttonStyle(.borderedProminent)
                 .disabled(!hasChanges || !problems.isEmpty)
         }
-    }
-
-    private func save() {
-        var tactic = draft.tactic
-        tactic.name = tactic.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        model.update(StoredTactic(id: stored.id, tactic: tactic))
-        draft = TacticDraft(tactic)
     }
 
     // MARK: The selected slot
@@ -103,7 +103,7 @@ struct TacticEditor: View {
                     .fixedSize()
                 }
                 Button("Remove") {
-                    draft.toggle(selected.slot, in: selected.phase, catalog: model.catalog)
+                    change { $0.toggle(selected.slot, in: selected.phase, catalog: model.catalog) }
                     self.selected = nil
                 }
                 Spacer(minLength: 0)
@@ -125,7 +125,7 @@ struct TacticEditor: View {
     private func roleBinding(_ selected: TacticSlot) -> Binding<String> {
         Binding(
             get: { draft.role(at: selected.slot, in: selected.phase) ?? "" },
-            set: { draft.setRole($0, at: selected.slot, in: selected.phase) })
+            set: { role in change { $0.setRole(role, at: selected.slot, in: selected.phase) } })
     }
 
     private func targetName(_ target: SlotID) -> String {
@@ -140,7 +140,7 @@ struct TacticEditor: View {
         Binding(
             get: { draft.tactic.mapping[slot] },
             set: { target in
-                if let target { draft.map(slot, to: target) }
+                if let target { change { $0.map(slot, to: target) } }
             })
     }
 
@@ -159,7 +159,7 @@ struct TacticEditor: View {
                 Text(phase == .inPossession ? "In possession" : "Out of possession")
                     .font(Theme.Typeface.text(Theme.TypeSize.step1, weight: .semibold))
                 Spacer(minLength: Theme.Spacing.s)
-                Text("\(draft.filled(in: phase)) of 11 slots filled")
+                Text("\(draft.filled(in: phase)) of \(TacticDraft.slotsPerSide) slots filled")
                     .font(Theme.Typeface.text())
                     .foregroundStyle(.secondary)
             }
@@ -175,7 +175,7 @@ struct TacticEditor: View {
     /// Clicking an empty slot adds it; either way the slot is then selected.
     private func click(_ place: TacticSlot) {
         if draft.role(at: place.slot, in: place.phase) == nil {
-            draft.toggle(place.slot, in: place.phase, catalog: model.catalog)
+            change { $0.toggle(place.slot, in: place.phase, catalog: model.catalog) }
         }
         selected = place
     }

@@ -13,7 +13,7 @@
 //                                              "squad-failed-…", "squad-imported-…"), and the Tactics screen
 //                                              empty and with a tactic that has a problem ("tactics-empty-…",
 //                                              "tactics-problem-…"). The Tactics editor is drawn with a slot
-//                                              selected.
+//                                              selected, and "tactics-…" with an unsaved change.
 
 import AppKit
 import Foundation
@@ -67,7 +67,7 @@ func fail(_ message: String) -> Never {
 
 /// Which state of the sample data to start from.
 enum SampleState {
-    case plain, failedImport, afterImport, tacticProblem
+    case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -79,6 +79,7 @@ enum SampleState {
         case .failedImport: return try SampleData.modelWithFailedImport(repositoryRoot: url)
         case .afterImport: return try SampleData.modelAfterImport(repositoryRoot: url)
         case .tacticProblem: return try SampleData.modelWithTacticProblem(repositoryRoot: url)
+        case .unsavedTacticChange: return try SampleData.modelWithUnsavedTacticChange(repositoryRoot: url)
         }
     } catch {
         fail("\(error)")
@@ -100,9 +101,12 @@ enum SampleState {
     let size = Theme.Layout.defaultWindow
     do {
         if let root = sampleDataRoot {
-            // The inside forward on the left, so the role menu, "Remove" and what he becomes are all shown.
             try ScreenPictures.write(model: sampleModel(root), to: directory, size: size,
-                                     tacticSlot: TacticSlot(.AM_L, in: .inPossession))
+                                     screens: Screen.allCases.filter { $0 != .tactics })
+            // With an unsaved change, the left inside forward made a winger and selected, so the role menu,
+            // "Remove", what he becomes and the marks for unsaved changes are all shown.
+            try ScreenPictures.write(model: sampleModel(root, .unsavedTacticChange), to: directory, size: size,
+                                     screens: [.tactics], tacticSlot: TacticSlot(.AM_L, in: .inPossession))
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size, variant: "empty",
                                      screens: [.squad, .tactics])
             // The striker nothing turns into, selected out of possession.

@@ -50,13 +50,14 @@ public struct TacticsScreen: View {
         }
     }
 
-    /// The saved tactics as a menu, the primary marked, with what can be done to them. A menu rather than a
+    /// The saved tactics as a menu, the primary and those with unsaved changes marked, with what can be done to
+    /// them. A menu rather than a
     /// column, so the two pitches have the window's width.
     private var list: some View {
         HStack(alignment: .center, spacing: Theme.Spacing.m) {
             Picker("Tactic", selection: Binding(get: { shown?.id }, set: { chosen = $0 })) {
                 ForEach(model.tactics) { stored in
-                    Text(stored.id == model.settings.primaryTacticID ? "\(stored.tactic.name) (primary)" : stored.tactic.name)
+                    Text(model.menuTitle(of: stored.id))
                         .tag(UUID?.some(stored.id))
                 }
             }

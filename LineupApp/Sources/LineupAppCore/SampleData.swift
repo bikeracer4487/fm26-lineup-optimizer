@@ -107,6 +107,17 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model with an unsaved change to its tactic: the inside forward on the left made a winger.
+    @MainActor public static func modelWithUnsavedTacticChange(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        guard let id = model.tactics.first?.id, var draft = model.draft(for: id) else {
+            throw SampleDataError(description: "The sample model has no tactic.")
+        }
+        draft.setRole("Winger", at: .AM_L, in: .inPossession)
+        model.setDraft(draft, for: id)
+        return model
+    }
+
     /// A model with nothing in it, on a new temporary directory, whose clipboard is empty.
     @MainActor public static func emptyModel() -> AppModel {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("lineup-empty-\(UUID().uuidString)")

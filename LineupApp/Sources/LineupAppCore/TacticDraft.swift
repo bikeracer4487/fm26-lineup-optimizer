@@ -14,6 +14,10 @@ public struct TacticSlot: Hashable, Sendable {
 /// The edits a tactic allows, kept out of the views so they can be tested. A draft may break the engine's rules
 /// (ten slots, a slot turning into nothing); `AppModel.problems(of:)` says how.
 public struct TacticDraft: Equatable, Sendable {
+    /// The slots each side of a tactic must fill. The engine's rule; it has no constant of its own, so this one
+    /// is tested against the problems it reports.
+    public static let slotsPerSide = 11
+
     public var tactic: Tactic
 
     public init(_ tactic: Tactic) {
