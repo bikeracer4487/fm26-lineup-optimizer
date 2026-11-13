@@ -50,7 +50,7 @@ fi
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-pbpaste > "$TMP/clip.tsv"
+LC_ALL=en_US.UTF-8 pbpaste > "$TMP/clip.tsv"
 if ! grep -q "$(printf '\t')" "$TMP/clip.tsv"; then
     echo "error: clipboard has no tab character; copy rows from FMRTE's grid first" >&2
     exit 1
