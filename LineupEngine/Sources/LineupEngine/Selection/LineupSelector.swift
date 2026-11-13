@@ -11,11 +11,20 @@ public struct SelectionRequest: Sendable {
     public var overrides: [SlotID: PlayerID]
     /// Players the manager has ruled out of this fixture.
     public var rejected: Set<PlayerID>
+    /// Adjustments to a player's value in every slot.
+    public var adjustments: [PlayerID: [Adjustment]]
+    /// Adjustments to a player's value in one slot only.
+    public var slotAdjustments: [PlayerID: [SlotID: [Adjustment]]]
+    /// True when the players' condition, sharpness and jadedness are projected to the fixture rather
+    /// than read from the game today; the fitness lines then say so.
+    public var fitnessIsProjected: Bool
 
     public init(tactic: Tactic, players: [Player], ownClub: String?, importance: Importance, isNextFixture: Bool,
-                overrides: [SlotID: PlayerID], rejected: Set<PlayerID>) {
+                overrides: [SlotID: PlayerID], rejected: Set<PlayerID>, adjustments: [PlayerID: [Adjustment]] = [:],
+                slotAdjustments: [PlayerID: [SlotID: [Adjustment]]] = [:], fitnessIsProjected: Bool = false) {
         self.tactic = tactic; self.players = players; self.ownClub = ownClub; self.importance = importance
         self.isNextFixture = isNextFixture; self.overrides = overrides; self.rejected = rejected
+        self.adjustments = adjustments; self.slotAdjustments = slotAdjustments; self.fitnessIsProjected = fitnessIsProjected
     }
 }
 
@@ -35,17 +44,22 @@ public struct Pick: Equatable, Sendable {
     public let name: String
     public let rating: SlotRating
     public let fitness: FitnessFactors
-    /// `rating.value × fitness.product`.
+    /// `rating.value × fitness.product × (product of the adjustments' factors) − (sum of their costs)`;
+    /// negative when the costs outweigh the rest.
     public let value: Double
     public let isOverride: Bool
     public let warnings: [PickWarning]
-    /// Plain sentences for the manager: the rating line, then the fitness lines, then the override line.
+    /// Plain sentences for the manager: the rating line, then the fitness lines, then each adjustment's
+    /// reason, then the override line.
     public let reasons: [String]
+    /// The adjustments applied to this player in this slot, in `Adjustment.Kind` order.
+    public let adjustments: [Adjustment]
 
     public init(slot: SlotID, player: PlayerID, name: String, rating: SlotRating, fitness: FitnessFactors,
-                value: Double, isOverride: Bool, warnings: [PickWarning], reasons: [String]) {
+                value: Double, isOverride: Bool, warnings: [PickWarning], reasons: [String], adjustments: [Adjustment] = []) {
         self.slot = slot; self.player = player; self.name = name; self.rating = rating; self.fitness = fitness
         self.value = value; self.isOverride = isOverride; self.warnings = warnings; self.reasons = reasons
+        self.adjustments = adjustments
     }
 }
 
@@ -56,6 +70,9 @@ public enum OmissionCause: Equatable, Sendable {
     /// He would start without the manager's overrides. `by` is the player chosen for his ideal
     /// slot when there is one; otherwise every applied override's player, in slot order.
     case displacedByOverride(by: [PlayerID])
+    /// Adjustments that lower his value in his ideal slot (a factor below 1 or a cost above 0), by
+    /// distinct kind in `Adjustment.Kind` order.
+    case heldBack([Adjustment.Kind])
 }
 
 /// A player in the ideal eleven who is not in the real one.
@@ -122,6 +139,10 @@ public struct LineupSelector: Sendable {
         let ratings: [[SlotRating?]] = try assignments.map { assignment in
             try players.indices.map { loanedOut[$0] ? nil : try engine.rating(for: players[$0], in: assignment) }
         }
+        // applied[slot][candidate]: the adjustments to his value in that slot, in Kind order.
+        let applied: [[[Adjustment]]] = assignments.map { assignment in
+            players.map { adjustments(for: $0.id, in: assignment.slot, request) }
+        }
 
         // Overrides, first problem wins: slot not in the tactic, not in the squad, used twice, not allowed.
         // An override for a slot the tactic does not use does not count as a use.
@@ -143,14 +164,18 @@ public struct LineupSelector: Sendable {
         }
         let overridden = Set(placed.keys)
 
-        // The real eleven: available players at match-day value, around the overrides.
+        // The real eleven: available players at adjusted match-day value, around the overrides. The
+        // solver fills every slot it can before it looks at value, so a player whose adjusted value is
+        // zero or negative is still a candidate.
         func solve(around fixed: [Int: Int]) -> [Int: Int] {
             var placed = fixed
             let openSlots = assignments.indices.filter { fixed[$0] == nil }
             let fixedPlayers = Set(fixed.values)
             let candidates = players.indices.filter { !fixedPlayers.contains($0) }
             let values: [[Double?]] = openSlots.map { s in
-                candidates.map { i in exclusions[i] == nil ? ratings[s][i].map { matchDayValue($0, fitness[i]) } : nil }
+                candidates.map { i in
+                    exclusions[i] == nil ? ratings[s][i].map { adjustedValue(matchDayValue($0, fitness[i]), applied[s][i]) } : nil
+                }
             }
             for (row, choice) in AssignmentSolver.maximise(values: values).enumerated() {
                 if let c = choice { placed[openSlots[row]] = candidates[c] }
@@ -164,8 +189,9 @@ public struct LineupSelector: Sendable {
         for (s, assignment) in assignments.enumerated() {
             guard let i = placed[s], let rating = ratings[s][i] else { unfilled.append(assignment.slot); continue }
             let isOverride = overridden.contains(s)
-            picks.append(pick(assignment, players[i], rating: rating, fitness: fitness[i],
-                              isOverride: isOverride, broken: isOverride ? exclusions[i] : nil))
+            picks.append(pick(assignment, players[i], rating: rating, fitness: fitness[i], adjustments: applied[s][i],
+                              isOverride: isOverride, broken: isOverride ? exclusions[i] : nil,
+                              projected: request.fitnessIsProjected))
         }
 
         // Who would start with the same availability but no overrides: an omitted player among them
@@ -173,7 +199,7 @@ public struct LineupSelector: Sendable {
         let startsWithoutOverrides = overridden.isEmpty ? [] : Set(solve(around: [:]).values)
         let overridePlayers = overridden.sorted().map { players[placed[$0]!] }
 
-        // The ideal eleven: everyone not out on loan, at full fitness, with no exclusions or overrides.
+        // The ideal eleven: everyone not out on loan, at full fitness, with no exclusions, overrides or adjustments.
         let ideal = AssignmentSolver.maximise(values: ratings.map { row in row.map { $0?.value } })
         let inLineup = Set(placed.values)
         var omissions: [Omission] = []
@@ -181,7 +207,7 @@ public struct LineupSelector: Sendable {
             guard let i = choice, !inLineup.contains(i), let rating = ratings[s][i] else { continue }
             let displacement: Displacement? = !startsWithoutOverrides.contains(i) ? nil
                 : overridden.contains(s) ? .inHisSlot(by: players[placed[s]!]) : .elsewhere(by: overridePlayers)
-            omissions.append(omission(players[i], assignments[s], rating: rating, fitness: fitness[i],
+            omissions.append(omission(players[i], assignments[s], rating: rating, fitness: fitness[i], adjustments: applied[s][i],
                                       excluded: exclusions[i], displacement: displacement))
         }
 
@@ -192,6 +218,29 @@ public struct LineupSelector: Sendable {
     /// sharpness and jadedness on the day.
     private func matchDayValue(_ rating: SlotRating, _ fitness: FitnessFactors) -> Double {
         rating.value * fitness.product
+    }
+
+    /// `value` times the adjustments' factors, less their costs, each taken in the order given. With no
+    /// adjustments it is `value` exactly (× 1 and − 0 are exact).
+    private func adjustedValue(_ value: Double, _ adjustments: [Adjustment]) -> Double {
+        var factor = 1.0
+        var cost = 0.0
+        for adjustment in adjustments {
+            factor *= adjustment.factor
+            cost += adjustment.cost
+        }
+        return value * factor - cost
+    }
+
+    /// The player's adjustments in `slot`: by kind in `Adjustment.Kind` order and, within a kind, those
+    /// for every slot before those for this slot, each in the order given.
+    private func adjustments(for player: PlayerID, in slot: SlotID, _ request: SelectionRequest) -> [Adjustment] {
+        let everySlot = request.adjustments[player] ?? []
+        let thisSlot = request.slotAdjustments[player]?[slot] ?? []
+        guard !everySlot.isEmpty || !thisSlot.isEmpty else { return [] }
+        return Adjustment.Kind.allCases.flatMap { kind in
+            everySlot.filter { $0.kind == kind } + thisSlot.filter { $0.kind == kind }
+        }
     }
 
     /// A risk rule's exclusion, else `.rejected` if the manager rejected him, else nil.
@@ -205,7 +254,7 @@ public struct LineupSelector: Sendable {
     }
 
     private func pick(_ assignment: SlotAssignment, _ player: Player, rating: SlotRating, fitness: FitnessFactors,
-                      isOverride: Bool, broken: Exclusion?) -> Pick {
+                      adjustments: [Adjustment], isOverride: Bool, broken: Exclusion?, projected: Bool) -> Pick {
         var warnings: [PickWarning] = []
         for (phase, phaseRating) in [(Phase.inPossession, rating.inPossession), (.outOfPossession, rating.outOfPossession)]
         where phaseRating.familiarity < parameters.outOfPositionBelow.value {
@@ -216,13 +265,16 @@ public struct LineupSelector: Sendable {
         var reasons = ["Rating \(oneDecimal(rating.value)): "
             + "\(assignment.ipPosition.rawValue) familiarity \(rating.inPossession.familiarity) in possession, "
             + "\(assignment.oopPosition.rawValue) familiarity \(rating.outOfPossession.familiarity) out of possession"]
-        if fitness.condition < 1 { reasons.append("Condition \(percent(player.condition)) (×\(twoDecimals(fitness.condition)))") }
-        if fitness.sharpness < 1 { reasons.append("Sharpness \(percent(player.sharpness)) (×\(twoDecimals(fitness.sharpness)))") }
-        if fitness.jadedness < 1 { reasons.append("Jadedness \(player.jadedness) (×\(twoDecimals(fitness.jadedness)))") }
+        func label(_ name: String) -> String { projected ? "Projected " + name.lowercased() : name }
+        if fitness.condition < 1 { reasons.append("\(label("Condition")) \(percent(player.condition)) (×\(twoDecimals(fitness.condition)))") }
+        if fitness.sharpness < 1 { reasons.append("\(label("Sharpness")) \(percent(player.sharpness)) (×\(twoDecimals(fitness.sharpness)))") }
+        if fitness.jadedness < 1 { reasons.append("\(label("Jadedness")) \(player.jadedness) (×\(twoDecimals(fitness.jadedness)))") }
+        reasons += adjustments.map(\.reason)
         if isOverride { reasons.append("Chosen by you" + (broken.map { ", overriding: \(rule($0))" } ?? "")) }
 
         return Pick(slot: assignment.slot, player: player.id, name: player.name, rating: rating, fitness: fitness,
-                    value: matchDayValue(rating, fitness), isOverride: isOverride, warnings: warnings, reasons: reasons)
+                    value: adjustedValue(matchDayValue(rating, fitness), adjustments), isOverride: isOverride,
+                    warnings: warnings, reasons: reasons, adjustments: adjustments)
     }
 
     /// How the manager's overrides cost an ideal player his place.
@@ -233,8 +285,11 @@ public struct LineupSelector: Sendable {
         case elsewhere(by: [Player])
     }
 
+    /// The cause, first that applies: an exclusion, a displacement by an override, adjustments that
+    /// lower his value in his ideal slot, his fitness on the day.
     private func omission(_ player: Player, _ assignment: SlotAssignment, rating: SlotRating, fitness: FitnessFactors,
-                          excluded: Exclusion?, displacement: Displacement?) -> Omission {
+                          adjustments: [Adjustment], excluded: Exclusion?, displacement: Displacement?) -> Omission {
+        let holding = adjustments.filter(\.holdsBack)
         let cause: OmissionCause
         let reason: String
         if let excluded {
@@ -249,6 +304,10 @@ public struct LineupSelector: Sendable {
                 cause = .displacedByOverride(by: chosen.map(\.id))
                 reason = "Left out: your choice of \(listed(chosen.map(\.name))) moved others into his place"
             }
+        } else if !holding.isEmpty {
+            let kinds = Adjustment.Kind.allCases.filter { kind in holding.contains { $0.kind == kind } }
+            cause = .heldBack(kinds)
+            reason = "Left out: " + holding.map(\.reason).joined(separator: "; ")
         } else {
             let today = matchDayValue(rating, fitness)
             cause = .lowerMatchDayValue(ideal: rating.value, today: today, limiting: limitingFactor(fitness))

@@ -777,6 +777,178 @@ import Testing
         let players = changing("Striker", in: squad()) { $0.attributes = [:] }
         #expect(throws: RatingError.self) { try selector.select(request(players)) }
     }
+
+    // MARK: - Adjustments
+
+    /// `base` with the given adjustments for every slot and for single slots.
+    func adjusted(_ base: SelectionRequest, every: [PlayerID: [Adjustment]] = [:],
+                  slots: [PlayerID: [SlotID: [Adjustment]]] = [:], projected: Bool = false) -> SelectionRequest {
+        var request = base
+        request.adjustments = every
+        request.slotAdjustments = slots
+        request.fitnessIsProjected = projected
+        return request
+    }
+
+    @Test func aRequestWithoutAdjustmentsGivesTheSameLineupAsBefore() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        var players = changing("Striker", in: squad(rival)) { $0.condition = 0.86 }
+        players = changing("Playmaker", in: players) { $0.sharpness = 0.75; $0.jadedness = 300 }
+        let base = request(players)
+        let lineup = try selector.select(base)
+        for pick in lineup.picks {
+            #expect(pick.value == pick.rating.value * pick.fitness.product, "\(pick.slot)")
+            #expect(pick.adjustments.isEmpty)
+        }
+        let playmaker = try #require(pick(lineup, .AM_C))
+        #expect(Array(playmaker.reasons.dropFirst()) == ["Sharpness 75% (×0.92)", "Jadedness 300 (×0.90)"])
+        // Empty lists, and adjustments for someone not in the squad, change nothing.
+        #expect(try selector.select(adjusted(base, every: [id("Striker"): [], id("Nobody"): [Adjustment(kind: .development, factor: 0.5, reason: "x")]],
+                                             slots: [id("Striker"): [.ST_C: []]])) == lineup)
+    }
+
+    @Test func aFactorBelowOneCanCostAPlayerHisPlace() throws {
+        // The rival's rating is exactly 5% lower.
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let base = request(squad(rival))
+        try #require(pick(try selector.select(base), .ST_C)?.player == id("Striker"))
+        let held = Adjustment(kind: .savedForLater, factor: 0.90, reason: "kept fresher for the cup final")
+        let lineup = try selector.select(adjusted(base, every: [id("Striker"): [held]]))
+        #expect(pick(lineup, .ST_C)?.player == id("Rival Striker"))
+    }
+
+    @Test func aFactorCloseToOneDoesNot() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let held = Adjustment(kind: .savedForLater, factor: 0.99, reason: "kept fresher for the cup final")
+        let lineup = try selector.select(adjusted(request(squad(rival)), every: [id("Striker"): [held]]))
+        let st = try #require(pick(lineup, .ST_C))
+        #expect(st.player == id("Striker"))
+        #expect(st.value == st.rating.value * st.fitness.product * 0.99)
+        #expect(st.adjustments == [held])
+        #expect(lineup.omissions.isEmpty)
+    }
+
+    @Test func aCostIsSubtractedInRatingPoints() throws {
+        let players = changing("Striker", in: squad()) { $0.condition = 0.90 }
+        let cost = Adjustment(kind: .consecutiveStarts, cost: 2.5, reason: "a fourth start in a row")
+        let lineup = try selector.select(adjusted(request(players), every: [id("Striker"): [cost]]))
+        let st = try #require(lineup.picks.first { $0.player == id("Striker") })
+        #expect(abs(st.value - (st.rating.value * st.fitness.product - 2.5)) < 1e-9)
+
+        // A negative cost is a bonus.
+        let bonus = Adjustment(kind: .needsSharpness, cost: -1.5, reason: "needs minutes for sharpness")
+        let raised = try selector.select(adjusted(request(players), every: [id("Striker"): [bonus]]))
+        let boosted = try #require(raised.picks.first { $0.player == id("Striker") })
+        #expect(abs(boosted.value - (boosted.rating.value * boosted.fitness.product + 1.5)) < 1e-9)
+    }
+
+    @Test func aSlotAdjustmentAppliesOnlyInThatSlot() throws {
+        let base = request(squad())
+        let st = try #require(pick(try selector.select(base), .ST_C))
+        let boost = Adjustment(kind: .development, factor: 1.5, reason: "learning the goalkeeper's role")
+
+        let elsewhere = try #require(pick(try selector.select(adjusted(base, slots: [id("Striker"): [.GK: [boost]]])), .ST_C))
+        #expect(elsewhere.player == id("Striker"))
+        #expect(elsewhere.value == st.value)
+        #expect(elsewhere.adjustments.isEmpty)
+        #expect(elsewhere.reasons == st.reasons)
+
+        let here = try #require(pick(try selector.select(adjusted(base, slots: [id("Striker"): [.ST_C: [boost]]])), .ST_C))
+        #expect(here.value == st.value * 1.5)
+        #expect(here.adjustments == [boost])
+    }
+
+    @Test func anAdjustmentNeverLeavesASlotEmpty() throws {
+        // Eleven players for eleven slots: the only goalkeeper must play, however costly.
+        let cost = Adjustment(kind: .savedForLater, cost: 1_000, reason: "kept back for the cup final")
+        let lineup = try selector.select(adjusted(request(squad()), every: [id("Goalkeeper"): [cost]]))
+        #expect(lineup.unfilled.isEmpty)
+        #expect(lineup.picks.count == 11)
+        let gk = try #require(pick(lineup, .GK))
+        #expect(gk.player == id("Goalkeeper"))
+        #expect(gk.value < 0)
+        #expect(abs(gk.value - (gk.rating.value - 1_000)) < 1e-9)
+    }
+
+    @Test func adjustmentReasonsAppearOnThePickInKindOrder() throws {
+        let players = changing("Striker", in: squad()) { $0.condition = 0.90 }
+        let saved = Adjustment(kind: .savedForLater, reason: "kept fresher for the cup final")
+        let loaned = Adjustment(kind: .loanedIn, reason: "on loan from Wallingford")
+        let streak = Adjustment(kind: .consecutiveStarts, reason: "a fourth start in a row")
+        let savedHere = Adjustment(kind: .savedForLater, reason: "kept back from striker duty")
+        let chosen = adjusted(request(players, overrides: [.ST_C: id("Striker")]),
+                              every: [id("Striker"): [saved, loaned]],
+                              slots: [id("Striker"): [.ST_C: [savedHere, streak]]])
+        let st = try #require(pick(try selector.select(chosen), .ST_C))
+        #expect(st.adjustments == [loaned, streak, saved, savedHere])
+        #expect(Array(st.reasons.dropFirst()) == [
+            "Condition 90% (×0.94)",
+            "on loan from Wallingford", "a fourth start in a row", "kept fresher for the cup final", "kept back from striker duty",
+            "Chosen by you",
+        ])
+    }
+
+    @Test func projectedFitnessIsLabelledAsProjected() throws {
+        let players = changing("Striker", in: squad()) { $0.condition = 0.90; $0.sharpness = 0.75; $0.jadedness = 300 }
+        let projected = try #require(pick(try selector.select(adjusted(request(players), projected: true)), .ST_C))
+        #expect(Array(projected.reasons.dropFirst())
+            == ["Projected condition 90% (×0.94)", "Projected sharpness 75% (×0.92)", "Projected jadedness 300 (×0.90)"])
+        let today = try #require(pick(try selector.select(request(players)), .ST_C))
+        #expect(Array(today.reasons.dropFirst()) == ["Condition 90% (×0.94)", "Sharpness 75% (×0.92)", "Jadedness 300 (×0.90)"])
+        #expect(projected.value == today.value)
+    }
+
+    @Test func anIdealPlayerLeftOutByAnAdjustmentSaysWhy() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let held = Adjustment(kind: .savedForLater, factor: 0.90, reason: "kept fresher for the cup final")
+        let base = request(squad(rival))
+        let lineup = try selector.select(adjusted(base, every: [id("Striker"): [held]]))
+        let omission = try #require(lineup.omissions.first)
+        #expect(lineup.omissions.count == 1)
+        #expect(omission.player == id("Striker") && omission.slot == .ST_C)
+        #expect(omission.cause == .heldBack([.savedForLater]))
+        #expect(omission.reason == "Left out: kept fresher for the cup final")
+
+        // Several, in Kind order; one that neither scales him down nor costs him is not named.
+        let streak = Adjustment(kind: .consecutiveStarts, cost: 0.5, reason: "a fourth start in a row")
+        let neutral = Adjustment(kind: .loanedIn, reason: "on loan from Wallingford")
+        let several = try selector.select(adjusted(base, every: [id("Striker"): [held, neutral]], slots: [id("Striker"): [.ST_C: [streak]]]))
+        #expect(several.omissions.first?.cause == .heldBack([.consecutiveStarts, .savedForLater]))
+        #expect(several.omissions.first?.reason == "Left out: a fourth start in a row; kept fresher for the cup final")
+
+        // An adjustment in another slot does not explain his omission from his ideal slot.
+        let tired = changing("Striker", in: squad(rival)) { $0.condition = 0.86 }
+        let otherSlot = try selector.select(adjusted(request(tired), slots: [id("Striker"): [.GK: [held]]]))
+        guard case .lowerMatchDayValue = otherSlot.omissions.first?.cause else {
+            Issue.record("expected lowerMatchDayValue, got \(String(describing: otherSlot.omissions.first?.cause))"); return
+        }
+        // An exclusion keeps its cause.
+        let injured = try selector.select(adjusted(request(changing("Striker", in: squad(rival)) { $0.isInjured = true }),
+                                                   every: [id("Striker"): [held]]))
+        #expect(injured.omissions.first?.cause == .excluded(.injured))
+        // So does a displacement by an override.
+        let overridden = try selector.select(adjusted(request(squad(rival), overrides: [.ST_C: id("Rival Striker")]),
+                                                      every: [id("Striker"): [Adjustment(kind: .savedForLater, factor: 0.99, reason: "x")]]))
+        #expect(overridden.omissions.first?.cause == .displacedByOverride(by: [id("Rival Striker")]))
+    }
+
+    @Test func anOverrideBeatsAnAdjustment() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let held = Adjustment(kind: .savedForLater, cost: 1_000, reason: "kept back for the cup final")
+        let base = adjusted(request(squad(rival)), every: [id("Striker"): [held]])
+        try #require(pick(try selector.select(base), .ST_C)?.player == id("Rival Striker"))
+
+        var chosen = base
+        chosen.overrides = [.ST_C: id("Striker")]
+        let lineup = try selector.select(chosen)
+        let st = try #require(pick(lineup, .ST_C))
+        #expect(st.player == id("Striker"))
+        #expect(st.isOverride)
+        #expect(st.adjustments == [held])
+        #expect(st.value < 0)
+        #expect(Array(st.reasons.suffix(2)) == ["kept back for the cup final", "Chosen by you"])
+        #expect(lineup.omissions.isEmpty)
+    }
 }
 
 private extension Lineup {
