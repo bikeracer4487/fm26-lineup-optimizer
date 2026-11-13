@@ -88,9 +88,9 @@ struct ScreenView: View {
         switch screen {
         case .squad: SquadScreen(model: model)
         case .tactics: TacticsScreen(model: model, startingSlot: tacticSlot)
-        case .fixtures: placeholder("No fixtures yet. Add the next few matches and how much each one matters.")
+        case .fixtures: FixturesScreen(model: model)
         case .matchSelection: placeholder("No lineup yet. A lineup needs a squad, a tactic and the next fixture.")
-        case .settings: placeholder("No settings yet.")
+        case .settings: SettingsScreen(model: model)
         }
     }
 

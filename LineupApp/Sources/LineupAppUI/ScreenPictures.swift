@@ -44,6 +44,24 @@ public enum ScreenPictures {
         }
     }
 
+    /// Draws the fixture editor on its own, as its sheet shows it, for a new fixture in `model`, in light and in
+    /// dark: "fixtures-editor-light.png" and "fixtures-editor-dark.png". A sheet is not drawn with the screen
+    /// under it, so the editor is drawn as a window of its own.
+    @MainActor public static func writeFixtureEditor(model: AppModel, to directory: URL) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let name = "fixtures-editor-\(suffix).png"
+            let editor = FixtureEditor(model: model, draft: model.newFixtureDraft()) {}
+                .tint(Theme.Colour.hoopBlue)
+            let png = try draw(editor, size: Theme.Layout.fixtureEditorSize, appearance: appearance, name: name)
+            do {
+                try png.write(to: directory.appendingPathComponent(name), options: .atomic)
+            } catch {
+                throw PictureError.couldNotWrite(name, underlying: error)
+            }
+        }
+    }
+
     /// Hosts `view` in a window that is never shown, lays it out and returns it as PNG data.
     @MainActor static func draw(_ view: some View, size: CGSize, appearance: NSAppearance.Name, name: String) throws -> Data {
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),

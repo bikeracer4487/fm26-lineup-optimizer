@@ -118,6 +118,24 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model five days on, on 18 November, with a lineup confirmed for the first fixture (the starters of
+    /// the last sample lineup) and none for the second, so one fixture before today is confirmed and one is not.
+    @MainActor public static func modelWithPastFixtures(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        guard model.fixtures.count >= 2, let first = model.fixtures.first, var record = model.history.last else {
+            throw SampleDataError(description: "The sample model has too few fixtures or no confirmed lineup.")
+        }
+        // Nothing confirms a lineup yet, so the record is added to the history directly.
+        record.lineup.fixture = first.id
+        record.lineup.date = first.date
+        model.history.append(record)
+        model.save(.history)
+        var settings = model.settings
+        settings.currentDate = Day(year: 2026, month: 11, day: 18)!
+        model.update(settings)
+        return model
+    }
+
     /// A model with nothing in it, on a new temporary directory, whose clipboard is empty.
     @MainActor public static func emptyModel() -> AppModel {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("lineup-empty-\(UUID().uuidString)")

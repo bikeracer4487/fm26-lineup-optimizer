@@ -13,7 +13,10 @@
 //                                              "squad-failed-…", "squad-imported-…"), and the Tactics screen
 //                                              empty and with a tactic that has a problem ("tactics-empty-…",
 //                                              "tactics-problem-…"). The Tactics editor is drawn with a slot
-//                                              selected, and "tactics-…" with an unsaved change.
+//                                              selected, and "tactics-…" with an unsaved change. The Fixtures
+//                                              screen is drawn empty ("fixtures-empty-…"), five days on with one
+//                                              past fixture confirmed and one not ("fixtures-past-…"), and its
+//                                              editor on its own for a new fixture ("fixtures-editor-…").
 
 import AppKit
 import Foundation
@@ -67,7 +70,7 @@ func fail(_ message: String) -> Never {
 
 /// Which state of the sample data to start from.
 enum SampleState {
-    case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange
+    case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange, pastFixtures
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -80,6 +83,7 @@ enum SampleState {
         case .afterImport: return try SampleData.modelAfterImport(repositoryRoot: url)
         case .tacticProblem: return try SampleData.modelWithTacticProblem(repositoryRoot: url)
         case .unsavedTacticChange: return try SampleData.modelWithUnsavedTacticChange(repositoryRoot: url)
+        case .pastFixtures: return try SampleData.modelWithPastFixtures(repositoryRoot: url)
         }
     } catch {
         fail("\(error)")
@@ -108,7 +112,10 @@ enum SampleState {
             try ScreenPictures.write(model: sampleModel(root, .unsavedTacticChange), to: directory, size: size,
                                      screens: [.tactics], tacticSlot: TacticSlot(.AM_L, in: .inPossession))
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size, variant: "empty",
-                                     screens: [.squad, .tactics])
+                                     screens: [.squad, .tactics, .fixtures])
+            try ScreenPictures.write(model: sampleModel(root, .pastFixtures), to: directory, size: size,
+                                     variant: "past", screens: [.fixtures])
+            try ScreenPictures.writeFixtureEditor(model: sampleModel(root), to: directory)
             // The striker nothing turns into, selected out of possession.
             try ScreenPictures.write(model: sampleModel(root, .tacticProblem), to: directory, size: size,
                                      variant: "problem", screens: [.tactics],

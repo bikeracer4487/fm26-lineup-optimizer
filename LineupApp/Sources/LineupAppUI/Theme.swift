@@ -149,6 +149,23 @@ public enum Theme {
         public static let nameFieldWidth: CGFloat = 240
         /// The height of a row of controls, kept whether it holds menus or a sentence, so what is below it stays put.
         public static let controlRowHeight: CGFloat = 24
+        /// The sheet that adds or edits a fixture.
+        public static let fixtureEditorSize = CGSize(width: 460, height: 300)
+        /// The widest a setting's control runs, so a slider is not stretched across a wide window.
+        public static let settingControlWidth: CGFloat = 360
+        /// The field for the club's name or the path to FMRTE's settings file.
+        public static let settingFieldWidth: CGFloat = 440
+    }
+
+    // MARK: Badges
+
+    /// A small label in an importance's colour: its words in the colour, on a faint fill of it, so the words read in
+    /// both appearances whatever the colour's lightness.
+    public enum Badge {
+        public static let fillOpacity: Double = 0.16
+        public static let horizontalPadding: CGFloat = 7
+        public static let verticalPadding: CGFloat = 2
+        public static let cornerRadius: CGFloat = 4
     }
 
     // MARK: Pitch
@@ -209,9 +226,9 @@ public enum Theme {
 
     // MARK: Tables
 
-    /// Column widths for the squad table, chosen so its ten columns fit beside the sidebar at the default
-    /// window size. Number columns are as narrow as their headings allow; the name and status columns are the
-    /// only ones that grow, and share what a wider window gives.
+    /// Column widths for the tables. The squad table's are chosen so its ten columns fit beside the sidebar at the
+    /// default window size: number columns are as narrow as their headings allow; the name and status columns are
+    /// the only ones that grow, and share what a wider window gives.
     public enum TableColumnWidth {
         public static let nameMinimum: CGFloat = 140
         public static let nameIdeal: CGFloat = 176
@@ -225,5 +242,15 @@ public enum Theme {
         public static let jadedness: CGFloat = 64
         public static let statusMinimum: CGFloat = 120
         public static let statusIdeal: CGFloat = 220
+
+        /// The fixtures table. The opponent and tactic columns share what a wider window gives.
+        public static let fixtureDate: CGFloat = 90
+        public static let opponentMinimum: CGFloat = 140
+        public static let opponentIdeal: CGFloat = 220
+        public static let importance: CGFloat = 90
+        public static let tacticMinimum: CGFloat = 120
+        public static let tacticIdeal: CGFloat = 200
+        public static let fixtureState: CGFloat = 160
+        public static let fixtureActions: CGFloat = 120
     }
 }

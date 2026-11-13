@@ -16,6 +16,11 @@ public enum LiveEnvironment {
         URL.applicationSupportDirectory.appendingPathComponent("FMRTE27/config.json")
     }
 
+    /// `fmrteConfigFile` with the home folder written as "~".
+    public static var fmrteConfigFileForDisplay: String {
+        NSString(string: fmrteConfigFile.path).abbreviatingWithTildeInPath
+    }
+
     public static func make() -> AppEnvironment {
         AppEnvironment(
             today: { today() },

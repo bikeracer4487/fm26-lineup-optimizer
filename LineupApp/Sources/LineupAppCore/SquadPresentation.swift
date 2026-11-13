@@ -21,18 +21,6 @@ extension Squad {
     }
 }
 
-/// Days as the screens write them, the same in every locale.
-public enum DayText {
-    private static let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
-    /// "13 Nov".
-    public static func short(_ day: Day) -> String {
-        // `Day.iso` is always YYYY-MM-DD.
-        let parts = day.iso.split(separator: "-").map { Int($0)! }
-        return "\(parts[2]) \(months[parts[1] - 1])"
-    }
-}
-
 /// One fact about a player's availability or standing, in the words the squad table shows.
 public enum PlayerStatus: Equatable, Sendable {
     case outOnLoan(to: String)
@@ -233,7 +221,7 @@ extension AppModel {
 
     /// "imported 13 Nov", or "not imported yet".
     public func importedText(for squad: Squad) -> String {
-        self.squad.importedOn[squad].map { "imported \(DayText.short($0))" } ?? "not imported yet"
+        self.squad.importedOn[squad].map { "imported \(DayText.dayAndMonth($0))" } ?? "not imported yet"
     }
 
     /// The report of an import that worked. Names come from the squad as imported, and removed players' names

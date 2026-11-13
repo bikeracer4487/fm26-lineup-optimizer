@@ -23,12 +23,6 @@ private func player(
         #expect(Squad.allCases.map(\.displayName) == ["First team", "U21s", "U18s"])
         #expect(Squad.allCases.map(\.importButtonTitle) == ["Import first team", "Import U21s", "Import U18s"])
     }
-
-    @Test func aDayIsWrittenAsDayAndShortMonth() {
-        #expect(DayText.short(Day(year: 2026, month: 11, day: 13)!) == "13 Nov")
-        #expect(DayText.short(Day(year: 2027, month: 1, day: 5)!) == "5 Jan")
-        #expect(DayText.short(Day(year: 2027, month: 12, day: 31)!) == "31 Dec")
-    }
 }
 
 @Suite struct PlayerStatusTests {
