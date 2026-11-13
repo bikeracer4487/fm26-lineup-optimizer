@@ -1,5 +1,5 @@
 {
-  "version": "FM27-v1 (harvestgreen22 preview-build data; Fm-Match-Lab cross-check), from docs/Research/fm27-attribute-weights-and-role-thresholds.md, recommendation D",
+  "version": "FM27-v2 (harvestgreen22 preview-build data; Fm-Match-Lab cross-check), from docs/Research/fm27-attribute-weights-and-role-thresholds.md, recommendation D; positional emphasis comes from the FM26 position tables (spec 8.4) in place of the research's speculative position multipliers",
   "outfieldBaseWeights": {
     "Pace": 0.1668, "Acceleration": 0.1351, "Stamina": 0.1219, "Jumping Reach": 0.0938,
     "Anticipation": 0.0691, "Strength": 0.0657, "Work Rate": 0.0618, "Concentration": 0.0500,
@@ -15,20 +15,6 @@
     "Heading": [1.04, 0.27, 0.00]
   },
   "curveBands": [[1, 6], [6, 12], [12, 18]],
-  "positionMultipliers": {
-    "D (C)": {"Jumping Reach": 1.5, "Heading": 1.5, "Strength": 1.25, "Finishing": 0, "Long Shots": 0, "Dribbling": 0.5},
-    "D (L)": {"Stamina": 1.25, "Finishing": 0.5, "Long Shots": 0.5, "Heading": 0.5},
-    "D (R)": {"Stamina": 1.25, "Finishing": 0.5, "Long Shots": 0.5, "Heading": 0.5},
-    "WB (L)": {"Stamina": 1.25, "Finishing": 0.5, "Long Shots": 0.5, "Heading": 0.5},
-    "WB (R)": {"Stamina": 1.25, "Finishing": 0.5, "Long Shots": 0.5, "Heading": 0.5},
-    "DM": {"Finishing": 0.5, "Heading": 0.75},
-    "M (C)": {"Finishing": 0.5, "Heading": 0.75},
-    "M (L)": {"Jumping Reach": 0.75, "Heading": 0.5, "Dribbling": 1.5, "Finishing": 1.25},
-    "M (R)": {"Jumping Reach": 0.75, "Heading": 0.5, "Dribbling": 1.5, "Finishing": 1.25},
-    "AM (L)": {"Jumping Reach": 0.75, "Heading": 0.5, "Dribbling": 1.5, "Finishing": 1.25},
-    "AM (C)": {"Jumping Reach": 0.75, "Heading": 0.5, "Dribbling": 1.5, "Finishing": 1.25},
-    "AM (R)": {"Jumping Reach": 0.75, "Heading": 0.5, "Dribbling": 1.5, "Finishing": 1.25},
-    "ST (C)": {"Finishing": 2.0, "Dribbling": 1.25, "Heading": 1.25}
-  },
+  "positionalEmphasis": {"share": 0.5, "cap": 2.0},
   "goalkeeper": {"carriedOverTableWithout": ["Kicking"]}
 }

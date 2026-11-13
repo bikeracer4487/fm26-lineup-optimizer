@@ -6,11 +6,13 @@ import Testing
     let carried = try! RatingProfile.carriedOver()
     let fm27 = try! RatingProfile.fm27EngineTests()
 
-    @Test func bothProfilesLoadAndAreListedCarriedOverFirst() throws {
+    @Test func theStandardProfileIsTheFM27EngineTests() throws {
+        let standard = try RatingProfile.standard()
+        #expect(standard.id == "fm27-engine-tests")
+        #expect(standard.tables.positionWeights == fm27.tables.positionWeights)
         let all = try RatingProfile.all()
-        #expect(all.count == 2)
-        #expect(all.map(\.id) == ["carried-over", "fm27-engine-tests"])
-        #expect(all.map(\.name) == ["Carried over from FM26", "FM27 engine tests"])
+        #expect(all.map(\.id) == ["fm27-engine-tests", "carried-over"])
+        #expect(all.map(\.name) == ["FM27 engine tests", "Carried over from FM26"])
     }
 
     @Test func fm27PositionWeightsSumToOneForAllFourteenPositions() {
@@ -23,17 +25,49 @@ import Testing
         }
     }
 
-    @Test func fm27StrikerWeightsFinishingTwiceAsHeavilyAsItsBaseShare() throws {
-        let st = try #require(fm27.tables.positionWeights[.striker])
-        let finishing = try #require(st[.finishing]), pace = try #require(st[.pace])
-        #expect(abs(finishing / pace - (0.0281 * 2.0) / 0.1668) < 1e-9)
-        let dc = try #require(fm27.tables.positionWeights[.defenderCentral])
-        #expect(dc[.finishing] == nil && dc[.longShots] == nil)
+    @Test func positionalEmphasisFollowsTheFM26Tables() throws {
+        // Each as a ratio to Natural Fitness, which FM26 weighs nowhere (multiplier 1), so normalising cancels.
+        func ratio(_ attribute: Attribute, at position: Position) throws -> Double {
+            let weights = try #require(fm27.tables.positionWeights[position])
+            return try #require(weights[attribute]) / #require(weights[.naturalFitness])
+        }
+        // FM26: Finishing 0.100 for strikers against an average of 0.235 / 13, so r is capped at 2.
+        #expect(abs(try ratio(.finishing, at: .striker) - (0.0281 * 1.5) / 0.0432) < 1e-9)
+        // FM26 gives centre-backs no Finishing weight: r = 0.
+        #expect(abs(try ratio(.finishing, at: .defenderCentral) - (0.0281 * 0.5) / 0.0432) < 1e-9)
+        // r = 0.115 × 13 / 0.80 = 1.86875, under the cap.
+        #expect(abs(try ratio(.jumpingReach, at: .defenderCentral) - (0.0938 * 1.434375) / 0.0432) < 1e-9)
         // An attribute the research weighs at 0 appears in no outfield table.
         for position in Position.allCases where position != .goalkeeper {
             #expect(fm27.tables.positionWeights[position]?[.passing] == nil, "\(position.rawValue)")
             #expect(fm27.tables.positionWeights[position]?[.tackling] == nil, "\(position.rawValue)")
         }
+    }
+
+    @Test func withAShareOfZeroEveryOutfieldPositionHasTheBaseTable() throws {
+        let flat = try RatingProfile.fm27(positionalEmphasisShare: 0)
+        let base = try #require(RatingProfile.fm27ResourceObject()["outfieldBaseWeights"] as? [String: Double])
+        let total = base.sorted { $0.key < $1.key }.reduce(0) { $0 + $1.value }
+        for position in Position.allCases where position != .goalkeeper {
+            let weights = try #require(flat.tables.positionWeights[position])
+            #expect(weights.count == base.count, "\(position.rawValue)")
+            for (name, weight) in base {
+                let attribute = try #require(Attribute(catalogName: name))
+                #expect(abs((weights[attribute] ?? 0) - weight / total) < 1e-12, "\(position.rawValue) \(name)")
+            }
+        }
+        // The emphasis is what differs: the standard profile's centre-back table is not the base table.
+        #expect(flat.tables.positionWeights[.defenderCentral] != fm27.tables.positionWeights[.defenderCentral])
+        #expect(flat.tables.positionWeights[.goalkeeper] == fm27.tables.positionWeights[.goalkeeper])
+    }
+
+    @Test func aShareOfOneDropsAnAttributeFM26DoesNotWeighAtAPosition() throws {
+        let full = try RatingProfile.fm27(positionalEmphasisShare: 1)
+        // FM26 gives centre-backs no Finishing weight, so with share 1 the multiplier is 0 and the weight is dropped.
+        #expect(full.tables.positionWeights[.defenderCentral]?[.finishing] == nil)
+        #expect(full.tables.positionWeights[.striker]?[.finishing] != nil)
+        // At the standard share it stays, at half.
+        #expect(fm27.tables.positionWeights[.defenderCentral]?[.finishing] != nil)
     }
 
     @Test func fm27GoalkeeperWeightsDropKicking() throws {
@@ -94,6 +128,7 @@ import Testing
         }
         #expect(fm27.evidence.contains { $0.evidence == .fm27Measured })
         #expect(fm27.evidence.contains { $0.evidence == .derived })
+        #expect(fm27.evidence.contains { $0.name == "positionalEmphasis" && $0.evidence == .carriedOverFM26 })
         #expect(fm27.evidence.allSatisfy { $0.source.contains("docs/Research/fm27-attribute-weights-and-role-thresholds.md") })
         #expect(carried.evidence.allSatisfy { $0.evidence == .carriedOverFM26 })
     }
@@ -124,7 +159,15 @@ import Testing
         #expect(fm27.tables.thresholds.isEmpty)
         let curveSource = fm27.evidence.first { $0.name == "curveSlopes" }?.source ?? ""
         #expect(curveSource.contains("third party") && curveSource.contains("standard error"))
-        #expect(fm27.evidence.first { $0.name == "positionMultipliers" }?.evidence == .derived)
+        #expect(!fm27.evidence.contains { $0.name == "positionMultipliers" })
+        let emphasis = fm27.evidence.first { $0.name == "positionalEmphasis" }
+        #expect(emphasis?.evidence == .carriedOverFM26)
+        #expect(emphasis?.source.contains("rating_tables.json") == true && emphasis?.source.contains("spec 8.4") == true)
+        for name in ["positionalEmphasisShare", "positionalEmphasisCap"] {
+            let entry = fm27.evidence.first { $0.name == name }
+            #expect(entry?.evidence == .derived, "\(name)")
+            #expect(entry?.source.contains("spec 8.4") == true, "\(name)")
+        }
         #expect(fm27.evidence.first { $0.name == "goalkeeperWeights" }?.evidence == .carriedOverFM26)
     }
 
@@ -132,9 +175,7 @@ import Testing
 
     /// The library's `rating_profile_fm27.json` as a JSON object.
     private func bundledObject() throws -> [String: Any] {
-        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().appendingPathComponent("Sources/LineupEngine/Resources/rating_profile_fm27.json")
-        return try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        try RatingProfile.fm27ResourceObject()
     }
 
     private func load(_ object: [String: Any]) throws -> RatingProfile {
@@ -159,36 +200,28 @@ import Testing
             + "attribute the engine does not know in outfieldBaseWeights: JumpingReach")
     }
 
-    @Test func aNegativeMultiplierFailsToLoad() throws {
+    @Test(arguments: [("share", -0.1), ("share", 1.1), ("cap", 0.5)])
+    func aBadPositionalEmphasisFailsToLoad(_ field: String, _ value: Double) throws {
         var object = try bundledObject()
-        var multipliers = try #require(object["positionMultipliers"] as? [String: [String: Double]])
-        multipliers["DM"]?["Heading"] = -0.5
-        object["positionMultipliers"] = multipliers
-        #expect(throws: CatalogError.malformed(reason: "the FM27 rating profile gives Heading a negative multiplier at DM")) {
-            try load(object)
+        var emphasis = try #require(object["positionalEmphasis"] as? [String: Double])
+        emphasis[field] = value
+        object["positionalEmphasis"] = emphasis
+        do {
+            _ = try load(object)
+            Issue.record("expected a load failure for \(field) \(value)")
+        } catch let error as CatalogError {
+            let text = ErrorDescriptions.describe(error)
+            #expect(text.contains("positionalEmphasis"), "\(text)")
+            #expect(text.contains(field), "\(text)")
         }
     }
 
-    @Test func aMultiplierForAnAttributeWithNoBaseWeightFailsToLoad() throws {
+    @Test func positionalEmphasisAtItsLimitsLoads() throws {
         var object = try bundledObject()
-        var multipliers = try #require(object["positionMultipliers"] as? [String: [String: Double]])
-        multipliers["ST (C)"]?["Passing"] = 1.5
-        object["positionMultipliers"] = multipliers
-        #expect(throws: CatalogError.malformed(
-            reason: "the FM27 rating profile has a ST (C) multiplier for Passing, which has no outfield base weight")) {
-            try load(object)
-        }
-    }
-
-    @Test func aMultiplierOfZeroDropsTheAttributeAtThatPositionOnly() throws {
-        var object = try bundledObject()
-        var multipliers = try #require(object["positionMultipliers"] as? [String: [String: Double]])
-        multipliers["DM"]?["Pace"] = 0
-        object["positionMultipliers"] = multipliers
-        let loaded = try load(object)
-        #expect(loaded.tables.positionWeights[.defensiveMidfielder]?[.pace] == nil)
-        #expect(loaded.tables.positionWeights[.midfielderCentral]?[.pace] != nil)
-        #expect(fm27.tables.positionWeights[.defensiveMidfielder]?[.pace] != nil)
+        object["positionalEmphasis"] = ["share": 1.0, "cap": 1.0]
+        #expect(throws: Never.self) { try load(object) }
+        object["positionalEmphasis"] = ["share": 0.0, "cap": 1.0]
+        #expect(throws: Never.self) { try load(object) }
     }
 
     @Test func goalkeepersAreScaledWithoutCurves() {
@@ -197,16 +230,6 @@ import Testing
             #expect(fm27.scaled(v, for: .agility, at: .defenderCentral) == fm27.scaled(v, for: .agility))
         }
         #expect(fm27.scaled(9, for: .agility) != 8.0 / 19)
-    }
-
-    @Test func anUnknownPositionFailsToLoadAndNamesIt() throws {
-        var object = try bundledObject()
-        var multipliers = try #require(object["positionMultipliers"] as? [String: [String: Double]])
-        multipliers["DC"] = ["Heading": 1.5]
-        object["positionMultipliers"] = multipliers
-        #expect(throws: CatalogError.malformed(reason: "the FM27 rating profile has a multiplier for an unknown position, DC")) {
-            try load(object)
-        }
     }
 
     @Test func aSlopeListThatDoesNotMatchTheBandsFailsToLoad() throws {

@@ -45,11 +45,13 @@ import Testing
     }
 
     @Test func realSquadsProduceAFullExplainedLineupUnderTheFM27Profile() throws {
-        let (lineup, book) = try realLineup(try RatingProfile.fm27EngineTests())
+        let (lineup, book) = try realLineup(try RatingProfile.standard())
         expectSound(lineup, book)
-        // Three picks pinned from the real data. Pace and Acceleration weigh heavily here, so the quicker Marsh
-        // (12 and 12) leads the line over Taylor (8 and 8). Humphries, the natural left back, leads D_L clearly
-        // (match-day value 86.1 to Nelson's 74.2). The stand-in goalkeeper is a near tie, so it is not pinned.
+        // Three picks pinned from the real data, each with a clear margin under the FM26 positional emphasis.
+        // Pace and Acceleration weigh heavily here, so the quicker Marsh (12 and 12) leads the line over Taylor
+        // (8 and 8): match-day value 95.0 to 89.0. McEachran keeps AM_C: moving Marsh there and Taylor up front
+        // would total 5.7 less. Humphries, the natural left back, leads D_L clearly (86.0 to Nelson's 74.0).
+        // The stand-in goalkeeper is a near tie, so it is not pinned.
         let bySlot = Dictionary(uniqueKeysWithValues: lineup.picks.map { ($0.slot, $0.name) })
         #expect(bySlot[.AM_C] == "Zac McEachran")
         #expect(bySlot[.ST_C] == "Tyrone Marsh")

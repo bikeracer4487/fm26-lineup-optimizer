@@ -8,16 +8,17 @@ let usage = """
 usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tactic.json>
                          [--first-team <paste.tsv>] [--u21 <paste.tsv>] [--u18 <paste.tsv>]
                          [--importance high|medium|low|sharpness] [--own-club <name>]
-                         [--profile carried-over|fm27|both]
+                         [--profile fm27|carried-over|both]
        At least one of --first-team, --u21, --u18 is required.
-       --profile picks the rating profile; the default, both, prints the lineup under each and compares them.
+       --profile picks the rating profile: fm27 (FM27 engine tests, the default), carried-over (carried over from FM26),
+       or both, which prints the FM27 lineup, then the carried-over one, and compares them.
 """
 
-/// The rating profiles `--profile` can name, by the ids `RatingProfile` gives them.
+/// The rating profiles `--profile` can name, by the ids `RatingProfile` gives them, in the order they print.
 let profileChoices: [String: [String]] = [
-    "carried-over": ["carried-over"],
     "fm27": ["fm27-engine-tests"],
-    "both": ["carried-over", "fm27-engine-tests"],
+    "carried-over": ["carried-over"],
+    "both": ["fm27-engine-tests", "carried-over"],
 ]
 
 struct Options {
@@ -26,7 +27,7 @@ struct Options {
     var pastes: [(squad: Squad, path: String)] = []
     var importance = Importance.high
     var ownClub: String?
-    var profileIDs = profileChoices["both"]!
+    var profileIDs = profileChoices["fm27"]!
 }
 
 struct UsageError: Error { let reason: String }
@@ -52,7 +53,7 @@ func parse(_ arguments: [String]) throws -> Options {
             options.importance = importance
         case "--profile":
             guard let ids = profileChoices[value] else {
-                throw UsageError(reason: "unknown profile '\(value)' (use carried-over, fm27 or both)")
+                throw UsageError(reason: "unknown profile '\(value)' (use fm27, carried-over or both)")
             }
             options.profileIDs = ids
         default: options.pastes.append((squads[flag]!, value))
@@ -109,7 +110,11 @@ do {
     }
     let ownClub = book.ownClub(override: options.ownClub)
     let catalog = try RoleCatalog.fm27()
-    let profiles = try RatingProfile.all().filter { options.profileIDs.contains($0.id) }
+    let available = try RatingProfile.all()
+    let profiles = options.profileIDs.map { id in
+        guard let profile = available.first(where: { $0.id == id }) else { fail("no rating profile has the id \(id)") }
+        return profile
+    }
     let request = SelectionRequest(tactic: tactic, players: book.allPlayers, ownClub: ownClub, importance: options.importance,
                                    isNextFixture: true, overrides: [:], rejected: [])
     let results = try profiles.map { profile in

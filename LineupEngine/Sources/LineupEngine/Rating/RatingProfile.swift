@@ -9,7 +9,7 @@ public enum RoleScoreRule: Sendable, Equatable {
 }
 
 /// One complete set of rating weights: the tables, how each attribute is scaled, and how the scores blend.
-/// The engine takes a profile explicitly; there is no default.
+/// The engine takes a profile explicitly; `standard()` is the one a caller uses when it has no reason to choose.
 public struct RatingProfile: Sendable {
     public let id: String
     public let name: String
@@ -37,10 +37,15 @@ public struct RatingProfile: Sendable {
         position == .goalkeeper ? (Double(value) - 1) / 19 : scaled(value, for: attribute)
     }
 
-    /// Both profiles, carried over first.
+    /// The owner's default (13 November 2026): the FM27 engine-tests profile.
+    public static func standard() throws -> RatingProfile {
+        try fm27EngineTests()
+    }
+
+    /// Both profiles, the standard profile first.
     public static func all() throws -> [RatingProfile] {
         let carried = try carriedOver()
-        return [carried, try fm27EngineTests(carriedOver: carried)]
+        return [try fm27EngineTests(carriedOver: carried), carried]
     }
 
     // MARK: - Carried over from FM26
@@ -73,7 +78,8 @@ public struct RatingProfile: Sendable {
 
     private static let research = "docs/Research/fm27-attribute-weights-and-role-thresholds.md"
 
-    /// Weights and curves from FM27 engine tests, built from `rating_profile_fm27.json`.
+    /// Weights and curves from FM27 engine tests, built from `rating_profile_fm27.json`, with positional emphasis
+    /// and the goalkeeper table from the carried-over FM26 tables.
     public static func fm27EngineTests() throws -> RatingProfile {
         try fm27EngineTests(carriedOver: carriedOver())
     }
@@ -85,14 +91,16 @@ public struct RatingProfile: Sendable {
         return try fm27EngineTests(json: Data(contentsOf: url), carriedOver: carriedOver)
     }
 
-    /// Builds the FM27 profile from the resource's numbers; the goalkeeper table comes from `carriedOver`.
+    /// Builds the FM27 profile from the resource's numbers; the goalkeeper table, and how each attribute's weight
+    /// differs between outfield positions, come from `carriedOver`.
     static func fm27EngineTests(json: Data, carriedOver: RatingProfile) throws -> RatingProfile {
         struct File: Decodable {
             struct Goalkeeper: Decodable { let carriedOverTableWithout: [String] }
+            struct PositionalEmphasis: Decodable { let share: Double; let cap: Double }
             let outfieldBaseWeights: [String: Double]
             let curveSlopesPerPoint: [String: [Double]]
             let curveBands: [[Int]]
-            let positionMultipliers: [String: [String: Double]]
+            let positionalEmphasis: PositionalEmphasis
             let goalkeeper: Goalkeeper
         }
         let file: File
@@ -104,30 +112,29 @@ public struct RatingProfile: Sendable {
         if let negative = inFixedOrder(base).first(where: { $0.value < 0 }) {
             throw CatalogError.malformed(reason: "the FM27 rating profile gives \(negative.key.rawValue) a negative base weight")
         }
-        var multipliers: [Position: [Attribute: Double]] = [:]
-        for (code, table) in file.positionMultipliers.sorted(by: { $0.key < $1.key }) {
-            guard let position = Position(rawValue: code), position != .goalkeeper else {
-                throw CatalogError.malformed(reason: "the FM27 rating profile has a multiplier for an unknown position, \(code)")
-            }
-            let factors = try attributes(table, in: "positionMultipliers \(code)")
-            // A multiplier of 0 is legal: it drops the attribute at that position.
-            for (attribute, factor) in inFixedOrder(factors) {
-                guard base[attribute] != nil else {
-                    throw CatalogError.malformed(reason: "the FM27 rating profile has a \(code) multiplier for \(attribute.rawValue), "
-                                                     + "which has no outfield base weight")
-                }
-                guard factor >= 0 else {
-                    throw CatalogError.malformed(reason: "the FM27 rating profile gives \(attribute.rawValue) a negative multiplier at \(code)")
-                }
-            }
-            multipliers[position] = factors
+        let share = file.positionalEmphasis.share, cap = file.positionalEmphasis.cap
+        guard (0...1).contains(share) else {
+            throw CatalogError.malformed(reason: "the FM27 rating profile's positionalEmphasis share must be from 0 to 1, not \(share)")
+        }
+        guard cap >= 1 else {
+            throw CatalogError.malformed(reason: "the FM27 rating profile's positionalEmphasis cap must be at least 1, not \(cap)")
         }
 
+        // Positional emphasis from the FM26 tables (spec 8.4). For each attribute with an FM27 base weight, r is its
+        // FM26 weight at the position over its mean FM26 weight across the thirteen outfield positions (a position
+        // without it counts 0; r is 1 when FM26 weighs it nowhere), and the multiplier is (1 - share) + share × min(r, cap).
+        // Sums run over positions in sorted order, so the result repeats exactly.
+        let outfield = Position.allCases.filter { $0 != .goalkeeper }.sorted { $0.rawValue < $1.rawValue }
+        let fm26 = carriedOver.tables.positionWeights
+        let mean26 = Dictionary(uniqueKeysWithValues: inFixedOrder(base).map { attribute, _ in
+            (attribute, outfield.reduce(0) { $0 + (fm26[$1]?[attribute] ?? 0) } / Double(outfield.count))
+        })
         var weights: [Position: [Attribute: Double]] = [:]
-        for position in Position.allCases where position != .goalkeeper {
-            let factors = multipliers[position] ?? [:]
+        for position in outfield {
             let scaled = inFixedOrder(base).compactMap { attribute, weight -> (Attribute, Double)? in
-                let w = weight * (factors[attribute] ?? 1)
+                let mean = mean26[attribute] ?? 0
+                let r = mean == 0 ? 1 : (fm26[position]?[attribute] ?? 0) / mean
+                let w = weight * ((1 - share) + share * min(r, cap))
                 return w > 0 ? (attribute, w) : nil
             }
             weights[position] = try normalised(scaled, for: position)
@@ -159,7 +166,17 @@ public struct RatingProfile: Sendable {
              "\(harvest); the per-band table was derived by a third party from harvestgreen22's data and its standard error "
                 + "is two to three points per band; \(research), section 2 and recommendation D; the optional 1.5 to 2 times "
                 + "uplift for Anticipation and Concentration is not applied"),
-            ("positionMultipliers", .derived, "\(research), recommendation D; the research labels them speculative (untested)"),
+            ("positionalEmphasis", .carriedOverFM26,
+             "the FM26 position weight tables in rating_tables.json (rating_calculator.py POSITION_WEIGHTS, branch "
+                + "customizable-tactics), used only for how an attribute's weight differs between positions; owner's decision of "
+                + "13 November 2026 to fill FM27 gaps from FM26 research; spec 8.4; replaces the position multipliers of "
+                + "\(research), recommendation D, which the research labels speculative (untested)"),
+            ("positionalEmphasisShare", .derived,
+             "spec 8.4; with the cap, it keeps every multiplier between 0.5 and 1.5; replaces the speculative multipliers of "
+                + "\(research), recommendation D"),
+            ("positionalEmphasisCap", .derived,
+             "spec 8.4; with the share, it keeps every multiplier between 0.5 and 1.5; replaces the speculative multipliers of "
+                + "\(research), recommendation D"),
             ("goalkeeperWeights", .carriedOverFM26,
              "rating_calculator.py POSITION_WEIGHTS GK (branch customizable-tactics) without Kicking, renormalised; \(research), "
                 + "recommendation D (no FM27 goalkeeper data; Fm-Match-Lab found Kicking slightly negative)"),

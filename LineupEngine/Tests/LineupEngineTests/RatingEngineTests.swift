@@ -154,6 +154,29 @@ import Testing
         #expect(carriedGap < fm27Gap)
     }
 
+    @Test func positionalEmphasisChangesWhoRatesHigherAtAPosition() throws {
+        // Identical but for Heading and Dribbling, rated in a role that reads neither: only the position score differs.
+        // FM26 weighs Heading at centre-back and Dribbling out wide, so the emphasis favours the header at D (C)
+        // and the dribbler at AM (L). FM27's base table weighs Dribbling above Heading, so without it the dribbler leads at both.
+        let header = Player.fixture(name: "Header", attributes: [.heading: 18, .dribbling: 1],
+                                    familiarity: [dc: 20, aml: 20])
+        let dribbler = Player.fixture(name: "Dribbler", attributes: [.heading: 1, .dribbling: 18],
+                                      familiarity: [dc: 20, aml: 20])
+        let standard = RatingEngine(profile: try RatingProfile.standard(), parameters: .fm27, configuration: .fm27)
+        let flat = RatingEngine(profile: try RatingProfile.fm27(positionalEmphasisShare: 0), parameters: .fm27, configuration: .fm27)
+        for position in [dc, aml] {
+            let roles = [probe(position).ipRole, probe(position).oopRole]
+            try #require(Set(roles.flatMap { $0.key + $0.preferable }).isDisjoint(with: [.heading, .dribbling]))
+        }
+        func gap(_ engine: RatingEngine, at position: Position) throws -> Double {
+            try engine.rating(for: header, in: probe(position)).value - engine.rating(for: dribbler, in: probe(position)).value
+        }
+        #expect(try gap(standard, at: dc) > 0)
+        #expect(try gap(standard, at: aml) < 0)
+        #expect(try gap(flat, at: dc) < 0)
+        #expect(try gap(flat, at: aml) < 0)
+    }
+
     @Test func curvesScaleThePositionScore() throws {
         // Pace 9 sits higher on the FM27 Pace curve than on the straight line; with the curve removed the score falls.
         let p = Player.fixture(attributes: [.pace: 9], familiarity: [dc: 20])
