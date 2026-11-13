@@ -63,6 +63,14 @@ public struct RatingTables: Sendable {
             }
         }
         positionWeights = weights
+        // A key whose position half matches no table key would never be looked up, silently.
+        let tableKeys = Set(Position.allCases.map(\.tableKey))
+        for key in file.consensusBonuses.keys.sorted() {
+            let parts = key.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2, tableKeys.contains(String(parts[0])) else {
+                throw CatalogError.malformed(reason: "rating tables have a consensus bonus for an unknown position: \(key)")
+            }
+        }
         consensusBonuses = try file.consensusBonuses.reduce(into: [:]) { $0[$1.key] = try attributes($1.value, owner: $1.key) }
         thresholds = try file.thresholds.reduce(into: [:]) { $0[$1.key] = try attributes($1.value, owner: $1.key) }
     }

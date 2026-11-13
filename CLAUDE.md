@@ -10,13 +10,17 @@ The FM26 lineup optimizer is being rebuilt as a native Mac app for Football Mana
 
 ## New code: `LineupEngine/`
 
-A Swift package (Swift 6, macOS 26, Swift Testing). It holds the domain model, importer, rating core, selection and advisors. It has no UI and no file-system dependencies beyond what it is handed. No third-party run-time dependencies.
+A Swift package (Swift 6, macOS 26, Swift Testing). It holds the domain model, the FMRTE importer, the rating core and lineup selection; the advisors (rest, training, player removal) are not built yet. It has no UI and no file-system dependencies beyond what it is handed. No third-party run-time dependencies.
 
 Test it with:
 
     cd LineupEngine && swift test
 
 Run one suite or test with `swift test --filter <name>`. Test output must be clean: no build warnings.
+
+- `lineup-cli`, in the package, reads a grids snapshot, a tactic and squad pastes, and prints the explained lineup (`swift run lineup-cli select ...`; usage at the top of `LineupEngine/Sources/lineup-cli/main.swift`).
+- `tools/capture_fmrte_paste.sh` saves the clipboard and FMRTE's grid layouts as test fixtures; `tools/export_rating_reference.py` rewrites the rating tables and Python reference data (tracked files).
+- How each captured paste was taken: `LineupEngine/Tests/LineupEngineTests/Fixtures/captures/README.md`.
 
 Rules for the engine:
 

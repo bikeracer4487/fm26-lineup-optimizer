@@ -31,6 +31,32 @@ import Testing
         }
     }
 
+    @Test(arguments: ["AM (C)|Advanced Playmaker", "XX|Probe", "Probe", "|Probe"])
+    func aConsensusBonusForAnUnknownPositionFailsToLoadAndNamesTheKey(_ key: String) throws {
+        let json = try bundledText().replacingOccurrences(of: #""consensusBonuses": {"#,
+                                                          with: #""consensusBonuses": {"\#(key)": {"Pace": 0.01}, "#)
+        try #require(json.contains(key))
+        #expect(throws: CatalogError.malformed(reason: "rating tables have a consensus bonus for an unknown position: \(key)")) {
+            try RatingTables(json: Data(json.utf8))
+        }
+    }
+
+    @Test func aConsensusBonusForEachKnownPositionLoads() throws {
+        for position in Position.allCases {
+            let key = "\(position.tableKey)|Probe"
+            let json = try bundledText().replacingOccurrences(of: #""consensusBonuses": {"#,
+                                                              with: #""consensusBonuses": {"\#(key)": {"Pace": 0.01}, "#)
+            #expect(try RatingTables(json: Data(json.utf8)).consensusBonuses[key] == [.pace: 0.01])
+        }
+    }
+
+    /// The library's `rating_tables.json` as text.
+    private func bundledText() throws -> String {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Sources/LineupEngine/Resources/rating_tables.json")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
     @Test func anUnknownPositionFailsToLoad() {
         let json = #"{"positionWeights":{"XX":{"Pace":1.0}},"consensusBonuses":{},"thresholds":{}}"#
         #expect(throws: CatalogError.self) { try RatingTables(json: Data(json.utf8)) }

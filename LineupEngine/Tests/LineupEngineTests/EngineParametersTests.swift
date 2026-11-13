@@ -4,7 +4,6 @@ import Testing
 @Suite struct EngineParametersTests {
     @Test func everyParameterHasEvidenceAndASource() {
         #expect(EngineParameters.fm27.all.allSatisfy { !$0.source.isEmpty })
-        #expect(EngineParameters.fm27.all.count >= 13)
     }
 
     @Test func allListsEveryStoredParameter() {

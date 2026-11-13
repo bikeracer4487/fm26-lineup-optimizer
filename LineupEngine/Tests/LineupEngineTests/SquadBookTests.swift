@@ -153,6 +153,28 @@ private func book(_ capture: String, squad: Squad) throws -> SquadBook {
         #expect(book.warnings(override: nil).isEmpty)
     }
 
+    @Test func aMoveLeavesTheSourceSquadsPreviousImportAlone() {
+        var book = SquadBook()
+        let firstU21 = [Player.fixture(name: "A", squad: .u21), .fixture(name: "B", squad: .u21)]
+        book.apply(result(firstU21), to: .u21)
+        book.apply(result([.fixture(name: "A", squad: .u21), .fixture(name: "C", squad: .u21)]), to: .u21)
+        let previous = book.previous[.u21]
+        #expect(previous == firstU21)
+        book.apply(result([.fixture(name: "A")]), to: .firstTeam)
+        #expect(book.current[.u21]?.map(\.name) == ["C"])
+        #expect(book.previous[.u21] == previous)
+        #expect(book.previous[.firstTeam] == nil)
+    }
+
+    @Test func aMovedInPlayerIsNotReportedAsChanged() {
+        var book = SquadBook()
+        book.apply(result([.fixture(name: "A", condition: 1.0)]), to: .u21)
+        book.apply(result([.fixture(name: "B")]), to: .firstTeam)
+        let change = book.apply(result([.fixture(name: "A", condition: 0.9), .fixture(name: "B", condition: 0.9)]), to: .firstTeam)
+        #expect(change.movedIn == [PlayerID(key: "a")])
+        #expect(change.changed == [PlayerID(key: "b")])
+    }
+
     @Test func changedListsPlayersWhoseFieldsDiffer() {
         var book = SquadBook()
         book.apply(result([.fixture(name: "A", condition: 1.0), .fixture(name: "B")]), to: .firstTeam)

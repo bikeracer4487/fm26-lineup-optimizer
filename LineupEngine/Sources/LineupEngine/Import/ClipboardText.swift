@@ -5,10 +5,12 @@ public enum ClipboardText {
     /// A paste with fewer fields than this cannot be a player grid.
     static let minimumFieldCount = 20
 
+    /// Lines end in CRLF, LF or a lone CR. A line of only tabs and spaces is blank and dropped.
     public static func rows(_ text: String) throws -> [[String]] {
+        // Swift reads CRLF as one Character, so the three endings are three distinct separators.
         let lines = text
-            .split(omittingEmptySubsequences: false, whereSeparator: { $0 == "\n" || $0 == "\r\n" })
-            .map { $0.hasSuffix("\r") ? String($0.dropLast()) : String($0) }
+            .split(omittingEmptySubsequences: false, whereSeparator: { $0 == "\r\n" || $0 == "\n" || $0 == "\r" })
+            .map(String.init)
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
 
         guard let first = lines.first else { throw ImportError.emptyClipboard }

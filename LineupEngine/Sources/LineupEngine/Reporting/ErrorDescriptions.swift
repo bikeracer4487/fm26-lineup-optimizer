@@ -16,12 +16,14 @@ public enum ErrorDescriptions {
 
     public static func describe(_ error: ImportError) -> String {
         switch error {
-        case .configUnreadable(let reason): "The grids file cannot be read: \(reason)"
-        case .noPlayerGrids: "The grids file has no player grids"
+        case .configUnreadable(let reason): "FMRTE's configuration cannot be read: \(reason)"
+        case .noPlayerGrids: "FMRTE's configuration has no player grids"
         case .emptyClipboard: "The paste is empty"
         case .notAnFMRTEGrid(let reason): "The paste is not an FMRTE grid: \(reason)"
         case .raggedRows(let expected, let row, let found):
             "Row \(row) of the paste has \(found) cells where \(expected) were expected"
+        case .noGridFits(let count, let violations) where violations.isEmpty:
+            "No saved FMRTE grid has \(count) columns, as the paste has; FMRTE may not have saved its current layout yet"
         case .noGridFits(let count, let violations):
             "No grid fits the paste's \(count) columns (misfit cells per grid: "
                 + violations.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ") + ")"
@@ -52,7 +54,9 @@ public enum ErrorDescriptions {
         case .unmapped(let slot): "\(slot.rawValue) has no out-of-possession slot to turn into"
         case .mappingTargetInactive(let from, let to): "\(from.rawValue) turns into \(to.rawValue), which has no out-of-possession role"
         case .duplicateMappingTarget(let slot): "More than one slot turns into \(slot.rawValue)"
-        case .unknownRole(let phase, let slot, let role): "\(role) is not a \(phaseName(phase)) role for \(slot.rawValue)"
+        case .unknownRole(let phase, let slot, let role): "\(role) is not an \(phaseName(phase)) role for \(slot.rawValue)"
+        case .goalkeeperMappedToOutfield(let slot):
+            "GK turns into \(slot.rawValue) out of possession; the goalkeeper must stay in goal"
         }
     }
 

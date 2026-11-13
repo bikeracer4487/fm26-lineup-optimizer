@@ -105,7 +105,7 @@ public enum Importer {
                 return value
             }
             func money(_ path: String) throws -> Int {
-                guard let value = Int(cell(path).filter(\.isASCII).filter(\.isNumber)) else { throw fail(path) }
+                guard let value = GridDetector.moneyValue(cell(path)) else { throw fail(path) }
                 return value
             }
             func rating(_ path: String) throws -> Int {

@@ -42,6 +42,35 @@ struct TacticTests {
         #expect(try problems(t) == [.missingGoalkeeper(.inPossession)])
     }
 
+    @Test func aGoalkeeperWhoTurnsIntoAnOutfielderIsReported() throws {
+        var t = try sample()
+        t.mapping[.GK] = .D_CL
+        t.mapping[.D_CL] = .GK
+        #expect(try problems(t) == [.goalkeeperMappedToOutfield(.D_CL)])
+    }
+
+    @Test func aGoalkeeperWhoStaysInGoalIsNotReported() throws {
+        var t = try sample()
+        t.mapping[.D_L] = .D_R
+        t.mapping[.D_R] = .D_L
+        #expect(try problems(t).isEmpty)
+        #expect(try t.assignments(catalog: RoleCatalog.fm27()).first { $0.slot == .GK }?.oopSlot == .GK)
+    }
+
+    @Test func missingOutOfPossessionGoalkeeperIsReported() throws {
+        var t = try sample()
+        t.outOfPossession[.GK] = nil
+        t.outOfPossession[.D_C] = "Centre-Back"
+        t.mapping[.GK] = .D_C
+        #expect(try problems(t) == [.missingGoalkeeper(.outOfPossession), .goalkeeperMappedToOutfield(.D_C)])
+    }
+
+    @Test func anUnknownOutOfPossessionRoleIsReported() throws {
+        var t = try sample()
+        t.outOfPossession[.D_CL] = "Ball-Playing Centre-Back"
+        #expect(try problems(t) == [.unknownRole(.outOfPossession, .D_CL, "Ball-Playing Centre-Back")])
+    }
+
     @Test func unmappedSlotIsReported() throws {
         var t = try sample()
         t.mapping[.AM_C] = nil

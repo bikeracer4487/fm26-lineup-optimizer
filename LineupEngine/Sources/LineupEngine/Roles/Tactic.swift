@@ -16,8 +16,8 @@ public struct Tactic: Equatable, Codable, Sendable {
         self.mapping = mapping
     }
 
-    /// Every problem that stops this tactic being used: slot counts, then goalkeepers, then
-    /// per-slot problems in `SlotID` order.
+    /// Every problem that stops this tactic being used: slot counts, then goalkeepers (missing in
+    /// either phase, then turning into an outfield slot), then per-slot problems in `SlotID` order.
     public func problems(catalog: RoleCatalog) -> [TacticProblem] {
         var found: [TacticProblem] = []
         let phases: [(Phase, [SlotID: String])] = [(.inPossession, inPossession), (.outOfPossession, outOfPossession)]
@@ -26,6 +26,9 @@ public struct Tactic: Equatable, Codable, Sendable {
         }
         for (phase, roles) in phases where roles[.GK] == nil {
             found.append(.missingGoalkeeper(phase))
+        }
+        if inPossession[.GK] != nil, let target = mapping[.GK], target != .GK {
+            found.append(.goalkeeperMappedToOutfield(target))
         }
         var claimed = Set<SlotID>()
         var reportedDuplicates = Set<SlotID>()
@@ -75,6 +78,8 @@ public enum TacticProblem: Equatable, Sendable {
     case mappingTargetInactive(from: SlotID, to: SlotID)
     case duplicateMappingTarget(SlotID)
     case unknownRole(Phase, SlotID, String)
+    /// The in-possession goalkeeper turns into this outfield slot out of possession.
+    case goalkeeperMappedToOutfield(SlotID)
 }
 
 public struct TacticError: Error, Equatable {

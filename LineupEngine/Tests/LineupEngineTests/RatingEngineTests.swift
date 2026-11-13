@@ -105,6 +105,22 @@ import Testing
         return SlotAssignment(slot: .AM_C, ipPosition: position, ipRole: ip, oopSlot: .AM_C, oopPosition: position, oopRole: oop)
     }
 
+    @Test func theInPossessionWeightFollowsTheOutOfPossessionPosition() throws {
+        func slot(ip: Position, ipSlot: SlotID, oop: Position, oopSlot: SlotID) -> SlotAssignment {
+            SlotAssignment(slot: ipSlot, ipPosition: ip, ipRole: probe(ip).ipRole,
+                           oopSlot: oopSlot, oopPosition: oop, oopRole: probe(oop).oopRole)
+        }
+        let p = Player.fixture(familiarity: [.wingBackLeft: 20, .midfielderLeft: 20])
+        // Defensive in possession, not out of it: the other-phase weight, 0.7.
+        let wingBackToMidfield = try engine.rating(for: p, in: slot(ip: .wingBackLeft, ipSlot: .WB_L, oop: .midfielderLeft, oopSlot: .M_L))
+        #expect(wingBackToMidfield.ipWeight == 0.7)
+        // Not defensive in possession, defensive out of it: the defensive weight, 0.5.
+        let midfieldToWingBack = try engine.rating(for: p, in: slot(ip: .midfielderLeft, ipSlot: .M_L, oop: .wingBackLeft, oopSlot: .WB_L))
+        #expect(midfieldToWingBack.ipWeight == 0.5)
+        let r = midfieldToWingBack
+        #expect(abs(r.value - 2 * (0.5 * r.inPossession.value + 0.5 * r.outOfPossession.value)) < 1e-9)
+    }
+
     @Test func fm27DoesNotRoundAndTheReferenceDoes() throws {
         let attrs: [Attribute: Int] = [.passing: 13, .pace: 7, .tackling: 16, .vision: 4, .strength: 11, .jumpingReach: 17]
         let p = Player.fixture(attributes: attrs, familiarity: [dc: 20], currentAbility: 100)

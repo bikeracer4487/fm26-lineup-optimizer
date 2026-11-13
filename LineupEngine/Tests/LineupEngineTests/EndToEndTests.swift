@@ -21,6 +21,12 @@ import Testing
         for p in book.allPlayers where p.isInjured { #expect(!names.contains(p.name)) }
         #expect(lineup.picks.allSatisfy { !$0.reasons.isEmpty })
 
+        // Three picks pinned from the real data.
+        let bySlot = Dictionary(uniqueKeysWithValues: lineup.picks.map { ($0.slot, $0.name) })
+        #expect(bySlot[.AM_C] == "Zac McEachran")
+        #expect(bySlot[.D_L] == "Evan Humphries")
+        #expect(bySlot[.GK] == "Matty Taylor")
+
         // Both goalkeepers are unavailable (Maxted injured, Treml on loan), so an outfield player stands in.
         let keeper = try #require(lineup.picks.first { $0.slot == .GK })
         #expect(keeper.warnings.contains { if case .outOfPosition(.inPossession, _) = $0 { true } else { false } })

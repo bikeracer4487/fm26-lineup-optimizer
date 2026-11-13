@@ -9,7 +9,7 @@ import Testing
                      "ambiguousGrid", "missingColumns", "invalidValue", "unexpectedScale", "malformed", "unknownAttribute",
                      "unknownRole", "missingAttribute", "missingFamiliarity", "keyNotFound", "valueNotFound", "typeMismatch",
                      "dataCorrupted", "wrongSlotCount", "missingGoalkeeper", "unmapped", "mappingTargetInactive",
-                     "duplicateMappingTarget", "TacticError", "problems"]
+                     "duplicateMappingTarget", "goalkeeperMappedToOutfield", "TacticError", "problems"]
         for name in names { #expect(!text.contains("\(name)("), sourceLocation: sourceLocation) }
     }
 
@@ -24,10 +24,22 @@ import Testing
         #expect(missing.contains("G") && missing.contains("CA, PA"))
         #expect(ErrorDescriptions.describe(ImportError.ambiguousGrid(keys: ["B", "A"])).contains("A, B"))
         #expect(ErrorDescriptions.describe(ImportError.unexpectedScale(column: "Condition")).contains("Condition"))
+        #expect(ErrorDescriptions.describe(ImportError.configUnreadable(reason: "not valid JSON"))
+            == "FMRTE's configuration cannot be read: not valid JSON")
+        #expect(ErrorDescriptions.describe(ImportError.noPlayerGrids) == "FMRTE's configuration has no player grids")
         for error in [ImportError.invalidValue(player: "P", column: "C", value: "v"), .emptyClipboard, .noPlayerGrids,
                       .configUnreadable(reason: "r"), .notAnFMRTEGrid(reason: "r"), .noGridFits(fieldCount: 1, violationsByGrid: ["G": 1])] {
             expectPlain(ErrorDescriptions.describe(error))
         }
+    }
+
+    @Test func aPasteNoSavedGridIsWideEnoughForSaysSo() {
+        let none = ErrorDescriptions.describe(ImportError.noGridFits(fieldCount: 97, violationsByGrid: [:]))
+        #expect(none == "No saved FMRTE grid has 97 columns, as the paste has; FMRTE may not have saved its current layout yet")
+        #expect(!none.contains("misfit"))
+        let some = ErrorDescriptions.describe(ImportError.noGridFits(fieldCount: 98, violationsByGrid: ["GridA": 3]))
+        #expect(some == "No grid fits the paste's 98 columns (misfit cells per grid: GridA 3)")
+        expectPlain(none)
     }
 
     @Test func catalogErrorsNameTheirSpecifics() {
@@ -50,12 +62,19 @@ import Testing
             (.mappingTargetInactive(from: .D_L, to: .D_R), ["D_L", "D_R"]),
             (.duplicateMappingTarget(.GK), ["GK"]),
             (.unknownRole(.inPossession, .AM_C, "Wizard"), ["Wizard", "AM_C", "in-possession"]),
+            (.goalkeeperMappedToOutfield(.D_CL), ["GK", "D_CL", "goal"]),
         ]
         for (problem, parts) in problems {
             let text = ErrorDescriptions.describe(problem)
             for part in parts { #expect(text.contains(part), "\(text) should contain \(part)") }
             expectPlain(text)
         }
+        #expect(ErrorDescriptions.describe(TacticProblem.unknownRole(.inPossession, .AM_C, "Wizard"))
+            == "Wizard is not an in-possession role for AM_C")
+        #expect(ErrorDescriptions.describe(TacticProblem.unknownRole(.outOfPossession, .AM_C, "Wizard"))
+            == "Wizard is not an out-of-possession role for AM_C")
+        #expect(ErrorDescriptions.describe(TacticProblem.goalkeeperMappedToOutfield(.D_CL))
+            == "GK turns into D_CL out of possession; the goalkeeper must stay in goal")
         let all = ErrorDescriptions.describe(TacticError(problems: problems.map(\.0)))
         #expect(all.contains("Wizard") && all.contains("10 slots"))
         expectPlain(all)

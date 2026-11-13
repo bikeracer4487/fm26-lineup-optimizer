@@ -160,6 +160,69 @@ private func quoted(_ value: String) -> String { "\"\(value)\"" }
         #expect(r.warnings.contains(.indistinguishable("Brayden Daniel")))
     }
 
+    @Test func injuredAndBannedEachLandInTheirOwnField() throws {
+        let injured = try column("IsInjured"), banned = try column("IsBanned")
+        let r = try importU21 { rows in
+            var rows = rows
+            rows[0][injured] = quoted("True"); rows[0][banned] = quoted("False")
+            rows[1][injured] = quoted("False"); rows[1][banned] = quoted("True")
+            return rows
+        }
+        let daniel = try #require(r.players.first { $0.name == "Brayden Daniel" })
+        #expect(daniel.isInjured && !daniel.isBanned)
+        let treml = try #require(r.players.first { $0.name == "Max Treml" })
+        #expect(!treml.isInjured && treml.isBanned)
+    }
+
+    @Test func aBlankClubCellGivesNoClub() throws {
+        let club = try column("Contract.Club")
+        let r = try importU21 { rows in
+            var rows = rows
+            rows[0][club] = quoted("")
+            rows[1][club] = quoted("  ")
+            return rows
+        }
+        #expect(r.players.first { $0.name == "Brayden Daniel" }?.club == nil)
+        #expect(r.players.first { $0.name == "Max Treml" }?.club == nil)
+        #expect(r.players.first { $0.name == "Tyrae Njogu" }?.club == "Oxford City")
+    }
+
+    @Test(arguments: [("£1,234.50", 1235), ("£1.234", 1234), ("£1,234", 1234), ("£1,234.49", 1234)])
+    func aWageWithPenceIsRoundedToTheNearestPound(cell: String, pounds: Int) throws {
+        let wage = try column("Contract.WagePerWeek"), price = try column("AskingPrice")
+        let r = try importU21 { rows in
+            var rows = rows
+            rows[0][wage] = quoted(cell)
+            rows[0][price] = quoted(cell)
+            return rows
+        }
+        let daniel = try #require(r.players.first { $0.name == "Brayden Daniel" })
+        #expect(daniel.wagePerWeek == pounds && daniel.askingPrice == pounds)
+    }
+
+    @Test func aWageWithMoreThanTwoDecimalPlacesStopsTheImport() throws {
+        let wage = try column("Contract.WagePerWeek")
+        #expect(throws: ImportError.invalidValue(player: "Brayden Daniel", column: "Contract.WagePerWeek", value: "£1.2345")) {
+            try importU21 { rows in
+                var rows = rows
+                rows[0][wage] = quoted("£1.2345")
+                return rows
+            }
+        }
+    }
+
+    @Test func jadednessBeyondAThousandImports() throws {
+        let jadedness = try column("Jadedness")
+        let r = try importU21 { rows in
+            var rows = rows
+            rows[0][jadedness] = quoted("2500")
+            rows[1][jadedness] = quoted("-1500")
+            return rows
+        }
+        #expect(r.players.first { $0.name == "Brayden Daniel" }?.jadedness == 2500)
+        #expect(r.players.first { $0.name == "Max Treml" }?.jadedness == -1500)
+    }
+
     @Test func blankConditionStopsTheImportAndNamesThePlayer() throws {
         let condition = try column("Condition")
         #expect(throws: ImportError.invalidValue(player: "Brayden Daniel", column: "Condition", value: "")) {

@@ -96,11 +96,13 @@ private func violations(_ column: String, _ value: String) -> Int {
     ("IsBanned", ["True", "False"], ["yes", ""]),
     ("Condition", ["0", "10000", "8167"], ["-1", "10001", "", "99.5"]),
     ("MatchSharpness", ["0", "10000"], ["-1", "10001", "abc"]),
-    ("Jadedness", ["-1000", "1000", "-122", "0"], ["-1001", "1001", "", "x"]),
+    // A signed 16-bit field in the game.
+    ("Jadedness", ["-32768", "32767", "-1001", "1001", "-122", "0"], ["-32769", "32768", "", "x", "1.5"]),
     ("Age", ["14", "60", "20"], ["13", "61", "", "x"]),
     ("CA", ["1", "200"], ["0", "201", ""]),
     ("PA", ["1", "200"], ["0", "201", ""]),
-    ("Contract.WagePerWeek", ["£500", "€1,200", "$12.000"], ["500", "£", "£abc", "", "£5 00x"]),
+    ("Contract.WagePerWeek", ["£500", "€1,200", "$12.000", "£1,234.50", "£1,234.5", "£1.234"],
+     ["500", "£", "£abc", "", "£5 00x", "£1.2345", "£1.", "£1.2.3", "£12.34.56", "£.50", "£1.23,4"]),
     ("AskingPrice", ["£25,250"], ["25,250", ""]),
     ("DisplayedName", ["Brayden Daniel", "R2D2 Jr"], ["", "12345"]),
     ("Contract.Club", ["", "Oxford City", "123"], []),
@@ -126,4 +128,16 @@ func typeRule(column: String, good: [String], bad: [String]) {
     let required = Set(GridDetector.requiredColumns)
     for attribute in Attribute.allCases { #expect(required.contains(attribute.fmrtePath)) }
     for position in Position.allCases { #expect(required.contains(position.fmrtePath)) }
+}
+
+@Test(arguments: [("£1,234.50", 1235), ("£1,234.49", 1234), ("£1,234.5", 1235), ("£1.234", 1234), ("£1,234", 1234),
+                  ("$12.000", 12000), ("€1.234.567", 1_234_567), ("£0.50", 1), ("£0.49", 0), ("£500", 500),
+                  ("£25,250", 25250), ("£1 234", 1234)])
+func moneyIsReadToTheNearestPound(cell: String, pounds: Int) {
+    #expect(GridDetector.moneyValue(cell) == pounds)
+}
+
+@Test(arguments: ["£1.2345", "£1.", "£1.2.3", "500", "£", "£.5"])
+func moneyThatIsNotAnAmountHasNoValue(cell: String) {
+    #expect(GridDetector.moneyValue(cell) == nil)
 }

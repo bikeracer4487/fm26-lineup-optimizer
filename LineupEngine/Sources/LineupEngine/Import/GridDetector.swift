@@ -7,12 +7,14 @@ public enum GridDetector {
     // Bounds that validate FMRTE's data format. They are not tuning values.
     static let ratingRange = 1...20
     static let conditionRange = 0...10000
-    static let jadednessRange = -1000...1000
+    /// Jadedness is a signed 16-bit field in the game.
+    static let jadednessRange = -32768...32767
     static let ageRange = 14...60
     static let abilityRange = 1...200
 
     static let currencySymbols: Set<Character> = ["£", "$", "€"]
-    /// Characters FMRTE puts between groups of digits in a money amount.
+    /// Characters FMRTE puts between groups of digits in a money amount. A full stop is one only
+    /// when three digits follow it; see `moneyValue`.
     static let thousandsSeparators: Set<Character> = [",", ".", " ", "\u{00A0}", "\u{202F}"]
 
     /// The one attribute whose FMRTE column can carry a currency symbol in front of the rating.
@@ -84,7 +86,7 @@ public enum GridDetector {
         case "Jadedness": return !isWholeNumber(cell, in: jadednessRange)
         case "Age": return !isWholeNumber(cell, in: ageRange)
         case "CA", "PA": return !isWholeNumber(cell, in: abilityRange)
-        case "Contract.WagePerWeek", "AskingPrice": return !isMoney(cell)
+        case "Contract.WagePerWeek", "AskingPrice": return moneyValue(cell) == nil
         case "DisplayedName": return cell.isEmpty || cell.allSatisfy(\.isASCIIDigit)
         default: return false
         }
@@ -97,12 +99,32 @@ public enum GridDetector {
         return range.contains(value)
     }
 
-    /// A currency symbol, then at least one digit, with only digits and thousands separators after.
-    private static func isMoney(_ cell: String) -> Bool {
-        guard let first = cell.first, currencySymbols.contains(first) else { return false }
-        let rest = cell.dropFirst()
-        return rest.contains(where: \.isASCIIDigit)
-            && rest.allSatisfy { $0.isASCIIDigit || thousandsSeparators.contains($0) }
+    /// The amount in whole pounds (or the cell's currency), or nil when the cell is not money: a
+    /// currency symbol, then digits and thousands separators. A full stop followed by exactly
+    /// three digits separates thousands; a full stop followed by one or two digits at the end is a
+    /// decimal point, and the amount is rounded to the nearest whole unit, a half rounding up.
+    static func moneyValue(_ cell: String) -> Int? {
+        guard let first = cell.first, currencySymbols.contains(first) else { return nil }
+        var whole = Substring(cell.dropFirst())
+        var fraction: Substring = ""
+        if let point = whole.lastIndex(of: ".") {
+            let after = whole[whole.index(after: point)...]
+            if (1...2).contains(after.count), after.allSatisfy(\.isASCIIDigit) {
+                fraction = after
+                whole = whole[..<point]
+            }
+        }
+        guard whole.contains(where: \.isASCIIDigit),
+              whole.allSatisfy({ $0.isASCIIDigit || thousandsSeparators.contains($0) }) else { return nil }
+        // Every full stop left must be followed by exactly three digits.
+        for point in whole.indices where whole[point] == "." {
+            let group = whole[whole.index(after: point)...].prefix { $0.isASCIIDigit }
+            guard group.count == 3 else { return nil }
+        }
+        guard let units = Int(String(whole.filter(\.isASCIIDigit))) else { return nil }
+        // One digit after the point is tenths: ".5" is 50 hundredths.
+        let hundredths = fraction.isEmpty ? 0 : Int(fraction.count == 1 ? fraction + "0" : String(fraction))!
+        return hundredths >= 50 ? units + 1 : units
     }
 }
 

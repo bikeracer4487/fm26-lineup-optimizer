@@ -60,8 +60,9 @@ struct RatingReference: Decodable {
         #expect(ref.cases.count > 400)
         for c in ref.cases {
             let r = try engine.rating(for: try c.builtPlayer, in: try c.assignment(catalog))
-            #expect(abs(r.inPossession.base - c.ipRating) <= 0.1001, "\(c.player) \(c.slot) IP")
-            #expect(abs(r.outOfPossession.base - c.oopRating) <= 0.1001, "\(c.player) \(c.slot) OOP")
+            // Every phase rating matches the Python exactly; only the combined value may differ by rounding.
+            #expect(abs(r.inPossession.base - c.ipRating) <= 1e-9, "\(c.player) \(c.slot) IP")
+            #expect(abs(r.outOfPossession.base - c.oopRating) <= 1e-9, "\(c.player) \(c.slot) OOP")
             #expect(abs(r.value - c.combinedRating) <= 0.2001, "\(c.player) \(c.slot)")
         }
     }

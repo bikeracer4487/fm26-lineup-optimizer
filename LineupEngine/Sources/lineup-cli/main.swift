@@ -100,6 +100,12 @@ do {
     output = Report.render(imports: imports, moves: moves, book: book, ownClub: ownClub, override: options.ownClub,
                            tactic: tactic, importance: options.importance, lineup: lineup)
 } catch {
-    fail(ErrorDescriptions.describe(error))
+    // The library describes FMRTE's configuration without knowing where it was read from.
+    let isConfigError = switch error as? ImportError {
+    case .configUnreadable?, .noPlayerGrids?: true
+    case .emptyClipboard?, .notAnFMRTEGrid?, .raggedRows?, .noGridFits?, .ambiguousGrid?, .missingColumns?,
+         .invalidValue?, .unexpectedScale?, nil: false
+    }
+    fail(ErrorDescriptions.describe(error) + (isConfigError ? " (read from \(options.grids!))" : ""))
 }
 print(output, terminator: "")
