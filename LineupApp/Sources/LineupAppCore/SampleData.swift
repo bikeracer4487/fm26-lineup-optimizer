@@ -125,7 +125,7 @@ public enum SampleData {
         guard model.fixtures.count >= 2, let first = model.fixtures.first, var record = model.history.last else {
             throw SampleDataError(description: "The sample model has too few fixtures or no confirmed lineup.")
         }
-        // Nothing confirms a lineup yet, so the record is added to the history directly.
+        // The record holds the last sample lineup's starters, not the planned ones, so it is added to the history directly.
         record.lineup.fixture = first.id
         record.lineup.date = first.date
         model.history.append(record)
@@ -151,7 +151,34 @@ public enum SampleData {
         return data
     }
 
+    /// A sample built and saved, with what the clipboard and FMRTE's settings file held at the end.
+    private struct Built {
+        let directory: URL
+        let clipboard: String?
+        let config: ScriptedInput.Config
+    }
+
+    /// The sample built from each repository root. Building plans the fixtures after every step, so it is done once
+    /// and its files are copied for each model asked for.
+    @MainActor private static var built: [URL: Built] = [:]
+
+    /// A model on a new temporary directory holding a copy of the sample's files, with the clipboard and FMRTE's
+    /// settings file as the sample's last import left them.
     @MainActor private static func build(repositoryRoot: URL) throws -> (model: AppModel, input: ScriptedInput) {
+        let sample = try built[repositoryRoot] ?? buildOnce(repositoryRoot: repositoryRoot)
+        built[repositoryRoot] = sample
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("lineup-sample-\(UUID().uuidString)")
+        do {
+            try FileManager.default.copyItem(at: sample.directory, to: directory)
+        } catch {
+            throw SampleDataError(description: "The sample data could not be copied to \(directory.path): \(error.localizedDescription)")
+        }
+        let input = ScriptedInput(today: date, clipboard: sample.clipboard, config: sample.config)
+        return (AppModel(store: Store(directory: directory), environment: input.environment), input)
+    }
+
+    /// Builds the sample on a temporary directory of its own, which `build` copies.
+    @MainActor private static func buildOnce(repositoryRoot: URL) throws -> Built {
         func data(_ path: String) throws -> Data { try fixture(path, under: repositoryRoot) }
         func decode<T: Decodable>(_ type: T.Type, _ path: String) throws -> T {
             do {
@@ -181,14 +208,16 @@ public enum SampleData {
             model.update(settings)
         }
 
-        let tactic = try decode(Tactic.self, "tactics/sample-4231.json")
-        let tacticID = model.addTactic(named: tactic.name)
-        model.update(StoredTactic(id: tacticID, tactic: tactic))
+        // The fixtures come before the tactic, so the fixtures are planned only once there is a tactic to plan them with.
         for fixture in try decode([SampleFixture].self, "plans/sample-fixtures.json") {
             model.addFixture(date: fixture.date, opponent: fixture.opponent, importance: fixture.importance)
         }
+        let tactic = try decode(Tactic.self, "tactics/sample-4231.json")
+        let tacticID = model.addTactic(named: tactic.name)
+        model.update(StoredTactic(id: tacticID, tactic: tactic))
 
-        // Nothing adds a confirmed lineup yet, so the history is saved directly and the model is loaded again.
+        // These matches have no saved fixture, so they cannot be confirmed: the history is saved directly, and the
+        // models made from these files load it.
         let names = Dictionary(model.players.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         let history = try decode([ConfirmedLineup].self, "plans/sample-history.json").map { lineup in
             ConfirmedRecord(
@@ -200,6 +229,6 @@ public enum SampleData {
         if let notice = model.notices.first {
             throw SampleDataError(description: "The sample data could not be built: \(notice.text)")
         }
-        return (AppModel(store: store, environment: input.environment), input)
+        return Built(directory: directory, clipboard: input.clipboard, config: input.config)
     }
 }

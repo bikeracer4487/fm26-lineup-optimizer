@@ -44,6 +44,7 @@ extension AppModel {
         state.importedOn[target] = settings.currentDate
         squad = state
         save(.squad)
+        replan()
 
         let onLoan = (state.book.current[target] ?? []).filter { player in
             switch state.book.loanStatus(of: player, override: settings.clubOverride) {

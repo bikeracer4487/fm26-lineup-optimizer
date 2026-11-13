@@ -15,6 +15,7 @@ extension AppModel {
             settings.primaryTacticID = stored.id
             save(.settings)
         }
+        replan()
         return stored.id
     }
 
@@ -27,6 +28,7 @@ extension AppModel {
         if tacticDrafts[tactic.id]?.tactic == tactic.tactic {
             tacticDrafts[tactic.id] = nil
         }
+        replan()
     }
 
     /// A copy of what the owner is looking at, the unsaved draft if there is one, named "<name> copy" (or
@@ -50,6 +52,7 @@ extension AppModel {
             tacticDrafts[copyID] = TacticDraft(copy)
         }
         save(.tactics)
+        replan()
         return copyID
     }
 
@@ -120,11 +123,12 @@ extension AppModel {
             save(.settings)
         }
         let affected = fixtures.filter { $0.tacticID == id }
-        guard !affected.isEmpty else { return }
+        guard !affected.isEmpty else { replan(); return }
         for index in fixtures.indices where fixtures[index].tacticID == id {
             fixtures[index].tacticID = nil
         }
         save(.fixtures)
+        replan()
 
         let matches = affected.map { "\($0.opponent) on \($0.date.iso)" }
         let list = matches.count == 1
@@ -143,6 +147,7 @@ extension AppModel {
         guard tactics.contains(where: { $0.id == id }) else { return }
         settings.primaryTacticID = id
         save(.settings)
+        replan()
     }
 
     /// The engine's sentence for each problem that stops the tactic being used.

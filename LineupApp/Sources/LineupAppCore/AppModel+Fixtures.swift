@@ -8,6 +8,7 @@ extension AppModel {
         fixtures.append(StoredFixture(id: id, date: date, opponent: opponent, importance: importance))
         fixtures.sort(by: Self.dateOrder)
         save(.fixtures)
+        replan()
         return id
     }
 
@@ -24,6 +25,7 @@ extension AppModel {
             history[record].lineup.date = fixture.date
             save(.history)
         }
+        replan()
     }
 
     /// Removes the fixture and any lineup confirmed for it.
@@ -34,12 +36,14 @@ extension AppModel {
             history.removeAll { $0.lineup.fixture == id }
             save(.history)
         }
+        replan()
     }
 
     /// Takes the settings as given; the planner reports any plan setting out of range.
     public func update(_ settings: AppSettings) {
         self.settings = settings
         save(.settings)
+        replan()
     }
 
     /// The fixture's own tactic while it is saved, else the primary.

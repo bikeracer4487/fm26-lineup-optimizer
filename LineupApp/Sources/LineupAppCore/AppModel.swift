@@ -63,9 +63,13 @@ public struct AppEnvironment: Sendable {
     public internal(set) var settings: AppSettings
     public internal(set) var notices: [Notice]
     public internal(set) var lastImport: ImportOutcome?
+    /// The plan for the saved fixtures, worked out again by every action that changes what it depends on.
+    public private(set) var planState: PlanState
     /// Unsaved changes to saved tactics, by tactic id: held only while the app is open, never written to disk.
     var tacticDrafts: [UUID: TacticDraft] = [:]
     public let catalog: RoleCatalog
+    /// The rating profile the plan is made with: the engine's standard one.
+    let profile: RatingProfile
 
     @ObservationIgnored let store: Store
     @ObservationIgnored let environment: AppEnvironment
@@ -80,6 +84,11 @@ public struct AppEnvironment: Sendable {
             fatalError("The engine's role list could not be loaded: the app was built without the engine's resources.")
         }
         self.catalog = catalog
+        do {
+            profile = try RatingProfile.standard()
+        } catch {
+            fatalError("The engine's rating profile could not be loaded: the app was built without the engine's resources.")
+        }
 
         // Files not on disk are written once loaded, so a later start does not report them missing.
         let missing = StoreFile.allCases.filter { !store.exists($0) }
@@ -96,7 +105,9 @@ public struct AppEnvironment: Sendable {
         self.notices = [settings.notice, tactics.notice, fixtures.notice, history.notice, squad.notice]
             .compactMap { $0 }.map(Notice.init(text:))
         self.lastImport = nil
+        self.planState = .needsSquad
         for file in missing { save(file) }
+        replan()
     }
 
     public func dismiss(_ notice: Notice) {
@@ -123,6 +134,12 @@ public struct AppEnvironment: Sendable {
             notices.append(Notice(text: "\(subject) could not be saved: \(error.localizedDescription) "
                 + "The change is kept while the app is open and is saved with the next change that succeeds."))
         }
+    }
+
+    /// Works the plan out again from the saved state. Every action that changes the squad, the saved tactics, the
+    /// fixtures, the history or the settings calls this after saving.
+    func replan() {
+        planState = workedOutPlan()
     }
 
     func notice(_ text: String) {

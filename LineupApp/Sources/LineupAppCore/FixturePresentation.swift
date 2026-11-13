@@ -141,6 +141,7 @@ extension AppModel {
                                           tacticID: draft.tacticID))
             fixtures.sort(by: Self.dateOrder)
             save(.fixtures)
+            replan()
             return id
         }
         guard var fixture = fixtures.first(where: { $0.id == id }) else { return nil }
