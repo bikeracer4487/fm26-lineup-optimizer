@@ -26,7 +26,7 @@ import Testing
         #expect(p.jadednessSteps.source.contains("JADEDNESS_THRESHOLDS") && p.jadednessSteps.source.contains("JADEDNESS_MULTIPLIERS"))
         #expect(p.jadednessAbove.source.contains("scoring_parameters.py") && p.jadednessAbove.source.contains("JADEDNESS_MULTIPLIERS"))
         #expect(p.conditionFloor.source.contains("fm_match_ready_selector.py"))
-        #expect(p.conditionFloor.source.contains("docs/Research/physical-condition.md"))
+        #expect(p.conditionFloor.source.contains("docs/Research/physical-condition-claude.md"))
         for source in [p.jadednessSteps.source, p.jadednessAbove.source, p.conditionFloor.source] {
             #expect(!source.contains("rating_calculator.py"), "\(source)")
         }

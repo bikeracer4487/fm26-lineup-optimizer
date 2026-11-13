@@ -191,7 +191,7 @@ public struct LineupSelector: Sendable {
     /// What the solver maximises and every explanation reports: the slot rating scaled by condition,
     /// sharpness and jadedness on the day.
     private func matchDayValue(_ rating: SlotRating, _ fitness: FitnessFactors) -> Double {
-        rating.value * fitness.condition * fitness.sharpness * fitness.jadedness
+        rating.value * fitness.product
     }
 
     /// A risk rule's exclusion, else `.rejected` if the manager rejected him, else nil.

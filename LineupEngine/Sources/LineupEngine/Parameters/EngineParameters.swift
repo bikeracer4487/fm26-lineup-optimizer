@@ -94,7 +94,7 @@ public struct EngineParameters: Sendable {
             conditionFloor: Parameter(
                 0.85, .carriedOverFM26,
                 source: "fm_match_ready_selector.py (\"NEVER field players below 85% condition\"; it cuts the rating below 85% "
-                    + "rather than leaving the player out); docs/Research/physical-condition.md (85% condition minimum for starting players)"),
+                    + "rather than leaving the player out); docs/Research/physical-condition-claude.md (85% condition minimum for starting players)"),
             jadedThreshold: Parameter(400, .fm27Observation, source: "\(fitnessSource); FM Lens labels players \"Jaded\" above 400"))
     }()
 

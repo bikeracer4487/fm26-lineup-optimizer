@@ -2,7 +2,7 @@ import Foundation
 
 /// A player's identity across imports: his name, normalised, with a potential ability, then a
 /// nationality, then (as a last resort) a row suffix when two players share a name. See
-/// `Importer` for one paste and `SquadBook.apply` for a name already used in another squad.
+/// `Importer` for one paste and `SquadBook.apply` for how a player keeps his key across imports.
 public struct PlayerID: Hashable, Codable, Sendable {
     public let key: String
 

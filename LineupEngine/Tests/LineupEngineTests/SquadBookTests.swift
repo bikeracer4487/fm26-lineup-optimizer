@@ -146,6 +146,138 @@ private func book(_ capture: String, squad: Squad) throws -> SquadBook {
         #expect(change.movedIn == [PlayerID(key: "tyrone marsh#90")])
     }
 
+    // MARK: - Identity kept when namesakes join, leave or move
+
+    /// The player as the importer keys him when a namesake shares his paste.
+    private func keyed(_ player: Player, _ key: String) -> Player {
+        var player = player
+        player.id = PlayerID(key: key)
+        return player
+    }
+
+    /// Each player in the book as name and potential ability, sorted.
+    private func people(_ book: SquadBook) -> [String] {
+        book.allPlayers.map { "\($0.name) \($0.potentialAbility)" }.sorted()
+    }
+
+    @Test func aRealMoveIsSeenEvenWhenANamesakeIsInTheDestinationPaste() {
+        var book = SquadBook()
+        book.apply(result([marsh(90, age: 18), .fixture(name: "D")]), to: .u21)
+        book.apply(result([marsh(120), .fixture(name: "B")]), to: .firstTeam)
+        #expect(keys(book, .u21) == ["tyrone marsh", "d"])
+        #expect(keys(book, .firstTeam) == ["tyrone marsh#120", "b"])
+        // The 90 player moves up; the importer keys both Marshes by potential ability.
+        let change = book.apply(result([keyed(marsh(120), "tyrone marsh#120"), keyed(marsh(90, age: 18), "tyrone marsh#90"),
+                                        .fixture(name: "B")]), to: .firstTeam)
+        #expect(change.movedIn == [PlayerID(key: "tyrone marsh")])
+        #expect(keys(book, .u21) == ["d"])
+        let marshes = book.allPlayers.filter { $0.name == "Tyrone Marsh" }
+        #expect(marshes.map(\.potentialAbility) == [120, 90])
+        #expect(Set(marshes.map(\.id)).count == 2)
+        #expect(keys(book, .firstTeam) == ["tyrone marsh#120", "tyrone marsh", "b"])
+    }
+
+    @Test func aNamesakeJoiningThePasteDoesNotChangeAnExistingPlayersKey() {
+        var book = SquadBook()
+        book.apply(result([marsh(120), .fixture(name: "B")]), to: .firstTeam)
+        let change = book.apply(result([keyed(marsh(120), "tyrone marsh#120"), keyed(marsh(90), "tyrone marsh#90"),
+                                        .fixture(name: "B")]), to: .firstTeam)
+        #expect(keys(book, .firstTeam) == ["tyrone marsh", "tyrone marsh#90", "b"])
+        #expect(change.added == [PlayerID(key: "tyrone marsh#90")])
+        #expect(change.removed.isEmpty && change.movedIn.isEmpty && change.changed.isEmpty)
+    }
+
+    @Test func aNamesakeLeavingDoesNotChangeTheRemainingPlayersKey() {
+        // Both Marshes arrive together, so each holds a key with his potential ability.
+        var book = SquadBook()
+        book.apply(result([keyed(marsh(120), "tyrone marsh#120"), keyed(marsh(90), "tyrone marsh#90"),
+                           .fixture(name: "B")]), to: .firstTeam)
+        let change = book.apply(result([marsh(120), .fixture(name: "B")]), to: .firstTeam)
+        #expect(keys(book, .firstTeam) == ["tyrone marsh#120", "b"])
+        #expect(change.removed == [PlayerID(key: "tyrone marsh#90")])
+        #expect(change.added.isEmpty && change.movedIn.isEmpty && change.changed.isEmpty)
+
+        // He arrived alone with the plain key; a namesake joins and then leaves again.
+        var plain = SquadBook()
+        plain.apply(result([marsh(120)]), to: .firstTeam)
+        plain.apply(result([keyed(marsh(120), "tyrone marsh#120"), keyed(marsh(90), "tyrone marsh#90")]), to: .firstTeam)
+        let left = plain.apply(result([marsh(120)]), to: .firstTeam)
+        #expect(keys(plain, .firstTeam) == ["tyrone marsh"])
+        #expect(left.removed == [PlayerID(key: "tyrone marsh#90")])
+        #expect(left.added.isEmpty && left.changed.isEmpty)
+    }
+
+    @Test(arguments: [true, false])
+    func theSameSequenceInEitherImportOrderLosesNobody(firstTeamFirst: Bool) {
+        let senior = result([marsh(120), .fixture(name: "B")])
+        let junior = result([marsh(90, age: 18), .fixture(name: "D")])
+        var book = SquadBook()
+        if firstTeamFirst {
+            book.apply(senior, to: .firstTeam); book.apply(junior, to: .u21)
+        } else {
+            book.apply(junior, to: .u21); book.apply(senior, to: .firstTeam)
+        }
+        let everyone = ["B 120", "D 120", "Tyrone Marsh 120", "Tyrone Marsh 90"]
+        #expect(people(book) == everyone)
+        let seniorKey = keys(book, .firstTeam)[0], juniorKey = keys(book, .u21)[0]
+
+        // The 90 player moves up: the first team is pasted with both Marshes, then the U21 without him.
+        book.apply(result([keyed(marsh(120), "tyrone marsh#120"), keyed(marsh(90, age: 18), "tyrone marsh#90"),
+                           .fixture(name: "B")]), to: .firstTeam)
+        #expect(people(book) == everyone)
+        #expect(Set(book.allPlayers.map(\.id)).count == everyone.count)
+        book.apply(result([.fixture(name: "D")]), to: .u21)
+        #expect(people(book) == everyone)
+        #expect(keys(book, .firstTeam) == [seniorKey, juniorKey, "b"])
+        #expect(keys(book, .u21) == ["d"])
+    }
+
+    @Test(arguments: [Squad.firstTeam, .u21])
+    func indistinguishableNamesakesDoNotBothClaimOneExistingKey(existingIn: Squad) {
+        var book = SquadBook()
+        book.apply(result([marsh(90), .fixture(name: "B")]), to: existingIn)
+        // Same name, potential ability and nationalities: the importer numbers them.
+        let change = book.apply(result([keyed(marsh(90), "tyrone marsh#90#england#1"),
+                                        keyed(marsh(90), "tyrone marsh#90#england#2")]), to: .firstTeam)
+        #expect(keys(book, .firstTeam) == ["tyrone marsh", "tyrone marsh#90#england#2"])
+        #expect(book.allPlayers.filter { $0.name == "Tyrone Marsh" }.count == 2)
+        #expect(change.movedIn == (existingIn == .u21 ? [PlayerID(key: "tyrone marsh")] : []))
+    }
+
+    @Test func aPlayerWithNoNationalityStillGetsAStableKey() {
+        var book = SquadBook()
+        book.apply(result([marsh(120, [])]), to: .firstTeam)
+        book.apply(result([marsh(90, ["Wales"])]), to: .u18)
+        // His plain key and his potential-ability key are held by others, and with no
+        // nationality the next key is the same, so the numbered fallback decides.
+        book.apply(result([marsh(90, [])]), to: .u21)
+        #expect(keys(book, .u21) == ["tyrone marsh#90#1"])
+        #expect(keys(book, .firstTeam) == ["tyrone marsh"] && keys(book, .u18) == ["tyrone marsh#90"])
+        #expect(Set(book.allPlayers.map(\.id)).count == 3)
+
+        // The Welsh namesake leaves; the U21 player's key does not follow.
+        book.apply(result([.fixture(name: "E")]), to: .u18)
+        let change = book.apply(result([marsh(90, [])]), to: .u21)
+        #expect(keys(book, .u21) == ["tyrone marsh#90#1"])
+        #expect(change.added.isEmpty && change.removed.isEmpty && change.movedIn.isEmpty && change.changed.isEmpty)
+    }
+
+    @Test func aKeptKeyThatEqualsANewcomersImporterKeyReKeysTheNewcomer() {
+        // Two England-first Marshes of potential 90, numbered by the importer.
+        let kept = marsh(90, ["England", "Jamaica"]), leaving = marsh(90, ["England"]), newcomer = marsh(90, ["England", "France"])
+        var book = SquadBook()
+        book.apply(result([keyed(kept, "tyrone marsh#90#england#1"), keyed(leaving, "tyrone marsh#90#england#2")]), to: .firstTeam)
+        // In the next paste the newcomer is first, so the importer gives him the kept player's key.
+        let change = book.apply(result([keyed(newcomer, "tyrone marsh#90#england#1"), keyed(kept, "tyrone marsh#90#england#2")]),
+                                to: .firstTeam)
+        // The existing re-key rules append to his importer key, starting with potential ability.
+        #expect(keys(book, .firstTeam) == ["tyrone marsh#90#england#1#90", "tyrone marsh#90#england#1"])
+        #expect(book.current[.firstTeam]?.map(\.nationalities) == [newcomer.nationalities, kept.nationalities])
+        #expect(change.added == [PlayerID(key: "tyrone marsh#90#england#1#90")])
+        #expect(change.removed == [PlayerID(key: "tyrone marsh#90#england#2")])
+        #expect(change.changed.isEmpty)
+    }
+
     @Test func oneNameWithOneKeyRaisesNoSharedNameWarning() {
         var book = SquadBook()
         book.apply(result([marsh(120), .fixture(name: "B")]), to: .firstTeam)
