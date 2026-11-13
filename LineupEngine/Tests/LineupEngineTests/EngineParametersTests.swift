@@ -72,4 +72,18 @@ import Testing
         #expect(found.contains { $0.contains("sharpnessGainTaper is empty") })
         #expect(found.contains { $0.contains("trainingIntensityRecovery") && $0.contains("high") })
     }
+
+    @Test func theImportanceRuleParametersAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        let names = ["loanedInFactor", "consecutiveStartSteps", "sharpnessNeedFull", "sharpnessNeedMost", "sharpnessNeedStrengthLow",
+                     "sharpnessNeedStrengthBuild", "fullySharpFactor", "prospectMaxAge", "prospectHeadroom", "developmentFactor",
+                     "retrainingFromFamiliarity", "retrainingFromFamiliarityMedium", "retrainingUntilFamiliarity",
+                     "retrainingFactorLow", "retrainingFactorMedium", "stabilityAnchorRun", "stabilityAnchorBonus", "stabilityRecentBonus"]
+        for name in names {
+            #expect(listed[name] != nil, "\(name) is not listed")
+            #expect(!(listed[name]?.source.isEmpty ?? true), "\(name) has no source")
+        }
+        #expect(listed["sharpnessNeedMost"]?.evidence == .derived)
+        #expect(listed["loanedInFactor"]?.evidence == .carriedOverFM26)
+    }
 }

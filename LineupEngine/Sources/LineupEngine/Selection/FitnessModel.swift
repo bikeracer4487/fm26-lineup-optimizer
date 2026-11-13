@@ -92,6 +92,14 @@ public enum FitnessModel {
         for intensity in TrainingIntensity.allCases where recovery[intensity] == nil {
             found.append("trainingIntensityRecovery has no entry for \(intensity.rawValue)")
         }
+        let loaned = parameters.loanedInFactor.value
+        for importance in Importance.allCases where loaned[importance] == nil {
+            found.append("loanedInFactor has no entry for \(importance.rawValue)")
+        }
+        let consecutive = parameters.consecutiveStartSteps.value
+        for position in Position.allCases where consecutive[position] == nil {
+            found.append("consecutiveStartSteps has no entry for \(position.rawValue)")
+        }
         return found
     }
 }

@@ -9,6 +9,17 @@ public struct FamiliarityStep: Sendable, Equatable {
     }
 }
 
+/// One step of a consecutive-starts table: a player who has started at least `starts` matches in quick succession plays at `factor`.
+public struct ConsecutiveStartStep: Sendable, Equatable {
+    public let starts: Int
+    public let factor: Double
+
+    public init(starts: Int, factor: Double) {
+        self.starts = starts
+        self.factor = factor
+    }
+}
+
 /// Lets `EngineParameters.all` list every stored `Parameter` whatever its value type.
 protocol ParameterProtocol {
     var evidence: Evidence { get }
@@ -77,11 +88,53 @@ public struct EngineParameters: Sendable {
     /// A start extends a run of consecutive starts only when it came within this many days of the next match.
     public var consecutiveStartWindowDays: Parameter<Int>
 
+    /// Factor on a loaned-in player's match-day value, by match importance.
+    public var loanedInFactor: Parameter<[Importance: Double]>
+    /// By in-possession position, the steps of a run of consecutive starts; the highest step reached applies.
+    public var consecutiveStartSteps: Parameter<[Position: [ConsecutiveStartStep]]>
+    /// Sharpness (fraction of 1) at and above which a player needs no minutes for sharpness.
+    public var sharpnessNeedFull: Parameter<Double>
+    /// Sharpness (fraction of 1) at and below which a player's need for minutes is greatest.
+    public var sharpnessNeedMost: Parameter<Double>
+    /// The most a lesser fixture favours an unsharp player, as a fraction of his value, at greatest need.
+    public var sharpnessNeedStrengthLow: Parameter<Double>
+    /// The most a sharpness fixture favours an unsharp first or second eleven player, as a fraction of his value.
+    public var sharpnessNeedStrengthBuild: Parameter<Double>
+    /// Factor on a first or second eleven player who is already fully sharp in a sharpness fixture.
+    public var fullySharpFactor: Parameter<Double>
+    /// The oldest age counted as a prospect.
+    public var prospectMaxAge: Parameter<Int>
+    /// A prospect's potential ability is at least this multiple of his current ability.
+    public var prospectHeadroom: Parameter<Double>
+    /// Factor on a prospect's value in a lesser fixture.
+    public var developmentFactor: Parameter<Double>
+    /// Lowest familiarity at which a retrainee is favoured in a low or sharpness fixture.
+    public var retrainingFromFamiliarity: Parameter<Int>
+    /// Lowest familiarity at which a retrainee is favoured in a medium fixture.
+    public var retrainingFromFamiliarityMedium: Parameter<Int>
+    /// Familiarity at and above which a retrainee is no longer favoured.
+    public var retrainingUntilFamiliarity: Parameter<Int>
+    /// Factor on a retrainee's value in a low or sharpness fixture.
+    public var retrainingFactorLow: Parameter<Double>
+    /// Factor on a retrainee's value in a medium fixture.
+    public var retrainingFactorMedium: Parameter<Double>
+    /// How many recent starts in one slot count as holding it.
+    public var stabilityAnchorRun: Parameter<Int>
+    /// Bonus, at stability 1, for having held the slot for the whole anchor run.
+    public var stabilityAnchorBonus: Parameter<Double>
+    /// Bonus, at stability 1, for having played the slot in the most recent match.
+    public var stabilityRecentBonus: Parameter<Double>
+
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
 
     public static let fm27: EngineParameters = {
         func carried(_ value: Double) -> Parameter<Double> { Parameter(value, .carriedOverFM26, source: pythonSource) }
+        let matchSelectorSource = "ui/api/api_match_selector.py (branch customizable-tactics)"
+        let readySelectorSource = "fm_match_ready_selector.py (branch customizable-tactics)"
+        let retrainingSource = "\(readySelectorSource); docs/Research/position-retraining.md"
+        let sharpnessNeedSource = "docs/Research/match-sharpness.md"
+        func steps(_ pairs: [(Int, Double)]) -> [ConsecutiveStartStep] { pairs.map { ConsecutiveStartStep(starts: $0.0, factor: $0.1) } }
         return EngineParameters(
             consensusCap: carried(10),
             balanceBonus: carried(0.01),
@@ -168,7 +221,47 @@ public struct EngineParameters: Sendable {
             assumedMinutes: Parameter(90, .derived, source: "the planner does not model substitutions"),
             consecutiveStartWindowDays: Parameter(
                 4, .derived,
-                source: "docs/Research/player-rotation-guide.md: one match a week needs little rotation; rotation matters when matches come two or three a week"))
+                source: "docs/Research/player-rotation-guide.md: one match a week needs little rotation; rotation matters when matches come two or three a week"),
+            loanedInFactor: Parameter(
+                [.high: 1.0, .medium: 0.95, .low: 0.85, .sharpness: 0.85], .carriedOverFM26, source: matchSelectorSource),
+            consecutiveStartSteps: Parameter(
+                Dictionary(uniqueKeysWithValues: Position.allCases.map { position in
+                    switch position {
+                    case .defenderLeft, .defenderRight, .wingBackLeft, .wingBackRight, .defensiveMidfielder:
+                        (position, steps([(2, 0.90), (3, 0.75), (4, 0.60)]))
+                    case .midfielderLeft, .midfielderCentral, .midfielderRight, .attackingMidLeft, .attackingMidCentral,
+                         .attackingMidRight, .striker:
+                        (position, steps([(3, 0.90), (4, 0.80), (5, 0.70)]))
+                    case .defenderCentral, .goalkeeper:
+                        (position, steps([(5, 0.90), (6, 0.80)]))
+                    }
+                }),
+                .carriedOverFM26, source: readySelectorSource),
+            sharpnessNeedFull: Parameter(0.91, .carriedOverFM26, source: "\(sharpnessNeedSource): 91% and above is full sharpness"),
+            sharpnessNeedMost: Parameter(
+                0.50, .derived, source: "the sharpness curve's 50% anchor (FM27 Match Lab), below which the need is treated as greatest"),
+            sharpnessNeedStrengthLow: Parameter(
+                0.30, .derived,
+                source: "the branch's ×1.2 to ×1.4 boosts (\(matchSelectorSource)), sized so an unsharp player is about level with a sharp one once his sharpness factor is counted"),
+            sharpnessNeedStrengthBuild: Parameter(
+                1.0, .derived, source: "a sharpness fixture exists to build sharpness, so need counts fully; this design's choice"),
+            fullySharpFactor: Parameter(0.60, .carriedOverFM26, source: matchSelectorSource),
+            prospectMaxAge: Parameter(21, .carriedOverFM26, source: "ui/api/api_player_removal.py (branch customizable-tactics)"),
+            prospectHeadroom: Parameter(1.15, .carriedOverFM26, source: "ui/api/api_player_removal.py (branch customizable-tactics)"),
+            developmentFactor: Parameter(
+                1.10, .derived,
+                source: "this design's size; the premise, that growth comes mainly from match time, is one FM27 tester's report in docs/Research/fm27-training-and-retraining.md"),
+            retrainingFromFamiliarity: Parameter(10, .carriedOverFM26, source: retrainingSource),
+            retrainingFromFamiliarityMedium: Parameter(15, .carriedOverFM26, source: retrainingSource),
+            retrainingUntilFamiliarity: Parameter(18, .carriedOverFM26, source: retrainingSource),
+            retrainingFactorLow: Parameter(1.15, .carriedOverFM26, source: retrainingSource),
+            retrainingFactorMedium: Parameter(1.08, .carriedOverFM26, source: retrainingSource),
+            stabilityAnchorRun: Parameter(
+                3, .derived, source: "rescaled from ui/api/stability.py (branch customizable-tactics); three matches running counts as holding a slot"),
+            stabilityAnchorBonus: Parameter(
+                0.05, .derived, source: "rescaled from ui/api/stability.py (branch customizable-tactics), which moved a rating by up to about 2 to 5 points"),
+            stabilityRecentBonus: Parameter(
+                0.02, .derived, source: "rescaled from ui/api/stability.py (branch customizable-tactics), which moved a rating by up to about 2 to 5 points"))
     }()
 
     /// Every stored parameter, found by reflection so a new one cannot be left out.
