@@ -44,6 +44,10 @@ public enum Importer {
     private static let modelledColumns: Set<String> = Set(GridDetector.requiredColumns)
         .union(["Contract.Club", "AskingPrice", "Nationalities"])
 
+    /// Text columns that must hold something other than whitespace. The grid detector accepts
+    /// any text here, so the importer checks them.
+    private static let nonBlankColumns: Set<String> = ["DisplayedName", "Positions.PositionsDesc", "Contract.ContractType"]
+
     public static func importPlayers(clipboard: String, fmrteConfig: Data, squad: Squad) throws -> ImportResult {
         let rows = try ClipboardText.rows(clipboard)
         let grids = try FMRTEConfig.playerGrids(from: fmrteConfig)
@@ -86,7 +90,8 @@ public enum Importer {
             func fail(_ path: String) -> ImportError {
                 .invalidValue(player: display, column: path, value: row[index[path]!])
             }
-            for (path, cell) in zip(layout.columns, row) where GridDetector.violates(cell, path: path) {
+            for (path, cell) in zip(layout.columns, row) where GridDetector.violates(cell, path: path)
+                || (nonBlankColumns.contains(path) && cell.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
                 throw fail(path)
             }
             func cell(_ path: String) -> String { row[index[path]!] }

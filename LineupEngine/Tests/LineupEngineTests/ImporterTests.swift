@@ -122,6 +122,42 @@ private func quoted(_ value: String) -> String { "\"\(value)\"" }
         }
     }
 
+    @Test(arguments: ["", "  "])
+    func blankPositionsTextNamesThePlayerAndColumn(blank: String) throws {
+        let positions = try column("Positions.PositionsDesc")
+        #expect(throws: ImportError.invalidValue(player: "Brayden Daniel", column: "Positions.PositionsDesc", value: blank)) {
+            try importU21 { rows in
+                var rows = rows
+                rows[0][positions] = quoted(blank)
+                return rows
+            }
+        }
+    }
+
+    @Test(arguments: ["", "  "])
+    func blankContractTypeNamesThePlayerAndColumn(blank: String) throws {
+        let contract = try column("Contract.ContractType")
+        #expect(throws: ImportError.invalidValue(player: "Brayden Daniel", column: "Contract.ContractType", value: blank)) {
+            try importU21 { rows in
+                var rows = rows
+                rows[0][contract] = quoted(blank)
+                return rows
+            }
+        }
+    }
+
+    @Test(arguments: ["", "  "])
+    func blankNameIsRejectedAndNamedByRow(blank: String) throws {
+        let name = try column("DisplayedName")
+        #expect(throws: ImportError.invalidValue(player: "row 1", column: "DisplayedName", value: blank)) {
+            try importU21 { rows in
+                var rows = rows
+                rows[0][name] = quoted(blank)
+                return rows
+            }
+        }
+    }
+
     @Test func aNonNumericAttributeNamesThePlayerAndColumn() throws {
         let pace = try column("PhysicalAttributes.Pace")
         #expect(throws: ImportError.invalidValue(player: "Brayden Daniel", column: "PhysicalAttributes.Pace", value: "n/a")) {
