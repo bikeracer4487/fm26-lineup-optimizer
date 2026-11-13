@@ -1348,6 +1348,88 @@ Decisions:
 
 ---
 
+### Task 18: Make the FM27 profile the default and take positional emphasis from the FM26 tables
+
+Added on the owner's decision of 13 November 2026: the FM27 engine-tests profile is the default, and FM26 research fills what FM27 testing does not cover. No FM27 test splits attribute value by position, so the profile's speculative position multipliers are replaced by a pattern taken from the FM26 position tables. See spec 8.4.
+
+**Files:**
+- Modify: `Sources/LineupEngine/Rating/RatingProfile.swift`, `Sources/LineupEngine/Resources/rating_profile_fm27.json`, `Sources/lineup-cli/main.swift`, `Sources/lineup-cli/Report.swift`
+- Test: `RatingProfileTests.swift`, `RatingEngineTests.swift`, `LineupSelectorTests.swift`, `EndToEndTests.swift`
+
+**Interfaces:**
+- Consumes: `RatingProfile.carriedOver()`, `RatingProfile.fm27EngineTests(json:carriedOver:)`, `RatingTables.positionWeights`, `Parameter`, `Evidence`, `CatalogError.malformed`.
+- Produces:
+  ```swift
+  extension RatingProfile {
+      /// The owner's default (13 November 2026): the FM27 engine-tests profile.
+      public static func standard() throws -> RatingProfile
+      public static func all() throws -> [RatingProfile]   // the standard profile first: ids ["fm27-engine-tests", "carried-over"]
+  }
+  ```
+  `RatingEngine` and `LineupSelector` still take a profile explicitly.
+
+Decisions:
+
+- **Resource:** `rating_profile_fm27.json` loses `positionMultipliers` and gains `"positionalEmphasis": {"share": 0.5, "cap": 2.0}`. Its `version` text becomes "FM27-v2" and says positional emphasis comes from the FM26 position tables.
+- **Positional emphasis**, for each of the 13 outfield positions `p` and each attribute `a` with an FM27 base weight:
+  - `mean26(a)` = the sum over the 13 outfield positions of the carried-over profile's position weight for `a` (0 where a position's table lacks it), divided by 13.
+  - `r(p, a)` = the carried-over weight of `a` at `p` (0 if absent) divided by `mean26(a)`; 1 when `mean26(a)` is 0.
+  - multiplier `m(p, a) = (1 - share) + share × min(r(p, a), cap)`.
+  - weight = base weight × `m(p, a)`; a weight of 0 is dropped; each position is then normalised to sum to 1, in fixed sorted order as today.
+- **Validation:** `share` outside 0...1 or `cap` below 1 fails to load with `CatalogError.malformed`, naming `positionalEmphasis` and the field.
+- **Evidence:** the profile's `evidence` replaces the position-multipliers entry with three: `positionalEmphasis` as `.carriedOverFM26` (source: the FM26 position weight tables in `rating_tables.json`, used only for how an attribute's weight differs between positions; owner's decision of 13 November 2026 to fill FM27 gaps from FM26 research; spec 8.4), and `positionalEmphasisShare` and `positionalEmphasisCap` as `.derived` (source: spec 8.4; they keep every multiplier between 0.5 and 1.5).
+- **Goalkeeper:** unchanged.
+- **Default:** `standard()` returns the FM27 engine-tests profile. `all()` lists it first.
+- **Command-line tool:** `--profile fm27 | carried-over | both`, default `fm27`. With `both`, the FM27 lineup prints first and is the first column of the comparison. Usage text updated.
+
+- [ ] **Step 1: Record the lineups before the change**
+
+  Run the two commands in Step 5 with `--profile both` and keep the output for the report.
+
+- [ ] **Step 2: Write the failing tests**
+
+  `RatingProfileTests.swift`:
+  - `theStandardProfileIsTheFM27EngineTests`: `standard().id == "fm27-engine-tests"`; `all()` ids are `["fm27-engine-tests", "carried-over"]`. Replaces `bothProfilesLoadAndAreListedCarriedOverFirst`.
+  - `positionalEmphasisFollowsTheFM26Tables`, replacing `fm27StrikerWeightsFinishingTwiceAsHeavilyAsItsBaseShare`. All within 1e-9, each as a ratio to Natural Fitness, which FM26 gives no weight anywhere (multiplier 1):
+    - "ST (C)": weight(Finishing) / weight(Natural Fitness) = `(0.0281 × 1.5) / 0.0432` (FM26 puts Finishing at 0.100 for strikers against an average of 0.235 / 13, so `r` is capped at 2).
+    - "D (C)": weight(Finishing) / weight(Natural Fitness) = `(0.0281 × 0.5) / 0.0432` (FM26 gives centre-backs no Finishing weight).
+    - "D (C)": weight(Jumping Reach) / weight(Natural Fitness) = `(0.0938 × 1.434375) / 0.0432` (`r` = 0.115 × 13 / 0.80 = 1.86875, under the cap).
+  - `withAShareOfZeroEveryOutfieldPositionHasTheBaseTable`: loading the resource with `share` 0 gives every outfield position the same weights, each equal to its base weight divided by the base total.
+  - `aBadPositionalEmphasisFailsToLoad`: `share` -0.1, `share` 1.1 and `cap` 0.5 each throw, and the description names `positionalEmphasis`.
+  - Remove the tests of position multipliers (negative, without a base weight, zero).
+  - `everyProfileNumberHasEvidenceAndASource`: the FM27 profile also has a `.carriedOverFM26` entry named `positionalEmphasis`.
+  - Keep `fm27PositionWeightsSumToOneForAllFourteenPositions` and `fm27GoalkeeperWeightsDropKicking` passing unchanged.
+
+  `RatingEngineTests.swift`, `LineupSelectorTests.swift`: update any test that relied on a position multiplier (for example Finishing absent at "D (C)"). Add `positionalEmphasisChangesWhoRatesHigherAtAPosition` to `RatingEngineTests`: two players identical except that one has Heading 18 and Dribbling 1 and the other Heading 1 and Dribbling 18, rated in roles whose key and preferable attributes include neither. Under the standard profile the first rates higher at "D (C)" and the second rates higher at "AM (L)". Under the same profile loaded with `share` 0 the second rates higher at both, which shows the emphasis is what changes the order at "D (C)".
+
+  `EndToEndTests.swift`: construct with `RatingProfile.standard()` where a single profile is wanted; re-pin the FM27 profile's three picks to clear-margin picks from the new output; the carried-over profile's pins must not change.
+
+- [ ] **Step 3: Run them and see them fail**
+
+  Run: `cd LineupEngine && swift test --filter RatingProfileTests`
+  Expected: FAIL (`standard` not found; the emphasis ratios differ).
+
+- [ ] **Step 4: Implement, then run the whole suite**
+
+  Run: `cd LineupEngine && swift test`
+  Expected: all tests PASS, no build warnings; the 594 reference cases unchanged.
+
+- [ ] **Step 5: Run the tool on both sets of captures**
+
+  ```bash
+  cd LineupEngine && swift run -q lineup-cli select \
+    --grids Tests/LineupEngineTests/Fixtures/captures/first-team.grids.json \
+    --tactic Tests/LineupEngineTests/Fixtures/tactics/sample-4231.json \
+    --first-team Tests/LineupEngineTests/Fixtures/captures/first-team.tsv \
+    --u21 Tests/LineupEngineTests/Fixtures/captures/u21.tsv --own-club "Oxford City" --profile both
+  ```
+
+  and the same with `first-team-with-id.grids.json`, `first-team-with-id.tsv` and `u21-with-id.tsv`. Then once with no `--profile` to show the default. Paste all outputs into the report, and list every slot whose FM27 pick changed from Step 1, with the two players' ratings before and after.
+
+- [ ] **Step 6: Commit** — "Make the FM27 profile the default and take positional emphasis from the FM26 tables".
+
+---
+
 ## Later plans
 
 Each is written when the one before it is done, because each depends on interfaces and findings from the last.
