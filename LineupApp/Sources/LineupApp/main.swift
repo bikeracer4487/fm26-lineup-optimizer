@@ -73,6 +73,7 @@ struct LineupApplication: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        AppIcon.apply()
         NSApp.activate()
     }
 

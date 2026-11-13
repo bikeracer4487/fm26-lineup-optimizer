@@ -4,7 +4,7 @@
 #   tools/build_app.sh      run from the repository root; writes build/FM27 Lineup Optimizer.app
 #                           and prints its path last
 #
-# The bundle holds the executable, an Info.plist, and every SwiftPM resource bundle found
+# The bundle holds the executable, an Info.plist, the app's icon, and every SwiftPM resource bundle found
 # beside the executable (the engine's role catalogue and rating tables, and the app's two
 # typefaces, among them), copied into Contents/Resources. It is signed ad hoc, for this Mac
 # only. The signed app then draws its empty screens into a temporary directory, which proves
@@ -39,6 +39,13 @@ if [ "$found" -eq 0 ]; then
     exit 1
 fi
 
+ICON="$ROOT/LineupApp/Sources/LineupAppUI/Resources/AppIcon.icns"
+if [ ! -f "$ICON" ]; then
+    echo "The app's icon was not found at $ICON; run tools/make_app_icon.sh." >&2
+    exit 1
+fi
+cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
+
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -52,6 +59,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <string>FM27 Lineup Optimizer</string>
     <key>CFBundleExecutable</key>
     <string>LineupApp</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

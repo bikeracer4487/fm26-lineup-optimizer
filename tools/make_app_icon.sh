@@ -3,8 +3,9 @@
 #
 #   tools/make_app_icon.sh      run from the repository root
 #
-# Reads LineupApp/Icon/app-icon-source.jpeg and writes LineupApp/Icon/AppIcon.icns, which holds
-# every size macOS asks for. Run it again after changing the source.
+# Reads LineupApp/Icon/app-icon-source.jpeg and writes the icon the app ships,
+# LineupApp/Sources/LineupAppUI/Resources/AppIcon.icns, which holds every size macOS asks for.
+# Run it again after changing the source, then build the app.
 set -euo pipefail
 
 ROOT="$(pwd)"
@@ -27,5 +28,6 @@ for size in 16 32 128 256 512; do
     sips -z "$double" "$double" "$WORK/master.png" --out "$SET/icon_${size}x${size}@2x.png" >/dev/null
 done
 
-iconutil -c icns "$SET" -o "$ROOT/LineupApp/Icon/AppIcon.icns"
-echo "$ROOT/LineupApp/Icon/AppIcon.icns"
+OUT="$ROOT/LineupApp/Sources/LineupAppUI/Resources/AppIcon.icns"
+iconutil -c icns "$SET" -o "$OUT"
+echo "$OUT"
