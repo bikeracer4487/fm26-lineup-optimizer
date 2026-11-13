@@ -104,7 +104,7 @@ do {
     let isConfigError = switch error as? ImportError {
     case .configUnreadable?, .noPlayerGrids?: true
     case .emptyClipboard?, .notAnFMRTEGrid?, .raggedRows?, .noGridFits?, .ambiguousGrid?, .missingColumns?,
-         .invalidValue?, .unexpectedScale?, nil: false
+         .invalidValue?, .unexpectedScale?, .duplicateID?, nil: false
     }
     fail(ErrorDescriptions.describe(error) + (isConfigError ? " (read from \(options.grids!))" : ""))
 }

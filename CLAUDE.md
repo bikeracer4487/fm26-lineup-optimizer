@@ -21,6 +21,7 @@ Run one suite or test with `swift test --filter <name>`. Test output must be cle
 - `lineup-cli`, in the package, reads a grids snapshot, a tactic and squad pastes, and prints the explained lineup (`swift run lineup-cli select ...`; usage at the top of `LineupEngine/Sources/lineup-cli/main.swift`).
 - `tools/capture_fmrte_paste.sh` saves the clipboard and FMRTE's grid layouts as test fixtures; `tools/export_rating_reference.py` rewrites the rating tables and Python reference data (tracked files).
 - How each captured paste was taken: `LineupEngine/Tests/LineupEngineTests/Fixtures/captures/README.md`.
+- A player's identity comes from FMRTE's `Id` column when the pasted grid has it; without it, players are identified by name, with a warning.
 
 Rules for the engine:
 

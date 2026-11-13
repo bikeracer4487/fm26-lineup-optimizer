@@ -60,16 +60,7 @@ enum Report {
         switch squad { case .firstTeam: "First team"; case .u21: "U21"; case .u18: "U18" }
     }
 
-    static func describe(_ warning: ImportWarning) -> String {
-        switch warning {
-        case .duplicateName(let name):
-            "more than one player is called \(name); they were told apart by potential ability, then nationality"
-        case .indistinguishable(let name):
-            "players called \(name) also share potential ability and nationality, so they were told apart by their order "
-                + "in the paste; re-sorting the grid in FMRTE can swap them"
-        case .outOfContract(let name): "\(name) is out of contract"
-        }
-    }
+    static func describe(_ warning: ImportWarning) -> String { ErrorDescriptions.describe(warning) }
 
     static func describe(_ warning: SquadWarning) -> String {
         switch warning {

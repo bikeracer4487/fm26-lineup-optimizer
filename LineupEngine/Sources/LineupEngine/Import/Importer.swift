@@ -13,6 +13,8 @@ public enum ImportError: Error, Equatable {
     case missingColumns(grid: String, columns: [String])
     case invalidValue(player: String, column: String, value: String)
     case unexpectedScale(column: String)
+    /// Two rows carry the same FMRTE `Id`; `players` names the earlier row's player, then the later's.
+    case duplicateID(id: String, players: [String])
 }
 
 public enum ImportWarning: Equatable, Sendable {
@@ -23,6 +25,8 @@ public enum ImportWarning: Equatable, Sendable {
     /// end in their order in the paste, which re-sorting the grid can change.
     case indistinguishable(String)
     case outOfContract(String)
+    /// The grid has no FMRTE `Id` column, so players are keyed by name. Raised once per import.
+    case identifiedByName
 }
 
 public struct ImportResult: Equatable, Sendable {
@@ -47,7 +51,7 @@ public enum Importer {
 
     /// Columns the importer reads into a typed field; every other column goes into `extras`.
     private static let modelledColumns: Set<String> = Set(GridDetector.requiredColumns)
-        .union(["Contract.Club", "AskingPrice", "Nationalities"])
+        .union(["Contract.Club", "AskingPrice", "Nationalities", GridDetector.idPath])
 
     /// Text columns that must hold something other than whitespace. The grid detector accepts
     /// any text here, so the importer checks them.
@@ -83,10 +87,14 @@ public enum Importer {
 
     private static func parse(rows: [[String]], layout: GridLayout, squad: Squad) throws -> ImportResult {
         let index = Dictionary(layout.columns.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        // With FMRTE's Id column every player is keyed by it; without, by name, which the warning says.
+        let idColumn = index[GridDetector.idPath]
         var players: [Player] = []
-        var warnings: [ImportWarning] = []
+        var warnings: [ImportWarning] = idColumn == nil ? [.identifiedByName] : []
         var rawCondition: [Int] = []
         var rawSharpness: [Int] = []
+        // The name on the first row that carried each FMRTE id.
+        var nameByID: [Int: String] = [:]
 
         for (rowIndex, row) in rows.enumerated() {
             let name = row[index["DisplayedName"]!].trimmingCharacters(in: .whitespaces)
@@ -144,8 +152,20 @@ public enum Importer {
             rawCondition.append(conditionRaw)
             rawSharpness.append(sharpnessRaw)
 
+            let id: PlayerID
+            if let idColumn {
+                guard let fmrteID = GridDetector.fmrteID(row[idColumn]) else { throw fail(GridDetector.idPath) }
+                if let earlier = nameByID[fmrteID] {
+                    throw ImportError.duplicateID(id: String(fmrteID), players: [earlier, display])
+                }
+                nameByID[fmrteID] = display
+                id = .fmrte(fmrteID)
+            } else {
+                id = PlayerID(key: PlayerID.normalise(name))
+            }
+
             players.append(Player(
-                id: PlayerID(key: PlayerID.normalise(name)), name: name, squad: squad,
+                id: id, name: name, squad: squad,
                 age: try int("Age"), positionsText: cell("Positions.PositionsDesc").trimmingCharacters(in: .whitespaces),
                 currentAbility: try int("CA"), potentialAbility: try int("PA"),
                 attributes: attributes, familiarity: familiarity,
@@ -166,7 +186,8 @@ public enum Importer {
         if rawCondition.allSatisfy({ $0 <= percentageScaleCeiling }) { throw ImportError.unexpectedScale(column: "Condition") }
         if rawSharpness.allSatisfy({ $0 <= percentageScaleCeiling }) { throw ImportError.unexpectedScale(column: "MatchSharpness") }
 
-        warnings += disambiguateDuplicates(&players)
+        // FMRTE's ids already tell every player apart; only name keys need the namesake handling.
+        if idColumn == nil { warnings += disambiguateDuplicates(&players) }
         return ImportResult(grid: layout.key, players: players, warnings: warnings)
     }
 

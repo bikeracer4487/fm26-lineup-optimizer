@@ -6,7 +6,7 @@ import Testing
     /// A Swift case rendered as `caseName(` is a debug dump, not a sentence.
     private func expectPlain(_ text: String, sourceLocation: SourceLocation = #_sourceLocation) {
         let names = ["configUnreadable", "noPlayerGrids", "emptyClipboard", "notAnFMRTEGrid", "raggedRows", "noGridFits",
-                     "ambiguousGrid", "missingColumns", "invalidValue", "unexpectedScale", "malformed", "unknownAttribute",
+                     "ambiguousGrid", "missingColumns", "invalidValue", "unexpectedScale", "duplicateID", "malformed", "unknownAttribute",
                      "unknownRole", "missingAttribute", "missingFamiliarity", "keyNotFound", "valueNotFound", "typeMismatch",
                      "dataCorrupted", "wrongSlotCount", "missingGoalkeeper", "unmapped", "mappingTargetInactive",
                      "duplicateMappingTarget", "goalkeeperMappedToOutfield", "TacticError", "problems"]
@@ -31,6 +31,23 @@ import Testing
                       .configUnreadable(reason: "r"), .notAnFMRTEGrid(reason: "r"), .noGridFits(fieldCount: 1, violationsByGrid: ["G": 1])] {
             expectPlain(ErrorDescriptions.describe(error))
         }
+    }
+
+    @Test func twoRowsWithOneIdNameTheIdAndBothPlayers() {
+        let text = ErrorDescriptions.describe(ImportError.duplicateID(id: "146837", players: ["Alfie Potter", "Jonny Maxted"]))
+        #expect(text == "Two rows have the same FMRTE Id 146837: Alfie Potter and Jonny Maxted")
+        expectPlain(text)
+    }
+
+    @Test func importWarningsAreSentences() {
+        #expect(ErrorDescriptions.describe(ImportWarning.identifiedByName)
+            == "This grid has no Id column, so players are identified by name. Add the Id column in FMRTE for exact identity.")
+        #expect(ErrorDescriptions.describe(ImportWarning.outOfContract("Aydin Ulas")) == "Aydin Ulas is out of contract")
+        #expect(ErrorDescriptions.describe(ImportWarning.duplicateName("Jo Bloggs"))
+            == "more than one player is called Jo Bloggs; they were told apart by potential ability, then nationality")
+        #expect(ErrorDescriptions.describe(ImportWarning.indistinguishable("Jo Bloggs"))
+            == "players called Jo Bloggs also share potential ability and nationality, so they were told apart by their order "
+                + "in the paste; re-sorting the grid in FMRTE can swap them")
     }
 
     @Test func aPasteNoSavedGridIsWideEnoughForSaysSo() {

@@ -31,4 +31,35 @@ import Testing
         let keeper = try #require(lineup.picks.first { $0.slot == .GK })
         #expect(keeper.warnings.contains { if case .outOfPosition(.inPossession, _) = $0 { true } else { false } })
     }
+
+    @Test func thePostMatchSnapshotFieldsWhoItCan() throws {
+        var book = SquadBook()
+        let firstTeam = try Importer.importPlayers(clipboard: Fixtures.text("captures/first-team-with-id.tsv"),
+                                                   fmrteConfig: Fixtures.data("captures/first-team-with-id.grids.json"), squad: .firstTeam)
+        let u21 = try Importer.importPlayers(clipboard: Fixtures.text("captures/u21-with-id.tsv"),
+                                             fmrteConfig: Fixtures.data("captures/u21-with-id.grids.json"), squad: .u21)
+        book.apply(firstTeam, to: .firstTeam)
+        book.apply(u21, to: .u21)
+        #expect(!(firstTeam.warnings + u21.warnings).contains(.identifiedByName))
+        #expect(book.allPlayers.count == 24)
+
+        let ownClub = book.ownClub(override: "Oxford City")
+        let tactic = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
+        let parameters = EngineParameters.fm27
+        let selector = LineupSelector(catalog: try .fm27(), tables: try .bundled(), parameters: parameters)
+        let lineup = try selector.select(.init(tactic: tactic, players: book.allPlayers, ownClub: ownClub,
+                                               importance: .high, isNextFixture: true, overrides: [:], rejected: []))
+
+        #expect(lineup.picks.count + lineup.unfilled.count == 11)
+        #expect(Set(lineup.picks.map(\.player)).count == lineup.picks.count)
+        #expect(lineup.picks.allSatisfy { $0.player.key.hasPrefix("fmrte:") })
+        let byID = Dictionary(uniqueKeysWithValues: book.allPlayers.map { ($0.id, $0) })
+        for pick in lineup.picks {
+            let player = try #require(byID[pick.player])
+            #expect(!player.isInjured, "\(player.name) is injured")
+            #expect(player.loanedTo == nil, "\(player.name) is out on loan")
+            #expect(player.condition >= parameters.conditionFloor.value, "\(player.name) is below the condition floor")
+        }
+        #expect(!lineup.picks.map(\.name).contains("Max Treml"))
+    }
 }

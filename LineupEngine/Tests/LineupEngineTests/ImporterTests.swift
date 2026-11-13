@@ -28,6 +28,30 @@ private func column(_ path: String) throws -> Int {
 /// The fields of a row are quoted in the capture; keep that when replacing one.
 private func quoted(_ value: String) -> String { "\"\(value)\"" }
 
+/// The first-team team-grid paste taken with FMRTE's `Id` column, with `change` applied to its
+/// rows, imported against the snapshot taken with it.
+private func importFirstTeamWithIDs(changingRows change: ([[String]]) -> [[String]] = { $0 }) throws -> ImportResult {
+    let rows = try Fixtures.text("captures/first-team-with-id.tsv")
+        .components(separatedBy: "\r\n").filter { !$0.isEmpty }
+        .map { $0.components(separatedBy: "\t") }
+    let text = change(rows).map { $0.joined(separator: "\t") }.joined(separator: "\r\n") + "\r\n"
+    return try Importer.importPlayers(clipboard: text,
+                                      fmrteConfig: Fixtures.data("captures/first-team-with-id.grids.json"), squad: .firstTeam)
+}
+
+/// Where a column sits in the team grid that has the `Id` column.
+private func teamColumn(_ path: String) throws -> Int {
+    try #require(Fixtures.gridColumns("first-team-with-id", grid: "TeamPlayersColumns").firstIndex(of: path))
+}
+
+/// True for the warnings that come from telling namesakes apart, or from having no ids at all.
+private func isNameWarning(_ warning: ImportWarning) -> Bool {
+    switch warning {
+    case .duplicateName, .indistinguishable, .identifiedByName: true
+    case .outOfContract: false
+    }
+}
+
 @Suite struct ImporterTests {
     @Test func importsTheRealU21Paste() throws {
         let r = try importU21()
@@ -116,7 +140,7 @@ private func quoted(_ value: String) -> String { "\"\(value)\"" }
         let r = try brayden(copies: [(pa: "60", nationality: nil, age: "18")])
         #expect(r.players.count == 7)
         #expect(braydenKeys(r) == ["brayden daniel#70", "brayden daniel#60"])
-        #expect(r.warnings == [.outOfContract("Aydin Ulas"), .duplicateName("Brayden Daniel")])
+        #expect(r.warnings == [.identifiedByName, .outOfContract("Aydin Ulas"), .duplicateName("Brayden Daniel")])
     }
 
     @Test func aDuplicatePairKeepsItsKeysWhenTheRowsSwapAndBothAgesRise() throws {
@@ -144,13 +168,13 @@ private func quoted(_ value: String) -> String { "\"\(value)\"" }
     @Test func equalPotentialIsToldApartByFirstNationality() throws {
         let r = try brayden(copies: [(pa: nil, nationality: "Wales,England", age: nil)])
         #expect(braydenKeys(r) == ["brayden daniel#70#england", "brayden daniel#70#wales"])
-        #expect(r.warnings == [.outOfContract("Aydin Ulas"), .duplicateName("Brayden Daniel")])
+        #expect(r.warnings == [.identifiedByName, .outOfContract("Aydin Ulas"), .duplicateName("Brayden Daniel")])
     }
 
     @Test func playersWhoShareNamePotentialAndNationalityAreNumberedAndWarnedAbout() throws {
         let r = try brayden(copies: [(pa: nil, nationality: nil, age: "18"), (pa: nil, nationality: nil, age: "25")])
         #expect(braydenKeys(r) == ["brayden daniel#70#england#1", "brayden daniel#70#england#2", "brayden daniel#70#england#3"])
-        #expect(r.warnings == [.outOfContract("Aydin Ulas"), .duplicateName("Brayden Daniel"), .indistinguishable("Brayden Daniel")])
+        #expect(r.warnings == [.identifiedByName, .outOfContract("Aydin Ulas"), .duplicateName("Brayden Daniel"), .indistinguishable("Brayden Daniel")])
     }
 
     @Test func onlyTheStillCollidingRowsAreNumbered() throws {
@@ -158,6 +182,86 @@ private func quoted(_ value: String) -> String { "\"\(value)\"" }
         let r = try brayden(copies: [(pa: nil, nationality: "Wales", age: nil), (pa: nil, nationality: nil, age: "18")])
         #expect(braydenKeys(r) == ["brayden daniel#70#england#1", "brayden daniel#70#wales", "brayden daniel#70#england#2"])
         #expect(r.warnings.contains(.indistinguishable("Brayden Daniel")))
+    }
+
+    // MARK: - FMRTE's Id column
+
+    @Test func playersFromAGridWithIdsAreKeyedById() throws {
+        let r = try importFirstTeamWithIDs()
+        #expect(r.grid == "TeamPlayersColumns")
+        #expect(r.players.count == 18)
+        let potter = try #require(r.players.first { $0.name == "Alfie Potter" })
+        #expect(potter.id == PlayerID.fmrte(146837))
+        #expect(potter.id.key == "fmrte:146837" && potter.id.fmrteID == 146837)
+        #expect(r.players.allSatisfy { $0.id.key.hasPrefix("fmrte:") && $0.id.fmrteID != nil })
+        #expect(Set(r.players.map(\.id)).count == 18)
+        #expect(!r.warnings.contains(where: isNameWarning))
+        // The id is identity, not an unmodelled column.
+        #expect(potter.extras["Id"] == nil)
+    }
+
+    @Test func aNameKeyHasNoFMRTEID() {
+        #expect(PlayerID(key: "alfie potter").fmrteID == nil)
+        #expect(PlayerID(key: "fmrte:").fmrteID == nil)
+        #expect(PlayerID.fmrte(2000482787).fmrteID == 2000482787)
+    }
+
+    @Test func twoNamesakesWithDifferentIdsNeedNoNameHandling() throws {
+        let id = try teamColumn("Id"), pa = try teamColumn("PA")
+        let r = try importFirstTeamWithIDs { rows in
+            var copy = rows[0]
+            copy[id] = quoted("999999")
+            copy[pa] = quoted("100")      // the same potential ability too: by name they could not be told apart
+            return rows + [copy]
+        }
+        #expect(r.players.count == 19)
+        let potters = r.players.filter { $0.name == "Alfie Potter" }
+        #expect(potters.map(\.id.key) == ["fmrte:146837", "fmrte:999999"])
+        #expect(!r.warnings.contains(where: isNameWarning))
+    }
+
+    @Test func twoRowsWithOneIdStopTheImport() throws {
+        let id = try teamColumn("Id")
+        #expect(throws: ImportError.duplicateID(id: "146837", players: ["Alfie Potter", "Jonny Maxted"])) {
+            try importFirstTeamWithIDs { rows in
+                var rows = rows
+                rows[2][id] = quoted("146837")    // Jonny Maxted, third row, given Alfie Potter's id
+                return rows
+            }
+        }
+    }
+
+    @Test(arguments: ["", "abc", "0"])
+    func aBlankIdNamesThePlayer(value: String) throws {
+        let id = try teamColumn("Id")
+        #expect(throws: ImportError.invalidValue(player: "Jonny Maxted", column: "Id", value: value)) {
+            try importFirstTeamWithIDs { rows in
+                var rows = rows
+                rows[2][id] = quoted(value)
+                return rows
+            }
+        }
+    }
+
+    @Test func aGridWithoutIdsWarnsThatIdentityIsByName() throws {
+        let r = try importU21()
+        #expect(r.warnings.filter { $0 == .identifiedByName }.count == 1)
+        #expect(r.warnings == [.identifiedByName, .outOfContract("Aydin Ulas")])
+        #expect(r.players.map(\.id.key) == ["brayden daniel", "max treml", "tyrae njogu", "caleb moir", "aydin ulas",
+                                            "kauan bitencourt de oliveira"])
+        #expect(r.players.allSatisfy { $0.id.fmrteID == nil })
+    }
+
+    @Test func theU21CaptureWithIdsMatchesTheEarlierCapturesPlayers() throws {
+        let r = try Importer.importPlayers(clipboard: Fixtures.text("captures/u21-with-id.tsv"),
+                                           fmrteConfig: Fixtures.data("captures/u21-with-id.grids.json"), squad: .u21)
+        #expect(r.grid == "TeamPlayersColumns")
+        #expect(Set(r.players.map(\.name)) == Set(try u21().map(\.name)))
+        #expect(r.players.count == 6)
+        #expect(r.players.allSatisfy { $0.id.key.hasPrefix("fmrte:") })
+        let treml = try #require(r.players.first { $0.name == "Max Treml" })
+        #expect(treml.id == PlayerID(key: "fmrte:2000482787") && treml.loanedTo == "Wallingford")
+        #expect(!r.warnings.contains(.identifiedByName))
     }
 
     @Test func injuredAndBannedEachLandInTheirOwnField() throws {

@@ -1,6 +1,6 @@
 import Foundation
 
-/// The engine's own errors in plain words for the manager. Every known error type is described
+/// The engine's own errors, and the importer's warnings, in plain words for the manager. Every known error type is described
 /// by an exhaustive switch; only a type the engine does not define falls through to a generic line.
 public enum ErrorDescriptions {
     public static func describe(_ error: Error) -> String {
@@ -31,6 +31,22 @@ public enum ErrorDescriptions {
         case .missingColumns(let grid, let columns): "Grid \(grid) lacks the columns: \(columns.joined(separator: ", "))"
         case .invalidValue(let player, let column, let value): "\(player): the value '\(value)' in column \(column) is not valid"
         case .unexpectedScale(let column): "Column \(column) looks like percentages; FMRTE's 0 to 10000 scale is expected"
+        case .duplicateID(let id, let players):
+            "Two rows have the same FMRTE Id \(id): \(players.joined(separator: " and "))"
+        }
+    }
+
+    /// An import warning in plain words; the caller says which squad it came from.
+    public static func describe(_ warning: ImportWarning) -> String {
+        switch warning {
+        case .duplicateName(let name):
+            "more than one player is called \(name); they were told apart by potential ability, then nationality"
+        case .indistinguishable(let name):
+            "players called \(name) also share potential ability and nationality, so they were told apart by their order "
+                + "in the paste; re-sorting the grid in FMRTE can swap them"
+        case .outOfContract(let name): "\(name) is out of contract"
+        case .identifiedByName:
+            "This grid has no Id column, so players are identified by name. Add the Id column in FMRTE for exact identity."
         }
     }
 

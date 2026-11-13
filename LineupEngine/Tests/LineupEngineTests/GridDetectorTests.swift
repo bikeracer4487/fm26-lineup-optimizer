@@ -75,6 +75,33 @@ private func searchCapture() throws -> (rows: [[String]], grids: [GridLayout]) {
     #expect(Set(GridDetector.requiredColumns).count == 90)
 }
 
+// MARK: - FMRTE's Id column
+
+@Test func aPasteWithAnIdColumnFitsTheTeamGrid() throws {
+    let rows = try ClipboardText.rows(Fixtures.text("captures/first-team-with-id.tsv"))
+    let grids = try FMRTEConfig.playerGrids(from: Fixtures.data("captures/first-team-with-id.grids.json"))
+    let layout = try GridDetector.detect(rows: rows, grids: grids)
+    #expect(layout.key == "TeamPlayersColumns")
+    #expect(layout.columns.count == 99 && layout.columns.last == "Id")
+    // The search grid in the same snapshot has no Id column and one column fewer.
+    let search = try #require(grids.first { $0.key == "SearchPlayersColumns" })
+    #expect(search.columns.count == 98 && !search.columns.contains("Id"))
+}
+
+@Test func idIsNotARequiredColumn() throws {
+    #expect(!GridDetector.requiredColumns.contains("Id"))
+    // A grid without it still detects.
+    let (rows, grids) = try searchCapture()
+    #expect(try GridDetector.detect(rows: rows, grids: grids).key == "SearchPlayersColumns")
+}
+
+@Test func anIdMustBeAWholePositiveNumber() {
+    for value in ["146837", "1", "2000482787"] { #expect(violations("Id", value) == 0, "Id accepts \(value)") }
+    for value in ["", "0", "-5", "12a", "£12", "1,234", "+5", " 12", "1.5"] {
+        #expect(violations("Id", value) == 1, "Id rejects \(value)")
+    }
+}
+
 @Test func reorderedColumnsStillDetect() throws {
     let (rows, grids) = try searchCapture()
     let search = try #require(grids.first { $0.key == "SearchPlayersColumns" })

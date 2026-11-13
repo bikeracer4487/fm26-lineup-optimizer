@@ -1,12 +1,24 @@
 import Foundation
 
-/// A player's identity across imports: his name, normalised, with a potential ability, then a
+/// A player's identity across imports. When the pasted grid has FMRTE's `Id` column it is that
+/// number, `fmrte:<id>`. Otherwise it is his name, normalised, with a potential ability, then a
 /// nationality, then (as a last resort) a row suffix when two players share a name. See
 /// `Importer` for one paste and `SquadBook.apply` for how a player keeps his key across imports.
 public struct PlayerID: Hashable, Codable, Sendable {
     public let key: String
 
     public init(key: String) { self.key = key }
+
+    private static let fmrtePrefix = "fmrte:"
+
+    /// The key for FMRTE's `Id` column value: `fmrte:<id>`.
+    public static func fmrte(_ id: Int) -> PlayerID { PlayerID(key: "\(fmrtePrefix)\(id)") }
+
+    /// The FMRTE id when the key has the form `fmrte:<id>`; nil for a name-based key.
+    public var fmrteID: Int? {
+        guard key.hasPrefix(Self.fmrtePrefix) else { return nil }
+        return Int(key.dropFirst(Self.fmrtePrefix.count))
+    }
 
     /// Lowercased, diacritics folded, inner whitespace collapsed to single spaces.
     public static func normalise(_ name: String) -> String {

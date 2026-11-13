@@ -49,26 +49,57 @@ public struct SquadBook: Equatable, Codable, Sendable {
     public init() {}
 
     /// Replaces the squad with the import. Each incoming player's key is decided by the first rule
-    /// that matches, `isSamePerson` deciding who is the same person:
-    /// 1. the same person is in this squad: he keeps that player's key, whatever the importer gave him;
+    /// that matches, `isSamePerson` deciding who is the same person.
+    ///
+    /// An incoming player keyed by FMRTE's id (`fmrte:<id>`) always keeps that key:
+    /// 1. a player in this squad holds the key: he is that player;
+    /// 2. a player in another squad holds it: he moves here (`movedIn`);
+    /// 3. the same person holds a name-based key in this squad: he takes over from him, and is reported
+    ///    in `changed`, not as one player removed and one added;
+    /// 4. the same person holds a name-based key in another squad: he takes over from him and moves here;
+    /// 5. otherwise he is new.
+    ///
+    /// An incoming player keyed by name:
+    /// 1. the same person is in this squad: he keeps that player's key (an `fmrte:` key included),
+    ///    whatever the importer gave him;
     /// 2. the same person is in another squad: he takes that key and moves here (`movedIn`);
     /// 3. otherwise his importer key, re-keyed by `freeKey` if it is held elsewhere or kept by rule 1 or 2.
-    /// Rules 1 and 2 let each existing key be claimed once, by the first incoming player in paste
-    /// order, and take candidates in `allPlayers` order. A name held under more than one key is
+    ///
+    /// Each existing key can be claimed once, by the first incoming player in paste order, and
+    /// candidates are taken in `allPlayers` order. A name held under more than one name-based key is
     /// reported by `warnings(override:)`.
     @discardableResult
     public mutating func apply(_ result: ImportResult, to squad: Squad) -> SquadChange {
         let old = current[squad] ?? []
         let elsewhere = Self.bookOrder.filter { $0 != squad }.flatMap { other in (current[other] ?? []).map { (squad: other, player: $0) } }
         var incoming = result.players
-        var claimed: Set<PlayerID> = []
+        // An `fmrte:` key in this import belongs to its incoming player; nobody keyed by name may claim it.
+        var claimed = Set(incoming.map(\.id).filter { $0.fmrteID != nil })
         var movedFrom: [Squad: Set<PlayerID>] = [:]
         var movedIn: [PlayerID] = []
+        // The `fmrte:` key of each incoming player who took over a name-keyed player of this squad, and that player's key.
+        var tookOver: [PlayerID: PlayerID] = [:]
         var unmatched: [Int] = []
         for i in incoming.indices {
             incoming[i].squad = squad
             func unclaimedSamePerson(_ existing: Player) -> Bool {
                 !claimed.contains(existing.id) && Self.isSamePerson(existing, incoming[i])
+            }
+            let id = incoming[i].id
+            if id.fmrteID != nil {
+                if old.contains(where: { $0.id == id }) { continue }
+                if let holder = elsewhere.first(where: { $0.player.id == id }) {
+                    movedFrom[holder.squad, default: []].insert(id)
+                    movedIn.append(id)
+                } else if let replaced = old.first(where: unclaimedSamePerson) {
+                    tookOver[id] = replaced.id
+                    claimed.insert(replaced.id)
+                } else if let replaced = elsewhere.first(where: { unclaimedSamePerson($0.player) }) {
+                    movedFrom[replaced.squad, default: []].insert(replaced.player.id)
+                    movedIn.append(id)
+                    claimed.insert(replaced.player.id)
+                }
+                continue
             }
             if let stays = old.first(where: unclaimedSamePerson) {
                 incoming[i].id = stays.id
@@ -92,11 +123,15 @@ public struct SquadBook: Equatable, Codable, Sendable {
 
         let oldByID = Dictionary(old.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let newIDs = Set(incoming.map(\.id))
+        let replaced = Set(tookOver.values)
         let change = SquadChange(
-            added: incoming.map(\.id).filter { oldByID[$0] == nil },
-            removed: old.map(\.id).filter { !newIDs.contains($0) },
+            added: incoming.map(\.id).filter { oldByID[$0] == nil && tookOver[$0] == nil },
+            removed: old.map(\.id).filter { !newIDs.contains($0) && !replaced.contains($0) },
             movedIn: movedIn,
-            changed: incoming.filter { player in oldByID[player.id].map { $0 != player } ?? false }.map(\.id)
+            // A take-over changes the key, so he is changed whatever his other fields.
+            changed: incoming.filter { player in
+                tookOver[player.id] != nil || (oldByID[player.id].map { $0 != player } ?? false)
+            }.map(\.id)
         )
 
         for (other, ids) in movedFrom {
@@ -122,9 +157,12 @@ public struct SquadBook: Equatable, Codable, Sendable {
         return PlayerID(key: "\(nationality)#\(position)")
     }
 
-    /// One person: equal names once `PlayerID.normalise`d, equal potential ability, equal nationalities.
+    /// One person. Two `fmrte:` keys are one person exactly when they are equal, whatever the names.
+    /// Otherwise (at least one key name-based): equal names once `PlayerID.normalise`d, equal potential
+    /// ability, equal nationalities.
     private static func isSamePerson(_ a: Player, _ b: Player) -> Bool {
-        PlayerID.normalise(a.name) == PlayerID.normalise(b.name)
+        if a.id.fmrteID != nil && b.id.fmrteID != nil { return a.id == b.id }
+        return PlayerID.normalise(a.name) == PlayerID.normalise(b.name)
             && a.potentialAbility == b.potentialAbility && a.nationalities == b.nationalities
     }
 
@@ -152,8 +190,9 @@ public struct SquadBook: Equatable, Codable, Sendable {
         LoanStatus.of(player, ownClub: ownClub(override: override))
     }
 
-    /// `ownClubUnknown` first, then one `sharedName` for each name held under more than one key,
-    /// in `allPlayers` order and spelt as first seen there.
+    /// `ownClubUnknown` first, then one `sharedName` for each name held under more than one
+    /// name-based key, in `allPlayers` order and spelt as first seen there. Players keyed by FMRTE's
+    /// id never raise it: their ids already tell them apart.
     public func warnings(override: String?) -> [SquadWarning] {
         var found: [SquadWarning] = []
         if ownClub(override: override) == nil && allPlayers.contains(where: { $0.loanedTo != nil }) {
@@ -161,7 +200,7 @@ public struct SquadBook: Equatable, Codable, Sendable {
         }
         var keysByName: [String: Set<PlayerID>] = [:]
         var names: [(normalised: String, spelling: String)] = []
-        for player in allPlayers {
+        for player in allPlayers where player.id.fmrteID == nil {
             let normalised = PlayerID.normalise(player.name)
             if keysByName[normalised] == nil { names.append((normalised, player.name)) }
             keysByName[normalised, default: []].insert(player.id)

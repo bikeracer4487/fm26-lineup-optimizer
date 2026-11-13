@@ -20,8 +20,11 @@ public enum GridDetector {
     /// The one attribute whose FMRTE column can carry a currency symbol in front of the rating.
     static let balancePath = "PhysicalAttributes.Balance"
 
+    /// FMRTE's player id: optional, and the player's identity when a grid has it.
+    static let idPath = "Id"
+
     /// Columns a layout must contain before a paste can be imported. `Contract.Club` and
-    /// `AskingPrice` are left out because the owner's team grid has neither.
+    /// `AskingPrice` are left out because the owner's team grid has neither; `Id` is optional.
     public static let requiredColumns: [String] = [
         "DisplayedName", "Age", "CA", "PA", "Positions.PositionsDesc",
         "IsInjured", "IsBanned", "Condition", "Jadedness", "MatchSharpness",
@@ -88,8 +91,15 @@ public enum GridDetector {
         case "CA", "PA": return !isWholeNumber(cell, in: abilityRange)
         case "Contract.WagePerWeek", "AskingPrice": return moneyValue(cell) == nil
         case "DisplayedName": return cell.isEmpty || cell.allSatisfy(\.isASCIIDigit)
+        case idPath: return fmrteID(cell) == nil
         default: return false
         }
+    }
+
+    /// The value of an `Id` cell: ASCII digits only, no sign or separator, at least 1; else nil.
+    static func fmrteID(_ cell: String) -> Int? {
+        guard !cell.isEmpty, cell.allSatisfy(\.isASCIIDigit), let value = Int(cell), value >= 1 else { return nil }
+        return value
     }
 
     /// An optional minus sign and ASCII digits only, with a value inside `range`.

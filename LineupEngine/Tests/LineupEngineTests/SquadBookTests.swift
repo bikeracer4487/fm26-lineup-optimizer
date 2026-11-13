@@ -278,6 +278,119 @@ private func book(_ capture: String, squad: Squad) throws -> SquadBook {
         #expect(change.changed.isEmpty)
     }
 
+    // MARK: - Identity by FMRTE's Id column
+
+    /// The player as the importer keys him when the grid has FMRTE's `Id` column.
+    private func withID(_ player: Player, _ id: Int) -> Player { keyed(player, "fmrte:\(id)") }
+
+    @Test func aPlayerWithAnIdMovesBetweenSquadsByIdAlone() {
+        var book = SquadBook()
+        book.apply(result([withID(marsh(90, age: 18), 7), withID(.fixture(name: "D"), 8)]), to: .u21)
+        // Spelt differently and with another potential ability: by name he would be someone else.
+        var renamed = withID(marsh(110, ["Wales"], age: 19), 7)
+        renamed.name = "Ty Marsh"
+        let change = book.apply(result([renamed, withID(.fixture(name: "B"), 9)]), to: .firstTeam)
+        #expect(keys(book, .u21) == ["fmrte:8"])
+        #expect(keys(book, .firstTeam) == ["fmrte:7", "fmrte:9"])
+        #expect(change.movedIn == [PlayerID.fmrte(7)])
+        #expect(change.added == [PlayerID.fmrte(7), PlayerID.fmrte(9)])
+        #expect(book.current[.firstTeam]?.first?.name == "Ty Marsh")
+
+        // Within one squad the same id is the same player, reported as changed.
+        let again = book.apply(result([withID(marsh(110, ["Wales"], age: 19), 7), withID(.fixture(name: "B"), 9)]), to: .firstTeam)
+        #expect(again.changed == [PlayerID.fmrte(7)])
+        #expect(again.added.isEmpty && again.removed.isEmpty && again.movedIn.isEmpty)
+    }
+
+    @Test func aNamesakeWithADifferentIdIsADifferentPerson() {
+        var book = SquadBook()
+        book.apply(result([withID(marsh(90), 1), withID(.fixture(name: "B"), 2)]), to: .firstTeam)
+        // Same name, potential ability and nationalities, but another id.
+        let change = book.apply(result([withID(marsh(90), 3)]), to: .u21)
+        #expect(keys(book, .firstTeam) == ["fmrte:1", "fmrte:2"])
+        #expect(keys(book, .u21) == ["fmrte:3"])
+        #expect(change.movedIn.isEmpty && change.added == [PlayerID.fmrte(3)])
+        #expect(book.warnings(override: nil).isEmpty)
+
+        // The same two Marshes keyed by name are taken for one person who moved.
+        var byName = SquadBook()
+        byName.apply(result([marsh(90), .fixture(name: "B")]), to: .firstTeam)
+        let moved = byName.apply(result([marsh(90)]), to: .u21)
+        #expect(moved.movedIn == [PlayerID(key: "tyrone marsh")])
+    }
+
+    @Test func importingWithIdsTakesOverFromNameKeyedEntries() throws {
+        var book = try book("first-team", squad: .firstTeam)
+        let before = try #require(book.current[.firstTeam])
+        #expect(before.allSatisfy { $0.id.fmrteID == nil })
+        let withIDs = try Importer.importPlayers(clipboard: Fixtures.text("captures/first-team-with-id.tsv"),
+                                                 fmrteConfig: Fixtures.data("captures/first-team-with-id.grids.json"),
+                                                 squad: .firstTeam)
+        let change = book.apply(withIDs, to: .firstTeam)
+        let after = try #require(book.current[.firstTeam])
+        #expect(after.count == before.count && after.count == 18)
+        #expect(after.allSatisfy { $0.id.key.hasPrefix("fmrte:") })
+        #expect(after.map(\.id) == withIDs.players.map(\.id))
+        #expect(change.added.isEmpty && change.removed.isEmpty && change.movedIn.isEmpty)
+        #expect(change.changed == withIDs.players.map(\.id))
+        #expect(book.allPlayers.count == 18)
+    }
+
+    @Test func anIdTakesOverANameKeyedEntryInAnotherSquad() {
+        var book = SquadBook()
+        book.apply(result([marsh(90, age: 18), .fixture(name: "D")]), to: .u21)
+        let change = book.apply(result([withID(marsh(90, age: 19), 7)]), to: .firstTeam)
+        #expect(keys(book, .u21) == ["d"])
+        #expect(keys(book, .firstTeam) == ["fmrte:7"])
+        #expect(change.movedIn == [PlayerID.fmrte(7)] && change.added == [PlayerID.fmrte(7)])
+        #expect(book.allPlayers.filter { $0.name == "Tyrone Marsh" }.count == 1)
+    }
+
+    @Test func anIdDoesNotTakeOverANameKeyedEntryWhoIsSomeoneElse() {
+        var book = SquadBook()
+        book.apply(result([marsh(90), .fixture(name: "D")]), to: .u21)
+        book.apply(result([marsh(120)]), to: .firstTeam)
+        // Another potential ability: not the same person by the name test.
+        let change = book.apply(result([withID(marsh(100), 7)]), to: .firstTeam)
+        #expect(keys(book, .u21) == ["tyrone marsh", "d"])
+        #expect(keys(book, .firstTeam) == ["fmrte:7"])
+        #expect(change.added == [PlayerID.fmrte(7)] && change.removed == [PlayerID(key: "tyrone marsh#120")])
+        #expect(change.movedIn.isEmpty && change.changed.isEmpty)
+    }
+
+    @Test func importingWithoutIdsAfterIdsKeepsTheIdKeys() throws {
+        var book = try book("first-team-with-id", squad: .firstTeam)
+        let idKeys = keys(book, .firstTeam)
+        #expect(idKeys.count == 18 && idKeys.allSatisfy { $0.hasPrefix("fmrte:") })
+        let change = book.apply(try Importer.importPlayers(clipboard: Fixtures.text("captures/first-team.tsv"),
+                                                           fmrteConfig: Fixtures.data("captures/first-team.grids.json"),
+                                                           squad: .firstTeam), to: .firstTeam)
+        #expect(keys(book, .firstTeam) == idKeys)
+        #expect(change.added.isEmpty && change.removed.isEmpty && change.movedIn.isEmpty)
+
+        // A name-keyed player who is the same person as an id-keyed one in another squad takes his key and moves.
+        var moves = SquadBook()
+        moves.apply(result([withID(marsh(90, age: 18), 7), withID(.fixture(name: "D"), 8)]), to: .u21)
+        let moved = moves.apply(result([marsh(90, age: 19), .fixture(name: "B")]), to: .firstTeam)
+        #expect(keys(moves, .firstTeam) == ["fmrte:7", "b"])
+        #expect(keys(moves, .u21) == ["fmrte:8"])
+        #expect(moved.movedIn == [PlayerID.fmrte(7)])
+    }
+
+    @Test func sharedNameIsNotRaisedForPlayersWithIds() {
+        var book = SquadBook()
+        book.apply(result([withID(marsh(120), 1)]), to: .firstTeam)
+        book.apply(result([withID(marsh(90), 2)]), to: .u21)
+        #expect(book.warnings(override: nil).isEmpty)
+        // One name-keyed namesake beside them: still one name-based key, so still no warning.
+        book.apply(result([marsh(70)]), to: .u18)
+        #expect(keys(book, .u18) == ["tyrone marsh"])
+        #expect(book.warnings(override: nil).isEmpty)
+        // A second name-keyed namesake makes two name-based keys for the name.
+        book.apply(result([marsh(70), keyed(marsh(60), "tyrone marsh#60")]), to: .u18)
+        #expect(book.warnings(override: nil) == [.sharedName("Tyrone Marsh")])
+    }
+
     @Test func oneNameWithOneKeyRaisesNoSharedNameWarning() {
         var book = SquadBook()
         book.apply(result([marsh(120), .fixture(name: "B")]), to: .firstTeam)
