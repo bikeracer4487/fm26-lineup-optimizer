@@ -53,8 +53,9 @@ public enum OmissionCause: Equatable, Sendable {
     case excluded(Exclusion)
     /// `ideal` is his full-fitness value in his ideal slot, `today` that value times his fitness product.
     case lowerMatchDayValue(ideal: Double, today: Double, limiting: FactorKind)
-    /// His ideal slot holds the player the manager chose for it.
-    case displacedByOverride(by: PlayerID)
+    /// He would start without the manager's overrides. `by` is the player chosen for his ideal
+    /// slot when there is one; otherwise every applied override's player, in slot order.
+    case displacedByOverride(by: [PlayerID])
 }
 
 /// A player in the ideal eleven who is not in the real one.
@@ -143,15 +144,20 @@ public struct LineupSelector: Sendable {
         let overridden = Set(placed.keys)
 
         // The real eleven: available players at match-day value, around the overrides.
-        let openSlots = assignments.indices.filter { placed[$0] == nil }
-        let fixedPlayers = Set(placed.values)
-        let candidates = players.indices.filter { !fixedPlayers.contains($0) }
-        let values: [[Double?]] = openSlots.map { s in
-            candidates.map { i in exclusions[i] == nil ? ratings[s][i].map { matchDayValue($0, fitness[i]) } : nil }
+        func solve(around fixed: [Int: Int]) -> [Int: Int] {
+            var placed = fixed
+            let openSlots = assignments.indices.filter { fixed[$0] == nil }
+            let fixedPlayers = Set(fixed.values)
+            let candidates = players.indices.filter { !fixedPlayers.contains($0) }
+            let values: [[Double?]] = openSlots.map { s in
+                candidates.map { i in exclusions[i] == nil ? ratings[s][i].map { matchDayValue($0, fitness[i]) } : nil }
+            }
+            for (row, choice) in AssignmentSolver.maximise(values: values).enumerated() {
+                if let c = choice { placed[openSlots[row]] = candidates[c] }
+            }
+            return placed
         }
-        for (row, choice) in AssignmentSolver.maximise(values: values).enumerated() {
-            if let c = choice { placed[openSlots[row]] = candidates[c] }
-        }
+        placed = solve(around: placed)
 
         var picks: [Pick] = []
         var unfilled: [SlotID] = []
@@ -162,15 +168,21 @@ public struct LineupSelector: Sendable {
                               isOverride: isOverride, broken: isOverride ? exclusions[i] : nil))
         }
 
+        // Who would start with the same availability but no overrides: an omitted player among them
+        // was displaced by the manager's choices, not by his fitness.
+        let startsWithoutOverrides = overridden.isEmpty ? [] : Set(solve(around: [:]).values)
+        let overridePlayers = overridden.sorted().map { players[placed[$0]!] }
+
         // The ideal eleven: everyone not out on loan, at full fitness, with no exclusions or overrides.
         let ideal = AssignmentSolver.maximise(values: ratings.map { row in row.map { $0?.value } })
         let inLineup = Set(placed.values)
         var omissions: [Omission] = []
         for (s, choice) in ideal.enumerated() {
             guard let i = choice, !inLineup.contains(i), let rating = ratings[s][i] else { continue }
-            let chosenInstead = overridden.contains(s) ? placed[s].map { players[$0] } : nil
+            let displacement: Displacement? = !startsWithoutOverrides.contains(i) ? nil
+                : overridden.contains(s) ? .inHisSlot(by: players[placed[s]!]) : .elsewhere(by: overridePlayers)
             omissions.append(omission(players[i], assignments[s], rating: rating, fitness: fitness[i],
-                                      excluded: exclusions[i], chosenInstead: chosenInstead))
+                                      excluded: exclusions[i], displacement: displacement))
         }
 
         return Lineup(picks: picks, unfilled: unfilled, omissions: omissions, ignoredOverrides: ignored)
@@ -213,33 +225,56 @@ public struct LineupSelector: Sendable {
                     value: matchDayValue(rating, fitness), isOverride: isOverride, warnings: warnings, reasons: reasons)
     }
 
-    /// `chosenInstead` is the manager's override in his ideal slot, if there is one.
+    /// How the manager's overrides cost an ideal player his place.
+    private enum Displacement {
+        /// His ideal slot holds the player chosen for it.
+        case inHisSlot(by: Player)
+        /// The overrides, in slot order, moved others into his place.
+        case elsewhere(by: [Player])
+    }
+
     private func omission(_ player: Player, _ assignment: SlotAssignment, rating: SlotRating, fitness: FitnessFactors,
-                          excluded: Exclusion?, chosenInstead: Player?) -> Omission {
+                          excluded: Exclusion?, displacement: Displacement?) -> Omission {
         let cause: OmissionCause
         let reason: String
         if let excluded {
             cause = .excluded(excluded)
             reason = "Left out: " + leftOutText(excluded)
-        } else if let chosenInstead {
-            cause = .displacedByOverride(by: chosenInstead.id)
-            reason = "Left out: you chose \(chosenInstead.name) for \(assignment.ipPosition.rawValue)"
+        } else if let displacement {
+            switch displacement {
+            case .inHisSlot(let chosen):
+                cause = .displacedByOverride(by: [chosen.id])
+                reason = "Left out: you chose \(chosen.name) for \(assignment.ipPosition.rawValue)"
+            case .elsewhere(let chosen):
+                cause = .displacedByOverride(by: chosen.map(\.id))
+                reason = "Left out: your choice of \(listed(chosen.map(\.name))) moved others into his place"
+            }
         } else {
             let today = matchDayValue(rating, fitness)
-            let limiting = limitingFactor(fitness)
-            cause = .lowerMatchDayValue(ideal: rating.value, today: today, limiting: limiting)
-            if fitness.condition == 1 && fitness.sharpness == 1 && fitness.jadedness == 1 {
-                reason = "Left out: others are a better fit today"
-            } else {
-                let input = switch limiting {
-                case .condition: "condition \(percent(player.condition))"
-                case .sharpness: "sharpness \(percent(player.sharpness))"
-                case .jadedness: "jadedness \(player.jadedness)"
+            cause = .lowerMatchDayValue(ideal: rating.value, today: today, limiting: limitingFactor(fitness))
+            let below = [(FactorKind.condition, fitness.condition), (.sharpness, fitness.sharpness), (.jadedness, fitness.jadedness)]
+                .filter { $0.1 < 1 }
+                .map { kind, _ in
+                    switch kind {
+                    case .condition: "condition \(percent(player.condition))"
+                    case .sharpness: "sharpness \(percent(player.sharpness))"
+                    case .jadedness: "jadedness \(player.jadedness)"
+                    }
                 }
-                reason = "Left out: \(input) lowers him from \(oneDecimal(rating.value)) to \(oneDecimal(today))"
+            let fall = "lowers him from \(oneDecimal(rating.value)) to \(oneDecimal(today))"
+            reason = switch below.count {
+            case 0: "Left out: others are a better fit today"
+            case 1: "Left out: \(below[0]) \(fall)"
+            default: "Left out: fitness \(fall) (\(below.joined(separator: ", ")))"
             }
         }
         return Omission(player: player.id, name: player.name, slot: assignment.slot, cause: cause, reason: reason)
+    }
+
+    /// "A", "A and B", "A, B and C".
+    private func listed(_ names: [String]) -> String {
+        guard let last = names.last, names.count > 1 else { return names.first ?? "" }
+        return names.dropLast().joined(separator: ", ") + " and " + last
     }
 
     /// The smallest factor; ties go to condition, then sharpness, then jadedness.

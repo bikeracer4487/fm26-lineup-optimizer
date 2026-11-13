@@ -136,7 +136,7 @@ import Testing
         #expect(Array(st.reasons.dropFirst()) == ["Condition 90% (×0.94)", "Sharpness 75% (×0.92)", "Jadedness 300 (×0.90)"])
     }
 
-    @Test func aLowFactorOtherThanConditionIsNamedAsTheLimit() throws {
+    @Test func twoLowFactorsAreBothNamedAndTheLowerIsTheLimit() throws {
         let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
         let lineup = try selector.select(request(changing("Striker", in: squad(rival)) { $0.condition = 0.90; $0.sharpness = 0.50 }))
         let omission = try #require(lineup.omissions.first)
@@ -144,7 +144,22 @@ import Testing
             Issue.record("expected lowerMatchDayValue, got \(omission.cause)"); return
         }
         #expect(limiting == .sharpness)
-        #expect(omission.reason == "Left out: sharpness 50% lowers him from \(oneDecimal(ideal)) to \(oneDecimal(today))")
+        #expect(omission.reason
+            == "Left out: fitness lowers him from \(oneDecimal(ideal)) to \(oneDecimal(today)) (condition 90%, sharpness 50%)")
+    }
+
+    @Test func sharpnessIsTheLimitWhenItTiesJadednessBelowCondition() throws {
+        // Condition 90% (0.94); sharpness 30% and jadedness 500 both 0.70. A high fixture, so 500 is not excluded.
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let players = changing("Striker", in: squad(rival)) { $0.condition = 0.90; $0.sharpness = 0.30; $0.jadedness = 500 }
+        let lineup = try selector.select(request(players, importance: .high))
+        let omission = try #require(lineup.omissions.first)
+        guard case .lowerMatchDayValue(let ideal, let today, let limiting) = omission.cause else {
+            Issue.record("expected lowerMatchDayValue, got \(omission.cause)"); return
+        }
+        #expect(limiting == .sharpness)
+        #expect(omission.reason == "Left out: fitness lowers him from \(oneDecimal(ideal)) to \(oneDecimal(today))"
+            + " (condition 90%, sharpness 30%, jadedness 500)")
     }
 
     // Each factor on its own against a rival at familiarity 17 (factor 0.95, a rating exactly 5% lower).
@@ -396,13 +411,13 @@ import Testing
         #expect(lineup.ignoredOverrides.isEmpty)
         let omission = try #require(lineup.omissions.first)
         #expect(omission.player == id("Striker"))
-        #expect(omission.cause == .displacedByOverride(by: id("Rival Striker")))
+        #expect(omission.cause == .displacedByOverride(by: [id("Rival Striker")]))
     }
 
-    @Test func aFitPlayerSqueezedOutElsewhereHearsThatOthersFitBetter() throws {
+    @Test func aFitPlayerSqueezedOutElsewhereIsToldYourChoiceMovedOthers() throws {
         // Ideal: Striker (all 12, natural at ST and AM (C)) at ST_C, Playmaker at AM_C. Overriding the
         // rival into ST_C moves the Striker to AM_C, so the fit Playmaker, whose own slot was not
-        // overridden, loses his place to a better player.
+        // overridden, loses his place because of the override.
         let striker = Player.fixture(name: "Striker", all: 12, familiarity: [.striker: 20, .attackingMidCentral: 20])
         let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
         let players = squad().filter { $0.name != "Striker" } + [striker, rival]
@@ -412,11 +427,79 @@ import Testing
         try #require(pick(lineup, .AM_C)?.player == id("Striker"))
         #expect(lineup.omissions.map(\.player) == [id("Playmaker")])
         let omission = try #require(lineup.omissions.first)
-        guard case .lowerMatchDayValue(let ideal, let today, let limiting) = omission.cause else {
-            Issue.record("expected lowerMatchDayValue, got \(omission.cause)"); return
+        #expect(omission.cause == .displacedByOverride(by: [id("Rival Striker")]))
+        #expect(omission.reason == "Left out: your choice of Rival Striker moved others into his place")
+
+        // Every applied override is named, in slot order.
+        let two = try selector.select(request(players, overrides: [.ST_C: id("Rival Striker"), .GK: id("Goalkeeper")]))
+        #expect(two.omissions.first?.cause == .displacedByOverride(by: [id("Goalkeeper"), id("Rival Striker")]))
+        #expect(two.omissions.first?.reason == "Left out: your choice of Goalkeeper and Rival Striker moved others into his place")
+        let three = try selector.select(request(players, overrides: [.ST_C: id("Rival Striker"), .GK: id("Goalkeeper"),
+                                                                     .D_L: id("Left Back")]))
+        #expect(three.omissions.first?.cause == .displacedByOverride(by: [id("Goalkeeper"), id("Left Back"), id("Rival Striker")]))
+        #expect(three.omissions.first?.reason
+            == "Left out: your choice of Goalkeeper, Left Back and Rival Striker moved others into his place")
+    }
+
+    @Test func anOverrideIntoOneTwinSlotDisplacesAnUnfitPlayerFromTheOther() throws {
+        // As on the real data: a midfielder chosen at one centre-back slot moves the fit centre-back
+        // across, and the unfit one, whose own slot was not overridden, drops out.
+        let spareHolder = natural("Spare Holder", at: [.defensiveMidfielder], all: 9)
+        let players = changing("Right Centre Back", in: squad(spareHolder)) { $0.sharpness = 0.54 }
+        // His slot in the ideal eleven, which ignores availability, found by ruling him out.
+        let ruledOut = try selector.select(request(changing("Right Centre Back", in: players) { $0.isInjured = true }))
+        let idealSlot = try #require(ruledOut.omissions.first { $0.player == id("Right Centre Back") }).slot
+        try #require([SlotID.D_CL, .D_CR].contains(idealSlot))
+        let otherSlot: SlotID = idealSlot == .D_CL ? .D_CR : .D_CL
+        #expect(picked(try selector.select(request(players)), "Right Centre Back"))
+
+        let lineup = try selector.select(request(players, overrides: [otherSlot: id("Left Holder")]))
+        #expect(pick(lineup, otherSlot)?.player == id("Left Holder"))
+        #expect(pick(lineup, idealSlot)?.player == id("Left Centre Back"))
+        #expect(lineup.omissions.map(\.player) == [id("Right Centre Back")])
+        let omission = try #require(lineup.omissions.first)
+        #expect(omission.slot == idealSlot)
+        #expect(omission.cause == .displacedByOverride(by: [id("Left Holder")]))
+        #expect(omission.reason == "Left out: your choice of Left Holder moved others into his place")
+    }
+
+    @Test func aPlayerLeftOutWithOrWithoutTheOverridesKeepsHisFitnessReason() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let players = changing("Striker", in: squad(rival)) { $0.condition = 0.86 }
+        try #require(pick(try selector.select(request(players)), .ST_C)?.player == id("Rival Striker"))
+        let elsewhere = try selector.select(request(players, overrides: [.D_L: id("Right Back"), .D_R: id("Left Back")]))
+        let ownSlot = try selector.select(request(players, overrides: [.ST_C: id("Rival Striker")]))
+        for lineup in [elsewhere, ownSlot] {
+            #expect(pick(lineup, .ST_C)?.player == id("Rival Striker"))
+            let omission = try #require(lineup.omissions.first { $0.player == id("Striker") })
+            guard case .lowerMatchDayValue(let ideal, let today, let limiting) = omission.cause else {
+                Issue.record("expected lowerMatchDayValue, got \(omission.cause)"); continue
+            }
+            #expect(limiting == .condition)
+            #expect(omission.reason == "Left out: condition 86% lowers him from \(oneDecimal(ideal)) to \(oneDecimal(today))")
         }
-        #expect(ideal == today && limiting == .condition)
-        #expect(omission.reason == "Left out: others are a better fit today")
+    }
+
+    @Test func anIdealPlayerOverriddenIntoHisOwnSlotIsNotAnOmission() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let players = changing("Striker", in: squad(rival)) { $0.condition = 0.86 }
+        try #require(try selector.select(request(players)).omissions.map(\.player) == [id("Striker")])
+        let lineup = try selector.select(request(players, overrides: [.ST_C: id("Striker")]))
+        #expect(pick(lineup, .ST_C)?.player == id("Striker"))
+        #expect(lineup.omissions.isEmpty)
+    }
+
+    @Test func anIdealPlayerOverriddenIntoAnotherSlotIsNotAnOmission() throws {
+        // A spare playmaker fills AM_C, so the striker has nowhere to go.
+        let spare = natural("Spare Playmaker", at: [.attackingMidCentral], all: 9)
+        let lineup = try selector.select(request(squad(spare), overrides: [.ST_C: id("Playmaker")]))
+        #expect(pick(lineup, .ST_C)?.player == id("Playmaker"))
+        #expect(pick(lineup, .AM_C)?.player == id("Spare Playmaker"))
+        #expect(!lineup.omissions.contains { $0.player == id("Playmaker") })
+        // The striker whose slot the playmaker took is the one omission.
+        #expect(lineup.omissions.map(\.player) == [id("Striker")])
+        #expect(lineup.omissions.first?.cause == .displacedByOverride(by: [id("Playmaker")]))
+        #expect(lineup.omissions.first?.reason == "Left out: you chose Playmaker for ST (C)")
     }
 
     @Test func aPlayerDisplacedByYourOverrideIsToldSo() throws {
@@ -426,12 +509,17 @@ import Testing
         let omission = try #require(lineup.omissions.first)
         #expect(lineup.omissions.count == 1)
         #expect(omission.player == id("Striker") && omission.slot == .ST_C)
-        #expect(omission.cause == .displacedByOverride(by: id("Rival Striker")))
+        #expect(omission.cause == .displacedByOverride(by: [id("Rival Striker")]))
         #expect(omission.reason == "Left out: you chose Rival Striker for ST (C)")
 
         // Without the override he starts: his condition factor (0.97) beats the rival's familiarity (0.95).
         let free = try selector.select(request(players))
         #expect(pick(free, .ST_C)?.player == id("Striker"))
+
+        // With other overrides too, only the one in his own slot is named.
+        let more = try selector.select(request(players, overrides: [.ST_C: id("Rival Striker"), .GK: id("Goalkeeper")]))
+        #expect(more.omissions.first?.cause == .displacedByOverride(by: [id("Rival Striker")]))
+        #expect(more.omissions.first?.reason == "Left out: you chose Rival Striker for ST (C)")
     }
 
     @Test func aPlayerWhoLosesOnMeritWithoutAnOverrideIsBlamedOnFitness() throws {
