@@ -361,6 +361,33 @@ import Testing
         #expect(lineup.picks.allSatisfy { !$0.isOverride })
     }
 
+    @Test func anOverrideIntoASlotTheTacticDoesNotUseIsReported() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let lineup = try selector.select(request(squad(rival), overrides: [.M_C: id("Rival Striker")]))
+        #expect(lineup.ignoredOverrides == [.M_C: .slotNotInTactic])
+        #expect(lineup == (try selector.select(request(squad(rival)))).withIgnoredOverrides(lineup.ignoredOverrides))
+    }
+
+    @Test func anOverrideIntoAnUnusedSlotDoesNotCountAsASecondUse() throws {
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let lineup = try selector.select(request(squad(rival), overrides: [.M_C: id("Rival Striker"), .ST_C: id("Rival Striker")]))
+        #expect(lineup.ignoredOverrides == [.M_C: .slotNotInTactic])
+        let st = try #require(pick(lineup, .ST_C))
+        #expect(st.player == id("Rival Striker"))
+        #expect(st.isOverride)
+    }
+
+    @Test func overrideProblemsAreCheckedInOrder() throws {
+        // An unused slot is reported as such even for someone not in the squad.
+        let unused = try selector.select(request(squad(), overrides: [.M_C: id("Nobody")]))
+        #expect(unused.ignoredOverrides == [.M_C: .slotNotInTactic])
+
+        // A player used twice is reported as used twice even when his exclusion cannot be overridden.
+        let injured = changing("Striker", in: squad()) { $0.isInjured = true }
+        let twice = try selector.select(request(injured, overrides: [.ST_C: id("Striker"), .AM_C: id("Striker")]))
+        #expect(twice.ignoredOverrides == [.ST_C: .usedTwice, .AM_C: .usedTwice])
+    }
+
     // MARK: - Short squads
 
     @Test func withBothGoalkeepersInjuredAnOutfielderIsFlaggedInGoal() throws {

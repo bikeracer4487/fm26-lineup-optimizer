@@ -71,6 +71,8 @@ public struct Omission: Equatable, Sendable {
 
 public enum OverrideProblem: Equatable, Sendable {
     case notInSquad, notAllowed(Exclusion), usedTwice
+    /// The slot is not one of the tactic's in-possession slots, for example after the fixture's tactic changed.
+    case slotNotInTactic
 }
 
 public struct Lineup: Equatable, Sendable {
@@ -119,18 +121,20 @@ public struct LineupSelector: Sendable {
         }
 
         // Overrides
-        // Overrides for slots this tactic does not use have nowhere to go and are dropped.
+        // Overrides, first problem wins: slot not in the tactic, not in the squad, used twice, not allowed.
+        // An override for a slot the tactic does not use does not count as a use.
         let slotIndex = Dictionary(uniqueKeysWithValues: assignments.enumerated().map { ($1.slot, $0) })
         let active = request.overrides.compactMap { slot, id in slotIndex[slot].map { (s: $0, slot: slot, id: id) } }
         let uses = Dictionary(active.map { ($0.id, 1) }, uniquingKeysWith: +)
         var ignored: [SlotID: OverrideProblem] = [:]
+        for slot in request.overrides.keys where slotIndex[slot] == nil { ignored[slot] = .slotNotInTactic }
         var placed: [Int: Int] = [:]   // slot index -> player index
         for (s, slot, id) in active {
             guard let i = index[id] else { ignored[slot] = .notInSquad; continue }
-            if let excluded = exclusions[i], !RiskRules.canBeOverridden(excluded) {
-                ignored[slot] = .notAllowed(excluded)
-            } else if uses[id, default: 0] > 1 {
+            if uses[id, default: 0] > 1 {
                 ignored[slot] = .usedTwice
+            } else if let excluded = exclusions[i], !RiskRules.canBeOverridden(excluded) {
+                ignored[slot] = .notAllowed(excluded)
             } else {
                 placed[s] = i
             }
