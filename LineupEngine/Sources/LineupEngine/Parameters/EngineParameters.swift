@@ -74,6 +74,8 @@ public struct EngineParameters: Sendable {
     public var jadednessFloor: Parameter<Double>
     /// Minutes a starter is assumed to play.
     public var assumedMinutes: Parameter<Double>
+    /// A start extends a run of consecutive starts only when it came within this many days of the next match.
+    public var consecutiveStartWindowDays: Parameter<Int>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -163,7 +165,10 @@ public struct EngineParameters: Sendable {
             jadednessRecoveryPerDay: Parameter(20, .carriedOverFM26, source: "fm-arena, one rest day removes about 20"),
             jadednessFloor: Parameter(
                 -500, .fm27Observation, source: "editor range; rested players sit at exactly -500 (\(fitnessSource))"),
-            assumedMinutes: Parameter(90, .derived, source: "the planner does not model substitutions"))
+            assumedMinutes: Parameter(90, .derived, source: "the planner does not model substitutions"),
+            consecutiveStartWindowDays: Parameter(
+                4, .derived,
+                source: "docs/Research/player-rotation-guide.md: one match a week needs little rotation; rotation matters when matches come two or three a week"))
     }()
 
     /// Every stored parameter, found by reflection so a new one cannot be left out.
