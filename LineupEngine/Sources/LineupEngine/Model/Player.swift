@@ -21,6 +21,20 @@ public enum Squad: String, Codable, CaseIterable, Sendable {
     case firstTeam, u21, u18
 }
 
+/// Lets `[Squad: ...]` encode as a JSON object keyed by the raw values rather than as a flat array.
+extension Squad: CodingKeyRepresentable {
+    private struct Key: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+
+    public var codingKey: any CodingKey { Key(stringValue: rawValue) }
+
+    public init?<T: CodingKey>(codingKey: T) { self.init(rawValue: codingKey.stringValue) }
+}
+
 public enum ContractType: Equatable, Codable, Sendable {
     case fullTime
     case outOfContract
