@@ -520,6 +520,45 @@ Rules:
 
 ---
 
+### Task 11: The Tactics board look
+
+Added after the owner opened the app, found it bland and its numbers squashed, and chose the Tactics board from three mock-up directions. It runs after the final review's fixes.
+
+**Files:**
+- Create: `Sources/LineupAppUI/Resources/Fonts/` (the two typefaces and their licences), `Sources/LineupAppUI/Board/` (the shared pieces: the board frame and top navigation, magnets, sticky notes, the marker underline, meters, pills, button styles), `Sources/LineupAppCore/BoardPresentation.swift`
+- Modify: `Package.swift` (the UI target's resources), `Sources/LineupAppUI/Theme.swift`, `Sources/LineupAppUI/RootView.swift`, every screen under `Sources/LineupAppUI/`, `Sources/LineupAppUI/ScreenPictures.swift`, the entry point, `tools/build_app.sh` if the fonts need it, `CLAUDE.md` (one paragraph)
+- Test: `Tests/LineupAppCoreTests/BoardPresentationTests.swift`
+
+**The direction** is `docs/superpowers/specs/2026-11-13-fm27-app-visual-direction.md`: read all of it. Every value in it goes into `Theme`; no view holds a literal colour, font name or measure.
+
+What changes:
+
+- **Fonts.** Bricolage Grotesque and Figtree (SIL Open Font License) are shipped as resources of the UI target with their licence files and registered when the app starts, for the real app, for sample-data runs and for picture runs alike. If a face cannot be registered the app says so once in a notice and falls back to the system typeface. DIN is gone.
+- **The frame.** The window is the wall; the board sits on it; the sidebar goes. Navigation is the row of pills at the top of the board beside the club's name (the club's name from the model, "Lineup Optimizer" when it is not known), and the date in the game is a yellow note at the top right on every screen, with "Day before" and "Day after". Notices are pink notes under the top row.
+- **Squad.** The three imports as outlined cards with a magnet each; the import's summary as a pink note; the table as in the direction: a magnet and the position, ability as "58 of a possible 100", five-block meters for condition and sharpness, status as a stamp.
+- **Tactics.** Both pitches drawn in marker on the board; filled slots are magnets coloured by line with the slot's short name inside and the role beneath; empty slots are dashed circles.
+- **Fixtures.** Each fixture is a row with a small sticky note for its importance; the editor is a card on the board.
+- **Match Selection.** Fixtures as sticky notes across the top; the pitch with magnets, initials, surname and value; the detail written on the board: the name, the value in a hand-drawn blue ring, the four figures as outlined cards, each reason with a green plus or a red minus, "Left out" under a three-point rule. A confirmed or missed fixture's eleven uses the same magnets without values.
+- **Settings.** The same controls, on the board, in the direction's type and buttons.
+- **Core** (with tests, in `BoardPresentation.swift`): a player's initials (two letters: first name and surname, the surname as `surname` already finds it, one-word names give one letter); the line a position or slot belongs to (goalkeeper, defence, midfield, attack) from the engine's `Position`; which of a meter's five blocks are lit and at which of three levels (85 and over, 70 and over, below), with the thresholds as named values; whether a reason raised or lowered a value (from the adjustment's factor and cost, and for the fitness lines from the factor), so a view never parses a sentence; each note's tilt, fixed by its position in its row so pictures are repeatable.
+
+Rules:
+
+- The look is the same in light and dark system appearance.
+- Text on a note or a magnet meets 4.5 to 1 against it; the direction's pairs do.
+- The window still works at 760 by 560: pills wrap, the detail goes under the pitch.
+- Nothing animates on its own.
+- The picture code's workarounds for the sidebar (matching private AppKit class names) go if nothing needs them any more.
+
+- [ ] **Step 1: Write the failing tests** — `BoardPresentationTests`: initials for "Evan Humphries" (EH), "Dillon De Silva" (DS), "Kauan Bitencourt de Oliveira" (KO), a one-word name; the line of each of the 14 positions; meter blocks for 100, 85, 84, 70, 69, 54, 9 and 0; a reason's direction for a factor above 1, below 1, exactly 1, a cost, and a fitness line; tilts repeat for the same position and differ between neighbours.
+- [ ] **Step 2: Run** `swift test --filter BoardPresentationTests` — expect FAIL.
+- [ ] **Step 3: Implement** Core, then the fonts and `Theme`, then the frame, then each screen.
+- [ ] **Step 4: Run** `swift build 2>&1 | grep -c "warning:"` — 0; `swift test` — PASS.
+- [ ] **Step 5: Draw every screen** with the sample data into `.build/pictures-board/` and look at each one: Bricolage Grotesque and Figtree are really in use (not a fallback), nothing is cut off or overlapping at 1200 by 800 or at 800 by 700, every colour pair is readable. Build the app with `tools/build_app.sh` and draw once from the built app to prove the fonts ship inside it. Put what you saw in the report.
+- [ ] **Step 6: Commit** — "Give the app the Tactics board look".
+
+---
+
 ## After this plan
 
 The advisor screens follow the advisors plan: First XI, Second XI and Depth, Training with accept and reject, Rest, Player Removal, and the importance suggestion on Fixtures. The owner's reaction to the look changes `Theme` and the visual direction document.
