@@ -187,7 +187,8 @@ enum Report {
         case .injured: "is injured"
         case .outOnLoan(let club): "is out on loan at \(club)"
         case .banned: "is banned"
-        case .belowConditionFloor(let condition): "is at \(Int((condition * 100).rounded()))% condition"
+        // Rounded down as the engine does, so 84.6% never reads as the 85% floor.
+        case .belowConditionFloor(let condition): "is at \(Display.percent(condition)) condition"
         case .jaded(let jadedness): "is jaded (\(jadedness))"
         case .rejected: "is ruled out of this fixture"
         }

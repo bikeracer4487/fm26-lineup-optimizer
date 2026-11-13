@@ -162,6 +162,13 @@ import Testing
             + " (condition 90%, sharpness 30%, jadedness 500)")
     }
 
+    @Test func aPercentageIsRoundedDown() {
+        #expect(Display.percent(0.846) == "84%")
+        #expect(Display.percent(0.85) == "85%")
+        #expect(Display.percent(0.84) == "84%")
+        #expect(Display.percent(1) == "100%")
+    }
+
     // Each factor on its own against a rival at familiarity 17 (factor 0.95, a rating exactly 5% lower).
 
     @Test func lowSharpnessAloneCostsAStart() throws {

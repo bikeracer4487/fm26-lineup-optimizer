@@ -100,6 +100,35 @@ public enum FitnessModel {
         for position in Position.allCases where consecutive[position] == nil {
             found.append("consecutiveStartSteps has no entry for \(position.rawValue)")
         }
+        // The need for sharpness divides by their difference.
+        let full = parameters.sharpnessNeedFull.value, most = parameters.sharpnessNeedMost.value
+        if !(full > most) {
+            found.append("sharpnessNeedFull (\(full)) is not greater than sharpnessNeedMost (\(most))")
+        }
+        // Each of these becomes an adjustment's factor, or 1 plus a multiple of it; an adjustment's factor must be
+        // finite and not negative.
+        func usable(_ x: Double) -> Bool { x.isFinite && x >= 0 }
+        let notUsable = "not a finite number of 0 or more"
+        for (name, value) in [("fullySharpFactor", parameters.fullySharpFactor.value),
+                              ("developmentFactor", parameters.developmentFactor.value),
+                              ("retrainingFactorLow", parameters.retrainingFactorLow.value),
+                              ("retrainingFactorMedium", parameters.retrainingFactorMedium.value),
+                              ("sharpnessNeedStrengthLow", parameters.sharpnessNeedStrengthLow.value),
+                              ("sharpnessNeedStrengthBuild", parameters.sharpnessNeedStrengthBuild.value),
+                              ("stabilityAnchorBonus", parameters.stabilityAnchorBonus.value),
+                              ("stabilityRecentBonus", parameters.stabilityRecentBonus.value)] where !usable(value) {
+            found.append("\(name) is \(value), \(notUsable)")
+        }
+        for importance in Importance.allCases {
+            if let factor = loaned[importance], !usable(factor) {
+                found.append("loanedInFactor for \(importance.rawValue) is \(factor), \(notUsable)")
+            }
+        }
+        for position in Position.allCases {
+            for step in consecutive[position] ?? [] where !usable(step.factor) {
+                found.append("consecutiveStartSteps for \(position.rawValue) at \(step.starts) starts is \(step.factor), \(notUsable)")
+            }
+        }
         let weights = parameters.importanceWeights.value
         for importance in Importance.allCases {
             if let weight = weights[importance] {

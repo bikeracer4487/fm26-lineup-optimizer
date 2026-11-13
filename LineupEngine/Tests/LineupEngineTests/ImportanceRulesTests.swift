@@ -201,6 +201,17 @@ import Testing
         #expect(every(run(Player.fixture(age: 21, currentAbility: 100, potentialAbility: 114), .low), .development) == nil)
     }
 
+    @Test func aPotentialExactlyAtTheHeadroomCountsDespiteRounding() {
+        // 1.10 × 100 is 110.00000000000001 in binary floating point.
+        var q = parameters
+        q.prospectHeadroom = Parameter(1.10, .derived, source: "test")
+        let context = context(.low)
+        let exact = Player.fixture(age: 21, currentAbility: 100, potentialAbility: 110)
+        #expect(ImportanceRules.adjustments(for: exact, context: context, parameters: q).everySlot.map(\.kind) == [.development])
+        let below = Player.fixture(age: 21, currentAbility: 100, potentialAbility: 109)
+        #expect(ImportanceRules.adjustments(for: below, context: context, parameters: q).everySlot.isEmpty)
+    }
+
     // MARK: Retraining
 
     func retrain(_ p: Player, _ position: Position) -> [Retraining] {
@@ -237,6 +248,20 @@ import Testing
         let r = run(p, .low, retraining: retrain(p, .midfielderLeft))
         #expect(slot(r, .AM_L, .retraining)?.factor == 1.15)
         #expect(r.bySlot.filter { !$0.value.isEmpty }.keys.sorted { $0.rawValue < $1.rawValue } == [.AM_L])
+    }
+
+    @Test func retrainingAtBothPositionsOfASlotCountsOnce() {
+        // AM_L is AM (L) in possession and M (L) out of possession. Both factors are 1.15: the lower position wins.
+        let p = Player.fixture(familiarity: [.attackingMidLeft: 12, .midfielderLeft: 14])
+        let both = retrain(p, .midfielderLeft) + retrain(p, .attackingMidLeft)
+        let expected = [Adjustment(kind: .retraining, factor: 1.15,
+                                   reason: "Retraining at AM (L) (familiarity 12): favoured for match experience there (×1.15)")]
+        #expect(run(p, .low, retraining: both).bySlot[.AM_L] == expected)
+        #expect(run(p, .low, retraining: both.reversed()).bySlot[.AM_L] == expected)
+        // When only one of the two is still being learnt, that one counts.
+        let learnt = Player.fixture(familiarity: [.attackingMidLeft: 18, .midfielderLeft: 14])
+        #expect(run(learnt, .low, retraining: both).bySlot[.AM_L]?.map(\.reason)
+            == ["Retraining at M (L) (familiarity 14): favoured for match experience there (×1.15)"])
     }
 
     @Test func aRetrainingNoSlotUsesGivesNothing() {

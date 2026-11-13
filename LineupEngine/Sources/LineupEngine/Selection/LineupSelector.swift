@@ -388,13 +388,13 @@ public struct LineupSelector: Sendable {
     private func twoDecimals(_ x: Double) -> String { Display.twoDecimals(x) }
 }
 
-/// How figures are written in the reasons the engine gives.
-enum Display {
+/// How figures are written in the reasons the engine gives. Public so the tools write them the same way.
+public enum Display {
     /// Absorbs binary floating-point error (0.84 × 100 is 83.999…) before rounding down; far below
     /// the importer's 1/10,000 resolution.
     private static let displayNoise = 1e-9
 
     /// A whole percentage rounded down, so a value shown never reaches a threshold or 100% it has not reached.
-    static func percent(_ fraction: Double) -> String { "\(Int((fraction * 100 + displayNoise).rounded(.down)))%" }
+    public static func percent(_ fraction: Double) -> String { "\(Int((fraction * 100 + displayNoise).rounded(.down)))%" }
     static func twoDecimals(_ x: Double) -> String { String(format: "%.2f", x) }
 }

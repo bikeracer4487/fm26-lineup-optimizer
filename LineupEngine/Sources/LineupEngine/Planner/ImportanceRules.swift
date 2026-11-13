@@ -65,7 +65,7 @@ public enum ImportanceRules {
     /// A position with no step reached, or missing from the table, gives none.
     private static func consecutiveStarts(_ player: Player, _ context: RuleContext,
                                           _ parameters: EngineParameters) -> [Adjustment] {
-        guard context.importance != .high else { return [] }
+        guard isLesser(context.importance) else { return [] }
         let starts = context.history.consecutiveStarts(
             of: player.id, before: context.date, windowDays: parameters.consecutiveStartWindowDays.value)
         let played = context.history.recentSlots(of: player.id, before: context.date, limit: starts).map(\.position)
@@ -109,8 +109,10 @@ public enum ImportanceRules {
         case .low, .sharpness: break
         }
         let factor = parameters.developmentFactor.value
+        // The margin absorbs binary floating-point error: 1.10 × 100 is 110.00000000000001.
         guard player.age <= parameters.prospectMaxAge.value, factor != 1,
-              Double(player.potentialAbility) >= parameters.prospectHeadroom.value * Double(player.currentAbility) else { return [] }
+              Double(player.potentialAbility) + 1e-9 >= parameters.prospectHeadroom.value * Double(player.currentAbility)
+        else { return [] }
         return [Adjustment(kind: .development, factor: factor,
                            reason: "Young player with room to grow: favoured for minutes (×\(Display.twoDecimals(factor)))")]
     }
@@ -129,16 +131,21 @@ public enum ImportanceRules {
             factor = parameters.retrainingFactorLow.value
         }
         guard factor != 1 else { return [] }
-        var found: [Adjustment] = []
+        var found: [(position: Position, adjustment: Adjustment)] = []
         for item in context.retraining where item.player == player.id
             && (item.position == assignment.ipPosition || item.position == assignment.oopPosition) {
             guard let familiarity = player.familiarity[item.position],
                   familiarity >= from, familiarity < parameters.retrainingUntilFamiliarity.value else { continue }
-            found.append(Adjustment(
+            found.append((item.position, Adjustment(
                 kind: .retraining, factor: factor,
-                reason: "Retraining at \(item.position.rawValue) (familiarity \(familiarity)): favoured for match experience there (×\(Display.twoDecimals(factor)))"))
+                reason: "Retraining at \(item.position.rawValue) (familiarity \(familiarity)): favoured for match experience there (×\(Display.twoDecimals(factor)))")))
         }
-        return found
+        // Retraining at both of the slot's positions favours him once: the higher factor, then the lower position.
+        let kept = found.min { a, b in
+            a.adjustment.factor != b.adjustment.factor ? a.adjustment.factor > b.adjustment.factor
+                : a.position.rawValue < b.position.rawValue
+        }
+        return kept.map { [$0.adjustment] } ?? []
     }
 
     private static func stability(_ recent: [SlotID], _ assignment: SlotAssignment, _ context: RuleContext,

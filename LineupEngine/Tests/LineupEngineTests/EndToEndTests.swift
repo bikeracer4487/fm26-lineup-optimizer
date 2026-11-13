@@ -117,7 +117,9 @@ import Testing
             #expect(strength[high] >= total, "\(ordered[index].id.raw) totals \(total), more than the high fixture's \(strength[high])")
         }
 
-        // Saving players changes no pick before the high fixture on this squad.
+        // Saving players changes no pick before the high fixture on this squad. There must be a fixture before it, or the
+        // loops below check nothing.
+        #expect(high > 0)
         let unsaved = try realPlan(savingPlayers: 0).plan
         func picks(_ plan: Plan, _ index: Int) -> [SlotID: PlayerID] {
             Dictionary(uniqueKeysWithValues: plan.fixtures[index].lineup.picks.map { ($0.slot, $0.player) })

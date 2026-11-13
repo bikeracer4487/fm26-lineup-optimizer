@@ -64,6 +64,63 @@ import Testing
         #expect(FitnessModel.problems(in: parameters).count == 2)
     }
 
+    @Test func aSharpnessNeedRangeThatIsEmptyOrReversedIsReported() {
+        // The need rule divides by sharpnessNeedFull − sharpnessNeedMost.
+        for most in [0.91, 0.95, Double.nan] {
+            var parameters = EngineParameters.fm27
+            parameters.sharpnessNeedMost = Parameter(most, .derived, source: "test")
+            #expect(FitnessModel.problems(in: parameters)
+                == ["sharpnessNeedFull (0.91) is not greater than sharpnessNeedMost (\(most))"])
+        }
+        var below = EngineParameters.fm27
+        below.sharpnessNeedMost = Parameter(0.90, .derived, source: "test")
+        #expect(FitnessModel.problems(in: below).isEmpty)
+    }
+
+    @Test func aFactorThatWouldMakeAnAdjustmentNegativeOrNotFiniteIsReported() {
+        for bad in [-0.1, Double.nan, .infinity] {
+            func broken(_ change: (inout EngineParameters) -> Void) -> [String] {
+                var parameters = EngineParameters.fm27
+                change(&parameters)
+                return FitnessModel.problems(in: parameters)
+            }
+            let reason = "is \(bad), not a finite number of 0 or more"
+            #expect(broken { $0.fullySharpFactor = Parameter(bad, .derived, source: "test") } == ["fullySharpFactor \(reason)"])
+            #expect(broken { $0.developmentFactor = Parameter(bad, .derived, source: "test") } == ["developmentFactor \(reason)"])
+            #expect(broken { $0.retrainingFactorLow = Parameter(bad, .derived, source: "test") } == ["retrainingFactorLow \(reason)"])
+            #expect(broken { $0.retrainingFactorMedium = Parameter(bad, .derived, source: "test") } == ["retrainingFactorMedium \(reason)"])
+            #expect(broken {
+                $0.loanedInFactor = Parameter($0.loanedInFactor.value.merging([.low: bad]) { _, new in new }, .derived, source: "test")
+            } == ["loanedInFactor for low \(reason)"])
+            #expect(broken {
+                let steps = $0.consecutiveStartSteps.value.merging([.striker: [ConsecutiveStartStep(starts: 3, factor: bad)]]) { _, new in new }
+                $0.consecutiveStartSteps = Parameter(steps, .derived, source: "test")
+            } == ["consecutiveStartSteps for ST (C) at 3 starts \(reason)"])
+        }
+        // 0 is allowed: it is finite and not negative.
+        var zero = EngineParameters.fm27
+        zero.fullySharpFactor = Parameter(0, .derived, source: "test")
+        #expect(FitnessModel.problems(in: zero).isEmpty)
+    }
+
+    @Test func aStrengthOrBonusThatIsNegativeOrNotFiniteIsReported() {
+        for bad in [-0.1, Double.nan, -.infinity] {
+            func broken(_ change: (inout EngineParameters) -> Void) -> [String] {
+                var parameters = EngineParameters.fm27
+                change(&parameters)
+                return FitnessModel.problems(in: parameters)
+            }
+            let reason = "is \(bad), not a finite number of 0 or more"
+            #expect(broken { $0.sharpnessNeedStrengthLow = Parameter(bad, .derived, source: "test") } == ["sharpnessNeedStrengthLow \(reason)"])
+            #expect(broken { $0.sharpnessNeedStrengthBuild = Parameter(bad, .derived, source: "test") } == ["sharpnessNeedStrengthBuild \(reason)"])
+            #expect(broken { $0.stabilityAnchorBonus = Parameter(bad, .derived, source: "test") } == ["stabilityAnchorBonus \(reason)"])
+            #expect(broken { $0.stabilityRecentBonus = Parameter(bad, .derived, source: "test") } == ["stabilityRecentBonus \(reason)"])
+        }
+        var zero = EngineParameters.fm27
+        zero.stabilityAnchorBonus = Parameter(0, .derived, source: "test")
+        #expect(FitnessModel.problems(in: zero).isEmpty)
+    }
+
     @Test func unsortedPointsAreSortedBeforeEvaluation() {
         var parameters = EngineParameters.fm27
         parameters.conditionCurve = Parameter([CurvePoint(x: 1, factor: 1), CurvePoint(x: 0, factor: 0.2)], .derived, source: "test")

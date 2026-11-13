@@ -124,7 +124,8 @@ import Testing
     @Test func inputOrderDoesNotMatter() throws {
         let squad = try PlannerFixture.squad()
         let a = try tiers(squad)
+        // Fixed permutations, so a failure repeats.
         #expect(try tiers(squad.reversed()) == a)
-        #expect(try tiers(squad.shuffled()) == a)
+        #expect(try tiers(Array(squad[7...] + squad[..<7])) == a)
     }
 }
