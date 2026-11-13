@@ -2,7 +2,8 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// The settings the planner and the imports use. Each change is saved as it is made.
+/// The settings the planner and the imports use. A menu, stepper or box is saved as it changes; a slider when it is
+/// let go, and a text field on Return or when it loses focus, so the plan is not worked out again at every step.
 public struct SettingsScreen: View {
     let model: AppModel
 
@@ -70,16 +71,8 @@ public struct SettingsScreen: View {
     private var stability: some View {
         SettingRow("Lineup stability",
                    "Higher keeps players in the slots they have been playing. Lower picks the best eleven each time.") {
-            // The words at the ends are beside the slider rather than its own labels, which take the accent colour.
-            HStack(alignment: .center, spacing: Theme.Spacing.s) {
-                end("Pure optimisation")
-                Slider(value: setting(\.plan.stability), in: 0...1) {
-                    Text("Lineup stability")
-                }
-                .labelsHidden()
-                .frame(maxWidth: Theme.Layout.settingControlWidth)
-                end("Maximum stability")
-            }
+            CommittingSlider(label: "Lineup stability", value: setting(\.plan.stability), range: 0...1,
+                             low: "Pure optimisation", high: "Maximum stability")
         }
     }
 
@@ -87,16 +80,9 @@ public struct SettingsScreen: View {
         SettingRow("Saving players for bigger fixtures",
                    "Higher rests more of your best players before a more important match soon after. "
                    + "Off picks each match on its own.") {
-            HStack(alignment: .center, spacing: Theme.Spacing.m) {
-                end("Off")
-                Slider(value: setting(\.savingPlayers), in: 0...2, step: 0.1) {
-                    Text("Saving players for bigger fixtures")
-                }
-                .labelsHidden()
-                .frame(maxWidth: Theme.Layout.settingControlWidth)
-                end("2")
-                number(AppSettings.savingPlayersText(model.settings.savingPlayers))
-            }
+            CommittingSlider(label: "Saving players for bigger fixtures", value: setting(\.savingPlayers), range: 0...2,
+                             step: 0.1, low: "Off", high: "2",
+                             readout: AppSettings.savingPlayersText)
         }
     }
 
@@ -131,9 +117,7 @@ public struct SettingsScreen: View {
     private var clubName: some View {
         SettingRow("Your club",
                    "Leave empty to use the club most players belong to. The club tells your own players from those on loan.") {
-            TextField("Your club", text: setting(\.clubNameText), prompt: Text("The club most players belong to"))
-                .textFieldStyle(.roundedBorder)
-                .labelsHidden()
+            CommittingTextField(label: "Your club", text: setting(\.clubNameText), prompt: "The club most players belong to")
                 .frame(maxWidth: Theme.Layout.settingFieldWidth)
         }
     }
@@ -142,22 +126,22 @@ public struct SettingsScreen: View {
         SettingRow("FMRTE's settings file",
                    "The file FMRTE keeps its column layouts in, which every import reads. "
                    + "Leave empty for FMRTE's usual place, shown in grey.") {
-            TextField("FMRTE's settings file", text: setting(\.fmrteConfigPathText),
-                      prompt: Text(LiveEnvironment.fmrteConfigFileForDisplay))
-                .textFieldStyle(.roundedBorder)
-                .labelsHidden()
+            CommittingTextField(label: "FMRTE's settings file", text: setting(\.fmrteConfigPathText),
+                                prompt: LiveEnvironment.fmrteConfigFileForDisplay)
                 .frame(maxWidth: Theme.Layout.settingFieldWidth)
         }
     }
 
-    /// A word at one end of a slider.
-    private func end(_ text: String) -> some View {
-        Text(text)
-            .font(Theme.Typeface.text())
-            .foregroundStyle(.secondary)
-    }
-
     private func number(_ text: String) -> some View {
+        SettingNumber(text: text)
+    }
+}
+
+/// A figure beside a setting's control, level with the words around it.
+private struct SettingNumber: View {
+    let text: String
+
+    var body: some View {
         Text(text)
             .font(Theme.Typeface.number(Theme.TypeSize.step1))
             .offset(y: Theme.Typeface.numberDrop(Theme.TypeSize.step1, besideTextOf: Theme.TypeSize.base))
@@ -192,5 +176,85 @@ private struct SettingRow<Control: View>: View {
                     .frame(maxWidth: Theme.Layout.readingWidth, alignment: .leading)
             }
         }
+    }
+}
+
+/// A slider between two words, and the figure it stands at when given a readout. It shows its own value while it is
+/// dragged and hands it to `value` only when let go; a change to `value` from elsewhere shows at once.
+private struct CommittingSlider: View {
+    let label: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var step: Double?
+    /// The words at the ends, beside the slider rather than its own labels, which take the accent colour.
+    let low: String
+    let high: String
+    var readout: ((Double) -> String)?
+    @State private var shown: Double?
+
+    var body: some View {
+        HStack(alignment: .center, spacing: Theme.Spacing.s) {
+            end(low)
+            slider
+                .labelsHidden()
+                .frame(maxWidth: Theme.Layout.settingControlWidth)
+            end(high)
+            if let readout {
+                SettingNumber(text: readout(shown ?? value))
+                    .padding(.leading, Theme.Spacing.xs)
+            }
+        }
+    }
+
+    private var local: Binding<Double> {
+        Binding(get: { shown ?? value }, set: { shown = $0 })
+    }
+
+    @ViewBuilder private var slider: some View {
+        if let step {
+            Slider(value: local, in: range, step: step) { Text(label) } onEditingChanged: { commit(editing: $0) }
+        } else {
+            Slider(value: local, in: range) { Text(label) } onEditingChanged: { commit(editing: $0) }
+        }
+    }
+
+    private func end(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.Typeface.text())
+            .foregroundStyle(.secondary)
+    }
+
+    /// When the drag ends, the value shown becomes the setting.
+    private func commit(editing: Bool) {
+        guard !editing, let shown else { return }
+        self.shown = nil
+        if shown != value { value = shown }
+    }
+}
+
+/// A text field that edits its own copy and hands it to `text` on Return or when it loses focus. A change to `text`
+/// from elsewhere shows while the field is not being edited.
+private struct CommittingTextField: View {
+    let label: String
+    @Binding var text: String
+    let prompt: String
+    @State private var draft: String?
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField(label, text: Binding(get: { draft ?? text }, set: { draft = $0 }), prompt: Text(prompt))
+            .textFieldStyle(.roundedBorder)
+            .labelsHidden()
+            .focused($focused)
+            .onSubmit(commit)
+            .onChange(of: focused) { _, isFocused in
+                if !isFocused { commit() }
+            }
+    }
+
+    private func commit() {
+        guard let draft else { return }
+        self.draft = nil
+        if draft != text { text = draft }
     }
 }
