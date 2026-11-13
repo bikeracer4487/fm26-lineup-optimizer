@@ -1359,3 +1359,30 @@ Each is written when the one before it is done, because each depends on interfac
 | Visual design pass | 12: direction and mock-ups, its own short design document | approval of the spec; runs alongside plans 1 to 3 |
 | 4. App | 9 and 10: persistence, clipboard, the ten screens and settings | plans 1 to 3 and the visual design |
 | 5. Clean-up | 14 step 7: remove Electron, Python, Windows scripts, workbook and `fm26_parser/`; final `CLAUDE.md` and README | owner sign-off of the app |
+
+## Carried into the later plans
+
+Found while building and reviewing this plan; none blocks it.
+
+For plan 2 (Planner):
+
+- `LineupSelector` needs an extension point for per-player, per-slot adjustments that carry their own reason line (development, retraining, saving players), and should reuse the rating matrix across a plan's fixtures.
+- `Tactic` needs a stable identifier before it is persisted.
+- The default rating profile is the owner's choice; until it is made, every caller names a profile.
+- `FitnessModel.problems` should cover `familiaritySteps` once parameters become editable.
+
+For plan 4 (App):
+
+- Show who was unavailable and why, not only omissions from the ideal eleven. Players under the condition floor leave no trace in the tool's output today.
+- `SquadBook`'s stored form needs a version number.
+- `.unexpectedScale` is a false positive for a paste whose every row is at or below 1% condition or sharpness, such as a single exhausted player.
+- A grid whose two same-typed columns are swapped in FMRTE imports wrongly if FMRTE has not yet rewritten `config.json`. Whether it rewrites the file at once on a reorder has not been observed.
+- Require the `Id` column and delete name-based identity, if the owner agrees: the search grid needs the column added.
+
+Small faults left as they are:
+
+- Name-based identity only: two players alike in name, potential ability and nationality swap keys when their rows swap; a potential-ability change for a player with a namesake can change his key.
+- `PlayerID.fmrteID` accepts "fmrte:+5" and "fmrte:007"; a player whose name is literally "fmrte:123" would read as an id.
+- `SquadWarning.sharedName` says "told apart by potential ability, then nationality" even when numbered keys were used.
+- Money: a comma is always read as a thousands separator, so "€1.234,56" reads as 123456.
+- `RatingProfile.scaled` re-sorts its curve on every read through `FitnessModel.evaluate`; `inFixedOrder` exists in both `RatingProfile` and `RatingEngine`.
