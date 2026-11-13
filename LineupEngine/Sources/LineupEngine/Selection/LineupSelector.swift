@@ -70,9 +70,14 @@ public enum OmissionCause: Equatable, Sendable {
     /// He would start without the manager's overrides. `by` is the player chosen for his slot
     /// (`Omission.slot`) when there is one; otherwise every applied override's player, in slot order.
     case displacedByOverride(by: [PlayerID])
-    /// Adjustments that lower his value in his slot (`Omission.slot`; a factor below 1 or a cost above 0), by
-    /// distinct kind in `Adjustment.Kind` order.
+    /// Without his adjustments that lower his value (a factor below 1 or a cost above 0) he would start. The kinds
+    /// named, distinct, in `Adjustment.Kind` order, are those in the slot he would take.
     case heldBack([Adjustment.Kind])
+    /// Without the adjustments that favour other players (a factor above 1 or a cost below 0) he would start. `by` is
+    /// each favoured player on his chain of displacements, from the slot he would take; the kinds, distinct, in
+    /// `Adjustment.Kind` order, are those players' favouring adjustments in the slots they hold. Both are empty when
+    /// nobody on the chain is favoured.
+    case preferred(by: [PlayerID], [Adjustment.Kind])
 }
 
 /// A first-choice player who is not in the real eleven: one in the ideal eleven (full fitness, nobody excluded),
@@ -166,26 +171,35 @@ public struct LineupSelector: Sendable {
             }
         }
         let overridden = Set(placed.keys)
+        let fixed = placed
+
+        /// A candidate's adjusted match-day value in a slot, with `change` applied; nil when he cannot play.
+        /// With no change it is the real value.
+        func value(_ s: Int, _ i: Int, _ change: Change) -> Double? {
+            guard exclusions[i] == nil, let rating = ratings[s][i] else { return nil }
+            let own = change.player == i
+            let product = own && change.atFullFitness ? 1 : fitness[i].product
+            var adjustments = applied[s][i]
+            if own && change.withoutHoldingBack { adjustments = adjustments.filter { !$0.holdsBack } }
+            if !own && change.withoutOthersFavour { adjustments = adjustments.filter { !$0.favours } }
+            return adjustedValue(rating.value * product, adjustments)
+        }
 
         // The real eleven: available players at adjusted match-day value, around the overrides. The
         // solver fills every slot it can before it looks at value, so a player whose adjusted value is
         // zero or negative is still a candidate.
-        func solve(around fixed: [Int: Int]) -> [Int: Int] {
+        func solve(around fixed: [Int: Int], _ change: Change = Change()) -> [Int: Int] {
             var placed = fixed
             let openSlots = assignments.indices.filter { fixed[$0] == nil }
             let fixedPlayers = Set(fixed.values)
             let candidates = players.indices.filter { !fixedPlayers.contains($0) }
-            let values: [[Double?]] = openSlots.map { s in
-                candidates.map { i in
-                    exclusions[i] == nil ? ratings[s][i].map { adjustedValue(matchDayValue($0, fitness[i]), applied[s][i]) } : nil
-                }
-            }
+            let values: [[Double?]] = openSlots.map { s in candidates.map { i in value(s, i, change) } }
             for (row, choice) in AssignmentSolver.maximise(values: values).enumerated() {
                 if let c = choice { placed[openSlots[row]] = candidates[c] }
             }
             return placed
         }
-        placed = solve(around: placed)
+        placed = solve(around: fixed)
 
         var picks: [Pick] = []
         var unfilled: [SlotID] = []
@@ -210,15 +224,17 @@ public struct LineupSelector: Sendable {
             row.indices.map { i in exclusions[i] == nil ? row[i]?.value : nil }
         })
         let inLineup = Set(placed.values)
+        let workings = Workings(players: players, assignments: assignments, ratings: ratings, fitness: fitness, applied: applied,
+                                exclusions: exclusions, placed: placed, projected: request.fitnessIsProjected,
+                                solve: { solve(around: fixed, $0) })
         var omissions: [Omission] = []
         var omitted = Set<Int>()
         for eleven in [ideal, available] {
             for (s, choice) in eleven.enumerated() {
-                guard let i = choice, !inLineup.contains(i), !omitted.contains(i), let rating = ratings[s][i] else { continue }
+                guard let i = choice, !inLineup.contains(i), !omitted.contains(i), ratings[s][i] != nil else { continue }
                 let displacement: Displacement? = !startsWithoutOverrides.contains(i) ? nil
                     : overridden.contains(s) ? .inHisSlot(by: players[placed[s]!]) : .elsewhere(by: overridePlayers)
-                omissions.append(omission(players[i], assignments[s], rating: rating, fitness: fitness[i], adjustments: applied[s][i],
-                                          excluded: exclusions[i], displacement: displacement, projected: request.fitnessIsProjected))
+                omissions.append(omission(i, expected: s, displacement: displacement, workings))
                 omitted.insert(i)
             }
         }
@@ -297,50 +313,157 @@ public struct LineupSelector: Sendable {
         case elsewhere(by: [Player])
     }
 
-    /// The cause, first that applies: an exclusion, a displacement by an override, adjustments that
-    /// lower his value in `assignment`'s slot, his fitness on the day. With `projected`, fitness figures are called projected.
-    private func omission(_ player: Player, _ assignment: SlotAssignment, rating: SlotRating, fitness: FitnessFactors,
-                          adjustments: [Adjustment], excluded: Exclusion?, displacement: Displacement?, projected: Bool) -> Omission {
-        let holding = adjustments.filter(\.holdsBack)
-        let cause: OmissionCause
-        let reason: String
-        if let excluded {
-            cause = .excluded(excluded)
-            reason = "Left out: " + leftOutText(excluded, projected: projected)
-        } else if let displacement {
+    /// What a solve changes from the request, to find out what would bring a left-out player back.
+    private struct Change {
+        /// The left-out player, by index.
+        var player: Int?
+        /// Without his adjustments that lower his value.
+        var withoutHoldingBack = false
+        /// With his condition, sharpness and jadedness factors at 1.
+        var atFullFitness = false
+        /// Without every other player's adjustments that raise his value.
+        var withoutOthersFavour = false
+    }
+
+    /// What `select` worked out, for explaining its omissions.
+    private struct Workings {
+        let players: [Player]
+        let assignments: [SlotAssignment]
+        let ratings: [[SlotRating?]]
+        let fitness: [FitnessFactors]
+        let applied: [[[Adjustment]]]
+        let exclusions: [Exclusion?]
+        /// The real eleven: slot index to player index.
+        let placed: [Int: Int]
+        let projected: Bool
+        /// The real eleven solved again with one change, around the same overrides.
+        let solve: (Change) -> [Int: Int]
+    }
+
+    /// The cause, first that applies, of player `i`'s omission from slot `s` (both indices into `workings`):
+    /// 1. an exclusion;
+    /// 2. a displacement by an override;
+    /// 3. his adjustments that hold him back, if he would start without them;
+    /// 4. other players' favouring adjustments, if he would start without them;
+    /// 5. his fitness, if he would start at full fitness;
+    /// 6. both 3 and 5, if he would start only without both;
+    /// 7. both 3 and 4, if he would start only without both;
+    /// 8. his fitness, or else others being a better fit.
+    /// A step whose adjustments or fitness do not apply solves nothing. With `projected`, fitness figures are called projected.
+    private func omission(_ i: Int, expected s: Int, displacement: Displacement?, _ w: Workings) -> Omission {
+        let player = w.players[i], assignment = w.assignments[s], fitness = w.fitness[i]
+        func left(_ cause: OmissionCause, _ reason: String) -> Omission {
+            Omission(player: player.id, name: player.name, slot: assignment.slot, cause: cause, reason: reason)
+        }
+        if let excluded = w.exclusions[i] {
+            return left(.excluded(excluded), "Left out: " + leftOutText(excluded, projected: w.projected))
+        }
+        if let displacement {
             switch displacement {
             case .inHisSlot(let chosen):
-                cause = .displacedByOverride(by: [chosen.id])
-                reason = "Left out: you chose \(chosen.name) for \(assignment.ipPosition.rawValue)"
+                return left(.displacedByOverride(by: [chosen.id]), "Left out: you chose \(chosen.name) for \(assignment.ipPosition.rawValue)")
             case .elsewhere(let chosen):
-                cause = .displacedByOverride(by: chosen.map(\.id))
-                reason = "Left out: your choice of \(listed(chosen.map(\.name))) moved others into his place"
-            }
-        } else if !holding.isEmpty {
-            let kinds = Adjustment.Kind.allCases.filter { kind in holding.contains { $0.kind == kind } }
-            cause = .heldBack(kinds)
-            reason = "Left out: " + holding.map(\.reason).joined(separator: "; ")
-        } else {
-            let today = matchDayValue(rating, fitness)
-            cause = .lowerMatchDayValue(ideal: rating.value, today: today, limiting: limitingFactor(fitness))
-            let below = [(FactorKind.condition, fitness.condition), (.sharpness, fitness.sharpness), (.jadedness, fitness.jadedness)]
-                .filter { $0.1 < 1 }
-                .map { kind, _ in
-                    switch kind {
-                    case .condition: "condition \(percent(player.condition))"
-                    case .sharpness: "sharpness \(percent(player.sharpness))"
-                    case .jadedness: "jadedness \(player.jadedness)"
-                    }
-                }
-            let fall = "lowers him from \(oneDecimal(rating.value)) to \(oneDecimal(today))"
-            let figures = projected ? "projected " : ""
-            reason = switch below.count {
-            case 0: "Left out: others are a better fit today"
-            case 1: "Left out: \(figures)\(below[0]) \(fall)"
-            default: "Left out: \(figures)fitness \(fall) (\(below.joined(separator: ", ")))"
+                return left(.displacedByOverride(by: chosen.map(\.id)),
+                            "Left out: your choice of \(listed(chosen.map(\.name))) moved others into his place")
             }
         }
-        return Omission(player: player.id, name: player.name, slot: assignment.slot, cause: cause, reason: reason)
+
+        // ratings[s][i] is non-nil: he is in an eleven at s.
+        let rating = w.ratings[s][i]!
+        let today = matchDayValue(rating, fitness)
+        let fitnessCause = OmissionCause.lowerMatchDayValue(ideal: rating.value, today: today, limiting: limitingFactor(fitness))
+        let phrase = fitnessPhrase(player, rating: rating, fitness: fitness, projected: w.projected)
+        let heldBack = w.assignments.indices.contains { w.applied[$0][i].contains(where: \.holdsBack) }
+        let unfit = fitness.product < 1
+
+        if heldBack, let named = heldBackNamed(i, in: w.solve(Change(player: i, withoutHoldingBack: true)), w) {
+            return left(.heldBack(named.kinds), "Left out: " + named.text)
+        }
+        let othersFavoured = w.players.indices.contains { j in
+            j != i && w.assignments.indices.contains { w.applied[$0][j].contains(where: \.favours) }
+        }
+        if othersFavoured {
+            let again = w.solve(Change(player: i, withoutOthersFavour: true))
+            if let start = slot(of: i, in: again) {
+                let named = preferred(from: start, in: again, w)
+                return left(.preferred(by: named.by, named.kinds), "Left out: " + named.text)
+            }
+        }
+        if unfit, slot(of: i, in: w.solve(Change(player: i, atFullFitness: true))) != nil, let phrase {
+            return left(fitnessCause, "Left out: " + phrase)
+        }
+        if heldBack, unfit, let phrase,
+           let named = heldBackNamed(i, in: w.solve(Change(player: i, withoutHoldingBack: true, atFullFitness: true)), w) {
+            return left(.heldBack(named.kinds), "Left out: " + named.text + "; " + phrase)
+        }
+        if heldBack, othersFavoured {
+            let again = w.solve(Change(player: i, withoutHoldingBack: true, withoutOthersFavour: true))
+            if let named = heldBackNamed(i, in: again, w), let start = slot(of: i, in: again) {
+                return left(.heldBack(named.kinds), "Left out: " + named.text + "; " + preferred(from: start, in: again, w).text)
+            }
+        }
+        if let phrase { return left(fitnessCause, "Left out: " + phrase) }
+        return left(fitnessCause, "Left out: others are a better fit today")
+    }
+
+    /// The slot index he holds in `placement`, if any.
+    private func slot(of i: Int, in placement: [Int: Int]) -> Int? {
+        placement.first { $0.value == i }?.key
+    }
+
+    /// When `placement` brings player `i` back: his adjustments that hold him back in the slot he takes there, keeping
+    /// those that cost him at least `omissionReasonMinimumLoss` if any do. nil when he is not back, or has none in that
+    /// slot (then the slot's value did not change, and only a tie between equal elevens brought him back).
+    private func heldBackNamed(_ i: Int, in placement: [Int: Int], _ w: Workings) -> (kinds: [Adjustment.Kind], text: String)? {
+        guard let t = slot(of: i, in: placement), let rating = w.ratings[t][i] else { return nil }
+        let holding = w.applied[t][i].filter(\.holdsBack)
+        guard !holding.isEmpty else { return nil }
+        let full = rating.value * w.fitness[i].product
+        func loss(_ a: Adjustment) -> Double { max(a.cost, 0) + (a.factor < 1 ? full * (1 - a.factor) : 0) }
+        let large = holding.filter { loss($0) >= parameters.omissionReasonMinimumLoss.value }
+        let named = large.isEmpty ? holding : large
+        let kinds = Adjustment.Kind.allCases.filter { kind in named.contains { $0.kind == kind } }
+        return (kinds, named.map(\.reason).joined(separator: "; "))
+    }
+
+    /// Player `i` takes slot `start` in `again`, the eleven without other players' favours. Follows his chain of
+    /// displacements: the real holder of his slot, then the real holder of the slot that player takes in `again`, until
+    /// one who is not in `again`. Names each player on the chain favoured in the slot he really holds; `text` follows "Left out: ".
+    private func preferred(from start: Int, in again: [Int: Int], _ w: Workings)
+        -> (by: [PlayerID], kinds: [Adjustment.Kind], text: String) {
+        var named: [(player: Player, favouring: [Adjustment])] = []
+        var seen = Set<Int>()
+        var s = start
+        while let holder = w.placed[s], seen.insert(holder).inserted {
+            let favouring = w.applied[s][holder].filter(\.favours)
+            if !favouring.isEmpty { named.append((w.players[holder], favouring)) }
+            guard let next = slot(of: holder, in: again) else { break }
+            s = next
+        }
+        guard !named.isEmpty else { return ([], [], "players favoured for this fixture are preferred") }
+        let kinds = Adjustment.Kind.allCases.filter { kind in named.contains { $0.favouring.contains { $0.kind == kind } } }
+        let parts = named.map { "\($0.player.name) is preferred: " + $0.favouring.map(\.reason).joined(separator: "; ") }
+        return (named.map(\.player.id), kinds, parts.joined(separator: ". "))
+    }
+
+    /// The fitness factors below 1 and the fall in his value they cause, as it follows "Left out: "; nil when none is below 1.
+    private func fitnessPhrase(_ player: Player, rating: SlotRating, fitness: FitnessFactors, projected: Bool) -> String? {
+        let below = [(FactorKind.condition, fitness.condition), (.sharpness, fitness.sharpness), (.jadedness, fitness.jadedness)]
+            .filter { $0.1 < 1 }
+            .map { kind, _ in
+                switch kind {
+                case .condition: "condition \(percent(player.condition))"
+                case .sharpness: "sharpness \(percent(player.sharpness))"
+                case .jadedness: "jadedness \(player.jadedness)"
+                }
+            }
+        let fall = "lowers him from \(oneDecimal(rating.value)) to \(oneDecimal(matchDayValue(rating, fitness)))"
+        let figures = projected ? "projected " : ""
+        return switch below.count {
+        case 0: nil
+        case 1: "\(figures)\(below[0]) \(fall)"
+        default: "\(figures)fitness \(fall) (\(below.joined(separator: ", ")))"
+        }
     }
 
     /// "A", "A and B", "A, B and C".

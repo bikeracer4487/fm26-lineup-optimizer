@@ -28,4 +28,7 @@ public struct Adjustment: Equatable, Sendable {
 
     /// True when it lowers the value: a factor below 1 or a cost above 0.
     var holdsBack: Bool { factor < 1 || cost > 0 }
+
+    /// True when it raises the value: a factor above 1 or a cost below 0.
+    var favours: Bool { factor > 1 || cost < 0 }
 }

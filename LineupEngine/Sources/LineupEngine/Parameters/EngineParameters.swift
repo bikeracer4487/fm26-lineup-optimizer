@@ -128,6 +128,9 @@ public struct EngineParameters: Sendable {
     public var importanceWeights: Parameter<[Importance: Double]>
     /// The most saving a player for later fixtures can cost him in one fixture, in rating points.
     public var savingCostCeiling: Parameter<Double>
+    /// An adjustment that costs a left-out player less than this many rating points is not named as the reason,
+    /// unless no adjustment that held him back reaches it.
+    public var omissionReasonMinimumLoss: Parameter<Double>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -272,7 +275,10 @@ public struct EngineParameters: Sendable {
             savingCostCeiling: Parameter(
                 1_000, .derived,
                 source: "five times the highest possible rating: at that cost a player starts only when nobody else can, "
-                    + "and values stay far below the assignment solver's empty-slot cost"))
+                    + "and values stay far below the assignment solver's empty-slot cost"),
+            omissionReasonMinimumLoss: Parameter(
+                1.0, .derived,
+                source: "an adjustment that costs a player less than one rating point is not given as the reason he was left out"))
     }()
 
     /// Every stored parameter, found by reflection so a new one cannot be left out.

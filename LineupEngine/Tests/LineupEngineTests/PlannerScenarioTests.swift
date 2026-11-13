@@ -131,8 +131,10 @@ import Testing
         #expect(pick(planned, .ST_C)?.player == id(.ST_C))
         #expect(pick(planned, .AM_C)?.player == id(.AM_C, "second"))
         let omission = try #require(planned.lineup.omissions.first { $0.player == id(.AM_C) })
+        // Only both together bring him back: his own ×0.60 and his cover's need for minutes.
         #expect(omission.cause == .heldBack([.needsSharpness]))
-        #expect(omission.reason == "Left out: Already sharp: others need the minutes more (×0.60)")
+        #expect(omission.reason == "Left out: Already sharp: others need the minutes more (×0.60); "
+            + "AM_C second is preferred: Needs minutes: sharpness 60% (×1.76)")
 
         // The third striker would beat the first choice if being unsharp earned him what it earns the elevens; it does not.
         let st = try #require(pick(planned, .ST_C))
@@ -162,6 +164,15 @@ import Testing
         let low = try #require(pick(result.fixtures[1], .ST_C))
         #expect(low.player == prospect.id)
         #expect(low.adjustments.map(\.kind).contains(.development))
+        // The first-choice striker is left out because the prospect is favoured.
+        let striker = try #require(result.fixtures[1].lineup.omissions.first { $0.player == id(.ST_C) })
+        guard case .preferred(let by, let kinds) = striker.cause else {
+            Issue.record("expected preferred, got \(striker.cause)"); return
+        }
+        #expect(by == [prospect.id])
+        #expect(kinds.contains(.development))
+        #expect(striker.reason.hasPrefix("Left out: ST prospect is preferred: "))
+        #expect(striker.reason.contains("Young player with room to grow: favoured for minutes (×1.10)"))
         #expect(pick(result.fixtures[2], .ST_C)?.player == id(.ST_C))
     }
 

@@ -966,7 +966,7 @@ import Testing
         #expect(omission.reason == "Left out: kept fresher for the cup final")
 
         // Several, in Kind order; one that neither scales him down nor costs him is not named.
-        let streak = Adjustment(kind: .consecutiveStarts, cost: 0.5, reason: "a fourth start in a row")
+        let streak = Adjustment(kind: .consecutiveStarts, cost: 5, reason: "a fourth start in a row")
         let neutral = Adjustment(kind: .loanedIn, reason: "on loan from Wallingford")
         let several = try selector.select(adjusted(base, every: [id("Striker"): [held, neutral]], slots: [id("Striker"): [.ST_C: [streak]]]))
         #expect(several.omissions.first?.cause == .heldBack([.consecutiveStarts, .savedForLater]))
@@ -986,6 +986,151 @@ import Testing
         let overridden = try selector.select(adjusted(request(squad(rival), overrides: [.ST_C: id("Rival Striker")]),
                                                       every: [id("Striker"): [Adjustment(kind: .savedForLater, factor: 0.99, reason: "x")]]))
         #expect(overridden.omissions.first?.cause == .displacedByOverride(by: [id("Rival Striker")]))
+    }
+
+    // MARK: - The cause that would bring him back
+
+    let development = Adjustment(kind: .development, factor: 1.10, reason: "Young player with room to grow: favoured for minutes (×1.10)")
+
+    @Test func aRivalsFavourNotHisOwnRunIsNamedWhenOnlyTheFavourDecides() throws {
+        // Striker 90.0 × 0.97 = 87.3; the rival 85.5 × 1.10 = 94.1. Without the run he is still out (90.0); without the
+        // rival's favour he starts.
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let run = Adjustment(kind: .consecutiveStarts, factor: 0.97, reason: "Has started the last 3 matches in quick succession (×0.97)")
+        let lineup = try selector.select(adjusted(request(squad(rival)), every: [id("Striker"): [run], id("Rival Striker"): [development]]))
+        let omission = try #require(lineup.omissions.first)
+        #expect(lineup.omissions.count == 1 && omission.player == id("Striker") && omission.slot == .ST_C)
+        #expect(omission.cause == .preferred(by: [id("Rival Striker")], [.development]))
+        #expect(omission.reason == "Left out: Rival Striker is preferred: Young player with room to grow: favoured for minutes (×1.10)")
+    }
+
+    @Test func hisFitnessNotARivalsFavourIsNamedWhenAThirdPlayerWouldTakeTheSlot() throws {
+        // No Playmaker. Quinn (ST 13, AM (C) 20) is favoured ×1.14 at ST_C only; Reed (15 at both) is next. Without Quinn's
+        // favour Reed takes ST_C and the Striker, at 90% condition, is still out; at full condition he starts.
+        let quinn = Player.fixture(name: "Quinn", familiarity: [.striker: 13, .attackingMidCentral: 20])
+        let reed = Player.fixture(name: "Reed", familiarity: [.striker: 15, .attackingMidCentral: 15])
+        let players = changing("Striker", in: squad(quinn, reed).filter { $0.name != "Playmaker" }) { $0.condition = 0.90 }
+        let favour = Adjustment(kind: .needsSharpness, factor: 1.14, reason: "Needs minutes: sharpness 72% (×1.14)")
+        let lineup = try selector.select(adjusted(request(players), slots: [id("Quinn"): [.ST_C: [favour]]]))
+        #expect(pick(lineup, .ST_C)?.player == id("Quinn") && pick(lineup, .AM_C)?.player == id("Reed"))
+        let omission = try #require(lineup.omissions.first { $0.player == id("Striker") })
+        guard case .lowerMatchDayValue(let ideal, let today, .condition) = omission.cause else {
+            Issue.record("expected lowerMatchDayValue, got \(omission.cause)"); return
+        }
+        #expect(omission.reason == "Left out: condition 90% lowers him from \(oneDecimal(ideal)) to \(oneDecimal(today))")
+    }
+
+    @Test func aCostThatDecidesIsNamed() throws {
+        // 90.0 − 5 = 85.0, below the rival's 85.5.
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let cost = Adjustment(kind: .savedForLater, cost: 5, reason: "Kept fresher for Wealdstone")
+        let omission = try #require(try selector.select(adjusted(request(squad(rival)), every: [id("Striker"): [cost]])).omissions.first)
+        #expect(omission.cause == .heldBack([.savedForLater]))
+        #expect(omission.reason == "Left out: Kept fresher for Wealdstone")
+    }
+
+    @Test func aCostUnderOnePointBesideALargerOneIsNotNamed() throws {
+        // 90.0 − 5.3 = 84.7, below the rival's 85.5.
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let small = Adjustment(kind: .consecutiveStarts, cost: 0.3, reason: "a little tired")
+        let large = Adjustment(kind: .savedForLater, cost: 5, reason: "Kept fresher for Wealdstone")
+        let omission = try #require(try selector.select(adjusted(request(squad(rival)), every: [id("Striker"): [small, large]])).omissions.first)
+        #expect(omission.cause == .heldBack([.savedForLater]))
+        #expect(omission.reason == "Left out: Kept fresher for Wealdstone")
+    }
+
+    @Test func aCostUnderOnePointThatAloneDecidesIsNamed() throws {
+        // The rival rates about 0.16 below the Striker (Vision 9): 90.0 − 0.3 falls below him.
+        let close = Player.fixture(name: "Close Striker", attributes: [.vision: 9], familiarity: [.striker: 20])
+        let small = Adjustment(kind: .consecutiveStarts, cost: 0.3, reason: "a little tired")
+        try #require(pick(try selector.select(request(squad(close))), .ST_C)?.player == id("Striker"))
+        let omission = try #require(try selector.select(adjusted(request(squad(close)), every: [id("Striker"): [small]])).omissions.first)
+        #expect(omission.cause == .heldBack([.consecutiveStarts]))
+        #expect(omission.reason == "Left out: a little tired")
+    }
+
+    @Test func heldBackAndUnfitAreBothNamedWhenOnlyBothTogetherDecide() throws {
+        // 90.0 × 0.94 − 5 = 79.6 against the rival's 85.5. Without the cost 84.6; at full fitness 85.0; without both 90.0.
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let cost = Adjustment(kind: .savedForLater, cost: 5, reason: "Kept fresher for Wealdstone")
+        let players = changing("Striker", in: squad(rival)) { $0.condition = 0.90 }
+        let omission = try #require(try selector.select(adjusted(request(players), every: [id("Striker"): [cost]])).omissions.first)
+        let rating = try #require(pick(try selector.select(request(changing("Striker", in: squad(rival)) { _ in })), .ST_C)).rating.value
+        #expect(omission.cause == .heldBack([.savedForLater]))
+        #expect(omission.reason
+            == "Left out: Kept fresher for Wealdstone; condition 90% lowers him from \(oneDecimal(rating)) to \(oneDecimal(rating * 0.94))")
+        // Projected, the fitness phrase says so, with no second "Left out: ".
+        let projected = try #require(try selector.select(adjusted(request(players), every: [id("Striker"): [cost]], projected: true)).omissions.first)
+        #expect(projected.reason
+            == "Left out: Kept fresher for Wealdstone; projected condition 90% lowers him from \(oneDecimal(rating)) to \(oneDecimal(rating * 0.94))")
+    }
+
+    @Test func heldBackAndARivalsFavourAreBothNamedWhenOnlyBothTogetherDecide() throws {
+        // Striker 90.0 × 0.80 = 72.0; the rival 85.5 × 1.10 = 94.1. Without his ×0.80, 90.0 still loses to 94.1; without the
+        // rival's favour, 72.0 still loses to 85.5; without both he starts.
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let sharp = Adjustment(kind: .needsSharpness, factor: 0.80, reason: "Already sharp: others need the minutes more (×0.80)")
+        let omission = try #require(try selector.select(adjusted(request(squad(rival)),
+                                                                 every: [id("Striker"): [sharp], id("Rival Striker"): [development]])).omissions.first)
+        #expect(omission.cause == .heldBack([.needsSharpness]))
+        #expect(omission.reason == "Left out: Already sharp: others need the minutes more (×0.80); "
+            + "Rival Striker is preferred: Young player with room to grow: favoured for minutes (×1.10)")
+    }
+
+    @Test func twoFavouredRivalsEachNameOnlyTheRegularTheyDisplaced() throws {
+        let rivalStriker = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let rivalPlaymaker = Player.fixture(name: "Rival Playmaker", familiarity: [.attackingMidCentral: 17])
+        let lineup = try selector.select(adjusted(request(squad(rivalStriker, rivalPlaymaker)),
+                                                  every: [id("Rival Striker"): [development], id("Rival Playmaker"): [development]]))
+        let striker = try #require(lineup.omissions.first { $0.player == id("Striker") })
+        #expect(striker.cause == .preferred(by: [id("Rival Striker")], [.development]))
+        #expect(striker.reason == "Left out: Rival Striker is preferred: Young player with room to grow: favoured for minutes (×1.10)")
+        let playmaker = try #require(lineup.omissions.first { $0.player == id("Playmaker") })
+        #expect(playmaker.cause == .preferred(by: [id("Rival Playmaker")], [.development]))
+        #expect(playmaker.reason == "Left out: Rival Playmaker is preferred: Young player with room to grow: favoured for minutes (×1.10)")
+    }
+
+    @Test func favouredPlayersAlongOneChainAreNamedInChainOrder() throws {
+        // No Playmaker. Versatile (ST 17, AM (C) 20) is favoured at ST_C and holds it; Apprentice (AM (C) 17) is favoured
+        // at AM_C and holds it. Without the favours the Striker takes ST_C, Versatile moves to AM_C and Apprentice drops out.
+        let versatile = Player.fixture(name: "Versatile", familiarity: [.striker: 17, .attackingMidCentral: 20])
+        let apprentice = Player.fixture(name: "Apprentice", familiarity: [.attackingMidCentral: 17])
+        let players = squad(versatile, apprentice).filter { $0.name != "Playmaker" }
+        let retraining = Adjustment(kind: .retraining, factor: 1.10, reason: "favoured up front")
+        let lineup = try selector.select(adjusted(request(players), slots: [id("Versatile"): [.ST_C: [retraining]],
+                                                                         id("Apprentice"): [.AM_C: [development]]]))
+        #expect(pick(lineup, .ST_C)?.player == id("Versatile") && pick(lineup, .AM_C)?.player == id("Apprentice"))
+        let omission = try #require(lineup.omissions.first { $0.player == id("Striker") })
+        #expect(omission.cause == .preferred(by: [id("Versatile"), id("Apprentice")], [.development, .retraining]))
+        #expect(omission.reason == "Left out: Versatile is preferred: favoured up front. "
+            + "Apprentice is preferred: Young player with room to grow: favoured for minutes (×1.10)")
+    }
+
+    @Test func withNoAdjustmentsTheCausesAndReasonsAreTodays() throws {
+        // Condition: only full fitness brings him back. Sharpness and condition together: the same, named together.
+        let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
+        let tired = try #require(try selector.select(request(changing("Striker", in: squad(rival)) { $0.condition = 0.86 })).omissions.first)
+        guard case .lowerMatchDayValue(let ideal, let today, .condition) = tired.cause else {
+            Issue.record("expected lowerMatchDayValue, got \(tired.cause)"); return
+        }
+        #expect(tired.reason == "Left out: condition 86% lowers him from \(oneDecimal(ideal)) to \(oneDecimal(today))")
+        let both = try #require(try selector.select(request(changing("Striker", in: squad(rival)) {
+            $0.condition = 0.90; $0.sharpness = 0.50
+        })).omissions.first)
+        guard case .lowerMatchDayValue(let ideal2, let today2, .sharpness) = both.cause else {
+            Issue.record("expected lowerMatchDayValue, got \(both.cause)"); return
+        }
+        #expect(both.reason == "Left out: fitness lowers him from \(oneDecimal(ideal2)) to \(oneDecimal(today2)) (condition 90%, sharpness 50%)")
+        // Empty adjustment tables are the same as none.
+        let players = changing("Striker", in: squad(rival)) { $0.condition = 0.86 }
+        #expect(try selector.select(adjusted(request(players), every: [:], slots: [:])) == (try selector.select(request(players))))
+    }
+
+    @Test func theMinimumLossIsListedWithEvidenceAndSource() {
+        let m = EngineParameters.fm27.omissionReasonMinimumLoss
+        #expect(m.value == 1.0)
+        #expect(m.evidence == .derived)
+        #expect(m.source == "an adjustment that costs a player less than one rating point is not given as the reason he was left out")
     }
 
     // MARK: - The best available eleven
