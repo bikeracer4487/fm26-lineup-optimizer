@@ -44,6 +44,11 @@ extension AppModel {
         state.importedOn[target] = settings.currentDate
         squad = state
         save(.squad)
+        // The new figures include every match played before the import, for this squad's players.
+        if history.contains(where: { $0.awaitingImport.contains(target) }) {
+            for index in history.indices { history[index].awaitingImport.remove(target) }
+            save(.history)
+        }
         replan()
 
         let onLoan = (state.book.current[target] ?? []).filter { player in

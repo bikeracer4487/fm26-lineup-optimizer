@@ -33,14 +33,15 @@ extension AppModel {
     }
 
     /// Records the fixture's planned lineup as played: the starters by slot, their names as the squad has them now,
-    /// and the tactic's name. Nothing happens unless `canConfirm` allows it.
+    /// and the tactic's name, with every squad imported so far awaiting an import that includes the match. Nothing
+    /// happens unless `canConfirm` allows it.
     public func confirm(_ fixture: FixtureID) {
         guard canConfirm(fixture), let plan = nextToPlay, case .planned(let lineup, _) = plan.body else { return }
         let starters = Dictionary(uniqueKeysWithValues: lineup.picks.map { ($0.slot, $0.player) })
         let names = Dictionary(uniqueKeysWithValues: lineup.picks.map { ($0.player, $0.name) })
         history.append(ConfirmedRecord(
             lineup: ConfirmedLineup(fixture: fixture, date: plan.fixture.date, starters: starters),
-            names: names, tacticName: plan.tacticName))
+            names: names, tacticName: plan.tacticName, awaitingImport: Set(squad.importedOn.keys)))
         save(.history)
         replan()
     }
@@ -61,7 +62,7 @@ extension AppModel {
         let planned = fixturePlans.compactMap { plan -> (FixturePlan, [PlayerID: ProjectedFitness])? in
             if case .planned(_, let fitness) = plan.body { (plan, fitness) } else { nil }
         }
-        guard let index = planned.firstIndex(where: { $0.0.id == fixture }), let asOf = planStartDay,
+        guard let index = planned.firstIndex(where: { $0.0.id == fixture }),
               let tactic = tactic(for: planned[index].0.fixture)?.tactic else { return [] }
         let assignments: [SlotAssignment]
         do {
@@ -72,7 +73,7 @@ extension AppModel {
         guard let assignment = assignments.first(where: { $0.slot == slot }) else { return [] }
         let (plan, fitness) = planned[index]
         let parameters = planParameters
-        let projected = Self.fitnessIsProjected(at: index, date: plan.fixture.date, asOf: asOf)
+        let projected = plan.fitnessIsProjected
         let club = ownClub
         let players = squad.book.allPlayers.filter {
             if case .loanedOut = LoanStatus.of($0, ownClub: club) { false } else { true }
@@ -136,8 +137,8 @@ extension AppModel {
                 Fixture(id: fixture.id, date: fixture.date, opponent: fixture.opponent, importance: fixture.importance,
                         tactic: tactic(for: fixture)!.tactic, overrides: fixture.overrides, rejected: fixture.rejected)
             },
-            players: players, ownClub: ownClub, asOf: asOf, confirmed: history.map(\.lineup), retraining: [],
-            settings: settings.plan)
+            players: players, ownClub: ownClub, asOf: asOf, confirmed: history.map(\.lineup),
+            played: playedSinceImport(players), retraining: [], settings: settings.plan)
         let plan: Plan
         do {
             plan = try Planner(catalog: catalog, profile: profile, parameters: parameters).plan(request)
@@ -146,7 +147,7 @@ extension AppModel {
         }
 
         let names = Dictionary(players.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
-        let planned = Dictionary(uniqueKeysWithValues: plan.fixtures.enumerated().map { ($1.fixture, (index: $0, $1)) })
+        let planned = Dictionary(uniqueKeysWithValues: plan.fixtures.map { ($0.fixture, $0) })
         let result = fixtures.compactMap { fixture -> FixturePlan? in
             if let record = confirmed[fixture.id] {
                 return FixturePlan(fixture: fixture, tacticName: record.tacticName, usesPrimaryBecauseItsTacticWasDeleted: false,
@@ -158,8 +159,8 @@ extension AppModel {
                 return FixturePlan(fixture: fixture, tacticName: tacticName, usesPrimaryBecauseItsTacticWasDeleted: tacticGone,
                                    body: .missed, ignoredOverrides: [])
             }
-            guard let (index, item) = planned[fixture.id] else { return nil }
-            let projected = Self.fitnessIsProjected(at: index, date: fixture.date, asOf: asOf)
+            guard let item = planned[fixture.id] else { return nil }
+            let projected = item.fitnessIsProjected
             let ignored = SlotID.allCases.compactMap { slot in
                 item.lineup.ignoredOverrides[slot].map { problem in
                     if let chosen = fixture.overrides[slot], let name = names[chosen] {
@@ -171,9 +172,45 @@ extension AppModel {
                 }
             }
             return FixturePlan(fixture: fixture, tacticName: tacticName, usesPrimaryBecauseItsTacticWasDeleted: tacticGone,
-                               body: .planned(item.lineup, fitness: item.fitness), ignoredOverrides: ignored)
+                               body: .planned(item.lineup, fitness: item.fitness), fitnessIsProjected: projected,
+                               ignoredOverrides: ignored)
         }
         return .ready(result)
+    }
+
+    /// The confirmed matches whose load the imported fitness does not include: each record still awaiting an import,
+    /// with its starters cut down to those in `players` whose squad it awaits. A record left with no starters is dropped,
+    /// since it changes nobody's fitness.
+    private func playedSinceImport(_ players: [Player]) -> [ConfirmedLineup] {
+        let squadOf = Dictionary(players.map { ($0.id, $0.squad) }, uniquingKeysWith: { first, _ in first })
+        return history.compactMap { record in
+            guard !record.awaitingImport.isEmpty else { return nil }
+            var lineup = record.lineup
+            lineup.starters = lineup.starters.filter { _, player in
+                squadOf[player].map(record.awaitingImport.contains) ?? false
+            }
+            return lineup.starters.isEmpty ? nil : lineup
+        }
+    }
+
+    /// Why the plan counts matches the imported fitness does not include, naming them by opponent in date order; nil
+    /// when no confirmed match awaits an import.
+    public var fitnessNote: String? {
+        let awaiting = history.filter { !$0.awaitingImport.isEmpty }
+            .sorted { ($0.lineup.date, $0.lineup.fixture.raw) < ($1.lineup.date, $1.lineup.fixture.raw) }
+        guard !awaiting.isEmpty else { return nil }
+        let opponents = awaiting.map { record in
+            fixtures.first { $0.id == record.lineup.fixture }?.opponent
+                ?? "an opponent on \(DayText.short(record.lineup.date))"
+        }
+        let tail = " confirmed after the squad was last imported. "
+        guard opponents.count > 1 else {
+            return "The match against \(opponents[0]) was" + tail
+                + "Its starters are counted as having played 90 minutes; import the squad again for their real fitness."
+        }
+        let listed = opponents.dropLast().joined(separator: ", ") + " and " + opponents.last!
+        return "The matches against \(listed) were" + tail
+            + "Their starters are counted as having played 90 minutes; import the squad again for their real fitness."
     }
 
     /// One sentence per tactic the fixtures would be planned with that cannot be used, in the order the fixtures
@@ -231,12 +268,6 @@ extension AppModel {
     /// The earliest fixture with a planned lineup.
     private var nextToPlay: FixturePlan? {
         fixturePlans.first { if case .planned = $0.body { true } else { false } }
-    }
-
-    /// The planner's rule: fitness is projected once a match has been planned before the fixture, or once a day has
-    /// passed since the import. `index` is the fixture's place among the planned fixtures.
-    private static func fitnessIsProjected(at index: Int, date: Day, asOf: Day) -> Bool {
-        index > 0 || asOf < date
     }
 
     /// Changes the saved fixture, saves the fixtures and replans; nothing happens if the change leaves it as it was.

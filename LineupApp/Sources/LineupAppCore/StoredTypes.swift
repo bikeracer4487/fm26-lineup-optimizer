@@ -62,9 +62,33 @@ public struct ConfirmedRecord: Equatable, Codable, Sendable {
     public var lineup: ConfirmedLineup
     public var names: [PlayerID: String]
     public var tacticName: String
+    /// The squads not imported since this lineup was confirmed: their imported fitness does not include the match.
+    public var awaitingImport: Set<Squad>
 
-    public init(lineup: ConfirmedLineup, names: [PlayerID: String], tacticName: String) {
-        self.lineup = lineup; self.names = names; self.tacticName = tacticName
+    public init(lineup: ConfirmedLineup, names: [PlayerID: String], tacticName: String, awaitingImport: Set<Squad> = []) {
+        self.lineup = lineup; self.names = names; self.tacticName = tacticName; self.awaitingImport = awaitingImport
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case lineup, names, tacticName, awaitingImport
+    }
+
+    /// A record saved before `awaitingImport` existed has nothing awaited.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        lineup = try c.decode(ConfirmedLineup.self, forKey: .lineup)
+        names = try c.decode([PlayerID: String].self, forKey: .names)
+        tacticName = try c.decode(String.self, forKey: .tacticName)
+        awaitingImport = Set(try c.decodeIfPresent([Squad].self, forKey: .awaitingImport) ?? [])
+    }
+
+    /// `awaitingImport` is written as an array in raw-value order, because a set has no fixed order of its own.
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(lineup, forKey: .lineup)
+        try c.encode(names, forKey: .names)
+        try c.encode(tacticName, forKey: .tacticName)
+        try c.encode(awaitingImport.sorted { $0.rawValue < $1.rawValue }, forKey: .awaitingImport)
     }
 }
 

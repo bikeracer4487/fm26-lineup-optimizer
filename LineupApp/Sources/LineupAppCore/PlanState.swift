@@ -21,6 +21,9 @@ public struct FixturePlan: Identifiable, Equatable, Sendable {
     }
 
     public let body: Body
+    /// For a planned lineup, the planner's word on whether the fitness it was chosen on is projected rather than the
+    /// imported figures; false for any other.
+    public let fitnessIsProjected: Bool
     /// One sentence per override the engine did not use, in slot order: "<Name> at D L: <the engine's reason>.", or
     /// "The player chosen for D L is no longer in the squad."
     public let ignoredOverrides: [String]
@@ -33,10 +36,10 @@ public struct FixturePlan: Identifiable, Equatable, Sendable {
     }
 
     public init(fixture: StoredFixture, tacticName: String, usesPrimaryBecauseItsTacticWasDeleted: Bool, body: Body,
-                ignoredOverrides: [String]) {
+                fitnessIsProjected: Bool = false, ignoredOverrides: [String]) {
         self.fixture = fixture; self.tacticName = tacticName
         self.usesPrimaryBecauseItsTacticWasDeleted = usesPrimaryBecauseItsTacticWasDeleted
-        self.body = body; self.ignoredOverrides = ignoredOverrides
+        self.body = body; self.fitnessIsProjected = fitnessIsProjected; self.ignoredOverrides = ignoredOverrides
     }
 }
 

@@ -51,6 +51,14 @@ import LineupEngine
         return record
     }
 
+    private func fitness(_ plan: FixturePlan?, sourceLocation: SourceLocation = #_sourceLocation) -> [PlayerID: ProjectedFitness] {
+        guard case .planned(_, let fitness)? = plan?.body else {
+            Issue.record("expected a planned lineup, got \(String(describing: plan?.body))", sourceLocation: sourceLocation)
+            return [:]
+        }
+        return fitness
+    }
+
     private func pick(at slot: SlotID, _ plan: FixturePlan?) -> Pick? {
         lineup(plan)?.picks.first { $0.slot == slot }
     }
@@ -304,6 +312,9 @@ import LineupEngine
         settings.conditionFloor = 0.99
         model.update(settings)
         #expect(self.record(plan(model, ids[0])) == record)
+        // At 99% the confirmed match's starters, tired by it, would be left out of the next fixture below the floor.
+        settings.conditionFloor = nil
+        model.update(settings)
 
         // The next fixture counts the confirmed match: a run of starts is longer than with that match gone.
         let without = try sample()
@@ -383,7 +394,10 @@ import LineupEngine
         t.importSquad(.firstTeam, paste: try Captures.u21, grids: try Captures.u21Grids)
         let present = Set(model.players.map(\.id))
         #expect(record.lineup.starters.values.contains { !present.contains($0) })
-        #expect(self.record(plan(model, id)) == record)
+        // Only what the import says about the squads changes: the first team is no longer awaited.
+        var kept = record
+        kept.awaitingImport = [.u21]
+        #expect(self.record(plan(model, id)) == kept)
     }
 
     // MARK: Things that point at something gone, and failures
@@ -677,5 +691,142 @@ import LineupEngine
         #expect(model.planState == before)
         model.saveDraft(id)
         #expect(model.planState != before)
+    }
+
+    // MARK: A confirmed match before the next import
+
+    @Test func confirmingAMatchKeepsItsLoadInLaterFixtures() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        let ids = model.fixtures.map(\.id)
+        guard let first = lineup(plan(model, ids[0])) else { return }
+        let before = fitness(plan(model, ids[1]))
+
+        model.confirm(ids[0])
+        #expect(model.history.first?.awaitingImport == [.firstTeam, .u21])
+        let after = fitness(plan(model, ids[1]))
+        #expect(first.picks.count == 11)
+        for pick in first.picks {
+            guard let was = before[pick.player], let now = after[pick.player] else {
+                Issue.record("no fitness for \(pick.name)"); continue
+            }
+            #expect(abs(now.condition - was.condition) < 1e-9, "\(pick.name)")
+            #expect(abs(now.sharpness - was.sharpness) < 1e-9, "\(pick.name)")
+            #expect(abs(now.jadedness - was.jadedness) < 1e-9, "\(pick.name)")
+            #expect(now.daysSinceMatch == was.daysSinceMatch, "\(pick.name)")
+        }
+    }
+
+    @Test func importingASquadAgainStopsCountingTheMatchForThatSquadOnly() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        let ids = model.fixtures.map(\.id)
+        // A U21 player fixed in the first match, so it has a starter from each squad.
+        guard let youngster = model.candidates(for: .ST_C, in: ids[0]).first(where: { $0.squad == .u21 && $0.unavailable == nil }) else {
+            Issue.record("no available U21 striker"); return
+        }
+        model.setOverride(youngster.player, at: .ST_C, in: ids[0])
+        guard let first = lineup(plan(model, ids[0])),
+              let senior = first.picks.first(where: { pick in model.players.first { $0.id == pick.player }?.squad == .firstTeam }) else {
+            Issue.record("no first-team starter"); return
+        }
+        #expect(first.picks.contains { $0.player == youngster.player })
+        model.confirm(ids[0])
+
+        func rested(_ id: PlayerID) throws -> ProjectedFitness {
+            let player = try #require(model.players.first { $0.id == id })
+            return try FitnessProjection.afterDays(
+                TestModel.today.days(to: model.fixtures[1].date), ProjectedFitness(player), player: player,
+                intensity: model.settings.plan.trainingIntensity, parameters: model.planParameters)
+        }
+        let restedSenior = try rested(senior.player)
+        let restedYoungster = try rested(youngster.player)
+        #expect(try #require(fitness(plan(model, ids[1]))[senior.player]).condition < restedSenior.condition)
+
+        try t.importFirstTeam()
+        #expect(model.history.first?.awaitingImport == [.u21])
+        #expect(t.reopened().history.first?.awaitingImport == [.u21])
+        let afterFirstTeam = fitness(plan(model, ids[1]))
+        #expect(afterFirstTeam[senior.player] == restedSenior)
+        #expect(try #require(afterFirstTeam[youngster.player]).condition < restedYoungster.condition)
+        #expect(model.fitnessNote != nil)
+
+        try t.importU21()
+        #expect(model.history.first?.awaitingImport == [])
+        #expect(fitness(plan(model, ids[1]))[youngster.player] == restedYoungster)
+        #expect(model.fitnessNote == nil)
+    }
+
+    @Test func unlockingRemovesTheLoadWithTheRecord() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        let ids = model.fixtures.map(\.id)
+        let before = model.planState
+        model.confirm(ids[0])
+        #expect(model.fitnessNote != nil)
+        model.unlock(ids[0])
+        #expect(model.planState == before)
+        #expect(model.fitnessNote == nil)
+        // Confirmed again, the load comes back; deleting the fixture removes it with the record.
+        model.confirm(ids[0])
+        model.deleteFixture(ids[0])
+        #expect(model.fitnessNote == nil)
+        guard let second = plans(model).first else { return }
+        #expect(fitness(second).values.allSatisfy { $0.daysSinceMatch == nil })
+    }
+
+    @Test func theNoteNamesTheMatchesAwaitingAnImport() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 3, t)
+        let ids = model.fixtures.map(\.id)
+        #expect(model.fitnessNote == nil)
+        model.confirm(ids[0])
+        #expect(model.fitnessNote == "The match against Opponent 1 was confirmed after the squad was last imported. Its "
+            + "starters are counted as having played 90 minutes; import the squad again for their real fitness.")
+        model.confirm(ids[1])
+        #expect(model.fitnessNote == "The matches against Opponent 1 and Opponent 2 were confirmed after the squad was last "
+            + "imported. Their starters are counted as having played 90 minutes; import the squad again for their real fitness.")
+        try t.importFirstTeam()
+        #expect(model.fitnessNote != nil)   // the U21 squad is still awaited
+        try t.importU21()
+        #expect(model.fitnessNote == nil)
+        #expect(model.history.count == 2)
+    }
+
+    @Test func theNoteIsNilWithNothingAwaited() throws {
+        // The sample's history was saved without anything awaited, as a file from before the field would be.
+        let model = try sample()
+        #expect(!model.history.isEmpty)
+        #expect(model.history.allSatisfy { $0.awaitingImport.isEmpty })
+        #expect(model.fitnessNote == nil)
+    }
+
+    @Test func awaitingImportSurvivesAReload() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        model.confirm(model.fixtures[0].id)
+        let reopened = t.reopened()
+        #expect(reopened.history == model.history)
+        #expect(reopened.history.first?.awaitingImport == [.firstTeam, .u21])
+        #expect(reopened.planState == model.planState)
+        #expect(reopened.fitnessNote == model.fitnessNote)
+    }
+
+    @Test func aFixtureOnTheImportDayAfterAConfirmedMatchThereHasProjectedFitness() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 0, t)
+        let played = model.addFixture(date: TestModel.today, opponent: "Opponent A", importance: .medium)
+        model.confirm(played)
+        let replay = model.addFixture(date: TestModel.today, opponent: "Opponent B", importance: .medium)
+        var settings = model.settings
+        settings.conditionFloor = 0.99
+        model.update(settings)
+        guard let floored = lineup(plan(model, replay))?.omissions.first(where: isBelowTheFloor) else {
+            Issue.record("nobody below the floor after the confirmed match"); return
+        }
+        #expect(model.history.first?.lineup.starters.values.contains(floored.player) == true)
+        let candidate = model.candidates(for: floored.slot, in: replay).first { $0.player == floored.player }
+        #expect(candidate?.unavailable.map { "Left out: " + $0 } == floored.reason)
+        #expect(candidate?.unavailable?.hasPrefix("projected condition") == true)
     }
 }

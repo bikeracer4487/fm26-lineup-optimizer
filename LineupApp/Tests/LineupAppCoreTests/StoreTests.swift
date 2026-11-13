@@ -26,7 +26,7 @@ import LineupEngine
     }
     private var record: ConfirmedRecord {
         ConfirmedRecord(lineup: ConfirmedLineup(fixture: FixtureID("f1"), date: day, starters: [.GK: alice]),
-                        names: [alice: "Alice"], tacticName: "Test")
+                        names: [alice: "Alice"], tacticName: "Test", awaitingImport: [.firstTeam, .u21])
     }
     private var settings: AppSettings {
         var s = AppSettings(currentDate: day)
@@ -69,9 +69,10 @@ import LineupEngine
             for (slot, id) in slots { overrides[slot] = id; names[id] = "P\(id.key)" }
             let fixture = StoredFixture(id: FixtureID("f1"), date: day, opponent: "Rovers", importance: .high,
                                         overrides: overrides, rejected: Set(rejected))
+            let awaited: [Squad] = reversed ? [.u18, .u21, .firstTeam] : [.firstTeam, .u21, .u18]
             let record = ConfirmedRecord(
                 lineup: ConfirmedLineup(fixture: FixtureID("f1"), date: day, starters: overrides),
-                names: names, tacticName: "T")
+                names: names, tacticName: "T", awaitingImport: Set(awaited))
             return ([fixture], [record])
         }
         var bytes: [Data] = []
@@ -99,6 +100,25 @@ import LineupEngine
         // Rejected players are listed in key order.
         #expect(position("fmrte:10") < position("fmrte:11"))
         #expect(position("fmrte:11") < position("fmrte:12"))
+        // Awaited squads are listed by their raw values.
+        #expect(position("\"firstTeam\"") < position("\"u18\""))
+        #expect(position("\"u18\"") < position("\"u21\""))
+    }
+
+    @Test func aHistoryFileWithoutTheNewFieldLoadsWithNothingAwaited() throws {
+        try withStore { store, dir in
+            let saved = #"""
+            {"version": 1, "value": [{"lineup": {"fixture": "f1", "date": "2026-11-13", "starters": {"GK": "fmrte:1"}},
+              "names": {"fmrte:1": "Alice"}, "tacticName": "Test"}]}
+            """#
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data(saved.utf8).write(to: dir.appendingPathComponent("history.json"))
+            let loaded = store.load(.history, as: [ConfirmedRecord].self, otherwise: [])
+            #expect(loaded.notice == nil)
+            var expected = record
+            expected.awaitingImport = []
+            #expect(loaded.value == [expected])
+        }
     }
 
     @Test func rejectedPlayersRoundTripAsASet() throws {
