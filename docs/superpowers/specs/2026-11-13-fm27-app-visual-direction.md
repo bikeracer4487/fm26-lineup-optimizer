@@ -7,7 +7,7 @@ The design document (section 12) asked for a visual pass with mock-ups before an
 
 ## What the app is for
 
-One person, managing Oxford City in Football Manager 27, deciding who starts the next few matches and seeing why. He builds a team from young players and reads this beside the game, on the same Mac.
+One person, managing Oxford City in Football Manager 27, deciding who starts the next few matches and seeing why. They build a team from young players and read this beside the game, on the same Mac.
 
 ## The one bold thing
 
