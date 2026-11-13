@@ -468,11 +468,16 @@ public enum MatchPresentation {
         return "Confirmed as played, with \(record.tacticName)."
     }
 
-    /// The line under "Confirm this lineup".
-    public static let confirmExplanation = "Locks this eleven as played. Later fixtures count it."
-
-    /// The button that confirms a missed fixture's remembered eleven.
-    public static let confirmMissedTitle = "Confirm this eleven as played"
+    /// The button that confirms the fixture, and the line under it: for a planned lineup, "Confirm this lineup"; for a
+    /// missed fixture's remembered eleven, "Confirm this eleven as played".
+    public static func confirmButton(for plan: FixturePlan) -> (title: String, explanation: String) {
+        switch plan.body {
+        case .missed:
+            ("Confirm this eleven as played", "Records who started. Later fixtures count their starts.")
+        case .planned, .confirmed:
+            ("Confirm this lineup", "Locks this eleven as played. Later fixtures count it.")
+        }
+    }
 
     /// The line beside a remembered eleven's pitch.
     public static let rememberedHint = "Click a player on the pitch to change who started there."

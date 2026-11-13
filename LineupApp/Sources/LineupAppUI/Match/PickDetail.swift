@@ -8,6 +8,8 @@ struct PickDetailView: View {
     let model: AppModel
     let fixture: FixtureID
     let detail: PickDetail
+    /// Selects the slot's pick after the owner changes it, as Core works it out.
+    let select: (PickSelection?) -> Void
     @State private var choosing = false
 
     var body: some View {
@@ -81,16 +83,16 @@ struct PickDetailView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             Button("Choose someone else…") { choosing = true }
                 .popover(isPresented: $choosing, arrowEdge: .leading) {
-                    CandidatePicker(title: MatchPresentation.pickerTitle(detail.slot),
+                    CandidatePicker(text: PickerText.planned(detail.slot),
                                     rows: model.candidateRows(for: detail.slot, in: fixture)) { player in
-                        model.setOverride(player, at: detail.slot, in: fixture)
+                        select(model.choose(player, at: detail.slot, in: fixture))
                         choosing = false
                     } cancel: {
                         choosing = false
                     }
                 }
             if detail.isOverride {
-                Button("Clear override") { model.setOverride(nil, at: detail.slot, in: fixture) }
+                Button("Clear this choice") { select(model.clearChoice(at: detail.slot, in: fixture)) }
             }
             Button("Leave him out of this match") { model.reject(detail.player, in: fixture) }
         }

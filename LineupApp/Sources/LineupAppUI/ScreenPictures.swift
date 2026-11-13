@@ -65,22 +65,21 @@ public enum ScreenPictures {
         }
     }
 
-    /// Draws the candidate picker on its own for `slot` in `fixture`, as its popover shows it, in light and in dark:
-    /// "match-picker-light.png" and "match-picker-dark.png". A popover cannot be drawn into a picture, so the picker
-    /// is drawn as a window of its own.
-    @MainActor public static func writeCandidatePicker(model: AppModel, fixture: FixtureID, slot: SlotID,
+    /// Draws the candidate picker on its own with `text` and `rows`, as its popover or sheet shows it, in light and in
+    /// dark: "<name>-light.png" and "<name>-dark.png". A popover cannot be drawn into a picture, so the picker is
+    /// drawn as a window of its own.
+    @MainActor public static func writeCandidatePicker(name: String, text: PickerText, rows: [CandidateRow],
                                                        to directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
-            let name = "match-picker-\(suffix).png"
-            let picker = CandidatePicker(title: MatchPresentation.pickerTitle(slot),
-                                         rows: model.candidateRows(for: slot, in: fixture), choose: { _ in }, cancel: {})
+            let file = "\(name)-\(suffix).png"
+            let picker = CandidatePicker(text: text, rows: rows, choose: { _ in }, cancel: {})
                 .tint(Theme.Colour.hoopBlue)
-            let png = try draw(picker, size: Theme.Match.pickerSize, appearance: appearance, name: name)
+            let png = try draw(picker, size: Theme.Match.pickerSize, appearance: appearance, name: file)
             do {
-                try png.write(to: directory.appendingPathComponent(name), options: .atomic)
+                try png.write(to: directory.appendingPathComponent(file), options: .atomic)
             } catch {
-                throw PictureError.couldNotWrite(name, underlying: error)
+                throw PictureError.couldNotWrite(file, underlying: error)
             }
         }
     }

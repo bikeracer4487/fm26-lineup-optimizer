@@ -112,29 +112,3 @@ private struct EditorRequest: Identifiable {
     let id = UUID()
     let draft: FixtureDraft
 }
-
-/// The game's current date, written out, with the day before, the day after and a date picker to change it.
-struct TodayControl: View {
-    let model: AppModel
-
-    var body: some View {
-        HStack(alignment: .center, spacing: Theme.Spacing.m) {
-            Text("Today in the game: \(DayText.long(model.settings.currentDate))")
-                .font(Theme.Typeface.text(Theme.TypeSize.step1, weight: .semibold))
-            Button("Day before") { model.moveToday(by: -1) }
-            Button("Day after") { model.moveToday(by: 1) }
-            DayPicker("Today in the game", day: today)
-                .labelsHidden()
-                .fixedSize()
-        }
-        .help("Fixtures before this day count as played.")
-    }
-
-    private var today: Binding<Day> {
-        Binding(get: { model.settings.currentDate }, set: { day in
-            var settings = model.settings
-            settings.currentDate = day
-            model.update(settings)
-        })
-    }
-}

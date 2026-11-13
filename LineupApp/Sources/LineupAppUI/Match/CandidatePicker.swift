@@ -2,28 +2,37 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// Everyone who could be chosen for a slot with his full-fitness rating: those who can play, best first, then those
-/// who cannot, greyed with the engine's reason; they cannot be chosen. Choosing one fixes him in the slot.
+/// Everyone who could be chosen for a slot: for a planned lineup with his full-fitness rating, those who can play best
+/// first, then those who cannot, greyed with the engine's reason, who cannot be chosen; for a missed fixture's
+/// remembered eleven, the squad by name with the eleven last. Choosing one puts him in the slot.
 public struct CandidatePicker: View {
-    let title: String
+    let text: PickerText
     let rows: [CandidateRow]
     let choose: (PlayerID) -> Void
     let cancel: () -> Void
 
-    public init(title: String, rows: [CandidateRow], choose: @escaping (PlayerID) -> Void,
+    public init(text: PickerText, rows: [CandidateRow], choose: @escaping (PlayerID) -> Void,
                 cancel: @escaping () -> Void) {
-        self.title = title; self.rows = rows; self.choose = choose; self.cancel = cancel
+        self.text = text; self.rows = rows; self.choose = choose; self.cancel = cancel
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text(title)
+                Text(text.title)
                     .font(Theme.Typeface.text(Theme.TypeSize.step1, weight: .semibold))
-                Text("Those who can play, best first at full fitness; then those who cannot, with the reason. Choosing a player fixes him here for this match.")
+                Text(text.explanation)
                     .font(Theme.Typeface.text())
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            if let heading = text.ratingHeading, !rows.isEmpty {
+                HStack {
+                    Spacer()
+                    Text(heading)
+                        .font(Theme.Typeface.text(weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
             if rows.isEmpty {
                 Text("Nobody can be chosen for this slot.")
@@ -74,6 +83,11 @@ struct CandidateRowView: View {
                             .font(Theme.Typeface.text())
                             .foregroundStyle(Theme.Colour.hoopBlue)
                     }
+                }
+                if let note = row.note {
+                    Text(note)
+                        .font(Theme.Typeface.text())
+                        .foregroundStyle(.secondary)
                 }
                 if let reason = row.unavailable {
                     Text(reason)

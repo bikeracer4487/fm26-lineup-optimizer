@@ -184,6 +184,11 @@ extension AppModel {
         return id
     }
 
+    /// "Today in the game: Friday 13 November 2026".
+    public var todayInTheGameText: String {
+        "Today in the game: \(DayText.long(settings.currentDate))"
+    }
+
     /// Moves the game's current date by whole days, back when negative.
     public func moveToday(by days: Int) {
         var changed = settings

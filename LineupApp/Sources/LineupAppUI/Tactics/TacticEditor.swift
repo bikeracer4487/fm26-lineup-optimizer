@@ -8,12 +8,16 @@ import SwiftUI
 struct TacticEditor: View {
     let model: AppModel
     let stored: StoredTactic
+    /// Filling: the pitches side by side fill the height left. Scrolling: side by side, sized by width. Stacked: one
+    /// above the other.
+    let layout: PageLayout
     @State private var selected: TacticSlot?
 
     /// - Parameter selected: the slot selected when the editor opens.
-    init(model: AppModel, stored: StoredTactic, selected: TacticSlot? = nil) {
+    init(model: AppModel, stored: StoredTactic, layout: PageLayout, selected: TacticSlot? = nil) {
         self.model = model
         self.stored = stored
+        self.layout = layout
         _selected = State(initialValue: selected)
     }
 
@@ -39,10 +43,7 @@ struct TacticEditor: View {
             header
             inspector
                 .frame(minHeight: Theme.Layout.controlRowHeight)
-            HStack(alignment: .top, spacing: Theme.Spacing.l) {
-                pitch(.inPossession)
-                pitch(.outOfPossession)
-            }
+            pitches
             if !problems.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                     ForEach(problems, id: \.self) { problem in
@@ -54,17 +55,33 @@ struct TacticEditor: View {
         }
     }
 
+    @ViewBuilder private var pitches: some View {
+        switch layout {
+        case .filling, .scrolling:
+            HStack(alignment: .top, spacing: Theme.Spacing.l) {
+                pitch(.inPossession)
+                pitch(.outOfPossession)
+            }
+        case .stacked:
+            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                pitch(.inPossession)
+                pitch(.outOfPossession)
+            }
+            .frame(maxWidth: Theme.Pitch.scrollingMaximumWidth)
+        }
+    }
+
     // MARK: Name and saving
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
+        WrappingRow(alignment: .firstTextBaseline) {
             Text("Name")
                 .font(Theme.Typeface.text())
             TextField("Name", text: Binding(get: { draft.tactic.name }, set: { name in change { $0.tactic.name = name } }))
                 .textFieldStyle(.roundedBorder)
                 .labelsHidden()
                 .frame(width: Theme.Layout.nameFieldWidth)
-            Spacer(minLength: Theme.Spacing.m)
+        } trailing: {
             if hasChanges {
                 Text("Unsaved changes")
                     .font(Theme.Typeface.text())
@@ -81,23 +98,24 @@ struct TacticEditor: View {
     // MARK: The selected slot
 
     @ViewBuilder private var inspector: some View {
-        if let selected, let role = draft.role(at: selected.slot, in: selected.phase) {
-            HStack(alignment: .center, spacing: Theme.Spacing.l) {
-                Text("\(selected.slot.displayName), \(phaseName(selected.phase))")
+        if let selected, draft.role(at: selected.slot, in: selected.phase) != nil {
+            WrappingRow(spacing: Theme.Spacing.l, pushesTrailing: false) {
+                Text(TacticDraft.inspectorTitle(selected))
                     .font(Theme.Typeface.text(weight: .semibold))
                 Picker("Role", selection: roleBinding(selected)) {
-                    ForEach(roleNames(selected, current: role), id: \.self) { name in
+                    ForEach(draft.roleChoices(at: selected, catalog: model.catalog), id: \.self) { name in
                         Text(name).tag(name)
                     }
                 }
                 .fixedSize()
+            } trailing: {
                 if selected.phase == .inPossession {
                     Picker("Becomes, out of possession", selection: targetBinding(selected.slot)) {
                         if draft.tactic.mapping[selected.slot] == nil {
-                            Text("Nothing yet").tag(SlotID?.none)
+                            Text(TacticDraft.noTargetYet).tag(SlotID?.none)
                         }
                         ForEach(draft.targetChoices(for: selected.slot), id: \.self) { target in
-                            Text(targetName(target)).tag(SlotID?.some(target))
+                            Text(draft.targetName(target)).tag(SlotID?.some(target))
                         }
                     }
                     .fixedSize()
@@ -106,34 +124,18 @@ struct TacticEditor: View {
                     change { $0.toggle(selected.slot, in: selected.phase, catalog: model.catalog) }
                     self.selected = nil
                 }
-                Spacer(minLength: 0)
             }
         } else {
-            Text("Click a place on either pitch to add a slot there, or a filled slot to change its role.")
+            Text(TacticDraft.inspectorHint)
                 .font(Theme.Typeface.text())
                 .foregroundStyle(.secondary)
         }
-    }
-
-    /// The roles the catalogue allows at the slot, with the current one added if the catalogue does not list it
-    /// there, so the menu can show it.
-    private func roleNames(_ selected: TacticSlot, current: String) -> [String] {
-        let allowed = model.catalog.roles(phase: selected.phase, at: selected.slot.position).map(\.name)
-        return allowed.contains(current) ? allowed : [current] + allowed
     }
 
     private func roleBinding(_ selected: TacticSlot) -> Binding<String> {
         Binding(
             get: { draft.role(at: selected.slot, in: selected.phase) ?? "" },
             set: { role in change { $0.setRole(role, at: selected.slot, in: selected.phase) } })
-    }
-
-    private func targetName(_ target: SlotID) -> String {
-        let label = target.displayName
-        if draft.role(at: target, in: .outOfPossession) == nil {
-            return "\(label) (empty)"
-        }
-        return draft.unmappedTargets.contains(target) ? "\(label) (nothing turns into it yet)" : label
     }
 
     private func targetBinding(_ slot: SlotID) -> Binding<SlotID?> {
@@ -144,22 +146,15 @@ struct TacticEditor: View {
             })
     }
 
-    private func phaseName(_ phase: Phase) -> String {
-        switch phase {
-        case .inPossession: "in possession"
-        case .outOfPossession: "out of possession"
-        }
-    }
-
     // MARK: Pitches
 
     private func pitch(_ phase: Phase) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             HStack(alignment: .firstTextBaseline) {
-                Text(phase == .inPossession ? "In possession" : "Out of possession")
+                Text(phase.title)
                     .font(Theme.Typeface.text(Theme.TypeSize.step1, weight: .semibold))
                 Spacer(minLength: Theme.Spacing.s)
-                Text("\(draft.filled(in: phase)) of \(TacticDraft.slotsPerSide) slots filled")
+                Text(draft.filledText(in: phase))
                     .font(Theme.Typeface.text())
                     .foregroundStyle(.secondary)
             }
@@ -206,7 +201,7 @@ struct SlotToken: View {
             }
         }
         .buttonStyle(.plain)
-        .help(role.map { "\(slot.displayName): \($0)" } ?? "Add a slot at \(slot.displayName)")
+        .help(TacticDraft.slotHelp(slot, role: role))
     }
 
     private var shape: RoundedRectangle {

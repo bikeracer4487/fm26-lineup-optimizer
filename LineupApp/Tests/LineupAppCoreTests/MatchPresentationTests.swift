@@ -308,6 +308,13 @@ import LineupEngine
     @Test func thePickerAndAConfirmedLineupSayWhatTheyAre() {
         #expect(MatchPresentation.pickerTitle(.D_L) == "Choose who plays at left back")
         #expect(MatchPresentation.pickerTitle(.ST_C) == "Choose who plays at striker")
+        #expect(PickerText.planned(.ST_C).title == "Choose who plays at striker")
+        #expect(PickerText.planned(.ST_C).ratingHeading == "Rating at full fitness")
+        #expect(PickerText.remembered(.D_L).title == "Who started at left back?")
+        #expect(PickerText.remembered(.D_L).ratingHeading == nil)
+        #expect(MatchPresentation.confirmButton(for: missed(fixture("m", "2026-11-10", "M"))).title
+            == "Confirm this eleven as played")
+        #expect(MatchPresentation.confirmButton(for: planned(fixture("p", "2026-11-14", "P"))).title == "Confirm this lineup")
         #expect(MatchPresentation.confirmedLine(confirmed(fixture("c", "2026-11-12", "C"), [:]))
             == "Confirmed as played, with 4-2-3-1.")
         #expect(MatchPresentation.confirmedLine(planned(fixture("p", "2026-11-14", "P"))) == nil)

@@ -32,16 +32,22 @@ struct TeamSheet: View {
 /// What each mark on a token means.
 struct MarkKey: View {
     var body: some View {
-        HStack(spacing: Theme.Spacing.m) {
-            ForEach(TokenMark.key, id: \.self) { entry in
-                HStack(spacing: Theme.Spacing.xs) {
-                    TokenMarkView(mark: entry.mark, onChalk: true)
-                    Text(entry.text)
-                        .font(Theme.Typeface.text())
-                        .foregroundStyle(.secondary)
-                }
-            }
+        // On one line when it fits beside the pitch, else a line each.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Theme.Spacing.m) { entries }
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) { entries }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    private var entries: some View {
+        ForEach(TokenMark.key, id: \.self) { entry in
+            HStack(spacing: Theme.Spacing.xs) {
+                TokenMarkView(mark: entry.mark, onChalk: true)
+                Text(entry.text)
+                    .font(Theme.Typeface.text())
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }

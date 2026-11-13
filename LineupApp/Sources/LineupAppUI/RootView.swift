@@ -15,12 +15,12 @@ extension EnvironmentValues {
     @Entry public var showScreen = ShowScreen { _ in }
 }
 
-/// The app's window: a sidebar listing the screens, and the chosen screen beside it, under the model's notices.
+/// The app's window: a sidebar listing the screens, and the chosen screen beside it, under the model's notices. It owns
+/// what the owner has chosen to look at, so a choice on a screen survives going to another and back.
 public struct RootView: View {
     let model: AppModel
     let tacticSlot: TacticSlot?
-    let matchStart: MatchStart
-    @State private var selection: Screen?
+    @State private var navigation: Navigation
 
     /// - Parameters:
     ///   - screen: the screen the sidebar starts on.
@@ -30,14 +30,19 @@ public struct RootView: View {
                 matchStart: MatchStart = MatchStart()) {
         self.model = model
         self.tacticSlot = tacticSlot
-        self.matchStart = matchStart
-        _selection = State(initialValue: screen)
+        var selection: PickSelection?
+        if let slot = matchStart.slot, case .ready(let plans) = model.planState,
+           let plan = MatchPresentation.chosen(matchStart.fixture, in: plans) {
+            selection = MatchPresentation.selection(at: slot, in: plan)
+        }
+        _navigation = State(initialValue: Navigation(screen: screen, matchFixture: matchStart.fixture,
+                                                     matchSelection: selection, matchView: matchStart.view))
     }
 
     public var body: some View {
-        let selected = $selection
+        let navigation = navigation
         NavigationSplitView {
-            List(Screen.allCases, selection: $selection) { screen in
+            List(Screen.allCases, selection: Bindable(navigation).screen) { screen in
                 Text(screen.title)
                     .tag(screen)
             }
@@ -45,8 +50,8 @@ public struct RootView: View {
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
                 NoticeList(model: model)
-                if let selection {
-                    ScreenView(screen: selection, model: model, tacticSlot: tacticSlot, matchStart: matchStart)
+                if let screen = navigation.screen {
+                    ScreenView(screen: screen, model: model, navigation: navigation, tacticSlot: tacticSlot)
                 } else {
                     EmptyState("Choose a screen in the sidebar.")
                         .padding(Theme.Spacing.xl)
@@ -54,7 +59,7 @@ public struct RootView: View {
                 }
             }
         }
-        .environment(\.showScreen, ShowScreen { selected.wrappedValue = $0 })
+        .environment(\.showScreen, ShowScreen { navigation.screen = $0 })
         .tint(Theme.Colour.hoopBlue)
         .frame(minWidth: Theme.Layout.minimumWindow.width, minHeight: Theme.Layout.minimumWindow.height)
     }
@@ -86,15 +91,15 @@ struct NoticeList: View {
 struct ScreenView: View {
     let screen: Screen
     let model: AppModel
+    let navigation: Navigation
     let tacticSlot: TacticSlot?
-    let matchStart: MatchStart
 
     var body: some View {
         switch screen {
-        case .squad: SquadScreen(model: model)
-        case .tactics: TacticsScreen(model: model, startingSlot: tacticSlot)
+        case .squad: SquadScreen(model: model, navigation: navigation)
+        case .tactics: TacticsScreen(model: model, navigation: navigation, startingSlot: tacticSlot)
         case .fixtures: FixturesScreen(model: model)
-        case .matchSelection: MatchSelectionScreen(model: model, start: matchStart)
+        case .matchSelection: MatchSelectionScreen(model: model, navigation: navigation)
         case .settings: SettingsScreen(model: model)
         }
     }

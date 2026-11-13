@@ -295,5 +295,6 @@ import LineupEngine
         t.model.moveToday(by: -2)
         #expect(t.model.settings.currentDate == day("2026-11-12"))
         #expect(t.reopened().settings.currentDate == day("2026-11-12"))
+        #expect(t.model.todayInTheGameText == "Today in the game: Thursday 12 November 2026")
     }
 }

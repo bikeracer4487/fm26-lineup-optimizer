@@ -22,10 +22,15 @@
 //                                              choices in the first fixture, in a taller window
 //                                              ("match-choices-…"); after confirming the
 //                                              first fixture, on it ("match-confirmed-…") and on the next
-//                                              ("match-after-confirm-…"); on a missed fixture ("match-missed-…");
-//                                              empty ("match-empty-…"); with two matches on one day
-//                                              ("match-failed-…"); and its candidate picker on its own for the
-//                                              first fixture's goalkeeper ("match-picker-…").
+//                                              ("match-after-confirm-…"); on a missed fixture with nothing
+//                                              remembered ("match-missed-…") and with its eleven remembered
+//                                              ("match-missed-eleven-…"); empty ("match-empty-…"); with two
+//                                              matches on one day ("match-failed-…"); and its candidate picker on
+//                                              its own for the first fixture's goalkeeper ("match-picker-…") and
+//                                              for the remembered eleven's goalkeeper ("match-remembered-picker-…").
+//                                              Match Selection and Tactics are drawn again in a narrow window,
+//                                              800 by 700 ("match-narrow-…", "tactics-narrow-…"), and in the
+//                                              smallest window ("match-small-…", "tactics-small-…").
 
 import AppKit
 import Foundation
@@ -52,7 +57,8 @@ struct LineupApplication: App {
     }
 
     var body: some Scene {
-        WindowGroup("FM27 Lineup Optimizer") {
+        // One window: a second over the same model would show the same state twice.
+        Window("FM27 Lineup Optimizer", id: "main") {
             RootView(model: model)
         }
         .defaultSize(Theme.Layout.defaultWindow)
@@ -80,7 +86,7 @@ func fail(_ message: String) -> Never {
 /// Which state of the sample data to start from.
 enum SampleState {
     case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange, pastFixtures
-    case afterConfirmingFirst, choices, missedFixture, twoMatchesOnOneDay
+    case afterConfirmingFirst, choices, missedFixture, missedEleven, twoMatchesOnOneDay
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -97,6 +103,7 @@ enum SampleState {
         case .afterConfirmingFirst: return try SampleData.modelAfterConfirmingFirst(repositoryRoot: url)
         case .choices: return try SampleData.modelWithChoices(repositoryRoot: url)
         case .missedFixture: return try SampleData.modelWithMissedFixture(repositoryRoot: url)
+        case .missedEleven: return try SampleData.modelWithMissedEleven(repositoryRoot: url)
         case .twoMatchesOnOneDay: return try SampleData.modelWithTwoMatchesOnOneDay(repositoryRoot: url)
         }
     } catch {
@@ -123,11 +130,28 @@ enum SampleState {
     guard let early = missed.fixtures.first else { fail("The sample model has no fixtures.") }
     try ScreenPictures.write(model: missed, to: directory, size: size, variant: "missed",
                              screens: [.matchSelection], matchStart: MatchStart(fixture: early.id))
+    let missedEleven = sampleModel(root, .missedEleven)
+    guard let unconfirmed = missedEleven.fixtures.first else { fail("The sample model has no fixtures.") }
+    try ScreenPictures.write(model: missedEleven, to: directory, size: size, variant: "missed-eleven",
+                             screens: [.matchSelection], matchStart: MatchStart(fixture: unconfirmed.id))
+    try ScreenPictures.writeCandidatePicker(
+        name: "match-remembered-picker", text: PickerText.remembered(.GK),
+        rows: missedEleven.rememberedCandidateRows(for: .GK, in: unconfirmed.id), to: directory)
     try ScreenPictures.write(model: sampleModel(root, .twoMatchesOnOneDay), to: directory, size: size,
                              variant: "failed", screens: [.matchSelection])
     let plain = sampleModel(root)
     guard let next = plain.fixtures.first else { fail("The sample model has no fixtures.") }
-    try ScreenPictures.writeCandidatePicker(model: plain, fixture: next.id, slot: .GK, to: directory)
+    try ScreenPictures.writeCandidatePicker(
+        name: "match-picker", text: PickerText.planned(.GK), rows: plain.candidateRows(for: .GK, in: next.id),
+        to: directory)
+
+    // The narrow and the smallest windows: the detail under the pitch, the pitches stacked, and scrolling.
+    for (variant, small) in [("narrow", CGSize(width: 800, height: 700)), ("small", Theme.Layout.minimumWindow)] {
+        try ScreenPictures.write(model: plain, to: directory, size: small, variant: variant,
+                                 screens: [.matchSelection], matchStart: MatchStart(slot: .D_L))
+        try ScreenPictures.write(model: sampleModel(root, .unsavedTacticChange), to: directory, size: small,
+                                 variant: variant, screens: [.tactics], tacticSlot: TacticSlot(.AM_L, in: .inPossession))
+    }
 }
 
 /// Draws the pictures and returns the process's exit status.

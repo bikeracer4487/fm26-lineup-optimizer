@@ -15,29 +15,34 @@ public struct MatchStart: Sendable {
 }
 
 /// The planned elevens for the saved fixtures: a strip of fixtures, the chosen one's team sheet on a pitch with the
-/// selected pick's reasons beside it and who was left out, and the owner's controls.
+/// selected pick's reasons beside it and who was left out, and the owner's controls. What is chosen is kept in the
+/// window's navigation, so it survives a change of screen. On a short window the screen scrolls; on a narrow one the
+/// detail goes under the pitch.
 public struct MatchSelectionScreen: View {
     let model: AppModel
-    /// The fixture shown: the one clicked in the strip; after confirming, `MatchPresentation.fixtureAfterConfirming`;
-    /// after unlocking, the unlocked one. While nil, or once it has left the plan, `MatchPresentation.initialFixture`.
-    @State private var chosen: FixtureID?
-    /// Holds only while its fixture is shown and the same player is in its slot (`MatchPresentation.selectedSlot`).
-    @State private var selection: PickSelection?
-    @State private var view: MatchView
+    @Bindable var navigation: Navigation
+    @State private var layout = PageLayout(Theme.Layout.defaultWindow)
 
-    public init(model: AppModel, start: MatchStart = MatchStart()) {
+    public init(model: AppModel, navigation: Navigation) {
         self.model = model
-        _chosen = State(initialValue: start.fixture)
-        _view = State(initialValue: start.view)
-        var selection: PickSelection?
-        if let slot = start.slot, case .ready(let plans) = model.planState,
-           let plan = MatchPresentation.chosen(start.fixture, in: plans) {
-            selection = MatchPresentation.selection(at: slot, in: plan)
-        }
-        _selection = State(initialValue: selection)
+        self.navigation = navigation
     }
 
+    /// The team sheet scrolls with the screen when it does not fit; the starts grid scrolls on its own.
+    private var scrolls: Bool { layout.scrolls && navigation.matchView == .teamSheet }
+
     public var body: some View {
+        Group {
+            if scrolls {
+                ScrollView(.vertical) { page }
+            } else {
+                page
+            }
+        }
+        .onGeometryChange(for: PageLayout.self) { PageLayout($0.size) } action: { layout = $0 }
+    }
+
+    private var page: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             Text(Screen.matchSelection.title)
                 .font(Theme.Typeface.title())
@@ -49,31 +54,34 @@ public struct MatchSelectionScreen: View {
             }
         }
         .padding(Theme.Spacing.xl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: scrolls ? nil : .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder private func ready(_ plans: [FixturePlan]) -> some View {
-        let plan = MatchPresentation.chosen(chosen, in: plans)
-        FixtureStrip(cells: plans.map(FixtureCell.init), chosen: plan?.id) { chosen = $0 }
+        let plan = MatchPresentation.chosen(navigation.matchFixture, in: plans)
+        FixtureStrip(cells: plans.map(FixtureCell.init), chosen: plan?.id) { navigation.matchFixture = $0 }
         if let note = model.fitnessNote {
             MarkedText(note, colour: Theme.Colour.amber)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         if let plan {
             header(plan)
-            switch view {
+            switch navigation.matchView {
             case .teamSheet:
-                FixtureBody(model: model, plan: plan, selection: $selection) { chosen = $0 }
+                FixtureBody(model: model, plan: plan, layout: layout, selection: $navigation.matchSelection) {
+                    navigation.matchFixture = $0
+                }
             case .starts:
                 StartsGridView(grid: model.startsGrid(for: plans), chosen: plan.id)
             }
         }
     }
 
-    /// The view switch, the chosen match in words and its tactic, and confirming or why not.
+    /// The view switch, the chosen match in words and its tactic, and confirming or why not; the confirming goes under
+    /// the rest when the row is too narrow for it.
     private func header(_ plan: FixturePlan) -> some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.l) {
-            Picker("View", selection: $view) {
+        WrappingRow(alignment: .top, spacing: Theme.Spacing.l) {
+            Picker("View", selection: $navigation.matchView) {
                 ForEach(MatchView.allCases, id: \.self) { view in
                     Text(view.title).tag(view)
                 }
@@ -95,32 +103,34 @@ public struct MatchSelectionScreen: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Spacer(minLength: Theme.Spacing.m)
+        } trailing: {
             ConfirmControl(model: model, plan: plan) {
                 if case .ready(let plans) = model.planState {
-                    chosen = MatchPresentation.fixtureAfterConfirming(plan.id, in: plans)
+                    navigation.matchFixture = MatchPresentation.fixtureAfterConfirming(plan.id, in: plans)
                 }
             }
         }
     }
 }
 
-/// "Confirm this lineup" for the next fixture to play, why not for a later one, and nothing otherwise.
+/// The button that confirms the next fixture to play or a missed fixture's remembered eleven, why a later fixture
+/// cannot be confirmed yet, and nothing otherwise.
 struct ConfirmControl: View {
     let model: AppModel
     let plan: FixturePlan
-    /// Called after the lineup is confirmed and the plan worked out again.
+    /// Called after the fixture is confirmed and the plan worked out again.
     let confirmed: () -> Void
 
     var body: some View {
         if model.canConfirm(plan.id) {
-            VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
-                Button("Confirm this lineup") {
+            let button = MatchPresentation.confirmButton(for: plan)
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                Button(button.title) {
                     model.confirm(plan.id)
                     confirmed()
                 }
                     .buttonStyle(.borderedProminent)
-                Text(MatchPresentation.confirmExplanation)
+                Text(button.explanation)
                     .font(Theme.Typeface.text())
                     .foregroundStyle(.secondary)
             }
@@ -132,76 +142,131 @@ struct ConfirmControl: View {
     }
 }
 
-/// The chosen fixture below the header: its team sheet and detail, its confirmed eleven, or what a missed fixture
-/// means.
+/// The pitch and what goes with it, laid out for the screen: beside it in a column of its own that scrolls when the
+/// screen fills the window; beside it, scrolling with the screen, when the screen is short; under it when narrow.
+struct PitchBeside<Pitch: View, Detail: View>: View {
+    let layout: PageLayout
+    @ViewBuilder let pitch: () -> Pitch
+    @ViewBuilder let detail: () -> Detail
+
+    var body: some View {
+        switch layout {
+        case .filling:
+            HStack(alignment: .top, spacing: Theme.Spacing.l) {
+                pitch()
+                ScrollView {
+                    detail()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(width: Theme.Match.detailWidth)
+            }
+        case .scrolling:
+            HStack(alignment: .top, spacing: Theme.Spacing.l) {
+                pitch()
+                    .frame(maxWidth: Theme.Pitch.scrollingMaximumWidth)
+                detail()
+                    .frame(width: Theme.Match.detailWidth, alignment: .leading)
+            }
+        case .stacked:
+            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                pitch()
+                    .frame(maxWidth: Theme.Pitch.scrollingMaximumWidth)
+                detail()
+                    .frame(maxWidth: Theme.Match.stackedDetailWidth, alignment: .leading)
+            }
+        }
+    }
+}
+
+/// A slot of a missed fixture's remembered eleven whose starter is being chosen.
+private struct RememberedSlot: Identifiable {
+    let slot: SlotID
+    var id: SlotID { slot }
+}
+
+/// The chosen fixture below the header: its team sheet and detail, its confirmed eleven, or a missed fixture's
+/// remembered eleven to put right, or what a missed fixture with none means.
 struct FixtureBody: View {
     let model: AppModel
     let plan: FixturePlan
+    let layout: PageLayout
     @Binding var selection: PickSelection?
     /// Shows a fixture: after unlocking, this one.
     let choose: (FixtureID) -> Void
     @State private var unlocking = false
+    @State private var choosingStarter: RememberedSlot?
     @Environment(\.showScreen) private var showScreen
 
     var body: some View {
         switch plan.body {
         case .planned(let lineup, _):
             let selected = MatchPresentation.selectedSlot(selection, in: plan)
-            HStack(alignment: .top, spacing: Theme.Spacing.l) {
+            PitchBeside(layout: layout) {
                 TeamSheet(tokens: model.tokens(for: plan), unfilled: lineup.unfilled, selected: selected) { slot in
                     selection = MatchPresentation.selection(at: slot, in: plan)
                 }
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-                        if let slot = selected, let detail = model.pickDetail(at: slot, in: plan) {
-                            PickDetailView(model: model, fixture: plan.id, detail: detail)
-                        } else {
-                            Text("Click a player on the pitch to see why he is in the eleven, or to change him.")
-                                .font(Theme.Typeface.text())
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Divider()
-                        LeftOutList(model: model, plan: plan, omissions: LeftOutRow.rows(lineup.omissions))
+            } detail: {
+                VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                    if let slot = selected, let detail = model.pickDetail(at: slot, in: plan) {
+                        PickDetailView(model: model, fixture: plan.id, detail: detail) { selection = $0 }
+                    } else {
+                        Text("Click a player on the pitch to see why he is in the eleven, or to change him.")
+                            .font(Theme.Typeface.text())
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Divider()
+                    LeftOutList(model: model, plan: plan, omissions: LeftOutRow.rows(lineup.omissions))
                 }
-                .frame(width: Theme.Match.detailWidth)
             }
         case .confirmed:
             let tokens = model.tokens(for: plan)
-            HStack(alignment: .top, spacing: Theme.Spacing.l) {
+            PitchBeside(layout: layout) {
                 TeamSheet(tokens: tokens, unfilled: [], selected: nil, showsKey: false)
+            } detail: {
                 VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                     if let line = MatchPresentation.confirmedLine(plan) {
                         Text(line)
                             .font(Theme.Typeface.text(Theme.TypeSize.step1, weight: .semibold))
                     }
-                    Grid(alignment: .leading, horizontalSpacing: Theme.Spacing.m, verticalSpacing: Theme.Spacing.xs) {
-                        ForEach(tokens) { token in
-                            GridRow {
-                                Text(token.slotText)
-                                    .font(Theme.Typeface.number(Theme.TypeSize.step1))
-                                Text(token.name)
-                                    .font(Theme.Typeface.text())
-                            }
-                        }
-                    }
+                    NamesBySlot(tokens: tokens)
                     Button("Unlock") { unlocking = true }
-                    Spacer(minLength: 0)
                 }
-                .frame(width: Theme.Match.detailWidth, alignment: .leading)
             }
-            .alert("Unlock this lineup?", isPresented: $unlocking) {
+            .alert(model.unlockNote(for: plan.id), isPresented: $unlocking) {
                 Button("Unlock") {
                     model.unlock(plan.id)
                     choose(plan.id)
                 }
                 Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("The match will be planned again.")
             }
-        case .missed:
+        case .missed(.some):
+            let tokens = model.tokens(for: plan)
+            PitchBeside(layout: layout) {
+                TeamSheet(tokens: tokens, unfilled: [], selected: choosingStarter?.slot,
+                          select: { choosingStarter = RememberedSlot(slot: $0) }, showsKey: false)
+            } detail: {
+                VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+                    if let note = plan.missedNote {
+                        MarkedText(note, colour: Theme.Colour.amber)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(MatchPresentation.rememberedHint)
+                        .font(Theme.Typeface.text())
+                        .foregroundStyle(.secondary)
+                    NamesBySlot(tokens: tokens)
+                }
+            }
+            .sheet(item: $choosingStarter) { choice in
+                CandidatePicker(text: PickerText.remembered(choice.slot),
+                                rows: model.rememberedCandidateRows(for: choice.slot, in: plan.id)) { player in
+                    model.setRemembered(player, at: choice.slot, in: plan.id)
+                    choosingStarter = nil
+                } cancel: {
+                    choosingStarter = nil
+                }
+            }
+        case .missed(.none):
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 if let note = plan.missedNote {
                     MarkedText(note, colour: Theme.Colour.amber)
@@ -210,6 +275,24 @@ struct FixtureBody: View {
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: Theme.Layout.readingWidth, alignment: .leading)
+        }
+    }
+}
+
+/// Each starter's slot and full name, in slot order.
+struct NamesBySlot: View {
+    let tokens: [TokenContent]
+
+    var body: some View {
+        Grid(alignment: .leading, horizontalSpacing: Theme.Spacing.m, verticalSpacing: Theme.Spacing.xs) {
+            ForEach(tokens) { token in
+                GridRow {
+                    Text(token.slotText)
+                        .font(Theme.Typeface.number(Theme.TypeSize.step1))
+                    Text(token.name)
+                        .font(Theme.Typeface.text())
+                }
+            }
         }
     }
 }

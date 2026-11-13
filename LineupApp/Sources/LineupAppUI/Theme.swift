@@ -137,8 +137,14 @@ public enum Theme {
         public static let sidebarWidth: CGFloat = 200
         /// The widest a block of sentences runs before it wraps.
         public static let readingWidth: CGFloat = 520
-        /// The smallest window the screens are laid out for.
-        public static let minimumWindow = CGSize(width: 900, height: 600)
+        /// The smallest window the screens are laid out for: small enough to sit beside the game.
+        public static let minimumWindow = CGSize(width: 760, height: 560)
+        /// Below this window width, Match Selection puts the detail under the pitch and Tactics stacks its two pitches.
+        public static let narrowWindowWidth: CGFloat = 1000
+        /// `narrowWindowWidth` as a screen beside the sidebar measures it.
+        public static let narrowScreenWidth: CGFloat = narrowWindowWidth - sidebarWidth
+        /// Below this screen height, Match Selection and Tactics scroll, their pitches sized by their width.
+        public static let shortScreenHeight: CGFloat = 640
         /// The window's size when the app opens, and the size of the pictures.
         public static let defaultWindow = CGSize(width: 1200, height: 780)
         /// The coloured bar beside a notice or a warning.
@@ -184,8 +190,12 @@ public enum Theme {
         public static let lineOpacity: Double = 0.55
         /// The number of mown stripes from goal line to goal line.
         public static let stripeCount = 12
-        /// The least size a pitch keeps, so two side by side stay legible.
-        public static let minimumSize = CGSize(width: 300, height: 380)
+        /// The pitch's width to its height. Fixed, so the pitch is never stretched: it fits the space it is given.
+        public static let aspectRatio: CGFloat = 1
+        /// The least width a pitch keeps, so two side by side stay legible; its height follows from `aspectRatio`.
+        public static let minimumWidth: CGFloat = 300
+        /// The widest a pitch is drawn when the screen scrolls, so it is not taller than a window.
+        public static let scrollingMaximumWidth: CGFloat = 480
 
         /// The markings as fractions of the pitch, from the Laws of the Game (a 105 by 68 metre pitch).
         public enum Markings {
@@ -262,6 +272,8 @@ public enum Theme {
         public static let startsNameWidth: CGFloat = 170
         public static let startsCellWidth: CGFloat = 96
         public static let startsCountWidth: CGFloat = 48
+        /// The detail under the pitch on a narrow screen.
+        public static let stackedDetailWidth: CGFloat = 520
         /// The candidate picker, as a popover or drawn on its own.
         public static let pickerSize = CGSize(width: 440, height: 520)
         /// The figures' columns in the pick's detail.

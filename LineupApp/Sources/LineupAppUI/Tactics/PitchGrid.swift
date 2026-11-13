@@ -81,7 +81,9 @@ public struct PitchGrid<Token: View>: View {
                 }
             }
         }
-        .frame(minWidth: Theme.Pitch.minimumSize.width, minHeight: Theme.Pitch.minimumSize.height)
+        // Fit, never stretched: the largest pitch of its shape within the space given, and never below its least size.
+        .aspectRatio(Theme.Pitch.aspectRatio, contentMode: .fit)
+        .frame(minWidth: Theme.Pitch.minimumWidth, minHeight: Theme.Pitch.minimumWidth / Theme.Pitch.aspectRatio)
     }
 }
 
