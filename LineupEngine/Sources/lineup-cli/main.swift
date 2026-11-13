@@ -84,7 +84,7 @@ do {
     }
     let tactic: Tactic
     do { tactic = try JSONDecoder().decode(Tactic.self, from: tacticData) } catch {
-        fail("The tactic file \(options.tactic!) is not a valid tactic: \(error.localizedDescription)")
+        fail("The tactic file \(options.tactic!) is not valid: \(ErrorDescriptions.describe(error))")
     }
     let ownClub = book.ownClub(override: options.ownClub)
     let selector = LineupSelector(catalog: try .fm27(), tables: try .bundled(), parameters: .fm27)
@@ -94,6 +94,6 @@ do {
     output = Report.render(imports: imports, book: book, ownClub: ownClub, override: options.ownClub,
                            tactic: tactic, importance: options.importance, lineup: lineup)
 } catch {
-    fail(Report.describe(error))
+    fail(ErrorDescriptions.describe(error))
 }
 print(output, terminator: "")

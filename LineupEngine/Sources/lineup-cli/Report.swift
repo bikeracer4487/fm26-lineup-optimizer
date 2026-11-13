@@ -79,49 +79,6 @@ enum Report {
         }
     }
 
-    static func describe(_ error: Error) -> String {
-        switch error {
-        case let e as ImportError: describe(e)
-        case let e as TacticError: "The tactic cannot be used:\n" + e.problems.map { "  - " + describe($0) }.joined(separator: "\n")
-        case let e as RatingError:
-            switch e {
-            case .missingAttribute(let player, let attribute): "\(player) has no value for the attribute \(attribute.rawValue)"
-            case .missingFamiliarity(let player, let position): "\(player) has no familiarity for the position \(position.rawValue)"
-            }
-        case let e as CatalogError: "The role catalog is damaged: \(e)"
-        default: "\(error)"
-        }
-    }
-
-    static func describe(_ error: ImportError) -> String {
-        switch error {
-        case .configUnreadable(let reason): "The grids file cannot be read: \(reason)"
-        case .noPlayerGrids: "The grids file has no player grids"
-        case .emptyClipboard: "The paste is empty"
-        case .notAnFMRTEGrid(let reason): "The paste is not an FMRTE grid: \(reason)"
-        case .raggedRows(let expected, let row, let found): "Row \(row) of the paste has \(found) cells where \(expected) were expected"
-        case .noGridFits(let count, let violations):
-            "No grid fits the paste's \(count) columns (misfit cells per grid: "
-                + violations.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ") + ")"
-        case .ambiguousGrid(let keys): "More than one grid fits the paste: \(keys.sorted().joined(separator: ", "))"
-        case .missingColumns(let grid, let columns): "Grid \(grid) lacks the columns: \(columns.joined(separator: ", "))"
-        case .invalidValue(let player, let column, let value): "\(player): the value '\(value)' in column \(column) is not valid"
-        case .unexpectedScale(let column): "Column \(column) looks like percentages; FMRTE's 0 to 10000 scale is expected"
-        }
-    }
-
-    static func describe(_ problem: TacticProblem) -> String {
-        switch problem {
-        case .wrongSlotCount(let phase, let n): "\(phaseName(phase)) has \(n) slots, not 11"
-        case .missingGoalkeeper(let phase): "\(phaseName(phase)) has no goalkeeper"
-        case .unmapped(let slot): "\(slot.rawValue) has no out-of-possession slot to turn into"
-        case .mappingTargetInactive(let from, let to): "\(from.rawValue) turns into \(to.rawValue), which has no out-of-possession role"
-        case .duplicateMappingTarget(let slot): "More than one slot turns into \(slot.rawValue)"
-        case .unknownRole(let phase, let slot, let role): "\(role) is not a \(phaseName(phase)) role for \(slot.rawValue)"
-        }
-    }
-
-    private static func phaseName(_ phase: Phase) -> String { phase == .inPossession ? "In possession" : "Out of possession" }
     private static func pad(_ s: String, _ n: Int) -> String { s.count >= n ? s : s + String(repeating: " ", count: n - s.count) }
     private static func fixed(_ x: Double, _ digits: Int) -> String { String(format: "%.\(digits)f", x) }
 }
