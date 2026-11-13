@@ -63,13 +63,17 @@ public enum PitchLayout {
 /// column on a pitch drawn in green marker. The Tactics editor gives it every slot; a team sheet gives it the eleven.
 public struct PitchGrid<Token: View>: View {
     let slots: [SlotID]
+    let aspectRatio: CGFloat
     let token: (SlotID) -> Token
 
     /// - Parameters:
     ///   - slots: the slots to draw a view for; the others are bare pitch.
+    ///   - aspectRatio: the pitch's width to its height.
     ///   - token: the view for a slot. It is given its cell less the gap between slots, centred.
-    public init(slots: [SlotID] = SlotID.allCases, @ViewBuilder token: @escaping (SlotID) -> Token) {
+    public init(slots: [SlotID] = SlotID.allCases, aspectRatio: CGFloat = Theme.Pitch.aspectRatio,
+                @ViewBuilder token: @escaping (SlotID) -> Token) {
         self.slots = slots
+        self.aspectRatio = aspectRatio
         self.token = token
     }
 
@@ -89,8 +93,8 @@ public struct PitchGrid<Token: View>: View {
             }
         }
         // Fit, never stretched: the largest pitch of its shape within the space given, and never below its least size.
-        .aspectRatio(Theme.Pitch.aspectRatio, contentMode: .fit)
-        .frame(minWidth: Theme.Pitch.minimumWidth, minHeight: Theme.Pitch.minimumWidth / Theme.Pitch.aspectRatio)
+        .aspectRatio(aspectRatio, contentMode: .fit)
+        .frame(minWidth: Theme.Pitch.minimumWidth, minHeight: Theme.Pitch.minimumWidth / aspectRatio)
     }
 }
 

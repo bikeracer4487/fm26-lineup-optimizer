@@ -13,8 +13,7 @@ public struct SettingsScreen: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            Text(Screen.settings.title)
-                .font(Theme.Typeface.title())
+            BoardHeading(Screen.settings.title, size: Theme.TypeSize.title)
             ScrollView {
                 Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Theme.Spacing.xl,
                      verticalSpacing: Theme.Spacing.l) {
@@ -29,9 +28,9 @@ public struct SettingsScreen: View {
                     fmrteConfigPath
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, Theme.Spacing.l)
             }
         }
-        .padding(Theme.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -46,10 +45,12 @@ public struct SettingsScreen: View {
 
     private func heading(_ text: String) -> some View {
         GridRow {
-            Text(text)
-                .font(Theme.Typeface.text(Theme.TypeSize.step1, weight: .semibold))
-                .padding(.top, Theme.Spacing.s)
-                .gridCellColumns(2)
+            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                BoardHeading(text)
+                HeavyRule()
+            }
+            .padding(.top, Theme.Spacing.s)
+            .gridCellColumns(2)
         }
     }
 
@@ -57,14 +58,9 @@ public struct SettingsScreen: View {
         SettingRow("Training intensity",
                    "Set this to the intensity you train at in the game. Lower intensity lets players recover "
                    + "condition faster between matches.") {
-            Picker("Training intensity", selection: setting(\.plan.trainingIntensity)) {
-                ForEach(TrainingIntensity.allCases, id: \.self) { intensity in
-                    Text(intensity.displayName).tag(intensity)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
+            BoardTabs(choices: TrainingIntensity.allCases.map { ($0, $0.displayName) },
+                      selection: setting(\.plan.trainingIntensity))
+                .accessibilityLabel("Training intensity")
         }
     }
 
@@ -91,7 +87,7 @@ public struct SettingsScreen: View {
                    "How far ahead each plan looks. Fixtures beyond it are not planned and nobody is saved for them.") {
             HStack(alignment: .center, spacing: Theme.Spacing.s) {
                 Text(AppSettings.horizonText(model.settings.plan.horizon))
-                    .font(Theme.Typeface.text())
+                    .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
                 Stepper("Fixtures to plan", value: setting(\.plan.horizon), in: 1...10)
                     .labelsHidden()
             }
@@ -102,13 +98,14 @@ public struct SettingsScreen: View {
         SettingRow("Condition floor", AppSettings.conditionFloorExplanation) {
             HStack(alignment: .center, spacing: Theme.Spacing.s) {
                 number("\(model.settings.conditionFloorPercent)%")
-                    .foregroundStyle(model.settings.usesEngineConditionFloor ? .secondary : .primary)
+                    .foregroundStyle(model.settings.usesEngineConditionFloor ? Theme.Colour.mutedInk : Theme.Colour.ink)
                 Stepper("Condition floor", value: setting(\.conditionFloorPercent),
                         in: AppSettings.conditionFloorPercentRange)
                     .labelsHidden()
                     .disabled(model.settings.usesEngineConditionFloor)
                 Toggle(AppSettings.engineConditionFloorTitle, isOn: setting(\.usesEngineConditionFloor))
                     .toggleStyle(.checkbox)
+                    .font(Theme.Typeface.text())
                     .padding(.leading, Theme.Spacing.m)
             }
         }
@@ -143,8 +140,7 @@ private struct SettingNumber: View {
 
     var body: some View {
         Text(text)
-            .font(Theme.Typeface.number(Theme.TypeSize.step1))
-            .offset(y: Theme.Typeface.numberDrop(Theme.TypeSize.step1, besideTextOf: Theme.TypeSize.base))
+            .font(Theme.Typeface.text(Theme.TypeSize.noteHeading, weight: .extraBold))
     }
 }
 
@@ -163,15 +159,17 @@ private struct SettingRow<Control: View>: View {
     var body: some View {
         GridRow(alignment: .top) {
             Text(name)
-                .font(Theme.Typeface.text(weight: .semibold))
+                .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
                 .frame(minHeight: Theme.Layout.controlRowHeight, alignment: .leading)
+                .frame(maxWidth: Theme.Layout.settingNameWidth, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
                 .gridColumnAlignment(.leading)
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                 control
                     .frame(minHeight: Theme.Layout.controlRowHeight, alignment: .leading)
                 Text(explanation)
-                    .font(Theme.Typeface.text())
-                    .foregroundStyle(.secondary)
+                    .font(Theme.Typeface.text(Theme.TypeSize.caption))
+                    .foregroundStyle(Theme.Colour.mutedInk)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: Theme.Layout.readingWidth, alignment: .leading)
             }
@@ -197,6 +195,7 @@ private struct CommittingSlider: View {
             end(low)
             slider
                 .labelsHidden()
+                .tint(Theme.Colour.markerBlue)
                 .frame(maxWidth: Theme.Layout.settingControlWidth)
             end(high)
             if let readout {
@@ -220,8 +219,8 @@ private struct CommittingSlider: View {
 
     private func end(_ text: String) -> some View {
         Text(text)
-            .font(Theme.Typeface.text())
-            .foregroundStyle(.secondary)
+            .font(Theme.Typeface.text(Theme.TypeSize.caption))
+            .foregroundStyle(Theme.Colour.mutedInk)
     }
 
     /// When the drag ends, the value shown becomes the setting.
@@ -243,8 +242,8 @@ private struct CommittingTextField: View {
 
     var body: some View {
         TextField(label, text: Binding(get: { draft ?? text }, set: { draft = $0 }), prompt: Text(prompt))
-            .textFieldStyle(.roundedBorder)
             .labelsHidden()
+            .boardField()
             .focused($focused)
             .onSubmit(commit)
             .onChange(of: focused) { _, isFocused in

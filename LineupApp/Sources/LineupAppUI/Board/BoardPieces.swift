@@ -63,7 +63,8 @@ struct EmptyMagnet: View {
                     .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .bold))
                     .foregroundStyle(Theme.Colour.mutedInk)
                     .lineLimit(1)
-                    .minimumScaleFactor(Theme.Pitch.labelMinimumScale)
+                    .minimumScaleFactor(Theme.Pitch.emptySlotMinimumScale)
+                    .padding(.horizontal, Theme.Spacing.xs)
             }
     }
 }
@@ -151,7 +152,7 @@ struct StampView: View {
             .lineLimit(1)
             .padding(.horizontal, Theme.Stamp.horizontalPadding)
             .padding(.vertical, Theme.Stamp.verticalPadding)
-            .overlay { Capsule().strokeBorder(colour, lineWidth: Theme.Stamp.lineWidth) }
+            .overlay { RoundedRectangle(cornerRadius: Theme.Stamp.cornerRadius, style: .circular).strokeBorder(colour, lineWidth: Theme.Stamp.lineWidth) }
             .rotationEffect(.degrees(Theme.Stamp.tilt))
             .help(stamp.text)
     }

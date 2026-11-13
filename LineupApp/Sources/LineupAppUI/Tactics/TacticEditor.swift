@@ -46,9 +46,7 @@ struct TacticEditor: View {
             pitches
             if !problems.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    ForEach(problems, id: \.self) { problem in
-                        MarkedText(problem, colour: Theme.Colour.amber)
-                    }
+                    ForEach(problems, id: \.self) { CautionLine($0) }
                 }
                 .frame(maxWidth: Theme.Layout.readingWidth, alignment: .leading)
             }
@@ -74,23 +72,24 @@ struct TacticEditor: View {
     // MARK: Name and saving
 
     private var header: some View {
-        WrappingRow(alignment: .firstTextBaseline) {
+        WrappingRow(alignment: .center) {
             Text("Name")
-                .font(Theme.Typeface.text())
+                .foregroundStyle(Theme.Colour.mutedInk)
             TextField("Name", text: Binding(get: { draft.tactic.name }, set: { name in change { $0.tactic.name = name } }))
-                .textFieldStyle(.roundedBorder)
                 .labelsHidden()
+                .boardField()
                 .frame(width: Theme.Layout.nameFieldWidth)
         } trailing: {
             if hasChanges {
                 Text("Unsaved changes")
-                    .font(Theme.Typeface.text())
-                    .foregroundStyle(.secondary)
+                    .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
+                    .foregroundStyle(Theme.Colour.amberText)
             }
             Button("Revert") { model.revertDraft(stored.id) }
+                .buttonStyle(.secondary)
                 .disabled(!hasChanges)
             Button("Save changes") { model.saveDraft(stored.id) }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.primary)
                 .disabled(!hasChanges || !problems.isEmpty)
         }
     }
@@ -101,7 +100,7 @@ struct TacticEditor: View {
         if let selected, draft.role(at: selected.slot, in: selected.phase) != nil {
             WrappingRow(spacing: Theme.Spacing.l, pushesTrailing: false) {
                 Text(TacticDraft.inspectorTitle(selected))
-                    .font(Theme.Typeface.text(weight: .semibold))
+                    .font(Theme.Typeface.display(Theme.TypeSize.noteHeading))
                 Picker("Role", selection: roleBinding(selected)) {
                     ForEach(draft.roleChoices(at: selected, catalog: model.catalog), id: \.self) { name in
                         Text(name).tag(name)
@@ -124,11 +123,11 @@ struct TacticEditor: View {
                     change { $0.toggle(selected.slot, in: selected.phase, catalog: model.catalog) }
                     self.selected = nil
                 }
+                .buttonStyle(.secondary)
             }
         } else {
             Text(TacticDraft.inspectorHint)
-                .font(Theme.Typeface.text())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.Colour.mutedInk)
         }
     }
 
@@ -151,14 +150,12 @@ struct TacticEditor: View {
     private func pitch(_ phase: Phase) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             HStack(alignment: .firstTextBaseline) {
-                Text(phase.title)
-                    .font(Theme.Typeface.text(Theme.TypeSize.step1, weight: .semibold))
+                BoardHeading(phase.title)
                 Spacer(minLength: Theme.Spacing.s)
                 Text(draft.filledText(in: phase))
-                    .font(Theme.Typeface.text())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.Colour.mutedInk)
             }
-            PitchGrid { slot in
+            PitchGrid(aspectRatio: Theme.Pitch.editorAspectRatio) { slot in
                 SlotToken(slot: slot, role: draft.role(at: slot, in: phase), look: look(of: TacticSlot(slot, in: phase))) {
                     click(TacticSlot(slot, in: phase))
                 }
@@ -183,7 +180,9 @@ struct TacticEditor: View {
     }
 }
 
-/// A slot on the editor's pitch: its code and role when filled, a dashed outline with its code when empty.
+/// A slot on the editor's pitch: when filled, a magnet in its line's colour with the slot's code on it and the role
+/// beneath on the board's white; when empty, a dashed circle with its code. The selected slot has an ink ring, and the
+/// slots it turns into or from a marker-blue one.
 struct SlotToken: View {
     enum Look { case plain, selected, linked }
 
@@ -194,59 +193,43 @@ struct SlotToken: View {
 
     var body: some View {
         Button(action: action) {
-            if let role {
-                filled(role)
-            } else {
-                empty
+            Group {
+                if let role {
+                    filled(role)
+                } else {
+                    EmptyMagnet(letters: slot.displayName, diameter: Theme.Pitch.emptySlotDiameter)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(TacticDraft.slotHelp(slot, role: role))
-    }
-
-    private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: Theme.Pitch.tokenCornerRadius)
+        .accessibilityAddTraits(look == .selected ? .isSelected : [])
     }
 
     private func filled(_ role: String) -> some View {
-        VStack(spacing: 0) {
-            Text(slot.displayName)
-                .font(Theme.Typeface.number(Theme.TypeSize.step1))
+        let colours = Theme.Colour.magnet(PitchLine(slot))
+        return VStack(spacing: Theme.Spacing.xxs) {
+            Magnet(fill: colours.fill, text: colours.text, letters: slot.displayName,
+                   diameter: Theme.Pitch.editorMagnetDiameter, font: Theme.Typeface.display(Theme.Pitch.slotCodeSize))
+                .overlay {
+                    if look != .plain {
+                        Circle()
+                            .strokeBorder(look == .selected ? Theme.Colour.ink : Theme.Colour.markerBlue,
+                                          lineWidth: Theme.Magnet.ringWidth)
+                            .padding(-(Theme.Magnet.ringWidth + Theme.Magnet.ringGap))
+                    }
+                }
+                .padding(.top, Theme.Magnet.ringWidth)
             Text(role)
-                .font(Theme.Typeface.text())
+                .font(Theme.Typeface.text(Theme.Pitch.roleSize, weight: .semibold))
+                .foregroundStyle(Theme.Colour.ink)
                 .multilineTextAlignment(.center)
                 .lineLimit(Theme.Pitch.roleNameLines)
-                .minimumScaleFactor(Theme.Pitch.roleNameMinimumScale)
+                .minimumScaleFactor(Theme.Pitch.labelMinimumScale)
+                .padding(.horizontal, Theme.Pitch.labelPadding)
+                .background(Theme.Colour.board)
         }
-        .foregroundStyle(look == .selected ? Theme.Colour.turf : Theme.Colour.chalk)
-        .padding(Theme.Pitch.tokenPadding)
-        // Every filled token takes its whole cell, so the codes along a row line up.
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background {
-            // Turf first, so the pitch's markings do not show through the token.
-            shape.fill(Theme.Colour.turf)
-            shape.fill(look == .selected ? Theme.Colour.chalk : Theme.Colour.chalk.opacity(Theme.Pitch.tokenFillOpacity))
-        }
-        .overlay {
-            if look == .linked {
-                shape.strokeBorder(Theme.Colour.chalk, lineWidth: Theme.Pitch.linkedLineWidth)
-            }
-        }
-        .contentShape(shape)
-    }
-
-    private var empty: some View {
-        Text(slot.displayName)
-            .font(Theme.Typeface.number(Theme.TypeSize.base))
-            .foregroundStyle(Theme.Colour.chalk.opacity(Theme.Pitch.emptyTokenOpacity))
-            .frame(maxWidth: .infinity)
-            .frame(height: Theme.Pitch.emptyTokenHeight)
-            .background(shape.fill(Theme.Colour.turf))
-            .overlay {
-                shape.strokeBorder(Theme.Colour.chalk.opacity(Theme.Pitch.emptyTokenOpacity),
-                                   style: StrokeStyle(lineWidth: Theme.Pitch.emptyTokenLineWidth,
-                                                      dash: Theme.Pitch.emptyTokenDash))
-            }
-            .contentShape(shape)
     }
 }

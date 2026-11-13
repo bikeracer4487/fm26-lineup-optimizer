@@ -89,25 +89,3 @@ struct ScreenView: View {
         }
     }
 }
-
-/// A sentence with a coloured bar beside it: amber for a caution such as a warning or a notice.
-struct MarkedText: View {
-    let text: String
-    let colour: Color
-
-    init(_ text: String, colour: Color) {
-        self.text = text
-        self.colour = colour
-    }
-
-    var body: some View {
-        Text(text)
-            .font(Theme.Typeface.text())
-            .padding(.leading, Theme.Layout.markerWidth + Theme.Spacing.s)
-            .background(alignment: .leading) {
-                Rectangle()
-                    .fill(colour)
-                    .frame(width: Theme.Layout.markerWidth)
-            }
-    }
-}

@@ -1,74 +1,129 @@
 import LineupAppCore
 import SwiftUI
 
-/// Every player shown, one row each. Numbers are in the number face and right-aligned; every column sorts.
-struct PlayerTable: View {
-    let rows: [SquadRow]
-    @State private var sortOrder: [KeyPathComparator<SquadRow>] = []
+/// The squad table written on the board: its headings over a heavy rule, then a row for each player with faint rules
+/// between. Clicking a heading sorts by it, and clicking it again turns the order round. The screen lays the parts
+/// out, so the headings can stay in view as the rows scroll.
+enum PlayerTable {
+    /// The width every column needs.
+    static let leastWidth: CGFloat = {
+        typealias C = Theme.Column
+        return C.nameMinimum + C.squad + C.age + C.position + C.ability + 2 * C.meter + C.jadedness + C.statusMinimum
+    }()
 
-    private var sortedRows: [SquadRow] {
-        SquadRow.sorted(rows, using: sortOrder)
+    /// The headings and the heavy rule under them, on the board's white so rows scroll out of sight beneath.
+    struct Headings: View {
+        @Binding var sort: SquadSort
+
+        var body: some View {
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    heading(.name).frame(minWidth: Theme.Column.nameMinimum, maxWidth: .infinity, alignment: .leading)
+                    heading(.squad).frame(width: Theme.Column.squad, alignment: .leading)
+                    heading(.age).frame(width: Theme.Column.age, alignment: .trailing)
+                    heading(.position).padding(.leading, Theme.Table.columnLead)
+                        .frame(width: Theme.Column.position, alignment: .leading)
+                    heading(.ability).frame(width: Theme.Column.ability, alignment: .leading)
+                    heading(.condition).frame(width: Theme.Column.meter, alignment: .leading)
+                    heading(.sharpness).frame(width: Theme.Column.meter, alignment: .leading)
+                    heading(.jadedness).frame(width: Theme.Column.jadedness, alignment: .trailing)
+                    heading(.status).padding(.leading, Theme.Table.columnLead)
+                        .frame(minWidth: Theme.Column.statusMinimum, maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(height: Theme.Table.headingHeight)
+                HeavyRule()
+            }
+            .background(Theme.Colour.board)
+        }
+
+        private func heading(_ column: SquadColumn) -> some View {
+            Button { sort = sort.choosing(column) } label: {
+                HStack(spacing: Theme.Spacing.xxs) {
+                    Text(column.title)
+                        .lineLimit(1)
+                        .minimumScaleFactor(Theme.Pitch.labelMinimumScale)
+                    if sort.column == column {
+                        Image(systemName: sort.ascending ? "chevron.up" : "chevron.down")
+                            .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .bold))
+                    }
+                }
+                .font(Theme.Typeface.text(Theme.TypeSize.caption, weight: .extraBold))
+                .foregroundStyle(Theme.Colour.ink)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Sort by \(column.title.lowercased())")
+            .accessibilityAddTraits(sort.column == column ? .isSelected : [])
+        }
     }
+
+    /// A row for each player, in the sort's order, with a faint rule under each.
+    struct Rows: View {
+        let rows: [SquadRow]
+        let sort: SquadSort
+
+        var body: some View {
+            ForEach(SquadRow.sorted(rows, using: sort.comparators)) { row in
+                PlayerRow(row: row)
+                FaintRule()
+            }
+        }
+    }
+}
+
+/// One player's row.
+struct PlayerRow: View {
+    let row: SquadRow
 
     var body: some View {
-        Table(sortedRows, sortOrder: $sortOrder) {
-            TableColumn("Name", value: \.name) { row in
-                Text(row.name)
-                    .help(row.name)
-            }
-            .width(min: Theme.TableColumnWidth.nameMinimum, ideal: Theme.TableColumnWidth.nameIdeal)
-            TableColumn("Squad", value: \.squadOrder) { row in
-                Text(row.squadName)
-            }
-            .width(Theme.TableColumnWidth.squad)
-            TableColumn("Age", value: \.age) { row in
-                number(String(row.age))
-            }
-            .width(Theme.TableColumnWidth.age)
-            .alignment(.numeric)
-            TableColumn("Positions", value: \.positions) { row in
+        HStack(spacing: 0) {
+            Text(row.name)
+                .font(Theme.Typeface.display(Theme.TypeSize.noteHeading, weight: .bold))
+                .lineLimit(1)
+                .help(row.name)
+                .frame(minWidth: Theme.Column.nameMinimum, maxWidth: .infinity, alignment: .leading)
+            Text(row.squadName)
+                .foregroundStyle(Theme.Colour.mutedInk)
+                .frame(width: Theme.Column.squad, alignment: .leading)
+            Text(String(row.age))
+                .frame(width: Theme.Column.age, alignment: .trailing)
+            HStack(spacing: Theme.Spacing.s) {
+                if let line = row.line {
+                    Magnet.table(line)
+                        .accessibilityHidden(true)
+                }
                 Text(row.positions)
+                    .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .semibold))
+                    .lineLimit(1)
             }
-            .width(Theme.TableColumnWidth.positions)
-            TableColumn("Ability", value: \.currentAbility) { row in
-                number(String(row.currentAbility))
+            .padding(.leading, Theme.Table.columnLead)
+            .frame(width: Theme.Column.position, alignment: .leading)
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.xs + Theme.Spacing.xxs) {
+                Text(String(row.currentAbility))
+                    .font(Theme.Typeface.text(Theme.TypeSize.button, weight: .extraBold))
+                Text("of a possible")
+                    .foregroundStyle(Theme.Colour.mutedInk)
+                Text(String(row.potentialAbility))
+                    .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .semibold))
             }
-            .width(Theme.TableColumnWidth.ability)
-            .alignment(.numeric)
-            TableColumn("Potential", value: \.potentialAbility) { row in
-                number(String(row.potentialAbility))
+            .lineLimit(1)
+            .frame(width: Theme.Column.ability, alignment: .leading)
+            MeterView(meter: row.conditionMeter, text: row.conditionText)
+                .frame(width: Theme.Column.meter, alignment: .leading)
+            MeterView(meter: row.sharpnessMeter, text: row.sharpnessText)
+                .frame(width: Theme.Column.meter, alignment: .leading)
+            Text(String(row.jadedness))
+                .foregroundStyle(Theme.Colour.mutedInk)
+                .frame(width: Theme.Column.jadedness, alignment: .trailing)
+            HStack(spacing: Theme.Spacing.xs) {
+                ForEach(row.stamps, id: \.self) { StampView(stamp: $0) }
             }
-            .width(Theme.TableColumnWidth.potential)
-            .alignment(.numeric)
-            TableColumn("Condition", value: \.condition) { row in
-                number(row.conditionText)
-            }
-            .width(Theme.TableColumnWidth.condition)
-            .alignment(.numeric)
-            TableColumn("Sharpness", value: \.sharpness) { row in
-                number(row.sharpnessText)
-            }
-            .width(Theme.TableColumnWidth.sharpness)
-            .alignment(.numeric)
-            TableColumn("Jadedness", value: \.jadedness) { row in
-                number(String(row.jadedness))
-            }
-            .width(Theme.TableColumnWidth.jadedness)
-            .alignment(.numeric)
-            TableColumn("Status", value: \.statusText) { row in
-                Text(row.statusText)
-                    .foregroundStyle(row.isOut ? Theme.Colour.claret : Color.primary)
-            }
-            .width(min: Theme.TableColumnWidth.statusMinimum, ideal: Theme.TableColumnWidth.statusIdeal)
+            .padding(.leading, Theme.Table.columnLead)
+            .frame(minWidth: Theme.Column.statusMinimum, maxWidth: .infinity, alignment: .leading)
+            .clipped()
         }
-        // The table scrolls, so its ideal height is its least: all its rows must not make the window taller.
-        .frame(minHeight: Theme.Layout.tableMinimumHeight, idealHeight: Theme.Layout.tableMinimumHeight, maxHeight: .infinity)
-    }
-
-    private func number(_ text: String) -> some View {
-        Text(text)
-            .font(Theme.Typeface.number(Theme.TypeSize.base))
-            .offset(y: Theme.Typeface.numberDrop(Theme.TypeSize.base))
-            .frame(maxWidth: .infinity, alignment: .trailing)
+        .font(Theme.Typeface.text())
+        .frame(height: Theme.Table.rowHeight)
+        .accessibilityElement(children: .combine)
     }
 }

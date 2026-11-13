@@ -2,7 +2,7 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// The sheet that adds a fixture or changes one: its date, opponent, importance and tactic.
+/// The card on the board that adds a fixture or changes one: its date, opponent, importance and tactic.
 struct FixtureEditor: View {
     let model: AppModel
     @State private var draft: FixtureDraft
@@ -16,52 +16,69 @@ struct FixtureEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            Text(draft.isNew ? "Add a fixture" : "Change the fixture")
-                .font(Theme.Typeface.title(Theme.TypeSize.step3))
+            BoardHeading(draft.isNew ? "Add a fixture" : "Change the fixture", size: Theme.TypeSize.boardTitle)
             if let note = model.confirmedNote(for: draft) {
                 Text(note)
-                    .font(Theme.Typeface.text())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.Colour.mutedInk)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Form {
-                DayPicker("Date", day: $draft.date)
-                LabeledContent("Opponent") {
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Theme.Spacing.l,
+                 verticalSpacing: Theme.Spacing.m) {
+                GridRow {
+                    label("Date")
+                    DayPicker("Date", day: $draft.date)
+                        .labelsHidden()
+                        .fixedSize()
+                }
+                GridRow {
+                    label("Opponent")
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                         TextField("Opponent", text: $draft.opponent, prompt: Text("Who the match is against"))
                             .labelsHidden()
+                            .boardField()
                         if let problem = draft.shownProblem {
-                            MarkedText(problem, colour: Theme.Colour.amber)
+                            CautionLine(problem)
                         }
                     }
                 }
-                Picker("Importance", selection: $draft.importance) {
-                    ForEach(Importance.allCases, id: \.self) { importance in
-                        Text(importance.displayName).tag(importance)
-                    }
+                GridRow {
+                    label("Importance")
+                    BoardTabs(choices: Importance.allCases.map { ($0, $0.displayName) }, selection: $draft.importance)
                 }
-                Picker("Tactic", selection: $draft.tacticID) {
-                    Text(model.primaryTacticText).tag(UUID?.none)
-                    ForEach(model.tactics) { stored in
-                        Text(stored.tactic.name).tag(UUID?.some(stored.id))
+                GridRow {
+                    label("Tactic")
+                    Picker("Tactic", selection: $draft.tacticID) {
+                        Text(model.primaryTacticText).tag(UUID?.none)
+                        ForEach(model.tactics) { stored in
+                            Text(stored.tactic.name).tag(UUID?.some(stored.id))
+                        }
                     }
+                    .labelsHidden()
+                    .fixedSize()
                 }
             }
-            Spacer(minLength: 0)
-            HStack {
+            HStack(spacing: Theme.Spacing.s) {
                 Spacer()
                 Button("Cancel", role: .cancel, action: close)
+                    .buttonStyle(.secondary)
                     .keyboardShortcut(.cancelAction)
                 Button(draft.saveButtonTitle) {
                     draft.noteSaveAttempt()
                     if model.save(draft) != nil { close() }
                 }
+                .buttonStyle(.primary)
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(Theme.Spacing.xl)
-        .frame(width: Theme.Layout.fixtureEditorSize.width, height: Theme.Layout.fixtureEditorSize.height,
-               alignment: .topLeading)
+        .padding(Theme.Card.padding + Theme.Spacing.xs)
+        .frame(width: Theme.Layout.fixtureEditorWidth, alignment: .topLeading)
+        .boardCard()
+    }
+
+    private func label(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
+            .gridColumnAlignment(.leading)
     }
 }
 

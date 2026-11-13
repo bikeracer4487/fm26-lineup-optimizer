@@ -50,9 +50,8 @@ public struct TacticsScreen: View {
 
     private var page: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            Text(Screen.tactics.title)
-                .font(Theme.Typeface.title())
             if model.tactics.isEmpty {
+                BoardHeading(Screen.tactics.title, size: Theme.TypeSize.title)
                 EmptyState("No tactics yet. Start from a 4-2-3-1 and change it to yours.",
                            action: "New tactic", perform: addTactic)
                 Spacer(minLength: 0)
@@ -64,32 +63,38 @@ public struct TacticsScreen: View {
                 }
             }
         }
-        .padding(Theme.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: layout.scrolls ? nil : .infinity, alignment: .topLeading)
     }
 
     /// The saved tactics as a menu, the primary and those with unsaved changes marked, with what can be done to
     /// them. A menu rather than a column, so the two pitches have the window's width.
     private var list: some View {
-        WrappingRow {
+        WrappingRow(alignment: .center) {
+            BoardHeading(Screen.tactics.title, size: Theme.TypeSize.title)
+                .padding(.trailing, Theme.Spacing.m)
             Picker("Tactic", selection: Binding(get: { shown?.id }, set: { chosen = $0 })) {
                 ForEach(model.tactics) { stored in
                     Text(model.menuTitle(of: stored.id))
                         .tag(UUID?.some(stored.id))
                 }
             }
+            .font(Theme.Typeface.text())
             .fixedSize()
         } trailing: {
             Button("New tactic", action: addTactic)
+                .buttonStyle(.secondary)
             Button("Duplicate") {
                 if let shown, let copy = model.duplicateTactic(shown.id) { chosen = copy }
             }
+            .buttonStyle(.secondary)
             Button("Make primary") {
                 if let shown { model.makePrimary(shown.id) }
             }
+            .buttonStyle(.secondary)
             .disabled(shown?.id == model.settings.primaryTacticID)
             .help("Fixtures use the primary tactic unless they name another.")
             Button("Delete") { deleting = shown }
+                .buttonStyle(.secondary)
         }
     }
 

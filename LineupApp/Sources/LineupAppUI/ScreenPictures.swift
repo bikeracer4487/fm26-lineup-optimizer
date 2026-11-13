@@ -47,16 +47,17 @@ public enum ScreenPictures {
         }
     }
 
-    /// Draws the fixture editor on its own, as its sheet shows it, for `draft` in `model`, in light and in dark:
-    /// "fixtures-editor-light.png" and "fixtures-editor-dark.png". A sheet is not drawn with the screen under it,
-    /// so the editor is drawn as a window of its own.
+    /// Draws the fixture editor's card on its own on the board, for `draft` in `model`, in light and in dark:
+    /// "fixtures-editor-light.png" and "fixtures-editor-dark.png".
     @MainActor public static func writeFixtureEditor(model: AppModel, draft: FixtureDraft, to directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let name = "fixtures-editor-\(suffix).png"
-            let editor = FixtureEditor(model: model, draft: draft) {}
-                .tint(Theme.Colour.hoopBlue)
-            let png = try draw(editor, size: Theme.Layout.fixtureEditorSize, appearance: appearance, name: name)
+            let editor = BoardFrame {
+                FixtureEditor(model: model, draft: draft) {}
+            }
+            .boardAppearance()
+            let png = try draw(editor, size: Theme.Layout.fixtureEditorPicture, appearance: appearance, name: name)
             do {
                 try png.write(to: directory.appendingPathComponent(name), options: .atomic)
             } catch {
@@ -74,8 +75,23 @@ public enum ScreenPictures {
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let file = "\(name)-\(suffix).png"
             let picker = CandidatePicker(text: text, rows: rows, choose: { _ in }, cancel: {})
-                .tint(Theme.Colour.hoopBlue)
             let png = try draw(picker, size: Theme.Match.pickerSize, appearance: appearance, name: file)
+            do {
+                try png.write(to: directory.appendingPathComponent(file), options: .atomic)
+            } catch {
+                throw PictureError.couldNotWrite(file, underlying: error)
+            }
+        }
+    }
+
+    /// Draws both typefaces at each weight on the board, in light and in dark: "type-light.png" and "type-dark.png".
+    /// It shows the faces are loaded and that the weight axis is set: every line must look heavier than the one above.
+    @MainActor public static func writeTypeSpecimen(to directory: URL) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let file = "type-\(suffix).png"
+            let png = try draw(BoardFrame { TypeSpecimen() }.boardAppearance(), size: Theme.Layout.typeSpecimenPicture,
+                               appearance: appearance, name: file)
             do {
                 try png.write(to: directory.appendingPathComponent(file), options: .atomic)
             } catch {
@@ -131,5 +147,22 @@ public enum ScreenPictures {
         guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
         view.cacheDisplay(in: view.bounds, to: bitmap)
         return bitmap
+    }
+}
+
+/// Each typeface at each of its weights, named, with figures that must line up in columns.
+struct TypeSpecimen: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            ForEach(Theme.Typeface.Face.allCases, id: \.self) { face in
+                Text("\(face.rawValue)\(Theme.Typeface.isLoaded(face) ? "" : " (not loaded: the system typeface)")")
+                    .font(Theme.Typeface.text(Theme.TypeSize.caption, weight: .bold))
+                    .foregroundStyle(Theme.Colour.mutedInk)
+                ForEach(Theme.Weight.allCases, id: \.self) { weight in
+                    Text("\(Int(weight.rawValue))  Evan Humphries 124.4  111 888 ×0.80")
+                        .font(Theme.Typeface.font(face, size: Theme.TypeSize.heading, weight: weight))
+                }
+            }
+        }
     }
 }

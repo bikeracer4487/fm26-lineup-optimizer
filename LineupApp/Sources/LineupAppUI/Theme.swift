@@ -54,13 +54,24 @@ public enum Theme {
         /// The magnet on a fixture's note that is not chosen.
         public static let idleMagnet = hex(0x9AA3AF)
 
-        /// A magnet's colour and the colour of the letters on it, by the line the player is in.
+        /// A magnet's colour and the colour of the letters on it, by the line the player is in. Midfield's magnet is
+        /// the darker green the direction gives for green text: white letters on marker green measure 4.0 to 1, below
+        /// the 4.5 to 1 a magnet's letters must meet; on this green they measure 6.2.
         public static func magnet(_ line: PitchLine) -> (fill: Color, text: Color) {
             switch line {
             case .goalkeeper: (magnetYellow, magnetYellowText)
             case .defence: (markerBlue, onMarker)
-            case .midfield: (markerGreen, onMarker)
+            case .midfield: (greenText, onMarker)
             case .attack: (markerRed, onMarker)
+            }
+        }
+
+        /// The magnet on a squad's import card: the first team blue, the U21s green, the U18s yellow.
+        public static func squad(_ squad: Squad) -> Color {
+            switch squad {
+            case .firstTeam: markerBlue
+            case .u21: markerGreen
+            case .u18: magnetYellow
             }
         }
 
@@ -354,6 +365,8 @@ public enum Theme {
         public static let cornerRadius: CGFloat = 10
         public static let smallCornerRadius: CGFloat = 8
         public static let padding: CGFloat = 14
+        /// The least width of an import's card.
+        public static let importMinimumWidth: CGFloat = 120
     }
 
     /// Tables written on the board.
@@ -380,6 +393,8 @@ public enum Theme {
         public static let tilt: Double = -1.5
         public static let horizontalPadding: CGFloat = 10
         public static let verticalPadding: CGFloat = 1
+        /// Round at the ends: half the stamp's height, or more, which draws the same.
+        public static let cornerRadius: CGFloat = 9
     }
 
     /// A rule across the board, as under a table's headings or over "Left out".
@@ -416,6 +431,8 @@ public enum Theme {
         public static let fixtureEditorWidth: CGFloat = 480
         /// The picture of the fixture editor on its own.
         public static let fixtureEditorPicture = CGSize(width: 560, height: 420)
+        /// The picture of the two typefaces at each weight.
+        public static let typeSpecimenPicture = CGSize(width: 760, height: 640)
         /// The widest a setting's control runs, so a slider is not stretched across a wide window.
         public static let settingControlWidth: CGFloat = 360
         /// The field for the club's name or the path to FMRTE's settings file.
@@ -435,6 +452,11 @@ public enum Theme {
         /// The pitch's width to its height: a little taller than wide, so six rows of magnets with names beneath fit
         /// and a long surname has a fifth of the width.
         public static let aspectRatio: CGFloat = 500.0 / 536.0
+        /// The Tactics editor's pitch: wider for its shape, so each of its five columns has room for a role's name
+        /// beneath its magnet.
+        public static let editorAspectRatio: CGFloat = 1.15
+        /// The editor's magnets, a little smaller than a team sheet's, as its pitches show all 24 slots.
+        public static let editorMagnetDiameter: CGFloat = 38
         /// The least width a pitch keeps, so two side by side stay legible; its height follows from `aspectRatio`.
         public static let minimumWidth: CGFloat = 300
         /// The widest a pitch is drawn when the screen scrolls, so it is not taller than a window.
@@ -465,7 +487,9 @@ public enum Theme {
         /// The most lines a role name takes under its slot.
         public static let roleNameLines = 2
         /// An empty slot of the tactic editor.
-        public static let emptySlotDiameter: CGFloat = 34
+        public static let emptySlotDiameter: CGFloat = 36
+        /// The letters in an empty slot's circle may shrink this far to fit inside it.
+        public static let emptySlotMinimumScale: CGFloat = 0.5
         /// The marks beside a magnet: a pin, a caution, a youth squad.
         public static let markSize: CGFloat = 11
         public static let youthMarkCornerRadius: CGFloat = 3
@@ -511,14 +535,14 @@ public enum Theme {
 
     /// Column widths for the tables on the board. The name and status columns share what a wider window gives.
     public enum Column {
-        public static let nameMinimum: CGFloat = 170
+        public static let nameMinimum: CGFloat = 160
         public static let squad: CGFloat = 84
         public static let age: CGFloat = 40
         public static let position: CGFloat = 118
-        public static let ability: CGFloat = 158
-        public static let meter: CGFloat = 122
+        public static let ability: CGFloat = 178
+        public static let meter: CGFloat = 128
         public static let jadedness: CGFloat = 80
-        public static let statusMinimum: CGFloat = 150
+        public static let statusMinimum: CGFloat = 140
 
         /// The fixtures table.
         public static let fixtureDate: CGFloat = 120
