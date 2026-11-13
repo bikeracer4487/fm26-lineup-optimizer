@@ -58,12 +58,8 @@ struct RatingReference: Decodable {
         let catalog = try RoleCatalog(fm26JSON: Fixtures.data("reference/fm26_roles.json"))
         let engine = RatingEngine(tables: try RatingTables.bundled(), parameters: .fm27, configuration: .fm26Reference)
         #expect(ref.cases.count > 400)
-        var worst = (ip: 0.0, oop: 0.0, combined: 0.0)
         for c in ref.cases {
             let r = try engine.rating(for: try c.builtPlayer, in: try c.assignment(catalog))
-            worst.ip = max(worst.ip, abs(r.inPossession.base - c.ipRating))
-            worst.oop = max(worst.oop, abs(r.outOfPossession.base - c.oopRating))
-            worst.combined = max(worst.combined, abs(r.value - c.combinedRating))
             #expect(abs(r.inPossession.base - c.ipRating) <= 0.1001, "\(c.player) \(c.slot) IP")
             #expect(abs(r.outOfPossession.base - c.oopRating) <= 0.1001, "\(c.player) \(c.slot) OOP")
             #expect(abs(r.value - c.combinedRating) <= 0.2001, "\(c.player) \(c.slot)")

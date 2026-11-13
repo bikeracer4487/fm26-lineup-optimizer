@@ -96,4 +96,102 @@ import Testing
         let s = try slot(.D_CL)
         #expect(try engine.rating(for: p, in: s).value == engine.rating(for: full, in: s).value)
     }
+
+    // MARK: rules that need a hand-built role or custom tables
+
+    private func probe(_ position: Position, key: [Attribute] = [.passing], preferable: [Attribute] = []) -> SlotAssignment {
+        let ip = Role(name: "Probe", phase: .inPossession, positions: [position], key: key, preferable: preferable)
+        let oop = Role(name: "Probe", phase: .outOfPossession, positions: [position], key: key, preferable: preferable)
+        return SlotAssignment(slot: .AM_C, ipPosition: position, ipRole: ip, oopSlot: .AM_C, oopPosition: position, oopRole: oop)
+    }
+
+    @Test func fm27DoesNotRoundAndTheReferenceDoes() throws {
+        let attrs: [Attribute: Int] = [.passing: 13, .pace: 7, .tackling: 16, .vision: 4, .strength: 11, .jumpingReach: 17]
+        let p = Player.fixture(attributes: attrs, familiarity: [dc: 20], currentAbility: 100)
+        let s = try slot(.D_CL)
+        let exact = try engine.rating(for: p, in: s).inPossession
+        let blended = 0.60 * exact.positionScore + 0.35 * exact.roleScore + 0.05 * exact.consensusBonus
+        #expect(abs(exact.base - blended * exact.thresholdFactor) < 1e-12)
+        #expect(exact.base != (exact.base * 10).rounded() / 10)
+        let rounded = try reference.rating(for: p, in: s).inPossession
+        #expect(rounded.base == (exact.base * 10).rounded(.toNearestOrEven) / 10)
+        #expect(rounded.base != exact.base)
+        let combined = try engine.rating(for: p, in: s).value
+        #expect(combined != (combined * 10).rounded() / 10)
+    }
+
+    @Test func balanceAddsToAnOutfieldConsensusBonusButNotAGoalkeepers() throws {
+        func bonus(_ position: Position, balance: Int, key: [Attribute] = [.passing]) throws -> PhaseRating {
+            let p = Player.fixture(attributes: [.balance: balance], familiarity: [position: 20])
+            return try engine.rating(for: p, in: probe(position, key: key)).inPossession
+        }
+        let low = try bonus(.attackingMidLeft, balance: 1), high = try bonus(.attackingMidLeft, balance: 20)
+        #expect(low.consensusBonus == 0)
+        #expect(abs(high.consensusBonus - 1.0) < 1e-9)
+        #expect(high.base > low.base)
+        // a goalkeeper phase ignores Balance for the bonus
+        let gkLow = try bonus(.goalkeeper, balance: 1), gkHigh = try bonus(.goalkeeper, balance: 20)
+        #expect(gkLow.consensusBonus == 0 && gkHigh.consensusBonus == 0)
+        #expect(gkLow.base == gkHigh.base)
+        // Balance already among the role's attributes: no extra bonus
+        let flaggedLow = try bonus(.attackingMidLeft, balance: 1, key: [.balance])
+        let flaggedHigh = try bonus(.attackingMidLeft, balance: 20, key: [.balance])
+        #expect(flaggedLow.consensusBonus == 0 && flaggedHigh.consensusBonus == 0)
+    }
+
+    @Test func theConsensusBonusIsCappedAtTenButLowerBonusesPassThrough() throws {
+        let tables = RatingTables(
+            positionWeights: [.attackingMidCentral: [.passing: 1]],
+            consensusBonuses: ["AM(C)|Probe": [.pace: 0.5]], thresholds: [:])
+        let capped = RatingEngine(tables: tables, parameters: .fm27, configuration: .fm27)
+        func bonus(pace: Int) throws -> Double {
+            let p = Player.fixture(attributes: [.pace: pace, .balance: 1], familiarity: [.attackingMidCentral: 20])
+            return try capped.rating(for: p, in: probe(.attackingMidCentral)).inPossession.consensusBonus
+        }
+        #expect(try bonus(pace: 20) == 10)
+        #expect(abs(try bonus(pace: 3) - 100 * 0.5 * 2.0 / 19) < 1e-9)   // 5.26, below the cap
+    }
+
+    @Test func aRoleWithNoAttributesScoresFifty() throws {
+        let p = Player.fixture(attributes: [.passing: 20], familiarity: [.attackingMidLeft: 20])
+        let none = try engine.rating(for: p, in: probe(.attackingMidLeft, key: [])).inPossession
+        #expect(none.roleScore == 50)
+        let some = try engine.rating(for: p, in: probe(.attackingMidLeft)).inPossession
+        #expect(some.roleScore == 100)
+    }
+
+    @Test func ratingsDoNotDependOnDictionaryOrder() throws {
+        let tables = try RatingTables.bundled()
+        func reversed<V>(_ table: [Attribute: V]) -> [Attribute: V] {
+            var out: [Attribute: V] = [:]
+            for (k, v) in table.sorted(by: { $0.key.rawValue > $1.key.rawValue }) { out[k] = v }
+            return out
+        }
+        func reversedOuter<K: Hashable & Comparable, V>(_ table: [K: V], _ inner: (V) -> V) -> [K: V] {
+            var out: [K: V] = [:]
+            for (k, v) in table.sorted(by: { $0.key > $1.key }) { out[k] = inner(v) }
+            return out
+        }
+        let rebuilt = RatingTables(
+            positionWeights: Dictionary(uniqueKeysWithValues: tables.positionWeights.sorted { $0.key.rawValue > $1.key.rawValue }.map { ($0.key, reversed($0.value)) }),
+            consensusBonuses: reversedOuter(tables.consensusBonuses, reversed),
+            thresholds: reversedOuter(tables.thresholds, reversed))
+        let a = RatingEngine(tables: tables, parameters: .fm27, configuration: .fm27)
+        let b = RatingEngine(tables: rebuilt, parameters: .fm27, configuration: .fm27)
+        let assignments = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
+            .assignments(catalog: RoleCatalog.fm27())
+        var seed: UInt64 = 12345
+        func next() -> Int { seed = seed &* 6364136223846793005 &+ 1442695040888963407; return Int((seed >> 33) % 20) + 1 }
+        var compared = 0
+        for n in 0..<40 {
+            let attrs = Dictionary(uniqueKeysWithValues: Attribute.allCases.map { ($0, next()) })
+            let fam = Dictionary(uniqueKeysWithValues: Position.allCases.map { ($0, next()) })
+            let p = Player.fixture(name: "P\(n)", attributes: attrs, familiarity: fam)
+            for s in assignments {
+                #expect(try a.rating(for: p, in: s) == b.rating(for: p, in: s))
+                compared += 1
+            }
+        }
+        #expect(compared == 40 * assignments.count)
+    }
 }

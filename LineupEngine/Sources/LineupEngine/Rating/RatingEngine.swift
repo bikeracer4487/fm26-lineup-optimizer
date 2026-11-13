@@ -83,6 +83,12 @@ public struct RatingEngine: Sendable {
                            familiarityFactor: familiarityFactor(familiarity))
     }
 
+    /// Floating-point sums depend on order and dictionary order changes between launches, so every
+    /// accumulation over a table goes through this fixed order.
+    private static func inFixedOrder<V>(_ table: [Attribute: V]) -> [(key: Attribute, value: V)] {
+        table.sorted { $0.key.rawValue < $1.key.rawValue }
+    }
+
     private func value(_ player: Player, _ attribute: Attribute) throws -> Int {
         guard let value = player.attributes[attribute] else {
             throw RatingError.missingAttribute(player: player.name, attribute: attribute)
@@ -97,9 +103,9 @@ public struct RatingEngine: Sendable {
     private func positionScore(_ player: Player, _ position: Position) throws -> Double {
         // `RatingTables` guarantees a non-empty, positive-sum table for every position.
         let weights = tables.positionWeights[position] ?? [:]
-        let total = weights.values.reduce(0, +)
+        let total = Self.inFixedOrder(weights).reduce(0) { $0 + $1.value }
         var sum = 0.0
-        for (attribute, weight) in weights { sum += try normalised(player, attribute) * weight }
+        for (attribute, weight) in Self.inFixedOrder(weights) { sum += try normalised(player, attribute) * weight }
         return 100 * sum / total
     }
 
@@ -115,7 +121,7 @@ public struct RatingEngine: Sendable {
     private func consensusBonus(_ player: Player, _ position: Position, _ role: Role) throws -> Double {
         let flagged = Set(role.key).union(role.preferable)
         var bonus = 0.0
-        for (attribute, weight) in tables.consensusBonuses["\(position.tableKey)|\(role.name)"] ?? [:] where !flagged.contains(attribute) {
+        for (attribute, weight) in Self.inFixedOrder(tables.consensusBonuses["\(position.tableKey)|\(role.name)"] ?? [:]) where !flagged.contains(attribute) {
             bonus += try normalised(player, attribute) * weight
         }
         if !flagged.contains(.balance), position != .goalkeeper {
@@ -126,7 +132,7 @@ public struct RatingEngine: Sendable {
 
     private func thresholdFactor(_ player: Player, _ role: Role) throws -> Double {
         var factor = 1.0
-        for (attribute, minimum) in tables.thresholds[role.name] ?? [:] {
+        for (attribute, minimum) in Self.inFixedOrder(tables.thresholds[role.name] ?? [:]) {
             let have = try value(player, attribute)
             if have < minimum { factor *= 1 - parameters.thresholdPenaltyPerPoint.value * Double(minimum - have) }
         }

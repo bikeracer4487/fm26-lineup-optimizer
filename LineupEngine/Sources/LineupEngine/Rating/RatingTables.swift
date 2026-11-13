@@ -8,6 +8,14 @@ public struct RatingTables: Sendable {
     /// Key role name.
     public let thresholds: [String: [Attribute: Int]]
 
+    /// Builds tables directly, without the checks `init(json:)` makes; for tests that need custom tables.
+    init(positionWeights: [Position: [Attribute: Double]], consensusBonuses: [String: [Attribute: Double]],
+         thresholds: [String: [Attribute: Int]]) {
+        self.positionWeights = positionWeights
+        self.consensusBonuses = consensusBonuses
+        self.thresholds = thresholds
+    }
+
     public init(json: Data) throws {
         struct File: Decodable {
             let positionWeights: [String: [String: Double]]
