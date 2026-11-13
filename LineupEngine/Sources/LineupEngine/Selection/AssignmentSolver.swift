@@ -5,12 +5,18 @@
 /// Deterministic: no randomness, no hashing, ties inside the algorithm are settled by strict `<` scans
 /// in index order.
 public enum AssignmentSolver {
-    /// Tie-break weight. A solution's perturbation is at most 1e-9 x 100 candidates x 24 slots x 24 slots
-    /// (about 6e-5 even with every index at its maximum), far below any gap between genuinely different
-    /// totals in this engine (values are 0 to 200 and differ by whole rating points or fractions well
-    /// above 1e-4), so it can only choose among solutions whose original totals are equal. It is also large
-    /// enough to stay distinguishable from rounding noise on values near 200 (double spacing there is ~3e-14).
+    /// Tie-break weight. The perturbation is only a preference among equal solutions: its largest possible
+    /// total is about 2.7e-5 (24 slots, 100 candidates), so it can outweigh a genuine difference smaller
+    /// than that. `maximise` therefore also solves without it and keeps the unperturbed answer whenever
+    /// that is better on the original values, so the result is never worse than the true optimum except
+    /// by `floatNoise`. 1e-9 is large enough to stay visible against the 1e-10 spacing of doubles at the
+    /// 1e6 costs below, and small enough not to alter any real preference.
     private static let tieBreakEpsilon = 1e-9
+
+    /// Margin by which the unperturbed solution must beat the perturbed one on the original values before
+    /// it is preferred; anything smaller is treated as float noise (sums of values up to 200 over 24 slots
+    /// are accurate to about 1e-12).
+    private static let floatNoise = 1e-9
 
     /// Cost of a disallowed pairing or of a dummy candidate. Must exceed the largest total value swing
     /// that filling one extra slot could ever buy back: with at most about 24 slots at values 0...200 that
@@ -24,6 +30,26 @@ public enum AssignmentSolver {
     /// - Returns: one entry per slot, the chosen candidate index or nil if the slot cannot be filled.
     ///   Each candidate is used at most once.
     public static func maximise(values: [[Double?]]) -> [Int?] {
+        let perturbed = solve(values: values, epsilon: tieBreakEpsilon)
+        let exact = solve(values: values, epsilon: 0)
+        let a = score(values, perturbed)
+        let b = score(values, exact)
+        if b.filled > a.filled || (b.filled == a.filled && b.total > a.total + floatNoise) {
+            return exact
+        }
+        return perturbed
+    }
+
+    private static func score(_ values: [[Double?]], _ result: [Int?]) -> (filled: Int, total: Double) {
+        var filled = 0
+        var total = 0.0
+        for (s, choice) in result.enumerated() {
+            if let p = choice, let v = values[s][p] { filled += 1; total += v }
+        }
+        return (filled, total)
+    }
+
+    private static func solve(values: [[Double?]], epsilon: Double) -> [Int?] {
         let slots = values.count
         guard slots > 0 else { return [] }
         let candidates = values[0].count
@@ -41,7 +67,7 @@ public enum AssignmentSolver {
                 } else if col > candidates {
                     cost[row][col] = unfillableCost
                 } else if let value = values[row - 1][col - 1] {
-                    let perturbation = tieBreakEpsilon * Double(col - 1) * Double(slots - (row - 1))
+                    let perturbation = epsilon * Double(col - 1) * Double(slots - (row - 1))
                     cost[row][col] = -(value - perturbation)
                 } else {
                     cost[row][col] = unfillableCost

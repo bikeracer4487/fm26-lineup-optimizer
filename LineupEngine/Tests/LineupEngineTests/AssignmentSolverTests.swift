@@ -76,9 +76,11 @@ private func score(_ values: [[Double?]], _ result: [Int?]) -> (filled: Int, tot
             let slots = 1 + rng.below(5)
             let candidates = 1 + rng.below(7)
             let tied = i % 2 == 0   // every other problem draws from a few integers so ties are common
+            let tiny = i % 5 == 1   // some problems differ only by amounts far below 1e-6
             let values: [[Double?]] = (0..<slots).map { _ in
                 (0..<candidates).map { _ in
                     if rng.unit() < 0.15 { return nil }
+                    if tiny { return 100 + Double(rng.below(5)) * 1e-8 }
                     return tied ? Double(rng.below(4)) * 10 : rng.unit() * 200
                 }
             }
@@ -90,9 +92,29 @@ private func score(_ values: [[Double?]], _ result: [Int?]) -> (filled: Int, tot
             let got = score(values, result)
             let want = bruteForce(values)
             #expect(got.filled == want.filled, "filled slots differ in problem \(i)")
-            #expect(abs(got.total - want.total) < 1e-6, "total differs in problem \(i)")
+            #expect(abs(got.total - want.total) < (tiny ? 1e-9 : 1e-6), "total differs in problem \(i)")
             #expect(AssignmentSolver.maximise(values: values) == result)
         }
+    }
+
+    /// Two slots, candidates 0 and 99 far apart so the tie-break perturbation differs between the two options.
+    private func farApartProblem(gain: Double) -> [[Double?]] {
+        var row0 = [Double?](repeating: nil, count: 100)
+        var row1 = [Double?](repeating: nil, count: 100)
+        row0[99] = 100 + gain   // option A: slot 0 -> 99, slot 1 -> 0
+        row1[0] = 100
+        row0[0] = 100           // option B: slot 0 -> 0, slot 1 -> 99
+        row1[99] = 100
+        return [row0, row1]
+    }
+
+    @Test func aTrueOptimumBeatsTheTieBreakEvenWhenTheMarginIsTiny() {
+        // A beats B by 5e-8, less than the perturbation gap (~9.9e-8) that favours B
+        #expect(AssignmentSolver.maximise(values: farApartProblem(gain: 5e-8)) == [99, 0])
+    }
+
+    @Test func exactlyEqualTotalsStillGoToTheLowerCandidateInTheEarlierSlot() {
+        #expect(AssignmentSolver.maximise(values: farApartProblem(gain: 0)) == [0, 99])
     }
 
     @Test func permutingCandidatesPermutesTheAnswer() {
