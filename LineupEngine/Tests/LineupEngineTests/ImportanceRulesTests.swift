@@ -153,12 +153,12 @@ import Testing
     @Test func anUnsharpPlayerIsFavouredInALesserFixture() {
         let p = Player.fixture(sharpness: 0.705)
         let a = every(run(p, .low), .needsSharpness)
-        #expect(abs((a?.factor ?? 0) - 1.15) < 1e-9)
-        #expect(a?.reason == "Needs minutes: sharpness 70% (×1.15)")
-        #expect(abs((every(run(Player.fixture(sharpness: 0.5), .low), .needsSharpness)?.factor ?? 0) - 1.30) < 1e-9)
-        #expect(abs((every(run(Player.fixture(sharpness: 0.2), .low), .needsSharpness)?.factor ?? 0) - 1.30) < 1e-9)
+        #expect(abs((a?.factor ?? 0) - 1.25) < 1e-9)
+        #expect(a?.reason == "Needs minutes: sharpness 70% (×1.25)")
+        #expect(abs((every(run(Player.fixture(sharpness: 0.5), .low), .needsSharpness)?.factor ?? 0) - 1.50) < 1e-9)
+        #expect(abs((every(run(Player.fixture(sharpness: 0.2), .low), .needsSharpness)?.factor ?? 0) - 1.50) < 1e-9)
         #expect(every(run(Player.fixture(sharpness: 0.91), .low), .needsSharpness) == nil)
-        #expect(every(run(Player.fixture(sharpness: 0.62), .low), .needsSharpness)?.reason == "Needs minutes: sharpness 62% (×1.21)")
+        #expect(every(run(Player.fixture(sharpness: 0.62), .low), .needsSharpness)?.reason == "Needs minutes: sharpness 62% (×1.35)")
     }
 
     @Test func needForSharpnessIsIgnoredAtHighAndMedium() {

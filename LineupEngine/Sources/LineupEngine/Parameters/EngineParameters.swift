@@ -248,8 +248,8 @@ public struct EngineParameters: Sendable {
             sharpnessNeedMost: Parameter(
                 0.50, .derived, source: "the sharpness curve's 50% anchor (FM27 Match Lab), below which the need is treated as greatest"),
             sharpnessNeedStrengthLow: Parameter(
-                0.30, .derived,
-                source: "the branch's ×1.2 to ×1.4 boosts (\(matchSelectorSource)), sized so an unsharp player is about level with a sharp one once his sharpness factor is counted"),
+                0.50, .derived,
+                source: "the owner's decision of 13 November 2026 that an unsharp regular should get the low fixtures: at 50% sharpness a player is worth about a sixth more than a fully sharp one of the same rating once his sharpness factor (×0.78) is counted. The branch boosted by ×1.2 to ×1.4 (\(matchSelectorSource))"),
             sharpnessNeedStrengthBuild: Parameter(
                 1.0, .derived, source: "a sharpness fixture exists to build sharpness, so need counts fully; this design's choice"),
             fullySharpFactor: Parameter(0.60, .carriedOverFM26, source: matchSelectorSource),
