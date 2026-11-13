@@ -1,0 +1,2058 @@
+{
+ "ColumnsSettings": {
+  "Items": [
+   {
+    "SettingsKey": "WonderKidsNotificationColumns",
+    "Columns": [
+     {
+      "Name": null,
+      "Path": "DisplayedName",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.PositionsDesc",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "CA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Age",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "AskingPrice",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PlayerRating.ActualRating",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PlayerRating.PotentialRating",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     }
+    ],
+    "Sort": null
+   },
+   {
+    "SettingsKey": "TeamPlayersColumns",
+    "Columns": [
+     {
+      "Name": null,
+      "Path": "Number",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PlayerStatusInformation",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "DisplayedName",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.PositionsDesc",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Nationalities",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "CA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Age",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Condition",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "IsBanned",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "IsInjured",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Jadedness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MatchSharpness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Morale",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.AgreedPlayingTime",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.Happiness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.MonthsLeft",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.PlayingTimeHappiness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.ContractType",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.WagePerWeek",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.AttackingMidCentral",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.AttackingMidLeft",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.AttackingMidRight",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.DefenderCentral",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.DefenderLeft",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.DefenderRight",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.DefensiveMidfielder",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.Goalkeeper",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.MidfielderCentral",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.MidfielderLeft",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.MidfielderRight",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.Striker",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.WingBackLeft",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.WingBackRight",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.AerialAbility",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.CommandOfArea",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.Communication",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.Eccentricity",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.Handling",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.Kicking",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.OneOnOnes",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.Reflexes",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.RushingOut",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.TendencyToPunch",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.Throwing",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "HiddenAttributes.Consistency",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "HiddenAttributes.Dirtiness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "HiddenAttributes.ImportantMatches",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "HiddenAttributes.InjuryProness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "HiddenAttributes.Versatility",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Aggression",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Anticipation",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Bravery",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Composure",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Concentration",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Decisions",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Determination",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Flair",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Leadership",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.OffTheBall",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Positioning",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Teamwork",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Vision",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Workrate",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Adaptability",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Ambition",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Controversy",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Loyalty",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Pressure",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Professional",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Sportsmanship",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Temperament",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Acceleration",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Agility",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Balance",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Jumping",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.LeftFoot",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.NaturalFitness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Pace",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.RightFoot",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Stamina",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Strength",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Corners",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Crossing",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Dribbling",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Finishing",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.FirstTouch",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Freekicks",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Heading",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.LongShots",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Longthrows",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Marking",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Passing",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.PenaltyTaking",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Tackling",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Technique",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "LoanContract.LoanedToTeam",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "LoanContract.ContractType",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     }
+    ],
+    "Sort": []
+   },
+   {
+    "SettingsKey": "TeamStaffColumns",
+    "Columns": [
+     {
+      "Name": null,
+      "Path": "ContractJob",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "DisplayedName",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Age",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Team",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Nation",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "CA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     }
+    ],
+    "Sort": null
+   },
+   {
+    "SettingsKey": "NationStaffColumns",
+    "Columns": [
+     {
+      "Name": null,
+      "Path": "NationalTeamJob",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Age",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "DisplayedName",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "NationalTeam",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Nation",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "CA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     }
+    ],
+    "Sort": null
+   },
+   {
+    "SettingsKey": "SearchPlayersColumns",
+    "Columns": [
+     {
+      "Name": null,
+      "Path": "PlayerStatusInformation",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "DisplayedName",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Age",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "CA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Nationalities",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.Club",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "AskingPrice",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.PositionsDesc",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "IsInjured",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Jadedness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MatchSharpness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Morale",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.Happiness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.PlayingTimeHappiness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.MonthsLeft",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.WagePerWeek",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.AerialAbility",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.CommandOfArea",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.Communication",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.Eccentricity",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.Handling",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.Kicking",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.OneOnOnes",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.Reflexes",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.RushingOut",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.TendencyToPunch",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalKeeperAttributes.Throwing",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "HiddenAttributes.Consistency",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "HiddenAttributes.Dirtiness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "HiddenAttributes.ImportantMatches",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "HiddenAttributes.InjuryProness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "HiddenAttributes.Versatility",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Aggression",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Anticipation",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Bravery",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Composure",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Concentration",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Decisions",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Determination",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Flair",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Leadership",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.OffTheBall",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Positioning",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Teamwork",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Vision",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "MentalAttributes.Workrate",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Adaptability",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Ambition",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Controversy",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Loyalty",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Pressure",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Professional",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Sportsmanship",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PersonalityAttributes.Temperament",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Acceleration",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Agility",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Balance",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Jumping",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.LeftFoot",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.NaturalFitness",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Pace",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.RightFoot",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Stamina",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PhysicalAttributes.Strength",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.AttackingMidCentral",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.AttackingMidLeft",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.AttackingMidRight",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.DefenderCentral",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.DefenderLeft",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.DefenderRight",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.DefensiveMidfielder",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.Goalkeeper",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.MidfielderCentral",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.MidfielderLeft",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.MidfielderRight",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.Striker",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.WingBackLeft",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.WingBackRight",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Corners",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Crossing",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Dribbling",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Finishing",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.FirstTouch",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Freekicks",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Heading",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.LongShots",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Longthrows",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Marking",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Passing",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.PenaltyTaking",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Tackling",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TechnicalAttributes.Technique",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Condition",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "IsBanned",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.ContractType",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "LoanContract.LoanedToTeam",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "LoanContract.ContractType",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     }
+    ],
+    "Sort": []
+   },
+   {
+    "SettingsKey": "SearchStaffColumns",
+    "Columns": [
+     {
+      "Name": null,
+      "Path": "DisplayedName",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Age",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "CA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.Club",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     }
+    ],
+    "Sort": null
+   },
+   {
+    "SettingsKey": "SearchAgent",
+    "Columns": [
+     {
+      "Name": null,
+      "Path": "Id",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "DisplayedName",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Nation.Name",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "NumberOfClients",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     }
+    ],
+    "Sort": null
+   },
+   {
+    "SettingsKey": "FrozenWindowPlayers",
+    "Columns": [
+     {
+      "Name": null,
+      "Path": "IsFrozen",
+      "IsWritable": false,
+      "Converter": "Boolean",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PlayerStatusInformation",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "DisplayedName",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Age",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "CA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Nationalities",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.Club",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "AskingPrice",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Positions.PositionsDesc",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     }
+    ],
+    "Sort": null
+   },
+   {
+    "SettingsKey": "FrozenWindowStaff",
+    "Columns": [
+     {
+      "Name": null,
+      "Path": "IsFrozen",
+      "IsWritable": false,
+      "Converter": "Boolean",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "DisplayedName",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Age",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "CA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "PA",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Contract.Club",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     }
+    ],
+    "Sort": null
+   },
+   {
+    "SettingsKey": "FutureTransfers",
+    "Columns": [
+     {
+      "Name": null,
+      "Path": "DisplayedName",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "SellerTeam",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "BuyerTeam",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Value",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TransferDate",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TransferType",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     }
+    ],
+    "Sort": null
+   }
+  ]
+ }
+}
