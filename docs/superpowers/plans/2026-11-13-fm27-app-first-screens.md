@@ -172,14 +172,14 @@ Rules:
       public let change: SquadChange
   }
   public enum ImportOutcome: Equatable, Sendable { case imported(ImportSummary), failed(String) }
-  public struct Environment: Sendable {
+  public struct AppEnvironment: Sendable {      // not "Environment": SwiftUI has one
       public var today: @Sendable () -> Day
       public var clipboard: @Sendable () -> String?
       public var fmrteConfig: @Sendable (_ path: String?) throws -> Data     // nil: the default path
   }
 
   @MainActor @Observable public final class AppModel {
-      public init(store: Store, environment: Environment)
+      public init(store: Store, environment: AppEnvironment)
       public private(set) var squad: SquadState
       public private(set) var tactics: [StoredTactic]
       public private(set) var fixtures: [StoredFixture]        // in date order, then id
@@ -258,7 +258,7 @@ Rules:
 
 **Interfaces:**
 - Consumes: `AppModel` (Task 3), `Theme`, `EmptyState`.
-- Produces: `SquadScreen(model:)`; `LiveEnvironment.make() -> Environment` (the real clock, `NSPasteboard.general` read as a string, the file at the given or default path); `RootView(model:)`; the app builds its model from the live store directory and environment, or from `SampleData` when started with `--sample-data <repository root>`; `ScreenPictures.write(model:to:size:)` draws from the model it is given.
+- Produces: `SquadScreen(model:)`; `LiveEnvironment.make() -> AppEnvironment` (the real clock, `NSPasteboard.general` read as a string, the file at the given or default path); `RootView(model:)`; the app builds its model from the live store directory and environment, or from `SampleData` when started with `--sample-data <repository root>`; `ScreenPictures.write(model:to:size:)` draws from the model it is given.
 
 What the screen shows:
 
