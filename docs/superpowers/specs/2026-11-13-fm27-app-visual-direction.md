@@ -33,7 +33,7 @@ Every colour has one value, used in light and dark system appearance alike: the 
 | Marker amber | `#D99A1C` | Middling levels; cautions. As text: `#8A5A00` |
 | Magnet yellow | `#F5C542` | The goalkeeper's magnet (its text is `#2A2000`) |
 
-Magnets are coloured by line: goalkeeper yellow, defence blue, midfield green, attack red. The same colours mark a player's position in tables.
+Magnets are coloured by line: goalkeeper yellow, defence blue, midfield green, attack red. The midfield magnet uses the darker green (`#1F6E44`), because white letters on marker green fall short of the contrast the app keeps to. The same colours mark a player's position in tables.
 
 Sticky notes, each with its own text colour:
 
