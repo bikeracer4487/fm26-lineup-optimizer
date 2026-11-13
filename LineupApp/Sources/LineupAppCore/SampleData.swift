@@ -80,21 +80,36 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model after the first team is imported again from the capture of the same squad taken with
+    /// FMRTE's `Id` column, so `lastImport` reports a second import: each player now keyed by his FMRTE id.
+    @MainActor public static func modelAfterImport(repositoryRoot: URL) throws -> AppModel {
+        let (model, input) = try build(repositoryRoot: repositoryRoot)
+        input.clipboard = String(decoding: try fixture("captures/first-team-with-id.tsv", under: repositoryRoot), as: UTF8.self)
+        input.config = .data(try fixture("captures/first-team-with-id.grids.json", under: repositoryRoot))
+        model.importSquad(.firstTeam)
+        if case .failed(let reason)? = model.lastImport {
+            throw SampleDataError(description: "The sample first-team-with-id.tsv could not be imported: \(reason)")
+        }
+        return model
+    }
+
     /// A model with nothing in it, on a new temporary directory, whose clipboard is empty.
     @MainActor public static func emptyModel() -> AppModel {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("lineup-empty-\(UUID().uuidString)")
         return AppModel(store: Store(directory: directory), environment: ScriptedInput(today: date).environment)
     }
 
-    @MainActor private static func build(repositoryRoot: URL) throws -> (model: AppModel, input: ScriptedInput) {
-        let fixturesDirectory = repositoryRoot.appendingPathComponent("LineupEngine/Tests/LineupEngineTests/Fixtures")
-        func data(_ path: String) throws -> Data {
-            let url = fixturesDirectory.appendingPathComponent(path)
-            guard let data = FileManager.default.contents(atPath: url.path) else {
-                throw SampleDataError(description: "The sample file \(url.path) could not be read.")
-            }
-            return data
+    /// The engine's test fixture at `path` under `repositoryRoot`.
+    private static func fixture(_ path: String, under repositoryRoot: URL) throws -> Data {
+        let url = repositoryRoot.appendingPathComponent("LineupEngine/Tests/LineupEngineTests/Fixtures").appendingPathComponent(path)
+        guard let data = FileManager.default.contents(atPath: url.path) else {
+            throw SampleDataError(description: "The sample file \(url.path) could not be read.")
         }
+        return data
+    }
+
+    @MainActor private static func build(repositoryRoot: URL) throws -> (model: AppModel, input: ScriptedInput) {
+        func data(_ path: String) throws -> Data { try fixture(path, under: repositoryRoot) }
         func decode<T: Decodable>(_ type: T.Type, _ path: String) throws -> T {
             do {
                 return try JSONDecoder().decode(type, from: data(path))

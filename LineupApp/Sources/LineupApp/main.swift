@@ -8,8 +8,9 @@
 //   LineupApp --pictures <directory>           draws every screen, light and dark, to PNG files in
 //                                              <directory>, then exits (0 on success, 1 on a problem).
 //                                              Without --sample-data it draws an empty model; with it,
-//                                              the sample model, and the Squad screen empty and after a
-//                                              failed import as well ("squad-empty-…", "squad-failed-…").
+//                                              the sample model, and the Squad screen empty, after a
+//                                              failed import and after a good one as well ("squad-empty-…",
+//                                              "squad-failed-…", "squad-imported-…").
 
 import AppKit
 import Foundation
@@ -61,11 +62,20 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
+/// Which state of the sample data to start from.
+enum SampleState {
+    case plain, failedImport, afterImport
+}
+
 /// The sample model from the repository at `root`, or the reason it could not be built.
-@MainActor func sampleModel(_ root: String, failedImport: Bool = false) -> AppModel {
+@MainActor func sampleModel(_ root: String, _ state: SampleState = .plain) -> AppModel {
     let url = URL(fileURLWithPath: root, isDirectory: true)
     do {
-        return failedImport ? try SampleData.modelWithFailedImport(repositoryRoot: url) : try SampleData.model(repositoryRoot: url)
+        switch state {
+        case .plain: return try SampleData.model(repositoryRoot: url)
+        case .failedImport: return try SampleData.modelWithFailedImport(repositoryRoot: url)
+        case .afterImport: return try SampleData.modelAfterImport(repositoryRoot: url)
+        }
     } catch {
         fail("\(error)")
     }
@@ -88,8 +98,10 @@ func fail(_ message: String) -> Never {
         if let root = sampleDataRoot {
             try ScreenPictures.write(model: sampleModel(root), to: directory, size: size)
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size, variant: "empty", screens: [.squad])
-            try ScreenPictures.write(model: sampleModel(root, failedImport: true), to: directory, size: size,
+            try ScreenPictures.write(model: sampleModel(root, .failedImport), to: directory, size: size,
                                      variant: "failed", screens: [.squad])
+            try ScreenPictures.write(model: sampleModel(root, .afterImport), to: directory, size: size,
+                                     variant: "imported", screens: [.squad])
         } else {
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size)
         }

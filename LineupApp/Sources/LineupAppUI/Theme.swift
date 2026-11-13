@@ -154,10 +154,10 @@ public enum Theme {
     /// only ones that grow, and share what a wider window gives.
     public enum TableColumnWidth {
         public static let nameMinimum: CGFloat = 140
-        public static let nameIdeal: CGFloat = 140
+        public static let nameIdeal: CGFloat = 176
         public static let squad: CGFloat = 64
         public static let age: CGFloat = 28
-        public static let positions: CGFloat = 78
+        public static let positions: CGFloat = 70
         public static let ability: CGFloat = 40
         public static let potential: CGFloat = 54
         public static let condition: CGFloat = 58

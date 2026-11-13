@@ -128,6 +128,23 @@ public struct SquadRow: Identifiable, Equatable, Sendable {
         isOut = PlayerStatus.isOut(statuses)
     }
 
+    /// The rows in the table's sort order: the first comparator that tells two rows apart decides, and rows
+    /// it leaves equal go by name, then by key, so the order never depends on the order they came in.
+    /// With no comparator the rows stay as given.
+    public static func sorted(_ rows: [SquadRow], using order: [KeyPathComparator<SquadRow>]) -> [SquadRow] {
+        guard !order.isEmpty else { return rows }
+        return rows.sorted { a, b in
+            for comparator in order {
+                switch comparator.compare(a, b) {
+                case .orderedAscending: return true
+                case .orderedDescending: return false
+                case .orderedSame: continue
+                }
+            }
+            return (a.name, a.id.key) < (b.name, b.id.key)
+        }
+    }
+
     /// A whole percentage rounded down, written as the engine writes it in its reasons.
     static func percent(_ fraction: Double) -> String { Display.percent(fraction) }
 
@@ -145,6 +162,15 @@ public struct ImportReport: Equatable, Sendable {
 
     /// How many names a list in the report shows before it says how many more there are.
     static let namesShown = 5
+
+    /// Which FMRTE grid the paste came from, in the owner's words.
+    static func gridLine(_ key: String) -> String {
+        switch key {
+        case "TeamPlayersColumns": "Recognised as FMRTE's squad grid."
+        case "SearchPlayersColumns": "Recognised as FMRTE's player search grid."
+        default: "Recognised as FMRTE's grid \"\(key)\"."
+        }
+    }
 
     static func playerCountLine(_ count: Int) -> String {
         count == 1 ? "1 player." : "\(count) players."
@@ -223,7 +249,7 @@ extension AppModel {
         return ImportReport(
             heading: "\(summary.squad.displayName) imported",
             lines: [
-                "Grid recognised: \(summary.grid).",
+                ImportReport.gridLine(summary.grid),
                 ImportReport.playerCountLine(summary.playerCount),
                 loans,
                 ImportReport.changeLine(summary.change, firstImport: previous == nil, name: { names[$0] ?? $0.key }),

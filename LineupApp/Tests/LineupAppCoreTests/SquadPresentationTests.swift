@@ -178,7 +178,7 @@ private func player(
         let report = t.model.report(of: try summary(t))
         #expect(report.heading == "First team imported")
         #expect(report.lines == [
-            "Grid recognised: TeamPlayersColumns.",
+            "Recognised as FMRTE's squad grid.",
             "18 players.",
             "No one is out on loan.",
             "This is the first import of this squad.",
@@ -251,6 +251,19 @@ private func player(
         #expect(ImportReport.changeLine(change, firstImport: true, name: { $0.key }) == "This is the first import of this squad.")
     }
 
+    @Test func theGridIsNamedInTheOwnersWords() {
+        #expect(ImportReport.gridLine("TeamPlayersColumns") == "Recognised as FMRTE's squad grid.")
+        #expect(ImportReport.gridLine("SearchPlayersColumns") == "Recognised as FMRTE's player search grid.")
+        #expect(ImportReport.gridLine("WonderKidsNotificationColumns")
+            == "Recognised as FMRTE's grid \"WonderKidsNotificationColumns\".")
+    }
+
+    @Test func aU21ImportFromThePlayerSearchSaysSo() throws {
+        let t = try TestModel()
+        try t.importU21()
+        #expect(t.model.report(of: try summary(t)).lines.first == "Recognised as FMRTE's player search grid.")
+    }
+
     @Test func oneIsOnePlayer() {
         #expect(ImportReport.playerCountLine(1) == "1 player.")
         #expect(ImportReport.playerCountLine(0) == "0 players.")
@@ -293,5 +306,40 @@ private func player(
         t.model.update(settings)
         #expect(t.model.listedSquadWarnings.contains(ErrorDescriptions.describe(SquadWarning.sharedName("Alfie Potter"))))
         #expect(t.model.listedSquadWarnings == t.model.squadWarnings)
+    }
+}
+
+@Suite struct SquadSortTests {
+    private func row(_ name: String, key: String? = nil, squad: Squad = .firstTeam, condition: Double = 1) -> SquadRow {
+        var p = player(name: name, squad: squad, condition: condition)
+        if let key { p.id = PlayerID(key: key) }
+        return SquadRow(p, loan: .own)
+    }
+
+    @Test func noSortOrderKeepsTheRowsAsGiven() {
+        let rows = [row("Zac"), row("Alfie")]
+        #expect(SquadRow.sorted(rows, using: []).map(\.name) == ["Zac", "Alfie"])
+    }
+
+    @Test func aColumnSortsItsValuesEitherWay() {
+        let rows = [row("Ann", condition: 0.9), row("Ben", condition: 0.7), row("Cal", condition: 0.8)]
+        #expect(SquadRow.sorted(rows, using: [KeyPathComparator(\.condition)]).map(\.name) == ["Ben", "Cal", "Ann"])
+        #expect(SquadRow.sorted(rows, using: [KeyPathComparator(\.condition, order: .reverse)]).map(\.name)
+            == ["Ann", "Cal", "Ben"])
+    }
+
+    @Test func tiesBreakOnNameThenKeyWhicheverWayTheColumnRuns() {
+        let rows = [row("Zac", condition: 1), row("Ann", key: "b", condition: 1), row("Ann", key: "a", condition: 1),
+                    row("Max", condition: 0.5)]
+        let up = SquadRow.sorted(rows, using: [KeyPathComparator(\.condition)])
+        #expect(up.map(\.name) == ["Max", "Ann", "Ann", "Zac"])
+        #expect(up.map(\.id.key) == ["max", "a", "b", "zac"])
+        let down = SquadRow.sorted(rows, using: [KeyPathComparator(\.condition, order: .reverse)])
+        #expect(down.map(\.id.key) == ["a", "b", "zac", "max"])
+    }
+
+    @Test func theSquadColumnSortsFirstTeamU21sU18s() {
+        let rows = [row("Ann", squad: .u18), row("Ben", squad: .firstTeam), row("Cal", squad: .u21)]
+        #expect(SquadRow.sorted(rows, using: [KeyPathComparator(\.squadOrder)]).map(\.squad) == [.firstTeam, .u21, .u18])
     }
 }

@@ -63,4 +63,18 @@ import LineupEngine
         }
         #expect(reason == ErrorDescriptions.describe(ImportError.notAnFMRTEGrid(reason: "first line has no tab separators")))
     }
+
+    @Test func theImportedModelShowsASecondImportOfTheFirstTeamWithItsChanges() throws {
+        let sample = try SampleData.model(repositoryRoot: Captures.repositoryRoot)
+        let model = try SampleData.modelAfterImport(repositoryRoot: Captures.repositoryRoot)
+        #expect(model.notices.isEmpty)
+        guard case .imported(let summary)? = model.lastImport else {
+            Issue.record("expected an import summary, got \(String(describing: model.lastImport))")
+            return
+        }
+        #expect(summary.squad == .firstTeam)
+        #expect(model.players.count == sample.players.count)
+        let report = model.report(of: summary)
+        #expect(report.lines.last?.hasPrefix("Since the last import:") == true)
+    }
 }

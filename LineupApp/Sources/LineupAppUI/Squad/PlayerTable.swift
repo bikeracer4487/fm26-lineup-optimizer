@@ -7,13 +7,14 @@ struct PlayerTable: View {
     @State private var sortOrder: [KeyPathComparator<SquadRow>] = []
 
     private var sortedRows: [SquadRow] {
-        sortOrder.isEmpty ? rows : rows.sorted(using: sortOrder)
+        SquadRow.sorted(rows, using: sortOrder)
     }
 
     var body: some View {
         Table(sortedRows, sortOrder: $sortOrder) {
             TableColumn("Name", value: \.name) { row in
                 Text(row.name)
+                    .help(row.name)
             }
             .width(min: Theme.TableColumnWidth.nameMinimum, ideal: Theme.TableColumnWidth.nameIdeal)
             TableColumn("Squad", value: \.squadOrder) { row in

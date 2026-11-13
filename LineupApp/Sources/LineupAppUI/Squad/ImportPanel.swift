@@ -40,7 +40,8 @@ struct ImportPanel: View {
     }
 }
 
-/// An import that worked: what was recognised and what changed, then the engine's warnings as written.
+/// An import that worked, a line each: the grid, the count, who is out on loan, what changed, then the engine's
+/// warnings as written.
 struct ImportReportView: View {
     let report: ImportReport
 
@@ -48,8 +49,10 @@ struct ImportReportView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             Text(report.heading)
                 .font(Theme.Typeface.text(weight: .semibold))
-            Text(report.lines.joined(separator: " "))
-                .font(Theme.Typeface.text())
+            ForEach(report.lines, id: \.self) { line in
+                Text(line)
+                    .font(Theme.Typeface.text())
+            }
             ForEach(report.warnings, id: \.self) { warning in
                 MarkedText(warning, colour: Theme.Colour.amber)
             }
