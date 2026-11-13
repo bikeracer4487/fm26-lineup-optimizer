@@ -7,13 +7,13 @@ The FM26 lineup optimizer is being rebuilt as a native Mac app for Football Mana
 - Design: `docs/superpowers/specs/2026-11-12-fm27-native-app-design.md`
 - Engine plan, complete (Tasks 1 to 18): `docs/superpowers/plans/2026-11-12-fm27-engine-foundation.md`. Its last two sections list the later plans (Planner, Advisors, the visual design pass, the App, Clean-up) and the notes and known small faults carried into them.
 - Planner plan, complete (Tasks 1 to 10): `docs/superpowers/plans/2026-11-13-fm27-planner.md`. Its closing sections list the planner's known limits, the decisions that changed during the build, what the plan showed on the real squad, the small faults left, and what is carried into the app plan.
-- Advisors plan, approved by the owner on 13 November 2026 and to be built after the app's first screens; nothing in it is built yet: `docs/superpowers/plans/2026-11-13-fm27-advisors.md`.
-- App plan, first screens (Squad, Tactics, Fixtures, Match Selection, Settings), being built: `docs/superpowers/plans/2026-11-13-fm27-app-first-screens.md`, to the visual direction in `docs/superpowers/specs/2026-11-13-fm27-app-visual-direction.md`. The owner asked on 13 November 2026 for a usable app before the advisors are built.
+- Advisors plan, approved by the owner on 13 November 2026 and next to be built; nothing in it is built yet: `docs/superpowers/plans/2026-11-13-fm27-advisors.md`.
+- App plan, first screens, complete (Tasks 1 to 10; Task 10 was built before Task 8): `docs/superpowers/plans/2026-11-13-fm27-app-first-screens.md`, to the visual direction in `docs/superpowers/specs/2026-11-13-fm27-app-visual-direction.md`. Squad, Tactics, Fixtures, Match Selection and Settings exist. The advisor screens come after the advisors plan.
 - Research: `docs/Research/fm27-*.md` and `docs/Research/fm27_roles.json` are FM27; the other files in `docs/Research/` are FM26. Prefer FM27 evidence. Where it is silent, use the FM26 research and label it as carried over (the owner's rule: a lot carries over between game years). An attribute FM27 tested and found to have no effect is a finding, not a gap.
 
 ## New code: `LineupEngine/`
 
-A Swift package (Swift 6, macOS 26, Swift Testing, Foundation only). Built so far: the domain model, the FMRTE clipboard importer, the squad book, the FM27 role catalogue and tactics, the rating core, fitness and risk rules, an exact assignment solver, lineup selection with a reason for every pick and omission, and the planner (looking ahead across fixtures). Not built yet: the advisors (First and Second XI, Depth, Rest, Training, Player Removal), persistence and the app. The engine has no UI and reads no files itself; it is handed data.
+A Swift package (Swift 6, macOS 26, Swift Testing, Foundation only). Built so far: the domain model, the FMRTE clipboard importer, the squad book, the FM27 role catalogue and tactics, the rating core, fitness and risk rules, an exact assignment solver, lineup selection with a reason for every pick and omission, and the planner (looking ahead across fixtures). Not built yet: the advisors (First and Second XI, Depth, Rest, Training, Player Removal). The app is a second package, `LineupApp/`, described below. The engine has no UI and reads no files itself; it is handed data.
 
 Test it with:
 
@@ -62,6 +62,40 @@ Rules for the engine:
 - Every rule gets a test where it changes an outcome and a test where it does not.
 - The same inputs always give the same lineup: sums run in a fixed order.
 - Errors and warnings become plain-words sentences in `Reporting/ErrorDescriptions.swift`; every `switch` over them is exhaustive, with no `default`.
+
+## New code: `LineupApp/`
+
+The Mac app: a second Swift package beside the engine, depending on it by path (Swift 6, macOS 26, SwiftUI and Observation, Swift Testing, no third-party code). Three targets:
+
+- `LineupAppCore`: the app's state and every action, with no views. `AppModel` (observable, on the main actor) holds the squads, tactics, fixtures, confirmed lineups and settings, saves each change through `Store` as versioned JSON, and works out the plan by calling the engine's `Planner`. Everything a screen shows that is built from data (labels, rows, which fixture is chosen, status words) is worked out here, with tests.
+- `LineupAppUI`: the SwiftUI views and `Theme`. Views hold layout only.
+- `LineupApp`: the few lines that start the app.
+
+Build and test it with:
+
+    cd LineupApp && swift build && swift test
+
+The tests take about a minute: each plan of the sample data takes most of a second in a debug build, and many tests plan.
+
+Run it:
+
+- `cd LineupApp && swift run LineupApp --sample-data ..` opens it on the engine's captures in a temporary directory. It does not touch real data, the clipboard or FMRTE's file.
+- `tools/build_app.sh`, from the repository root, builds `build/FM27 Lineup Optimizer.app` and checks it can load the engine's resources. That is the real app: it reads the clipboard and `~/Library/Application Support/FMRTE27/config.json`, and saves under `~/Library/Application Support/FM27 Lineup Optimizer/`. It is signed for this Mac only.
+
+Draw the screens without opening a window:
+
+    cd LineupApp && swift run -q LineupApp --sample-data .. --pictures .build/pictures
+
+That writes a PNG of every screen and its variants (empty, failed, confirmed and so on), light and dark. A screen is not done until its pictures have been looked at. The pictures approximate the sidebar and draw buttons as an inactive window would; judge the real look in the running app.
+
+Rules for the app:
+
+- The engine decides; the app shows. A view never computes a rating, a reason or a rule. Sentences for errors, warnings and reasons are the engine's (`ErrorDescriptions.describe`, and the reasons on picks and omissions), shown as written. Where the engine has no sentence for something, add one to the engine.
+- Logic for a screen lives in `LineupAppCore` with tests. If a view needs an `if` about data, that is a sign it belongs in Core.
+- Every colour, typeface and measure comes from `Theme`, which holds the visual direction's tokens. No literal colour or font name in a view.
+- Nothing the owner reads is an id or a code: slots are "D L" on a token and "left back" in a sentence; fixtures are named by opponent and date.
+- A file that cannot be read gives a notice and a fresh start for that file, and the unreadable file is kept aside. Nothing in a test, a picture run or a sample-data run touches `~/Library/Application Support` or the real clipboard.
+- Unsaved changes to a tactic are kept in the model until saved or reverted. Only the earliest planned fixture can be confirmed. A confirmed match keeps its load on its starters in later fixtures until their squad is imported again.
 
 ## Old code: reference only
 

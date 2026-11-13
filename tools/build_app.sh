@@ -2,11 +2,13 @@
 # Build the Mac app in the release configuration and assemble it as an app bundle.
 #
 #   tools/build_app.sh      run from the repository root; writes build/FM27 Lineup Optimizer.app
-#                           and prints its path
+#                           and prints its path last
 #
 # The bundle holds the executable, an Info.plist, and every SwiftPM resource bundle found
 # beside the executable (the engine's role catalogue and rating tables among them), copied
-# into Contents/Resources. It is signed ad hoc, for this Mac only.
+# into Contents/Resources. It is signed ad hoc, for this Mac only. The signed app then draws
+# its empty screens into a temporary directory, which proves it can load the engine's
+# resources from inside the bundle; the script fails if it cannot.
 set -euo pipefail
 
 ROOT="$(pwd)"
@@ -18,7 +20,7 @@ fi
 NAME="FM27 Lineup Optimizer"
 APP="$ROOT/build/$NAME.app"
 
-swift build --package-path "$ROOT/LineupApp" -c release --product LineupApp
+swift build --quiet --package-path "$ROOT/LineupApp" -c release --product LineupApp
 BIN_DIR="$(swift build --package-path "$ROOT/LineupApp" -c release --show-bin-path)"
 
 rm -rf "$APP"
@@ -72,5 +74,13 @@ codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || {
     codesign --force --deep --sign - "$APP"
     exit 1
 }
+
+CHECK="$(mktemp -d)"
+trap 'rm -rf "$CHECK"' EXIT
+if ! "$APP/Contents/MacOS/LineupApp" --pictures "$CHECK/pictures" >"$CHECK/output.txt" 2>&1; then
+    echo "The built app could not draw its screens, so it cannot load the engine's resources:" >&2
+    cat "$CHECK/output.txt" >&2
+    exit 1
+fi
 
 echo "$APP"
