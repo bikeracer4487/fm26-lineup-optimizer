@@ -168,6 +168,12 @@ Changes for FM27:
 - Familiarity is applied per phase using the position rating for that phase's position, as the branch does. The step shape is kept: none at 18 and above, small at 15 to 17, growing below.
 - The position attribute weights are carried over from the branch (they came from FM26 engine testing) and labelled as carried over.
 
+**Decisions of 13 November 2026**, after the research in `docs/Research/fm27-attribute-weights-and-role-thresholds.md`:
+
+- **Role thresholds are dropped for FM27.** The Python penalised a player whose attributes fell below fixed minimums for seven roles. No engine test in any version supports those minimums, about half the attributes they gate show little or no measurable effect in FM27 tests, and on a lower-league squad nearly everyone hit the penalty's floor, so it changed picks arbitrarily. They remain only in the FM26 configuration used for the port check. Thresholds set relative to the squad's own average or median were considered and rejected: half the squad fails each by construction, a squad weak at something lowers its own bar for it, and they add nothing to ranking players within the squad.
+- **Two rating profiles.** The carried-over profile is the formula above with the FM26 weight tables. The FM27 engine-tests profile uses one outfield weight table from FM27 match-engine testing (Pace, Acceleration, Stamina and Jumping Reach at the top; no weight for attributes that showed no measurable effect), position adjustments the research labels speculative, a curve per attribute in place of the straight line, a 70/30 split between the engine weights and the role's key attributes, and no consensus bonus. The FM27 evidence is thin: one tester on the preview build, tabulated by a third party.
+- **The owner chooses the default** after comparing the lineups both profiles produce for the real squad. Until then the engine has no default profile and the command-line tool prints both.
+
 The rating core takes its role data, weights and switches as inputs. That allows one check against the Python: run in an "FM26 configuration" against outputs generated once from the branch on the committed FM26 data, to prove the formula was ported correctly. The app itself uses the FM27 configuration.
 
 ### 8.5 Fitness and availability

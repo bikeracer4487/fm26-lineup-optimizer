@@ -1125,6 +1125,129 @@ Expected: a lineup of Oxford City players with ratings, fitness factors and reas
 
 ---
 
+### Task 15: Drop role thresholds for FM27 and add a second rating profile
+
+Added after the whole-branch review, on the owner's decision of 13 November 2026, following the research in `docs/Research/fm27-attribute-weights-and-role-thresholds.md`. Read that document's "Recommendations" and its JSON block before starting.
+
+Two changes:
+
+1. **Role thresholds no longer apply in the FM27 configuration.** No engine test in any version supports them, and on a lower-league squad they flip picks. They remain only in the FM26 reference configuration, so the port check against the Python keeps working.
+2. **A second rating profile built from FM27 engine tests**, alongside the existing one. Neither is the default yet: the tool prints the lineup under both so the owner can compare and choose.
+
+**Files:**
+- Create: `Sources/LineupEngine/Rating/RatingProfile.swift`, `Sources/LineupEngine/Resources/rating_profile_fm27.json`
+- Modify: `Sources/LineupEngine/Rating/RatingEngine.swift`, `Sources/LineupEngine/Rating/RatingTables.swift`, `Sources/LineupEngine/Parameters/EngineParameters.swift`, `Sources/LineupEngine/Selection/LineupSelector.swift`, `Sources/lineup-cli/main.swift`, `Sources/lineup-cli/Report.swift`, `CLAUDE.md`
+- Test: `RatingProfileTests.swift`, and updates to `RatingEngineTests.swift`, `RatingReferenceTests.swift`, `EngineParametersTests.swift`, `LineupSelectorTests.swift`, `EndToEndTests.swift`
+
+**Interfaces:**
+- Consumes: `RatingTables`, `CurvePoint`, `Parameter`, `Evidence`, `Attribute`, `Position`, `Role`, `EngineParameters`, `RatingConfiguration`, `RatingEngine`, `LineupSelector`.
+- Produces:
+  ```swift
+  public enum RoleScoreRule: Sendable, Equatable {
+      /// Weighted mean over the union of key and preferable attributes (the carried-over rule).
+      case weightedUnion(keyWeight: Double, preferableWeight: Double)
+      /// Mean of the key attributes, with the preferable attributes' mean blended in at `preferableShare`.
+      case keyWithPreferableTieBreak(preferableShare: Double)
+  }
+  public struct RatingProfile: Sendable {
+      public let id: String                      // "carried-over" or "fm27-engine-tests"
+      public let name: String                    // "Carried over from FM26" or "FM27 engine tests"
+      public let tables: RatingTables
+      public let curves: [Attribute: [CurvePoint]]   // attribute value 1...20 → 0...1; no entry means the straight line (v - 1) / 19
+      public let positionShare: Parameter<Double>
+      public let roleShare: Parameter<Double>
+      public let consensusShare: Parameter<Double>
+      public let roleScoreRule: Parameter<RoleScoreRule>
+      public let evidence: [(name: String, evidence: Evidence, source: String)]   // every table and number in the profile
+      public static func carriedOver() throws -> RatingProfile
+      public static func fm27EngineTests() throws -> RatingProfile
+      public static func all() throws -> [RatingProfile]     // carried over first
+      public func scaled(_ value: Int, for attribute: Attribute) -> Double
+  }
+  // RatingConfiguration gains: public var appliesRoleThresholds: Bool
+  //   .fm27          → false, false, false   (no current-ability factor, no rounding, no thresholds)
+  //   .fm26Reference → true, true, true
+  // RatingEngine.init(profile: RatingProfile, parameters: EngineParameters, configuration: RatingConfiguration)
+  // LineupSelector.init(catalog: RoleCatalog, profile: RatingProfile, parameters: EngineParameters, configuration: RatingConfiguration = .fm27)
+  ```
+
+Decisions:
+
+- **What moves out of `EngineParameters`:** `positionShare`, `roleShare`, `consensusShare`, `keyWeight` and `preferableWeight` belong to a profile now and leave `EngineParameters`. Everything else stays: familiarity steps, phase weights, consensus cap, Balance bonus, threshold penalty figures, empty-role score, the fitness and risk parameters.
+- **`RatingTables.evidence`** (added by the review fixes) becomes part of the carried-over profile's `evidence`; remove the separate static list.
+- **Carried-over profile:** exactly today's behaviour apart from thresholds. Tables from `rating_tables.json`; no curves; shares 0.60, 0.35, 0.05; `.weightedUnion(keyWeight: 1.5, preferableWeight: 1.2)`; all `.carriedOverFM26`.
+- **FM27 engine-tests profile**, built from `rating_profile_fm27.json`:
+  - The resource holds the research's source numbers under the engine's own names (`Attribute` and `Position` raw values): the outfield base weights, the per-band slopes, the bands, the position multipliers, and the goalkeeper rule. Copy the numbers from the research document's JSON block; translate its names ("JumpingReach" → "Jumping Reach", "WorkRate" → "Work Rate", "NaturalFitness" → "Natural Fitness", "LongShots" → "Long Shots"; "DC" → "D (C)", "DL" → "D (L)", "WBL" → "WB (L)", "MC" → "M (C)", "AML" → "AM (L)", "ST" → "ST (C)" and so on). Attributes the research lists with weight 0 are omitted.
+  - Position weights for each of the 13 outfield positions: base weight times that position's multiplier (1 where none is given), then renormalised so each position sums to 1. A weight of 0 after the multiplier is dropped.
+  - Goalkeeper weights: the carried-over goalkeeper table with Kicking removed, renormalised to sum to 1. Goalkeeper attributes have no curves.
+  - Curves, for the 16 attributes with slopes: cumulative value from 1 using the band slopes (1 to 6, 6 to 12, 12 to 18), continuing from 18 to 20 at the 12-to-18 slope, divided by the cumulative value at 20, so every curve runs from 0 at 1 to 1 at 20. An attribute whose slopes are all zero is not given a curve. `scaled(_:for:)` evaluates the curve by straight-line interpolation between whole-number points, and uses the straight line `(v - 1) / 19` for an attribute with no curve.
+  - Curves apply wherever the profile scales an attribute: the position score, the role score and the consensus bonus.
+  - Shares 0.70 position, 0.30 role, 0 consensus. `.keyWithPreferableTieBreak(preferableShare: 0.05)`.
+  - No consensus bonuses and no thresholds in this profile's tables.
+  - Evidence: base weights and slopes `.fm27Measured` (source: harvestgreen22's FM27 attribute test as tabulated in FM-Player-Analyzer issue 17, cross-checked against Fm-Match-Lab; note in the source text that the per-band table was derived by a third party and its standard error is two to three points); position multipliers `.derived` (the research labels them speculative); shares and role rule `.derived`; goalkeeper weights `.carriedOverFM26`. Every source cites `docs/Research/fm27-attribute-weights-and-role-thresholds.md`.
+  - The research's optional 1.5 to 2 times uplift for Anticipation and Concentration is not applied.
+- **Role score under `.keyWithPreferableTieBreak(preferableShare: t)`:** `(1 - t) × mean(key) + t × mean(preferable)`, each mean over the scaled attribute values. With no preferable attributes it is the key mean alone; with no key attributes, the preferable mean alone; with neither, `emptyRoleScore`.
+- **Thresholds:** `RatingEngine` applies the threshold factor only when `configuration.appliesRoleThresholds` is true. `PhaseRating.thresholdFactor` is 1.0 otherwise.
+- **Balance bonus:** it is part of the consensus bonus, so with a consensus share of 0 it has no effect in the FM27 profile. That is intended.
+- **No default profile.** `RatingEngine` and `LineupSelector` take the profile explicitly.
+- **Command-line tool:** new option `--profile carried-over | fm27 | both`, default `both`. For `both` it prints the lineup for each profile under a heading with the profile's name, then a comparison: one line per slot with the player picked under each profile and a marker where they differ, and the number of slots that differ. An unknown profile name is a usage error.
+
+- [ ] **Step 1: Write the failing tests**
+
+  `RatingProfileTests.swift`:
+  - `bothProfilesLoadAndAreListedCarriedOverFirst`: `all()` returns two, ids `["carried-over", "fm27-engine-tests"]`.
+  - `fm27PositionWeightsSumToOneForAllFourteenPositions` (within 1e-9), and none contains an attribute with weight 0.
+  - `fm27StrikerWeightsFinishingTwiceAsHeavilyAsItsBaseShare`: for "ST (C)", weight(Finishing) / weight(Pace) equals `(0.0281 × 2.0) / 0.1668` within 1e-9; for "D (C)", Finishing and Long Shots are absent.
+  - `fm27GoalkeeperWeightsDropKicking`: no Kicking; the other goalkeeper weights keep their carried-over ratios (Agility to Reflexes is 0.140 to 0.130).
+  - `curvesRunFromZeroAtOneToOneAtTwenty`: for every curve, `scaled(1) == 0` and `scaled(20) == 1` within 1e-9, and the curve never decreases.
+  - `paceIsSteepestInTheMiddleBand`: `scaled(9) - scaled(8)` for Pace is greater than `scaled(16) - scaled(15)` and greater than `scaled(4) - scaled(3)`.
+  - `workRateIsFlatAboveTwelve`: `scaled(12) == scaled(18) == scaled(20)` for Work Rate, and `scaled(6) > 0.9`.
+  - `anAttributeWithoutACurveIsLinear`: Passing in the FM27 profile and Pace in the carried-over profile give `(v - 1) / 19`.
+  - `everyProfileNumberHasEvidenceAndASource`: each profile's `evidence` is non-empty, no source is empty, the FM27 profile has at least one `.fm27Measured` and one `.derived` entry, and the carried-over profile has only `.carriedOverFM26`.
+
+  `RatingEngineTests.swift`:
+  - `thresholdsDoNotApplyInTheFM27Configuration`: a Channel Forward with Acceleration 12 has `thresholdFactor == 1.0` under `.fm27` and 0.96 under a configuration with `appliesRoleThresholds: true`. Replace the existing threshold test's use of `.fm27` accordingly, keeping its 0.96 and 0.80 assertions under the thresholds-on configuration.
+  - `aPlayerBelowAThresholdNoLongerLosesHisPlaceBecauseOfIt`: two strikers, one better on the position and role attributes but below the Channel Forward thresholds; under `.fm27` he rates higher, under thresholds-on he rates lower.
+  - `keyOnlyRoleScoreIgnoresPreferableExceptAsATieBreak`: under the FM27 profile, raising a preferable attribute from 10 to 20 moves the role score by at most 5 points, while raising a key attribute does so by more; two players equal on key attributes are ordered by their preferable attributes.
+  - `theTwoProfilesRateAFastWeakPasserDifferently`: a player with Pace and Acceleration 18 and Passing and Technique 5 rates relatively better under the FM27 profile than a player with the reverse, and the order is the opposite or closer under the carried-over profile for a passing role (pick the Deep-Lying Playmaker at DM).
+  - Existing tests are updated to construct `RatingEngine(profile:parameters:configuration:)`; tests of the consensus bonus and Balance run against the carried-over profile.
+
+  `RatingReferenceTests.swift`: unchanged in what it asserts; it builds the engine from the carried-over profile with `.fm26Reference`. All 594 cases must still pass with the same tolerances.
+
+  `LineupSelectorTests.swift`: update construction; add `theSelectorUsesTheProfileItIsGiven`: the same squad gives a different lineup or different ratings under the two profiles for a pair of players constructed to differ.
+
+  `EndToEndTests.swift`: run the real captures under both profiles. For each: eleven slots accounted for, no player twice, no injured or loaned-out player picked, every pick has reasons. Re-pin the carried-over profile's three picks to what it now selects without thresholds, and pin three picks for the FM27 profile, after checking both lineups by eye; record both lineups in the report.
+
+- [ ] **Step 2: Run them and see them fail**
+
+  Run: `cd LineupEngine && swift test --filter RatingProfileTests`
+  Expected: FAIL, `RatingProfile` not found.
+
+- [ ] **Step 3: Implement**
+
+  Create the resource and `RatingProfile`; change `RatingEngine` to take a profile and to scale attributes through `profile.scaled`; add the configuration flag; move the five parameters; update `LineupSelector`, the command-line tool and `CLAUDE.md` (one paragraph on profiles).
+
+- [ ] **Step 4: Run the whole suite**
+
+  Run: `cd LineupEngine && swift test`
+  Expected: all tests PASS, no build warnings.
+
+- [ ] **Step 5: Run the tool on the real captures under both profiles**
+
+  ```bash
+  cd LineupEngine && swift run -q lineup-cli select \
+    --grids Tests/LineupEngineTests/Fixtures/captures/first-team.grids.json \
+    --tactic Tests/LineupEngineTests/Fixtures/tactics/sample-4231.json \
+    --first-team Tests/LineupEngineTests/Fixtures/captures/first-team.tsv \
+    --u21 Tests/LineupEngineTests/Fixtures/captures/u21.tsv --own-club "Oxford City" --profile both
+  ```
+
+  Expected: two lineups and a comparison. Paste the full output into the report.
+
+- [ ] **Step 6: Commit** — "Drop role thresholds for FM27 and add an FM27 engine-test rating profile".
+
+---
+
 ## Later plans
 
 Each is written when the one before it is done, because each depends on interfaces and findings from the last.
