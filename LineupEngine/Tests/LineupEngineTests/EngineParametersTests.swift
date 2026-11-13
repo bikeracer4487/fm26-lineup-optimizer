@@ -53,4 +53,23 @@ import Testing
         #expect(EngineParameters.fm27.outOfPositionBelow.value == 10)
         #expect(EngineParameters.fm27.outOfPositionBelow.evidence == .derived)
     }
+
+    @Test func theProjectionParametersHaveNoProblems() {
+        #expect(FitnessModel.problems(in: .fm27).isEmpty)
+    }
+
+    @Test func projectionProblemsAreReported() {
+        var q = EngineParameters.fm27
+        var load = q.positionConditionLoad.value
+        load[.striker] = nil
+        q.positionConditionLoad = Parameter(load, .derived, source: "test")
+        q.conditionRecoveryPerDay = Parameter([], .derived, source: "test")
+        q.sharpnessGainTaper = Parameter([], .derived, source: "test")
+        q.trainingIntensityRecovery = Parameter([.low: 1.2, .medium: 1.0], .derived, source: "test")
+        let found = FitnessModel.problems(in: q)
+        #expect(found.contains { $0.contains("positionConditionLoad") && $0.contains("ST (C)") })
+        #expect(found.contains { $0.contains("conditionRecoveryPerDay is empty") })
+        #expect(found.contains { $0.contains("sharpnessGainTaper is empty") })
+        #expect(found.contains { $0.contains("trainingIntensityRecovery") && $0.contains("high") })
+    }
 }

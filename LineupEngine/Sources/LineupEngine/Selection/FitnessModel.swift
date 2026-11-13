@@ -80,6 +80,18 @@ public enum FitnessModel {
         } else if !zip(steps, steps.dropFirst()).allSatisfy({ $0.upTo < $1.upTo }) {
             found.append("jadednessSteps upTo values are not strictly increasing")
         }
+        for (name, curve) in [("conditionRecoveryPerDay", parameters.conditionRecoveryPerDay.value),
+                              ("sharpnessGainTaper", parameters.sharpnessGainTaper.value)] where curve.isEmpty {
+            found.append("\(name) is empty")
+        }
+        let load = parameters.positionConditionLoad.value
+        for position in Position.allCases where load[position] == nil {
+            found.append("positionConditionLoad has no entry for \(position.rawValue)")
+        }
+        let recovery = parameters.trainingIntensityRecovery.value
+        for intensity in TrainingIntensity.allCases where recovery[intensity] == nil {
+            found.append("trainingIntensityRecovery has no entry for \(intensity.rawValue)")
+        }
         return found
     }
 }
