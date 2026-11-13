@@ -100,6 +100,16 @@ public enum FitnessModel {
         for position in Position.allCases where consecutive[position] == nil {
             found.append("consecutiveStartSteps has no entry for \(position.rawValue)")
         }
+        let weights = parameters.importanceWeights.value
+        for importance in Importance.allCases {
+            if let weight = weights[importance] {
+                if !(weight.isFinite && weight > 0) {
+                    found.append("importanceWeights for \(importance.rawValue) is \(weight), not a finite number above 0")
+                }
+            } else {
+                found.append("importanceWeights has no entry for \(importance.rawValue)")
+            }
+        }
         return found
     }
 }

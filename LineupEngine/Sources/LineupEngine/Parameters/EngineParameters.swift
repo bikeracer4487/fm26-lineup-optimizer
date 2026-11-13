@@ -124,6 +124,8 @@ public struct EngineParameters: Sendable {
     public var stabilityAnchorBonus: Parameter<Double>
     /// Bonus, at stability 1, for having played the slot in the most recent match.
     public var stabilityRecentBonus: Parameter<Double>
+    /// How much each match importance counts when a start today is weighed against a more important fixture later.
+    public var importanceWeights: Parameter<[Importance: Double]>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -261,7 +263,10 @@ public struct EngineParameters: Sendable {
             stabilityAnchorBonus: Parameter(
                 0.05, .derived, source: "rescaled from ui/api/stability.py (branch customizable-tactics), which moved a rating by up to about 2 to 5 points"),
             stabilityRecentBonus: Parameter(
-                0.02, .derived, source: "rescaled from ui/api/stability.py (branch customizable-tactics), which moved a rating by up to about 2 to 5 points"))
+                0.02, .derived, source: "rescaled from ui/api/stability.py (branch customizable-tactics), which moved a rating by up to about 2 to 5 points"),
+            importanceWeights: Parameter(
+                [.high: 3.0, .medium: 1.5, .low: 0.8, .sharpness: 0.1], .carriedOverFM26,
+                source: "scoring_parameters.py IMPORTANCE_WEIGHTS, branch customizable-tactics"))
     }()
 
     /// Every stored parameter, found by reflection so a new one cannot be left out.
