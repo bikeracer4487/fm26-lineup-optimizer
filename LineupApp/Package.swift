@@ -17,7 +17,9 @@ let package = Package(
         ),
         .target(
             name: "LineupAppUI",
-            dependencies: ["LineupAppCore", .product(name: "LineupEngine", package: "LineupEngine")]
+            dependencies: ["LineupAppCore", .product(name: "LineupEngine", package: "LineupEngine")],
+            // Bricolage Grotesque and Figtree with their licences, registered when the app starts.
+            resources: [.copy("Resources/Fonts")]
         ),
         .executableTarget(
             name: "LineupApp",

@@ -2,76 +2,89 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// The fixtures across the top, in date order: each one's date, opponent and importance, and whether it is confirmed
-/// or missed. The chosen one is outlined in hoop blue; clicking another chooses it.
+/// The fixtures across the top as sticky notes, in date order: each one's date, opponent and importance, and whether
+/// it is confirmed or missed. The chosen one's magnet is blue and its note has a blue foot; clicking another chooses
+/// it. The notes share the width; when they do not fit, they keep their least width and scroll.
 struct FixtureStrip: View {
     let cells: [FixtureCell]
     let chosen: FixtureID?
     let choose: (FixtureID) -> Void
 
     var body: some View {
-        ScrollView(.horizontal) {
-            HStack(alignment: .top, spacing: Theme.Spacing.s) {
-                ForEach(cells) { cell in
-                    Button { choose(cell.id) } label: {
-                        FixtureStripCell(cell: cell, isChosen: cell.id == chosen)
-                    }
-                    .buttonStyle(.plain)
-                    .help(cell.id == chosen ? "The match shown" : "Show this match")
-                }
+        ViewThatFits(in: .horizontal) {
+            notes(fillsWidth: true)
+            ScrollView(.horizontal) {
+                notes(fillsWidth: false)
             }
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(Theme.Match.chosenLineWidth)
+            .scrollIndicators(.automatic)
         }
-        .scrollIndicators(.automatic)
+    }
+
+    private func notes(fillsWidth: Bool) -> some View {
+        HStack(alignment: .top, spacing: Theme.Match.noteGap) {
+            ForEach(Array(cells.enumerated()), id: \.element.id) { index, cell in
+                Button { choose(cell.id) } label: {
+                    FixtureNote(cell: cell, isChosen: cell.id == chosen, tilt: NoteTilt.degrees(at: index))
+                        .frame(minWidth: Theme.Match.noteMinimumWidth,
+                               maxWidth: fillsWidth ? .infinity : Theme.Match.noteMinimumWidth)
+                }
+                .buttonStyle(.plain)
+                .help(cell.id == chosen ? "The match shown" : "Show this match")
+            }
+        }
+        .padding(.top, Theme.Match.notesTopPadding)
+        .padding(.horizontal, Theme.Spacing.xs)
+        .padding(.bottom, Theme.Spacing.xs)
     }
 }
 
-struct FixtureStripCell: View {
+/// One fixture's sticky note, in its importance's colour, held up by a magnet.
+struct FixtureNote: View {
     let cell: FixtureCell
     let isChosen: Bool
-
-    private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: Theme.Match.stripCellCornerRadius)
-    }
+    let tilt: Double
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
             HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.xs) {
                 Text(cell.dateText)
-                    .font(Theme.Typeface.number(Theme.TypeSize.step1))
-                    .foregroundStyle(isChosen ? Theme.Colour.hoopBlue : .primary)
+                    .font(Theme.Typeface.display(Theme.TypeSize.noteHeading))
                 Spacer(minLength: 0)
                 switch cell.state {
                 case .planned:
                     EmptyView()
                 case .confirmed:
                     Image(systemName: "lock.fill")
-                        .font(Theme.Typeface.text())
-                        .foregroundStyle(.secondary)
+                        .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .bold))
                         .accessibilityLabel(cell.stateText ?? "")
                 case .missed:
                     Text(cell.stateText ?? "")
-                        .font(Theme.Typeface.text(weight: .semibold))
-                        .foregroundStyle(Theme.Colour.amber)
+                        .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .extraBold))
                 }
             }
             Text(cell.opponentText)
-                .font(Theme.Typeface.text(weight: isChosen ? .semibold : .regular))
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            ImportanceBadge(cell.importance)
+                .font(Theme.Typeface.text())
+                .lineLimit(1)
+            Text(cell.importance.noteText)
+                .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .bold))
+                .lineLimit(1)
         }
-        .padding(Theme.Match.stripCellPadding)
-        // Every cell takes the strip's height, so a cell whose opponent takes two lines is not taller than the others.
-        .frame(width: Theme.Match.stripCellWidth, alignment: .leading)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(isChosen ? Theme.Colour.hoopBlue.opacity(Theme.Match.chosenFillOpacity) : Color.clear, in: shape)
-        .overlay {
-            shape.strokeBorder(isChosen ? Theme.Colour.hoopBlue : Theme.Colour.separator,
-                               lineWidth: isChosen ? Theme.Match.chosenLineWidth : Theme.Match.otherLineWidth)
+        .padding(.horizontal, Theme.Sticky.horizontalPadding)
+        .padding(.top, Theme.Sticky.verticalPadding)
+        .padding(.bottom, Theme.Sticky.verticalPadding + Theme.Sticky.footHeight)
+        .frame(maxWidth: .infinity, minHeight: Theme.Match.noteHeight, alignment: .topLeading)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(isChosen ? Theme.Colour.markerBlue : Color.clear)
+                .frame(height: Theme.Sticky.footHeight)
         }
-        .contentShape(shape)
+        .overlay(alignment: .top) {
+            Magnet.pin(isChosen ? Theme.Colour.markerBlue : Theme.Colour.idleMagnet)
+                .offset(y: -Theme.Magnet.noteDiameter / 2)
+                .accessibilityHidden(true)
+        }
+        .stickyNote(Theme.Note.fixture(cell.importance), tilt: tilt)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isChosen ? .isSelected : [])
     }

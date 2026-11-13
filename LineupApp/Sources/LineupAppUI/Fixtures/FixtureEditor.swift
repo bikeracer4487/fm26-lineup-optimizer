@@ -66,21 +66,33 @@ struct FixtureEditor: View {
 }
 
 /// A date picker for an engine `Day`, shown in the calendar `DayDate` converts with, so the day it shows is the day
-/// saved whatever the Mac's time zone.
+/// saved whatever the Mac's time zone: a field, or a calendar when `graphical`.
 struct DayPicker: View {
     let title: String
     @Binding var day: Day
+    let graphical: Bool
 
-    init(_ title: String, day: Binding<Day>) {
+    init(_ title: String, day: Binding<Day>, graphical: Bool = false) {
         self.title = title
         _day = day
+        self.graphical = graphical
     }
 
     var body: some View {
+        Group {
+            if graphical {
+                picker.datePickerStyle(.graphical)
+            } else {
+                picker.datePickerStyle(.field)
+            }
+        }
+        .tint(Theme.Colour.markerBlue)
+        .environment(\.calendar, DayDate.calendar)
+        .environment(\.timeZone, DayDate.calendar.timeZone)
+    }
+
+    private var picker: some View {
         DatePicker(title, selection: Binding(get: { DayDate.date(day) }, set: { day = DayDate.day($0) }),
                    displayedComponents: .date)
-            .datePickerStyle(.field)
-            .environment(\.calendar, DayDate.calendar)
-            .environment(\.timeZone, DayDate.calendar.timeZone)
     }
 }

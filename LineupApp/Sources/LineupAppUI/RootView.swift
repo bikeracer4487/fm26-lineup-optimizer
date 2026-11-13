@@ -1,8 +1,8 @@
 import LineupAppCore
 import SwiftUI
 
-/// Shows another screen beside the sidebar. `RootView` owns which screen is shown and puts this in the
-/// environment, so a button on any screen can go to another.
+/// Shows another screen on the board. `RootView` owns which screen is shown and puts this in the environment, so a
+/// button on any screen can go to another.
 public struct ShowScreen: Sendable {
     let action: @MainActor @Sendable (Screen) -> Void
 
@@ -15,15 +15,17 @@ extension EnvironmentValues {
     @Entry public var showScreen = ShowScreen { _ in }
 }
 
-/// The app's window: a sidebar listing the screens, and the chosen screen beside it, under the model's notices. It owns
-/// what the owner has chosen to look at, so a choice on a screen survives going to another and back.
+/// The app's window: a board on the wall, with the club's name, the screens as pills and the date in the game across
+/// the top, the model's notices under them, and the chosen screen below. It owns what the owner has chosen to look
+/// at, so a choice on a screen survives going to another and back. The board is white whatever the system's
+/// appearance, so the window is drawn in the light appearance and the system's controls are drawn for it.
 public struct RootView: View {
     let model: AppModel
     let tacticSlot: TacticSlot?
     @State private var navigation: Navigation
 
     /// - Parameters:
-    ///   - screen: the screen the sidebar starts on.
+    ///   - screen: the screen the board starts on.
     ///   - tacticSlot: the slot the Tactics editor opens with selected.
     ///   - matchStart: the fixture, pick and view Match Selection opens with.
     public init(model: AppModel, showing screen: Screen = .squad, tacticSlot: TacticSlot? = nil,
@@ -41,53 +43,36 @@ public struct RootView: View {
 
     public var body: some View {
         let navigation = navigation
-        NavigationSplitView {
-            List(Screen.allCases, selection: Bindable(navigation).screen) { screen in
-                Text(screen.title)
-                    .tag(screen)
-            }
-            .navigationSplitViewColumnWidth(Theme.Layout.sidebarWidth)
-        } detail: {
-            VStack(alignment: .leading, spacing: 0) {
-                NoticeList(model: model)
+        BoardFrame {
+            VStack(alignment: .leading, spacing: Theme.Board.rowGap) {
+                TopRow(model: model, navigation: navigation)
+                NoticeNotes(model: model)
                 if let screen = navigation.screen {
                     ScreenView(screen: screen, model: model, navigation: navigation, tacticSlot: tacticSlot)
                 } else {
-                    EmptyState("Choose a screen in the sidebar.")
-                        .padding(Theme.Spacing.xl)
+                    EmptyState("Choose a screen above.")
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
         }
         .environment(\.showScreen, ShowScreen { navigation.screen = $0 })
-        .tint(Theme.Colour.hoopBlue)
+        .boardAppearance()
         .frame(minWidth: Theme.Layout.minimumWindow.width, minHeight: Theme.Layout.minimumWindow.height)
     }
 }
 
-/// The model's notices, each with a button that dismisses it.
-struct NoticeList: View {
-    let model: AppModel
-
-    var body: some View {
-        if !model.notices.isEmpty {
-            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                ForEach(model.notices) { notice in
-                    HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
-                        MarkedText(notice.text, colour: Theme.Colour.amber)
-                        Spacer(minLength: Theme.Spacing.m)
-                        Button("Dismiss") { model.dismiss(notice) }
-                    }
-                }
-            }
-            .padding(.horizontal, Theme.Spacing.xl)
-            .padding(.vertical, Theme.Spacing.m)
-            Divider()
-        }
+extension View {
+    /// The board's look for anything the system draws: the light appearance, whatever the system is set to, so
+    /// fields, menus and pickers are drawn for a white board; marker blue as their accent; the text face.
+    public func boardAppearance() -> some View {
+        self
+            .tint(Theme.Colour.markerBlue)
+            .environment(\.colorScheme, .light)
+            .preferredColorScheme(.light)
     }
 }
 
-/// One screen: its title, then its content.
+/// One screen.
 struct ScreenView: View {
     let screen: Screen
     let model: AppModel

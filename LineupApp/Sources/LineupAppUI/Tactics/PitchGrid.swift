@@ -5,11 +5,18 @@ import SwiftUI
 /// Where each of the 24 slots sits on a pitch drawn from above with the attack at the top, and what it is called
 /// there. Left-sided slots are on the left as the owner looks at the screen, as in the game's tactics screen.
 public enum PitchLayout {
-    /// Each row's share of the pitch's height, from the top: strikers, attacking midfield, midfield, defensive
-    /// midfield with the wing-backs outside, defence, goalkeeper. Equal, so a token with a two-line role name fits
-    /// every row; the goalkeeper's row then lies within his penalty area.
-    public static let rowWeights: [CGFloat] = [1, 1, 1, 1, 1, 1]
+    /// The rows from the top: strikers, attacking midfield, midfield, defensive midfield with the wing-backs outside,
+    /// defence, goalkeeper.
+    public static let rowCount = 6
     public static let columnCount = 5
+
+    /// Each row's share of the pitch's height when `slots` are drawn: a row with a slot in it takes a full share, so a
+    /// magnet with the words beneath it fits, and a row with none a smaller one (`Theme.Pitch.emptyRowWeight`). With
+    /// every slot drawn, as in the Tactics editor, the rows are equal.
+    public static func rowWeights(for slots: [SlotID]) -> [CGFloat] {
+        let used = Set(slots.map { place(of: $0).row })
+        return (0..<rowCount).map { used.contains($0) ? 1 : Theme.Pitch.emptyRowWeight }
+    }
 
     /// The row (0 at the top) and column (0 at the left) of each slot.
     public static func place(of slot: SlotID) -> (row: Int, column: Int) {
@@ -41,8 +48,8 @@ public enum PitchLayout {
         }
     }
 
-    /// The slot's cell within `field`, the area inside the touchlines and goal lines.
-    static func cell(of slot: SlotID, in field: CGRect) -> CGRect {
+    /// The slot's cell within `field`, the area inside the touchlines and goal lines, its rows weighted as given.
+    static func cell(of slot: SlotID, in field: CGRect, rowWeights: [CGFloat]) -> CGRect {
         let (row, column) = place(of: slot)
         let total = rowWeights.reduce(0, +)
         let top = rowWeights[..<row].reduce(0, +) / total * field.height
@@ -53,30 +60,30 @@ public enum PitchLayout {
 }
 
 /// The 24 slots laid out as a pitch, attack at the top: a view for each slot it is given, placed in its row and
-/// column on the turf with chalk markings. The Tactics editor gives it every slot; a team sheet gives it the eleven.
+/// column on a pitch drawn in green marker. The Tactics editor gives it every slot; a team sheet gives it the eleven.
 public struct PitchGrid<Token: View>: View {
     let slots: [SlotID]
     let token: (SlotID) -> Token
 
     /// - Parameters:
-    ///   - slots: the slots to draw a token for; the others are bare turf.
-    ///   - token: the view for a slot. It is given its cell less the gap between tokens, centred.
+    ///   - slots: the slots to draw a view for; the others are bare pitch.
+    ///   - token: the view for a slot. It is given its cell less the gap between slots, centred.
     public init(slots: [SlotID] = SlotID.allCases, @ViewBuilder token: @escaping (SlotID) -> Token) {
         self.slots = slots
         self.token = token
     }
 
     public var body: some View {
+        let weights = PitchLayout.rowWeights(for: slots)
         GeometryReader { geometry in
             let field = CGRect(origin: .zero, size: geometry.size)
-                .insetBy(dx: Theme.Pitch.margin, dy: Theme.Pitch.margin)
             ZStack(alignment: .topLeading) {
-                Turf()
+                BoardPitch()
                 ForEach(slots, id: \.self) { slot in
-                    let cell = PitchLayout.cell(of: slot, in: field)
+                    let cell = PitchLayout.cell(of: slot, in: field, rowWeights: weights)
                     token(slot)
-                        .frame(width: max(cell.width - Theme.Pitch.tokenGap, 0),
-                               height: max(cell.height - Theme.Pitch.tokenGap, 0))
+                        .frame(width: max(cell.width - Theme.Pitch.slotGap, 0),
+                               height: max(cell.height - Theme.Pitch.slotGap, 0))
                         .position(x: cell.midX, y: cell.midY)
                 }
             }
@@ -87,101 +94,48 @@ public struct PitchGrid<Token: View>: View {
     }
 }
 
-/// The turf with its mown stripes and chalk markings.
-struct Turf: View {
+/// The pitch drawn on the board in green marker: touchlines and goal lines, the halfway line, the centre circle and
+/// both penalty areas.
+struct BoardPitch: View {
     var body: some View {
-        RoundedRectangle(cornerRadius: Theme.Pitch.cornerRadius)
-            .fill(Theme.Colour.turf)
-            .overlay {
-                MownStripes(count: Theme.Pitch.stripeCount)
-                    .fill(Theme.Colour.turfStripe)
-            }
-            .overlay {
-                PitchMarkings()
-                    .stroke(Theme.Colour.chalk.opacity(Theme.Pitch.lineOpacity), lineWidth: Theme.Pitch.lineWidth)
-                    .padding(Theme.Pitch.margin)
-            }
-            .overlay {
-                PitchMarks()
-                    .fill(Theme.Colour.chalk.opacity(Theme.Pitch.lineOpacity))
-                    .padding(Theme.Pitch.margin)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Pitch.cornerRadius))
-            .accessibilityHidden(true)
-    }
-}
-
-/// Every other band of `count` across the pitch.
-struct MownStripes: Shape {
-    let count: Int
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let height = rect.height / CGFloat(count)
-        for band in stride(from: 1, to: count, by: 2) {
-            path.addRect(CGRect(x: rect.minX, y: rect.minY + CGFloat(band) * height, width: rect.width, height: height))
+        let inset = Theme.Pitch.lineWidth / 2
+        ZStack {
+            RoundedRectangle(cornerRadius: Theme.Pitch.cornerRadius)
+                .strokeBorder(Theme.Colour.markerGreen, lineWidth: Theme.Pitch.lineWidth)
+            PitchMarkings()
+                .stroke(Theme.Colour.markerGreen, lineWidth: Theme.Pitch.lineWidth)
+                .padding(inset)
         }
-        return path
+        .accessibilityHidden(true)
     }
 }
 
-/// The lines of a pitch drawn in `rect`, the area inside the touchlines and goal lines, attack at the top.
+/// The lines inside the pitch's outline, drawn in `rect`, attack at the top.
 struct PitchMarkings: Shape {
     func path(in rect: CGRect) -> Path {
         typealias M = Theme.Pitch.Markings
         var path = Path()
-        path.addRect(rect)
         path.move(to: CGPoint(x: rect.minX, y: rect.midY))
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-        let radius = M.circleRadius * rect.width
+        let radius = M.circleDiameter * rect.width / 2
         path.addEllipse(in: CGRect(x: rect.midX - radius, y: rect.midY - radius, width: radius * 2, height: radius * 2))
-
-        for end in [PitchEnd.top, .bottom] {
-            path.addRect(end.box(width: M.penaltyAreaWidth, depth: M.penaltyAreaDepth, in: rect))
-            path.addRect(end.box(width: M.goalAreaWidth, depth: M.goalAreaDepth, in: rect))
-            // The arc of the penalty area: the part of the circle round the penalty mark outside the area.
-            let mark = end.point(atDepth: M.penaltyMarkDistance, in: rect)
-            let beyond = (M.penaltyAreaDepth - M.penaltyMarkDistance) * rect.height
-            guard beyond < radius else { continue }
-            let half = acos(beyond / radius)
-            let outwards: Double = end == .top ? .pi / 2 : -.pi / 2
-            path.addArc(center: mark, radius: radius, startAngle: .radians(outwards - half),
-                        endAngle: .radians(outwards + half), clockwise: false)
+        let width = M.penaltyAreaWidth * rect.width
+        let depth = M.penaltyAreaDepth * rect.height
+        let corner = Theme.Pitch.boxCornerRadius
+        // Each penalty area: three sides from the goal line, its far corners rounded.
+        for top in [true, false] {
+            let goalLine = top ? rect.minY : rect.maxY
+            let far = top ? rect.minY + depth : rect.maxY - depth
+            let toward: CGFloat = top ? -1 : 1
+            let left = rect.midX - width / 2
+            let right = rect.midX + width / 2
+            path.move(to: CGPoint(x: left, y: goalLine))
+            path.addLine(to: CGPoint(x: left, y: far + toward * corner))
+            path.addQuadCurve(to: CGPoint(x: left + corner, y: far), control: CGPoint(x: left, y: far))
+            path.addLine(to: CGPoint(x: right - corner, y: far))
+            path.addQuadCurve(to: CGPoint(x: right, y: far + toward * corner), control: CGPoint(x: right, y: far))
+            path.addLine(to: CGPoint(x: right, y: goalLine))
         }
         return path
-    }
-}
-
-/// The centre mark and the two penalty marks.
-struct PitchMarks: Shape {
-    func path(in rect: CGRect) -> Path {
-        typealias M = Theme.Pitch.Markings
-        var path = Path()
-        let points = [CGPoint(x: rect.midX, y: rect.midY)]
-            + [PitchEnd.top, .bottom].map { $0.point(atDepth: M.penaltyMarkDistance, in: rect) }
-        for point in points {
-            path.addEllipse(in: CGRect(x: point.x - M.markRadius, y: point.y - M.markRadius,
-                                       width: M.markRadius * 2, height: M.markRadius * 2))
-        }
-        return path
-    }
-}
-
-/// One end of the pitch.
-enum PitchEnd {
-    case top, bottom
-
-    /// A box against this goal line, centred, with its width a fraction of the pitch's width and its depth a
-    /// fraction of its length.
-    func box(width: CGFloat, depth: CGFloat, in rect: CGRect) -> CGRect {
-        let size = CGSize(width: width * rect.width, height: depth * rect.height)
-        let y = self == .top ? rect.minY : rect.maxY - size.height
-        return CGRect(x: rect.midX - size.width / 2, y: y, width: size.width, height: size.height)
-    }
-
-    /// The point on the pitch's long axis `depth` of its length from this goal line.
-    func point(atDepth depth: CGFloat, in rect: CGRect) -> CGPoint {
-        let distance = depth * rect.height
-        return CGPoint(x: rect.midX, y: self == .top ? rect.minY + distance : rect.maxY - distance)
     }
 }

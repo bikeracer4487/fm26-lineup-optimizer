@@ -14,10 +14,10 @@ public struct MatchStart: Sendable {
     }
 }
 
-/// The planned elevens for the saved fixtures: a strip of fixtures, the chosen one's team sheet on a pitch with the
-/// selected pick's reasons beside it and who was left out, and the owner's controls. What is chosen is kept in the
-/// window's navigation, so it survives a change of screen. On a short window the screen scrolls; on a narrow one the
-/// detail goes under the pitch.
+/// The planned elevens for the saved fixtures: the fixtures as sticky notes across the top, the chosen one's eleven
+/// as magnets on a pitch with the selected pick's reasons written beside it and who was left out, and the owner's
+/// controls. What is chosen is kept in the window's navigation, so it survives a change of screen. On a short window
+/// the screen scrolls; on a narrow one the detail goes under the pitch.
 public struct MatchSelectionScreen: View {
     let model: AppModel
     @Bindable var navigation: Navigation
@@ -44,16 +44,14 @@ public struct MatchSelectionScreen: View {
 
     private var page: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            Text(Screen.matchSelection.title)
-                .font(Theme.Typeface.title())
             if case .ready(let plans) = model.planState, !plans.isEmpty {
                 ready(plans)
             } else if let notReady = MatchPresentation.notReady(model.planState) {
+                BoardHeading(Screen.matchSelection.title, size: Theme.TypeSize.title)
                 NotReadyView(notReady: notReady)
                 Spacer(minLength: 0)
             }
         }
-        .padding(Theme.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: scrolls ? nil : .infinity, alignment: .topLeading)
     }
 
@@ -61,7 +59,7 @@ public struct MatchSelectionScreen: View {
         let plan = MatchPresentation.chosen(navigation.matchFixture, in: plans)
         FixtureStrip(cells: plans.map(FixtureCell.init), chosen: plan?.id) { navigation.matchFixture = $0 }
         if let note = model.fitnessNote {
-            MarkedText(note, colour: Theme.Colour.amber)
+            CautionLine(note)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         if let plan {
@@ -77,32 +75,21 @@ public struct MatchSelectionScreen: View {
         }
     }
 
-    /// The view switch, the chosen match in words and its tactic, and confirming or why not; the confirming goes under
+    /// The chosen match in words and its tactic, the view switch, and confirming or why not; the confirming goes under
     /// the rest when the row is too narrow for it.
     private func header(_ plan: FixturePlan) -> some View {
         WrappingRow(alignment: .top, spacing: Theme.Spacing.l) {
-            Picker("View", selection: $navigation.matchView) {
-                ForEach(MatchView.allCases, id: \.self) { view in
-                    Text(view.title).tag(view)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text(MatchPresentation.heading(plan))
-                    .font(Theme.Typeface.text(Theme.TypeSize.step1, weight: .semibold))
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                BoardHeading(MatchPresentation.heading(plan))
                 if let tactic = MatchPresentation.tacticLine(plan) {
                     Text(tactic)
-                        .font(Theme.Typeface.text())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.Colour.mutedInk)
                 }
                 if let deleted = MatchPresentation.deletedTacticLine(plan) {
-                    Text(deleted)
-                        .font(Theme.Typeface.text())
-                        .foregroundStyle(.secondary)
+                    CautionLine(deleted)
                 }
             }
+            BoardTabs(choices: MatchView.allCases.map { ($0, $0.title) }, selection: $navigation.matchView)
         } trailing: {
             ConfirmControl(model: model, plan: plan) {
                 if case .ready(let plans) = model.planState {
@@ -124,20 +111,26 @@ struct ConfirmControl: View {
     var body: some View {
         if model.canConfirm(plan.id) {
             let button = MatchPresentation.confirmButton(for: plan)
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            HStack(alignment: .center, spacing: Theme.Spacing.m) {
+                Text(button.explanation)
+                    .font(Theme.Typeface.text(Theme.TypeSize.small))
+                    .foregroundStyle(Theme.Colour.mutedInk)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: Theme.Match.confirmExplanationWidth, alignment: .trailing)
+                    .fixedSize(horizontal: false, vertical: true)
                 Button(button.title) {
                     model.confirm(plan.id)
                     confirmed()
                 }
-                    .buttonStyle(.borderedProminent)
-                Text(button.explanation)
-                    .font(Theme.Typeface.text())
-                    .foregroundStyle(.secondary)
+                .buttonStyle(.main)
             }
         } else if let why = model.whyNotConfirm(plan.id) {
             Text(why)
-                .font(Theme.Typeface.text())
-                .foregroundStyle(.secondary)
+                .font(Theme.Typeface.text(Theme.TypeSize.caption))
+                .foregroundStyle(Theme.Colour.mutedInk)
+                .frame(maxWidth: Theme.Match.detailMinimumWidth, alignment: .trailing)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -152,23 +145,27 @@ struct PitchBeside<Pitch: View, Detail: View>: View {
     var body: some View {
         switch layout {
         case .filling:
-            HStack(alignment: .top, spacing: Theme.Spacing.l) {
+            HStack(alignment: .top, spacing: Theme.Match.pitchGap) {
+                // Offered first, so it takes the largest size its shape allows and the detail has the rest.
                 pitch()
+                    .layoutPriority(1)
                 ScrollView {
                     detail()
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.trailing, Theme.Spacing.xs)
                 }
-                .frame(width: Theme.Match.detailWidth)
+                .frame(minWidth: Theme.Match.detailMinimumWidth, maxWidth: .infinity)
             }
         case .scrolling:
-            HStack(alignment: .top, spacing: Theme.Spacing.l) {
+            HStack(alignment: .top, spacing: Theme.Match.pitchGap) {
                 pitch()
                     .frame(maxWidth: Theme.Pitch.scrollingMaximumWidth)
+                    .layoutPriority(1)
                 detail()
-                    .frame(width: Theme.Match.detailWidth, alignment: .leading)
+                    .frame(minWidth: Theme.Match.detailMinimumWidth, maxWidth: .infinity, alignment: .leading)
             }
         case .stacked:
-            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
                 pitch()
                     .frame(maxWidth: Theme.Pitch.scrollingMaximumWidth)
                 detail()
@@ -211,26 +208,26 @@ struct FixtureBody: View {
                         PickDetailView(model: model, fixture: plan.id, detail: detail) { selection = $0 }
                     } else {
                         Text("Click a player on the pitch to see why he is in the eleven, or to change him.")
-                            .font(Theme.Typeface.text())
-                            .foregroundStyle(.secondary)
+                            .font(Theme.Typeface.text(Theme.TypeSize.noteHeading))
+                            .foregroundStyle(Theme.Colour.mutedInk)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Divider()
                     LeftOutList(model: model, plan: plan, omissions: LeftOutRow.rows(lineup.omissions))
+                    MarkKey()
                 }
             }
         case .confirmed:
             let tokens = model.tokens(for: plan)
             PitchBeside(layout: layout) {
-                TeamSheet(tokens: tokens, unfilled: [], selected: nil, showsKey: false)
+                TeamSheet(tokens: tokens, unfilled: [], selected: nil)
             } detail: {
                 VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                     if let line = MatchPresentation.confirmedLine(plan) {
-                        Text(line)
-                            .font(Theme.Typeface.text(Theme.TypeSize.step1, weight: .semibold))
+                        BoardHeading(line)
                     }
                     NamesBySlot(tokens: tokens)
                     Button("Unlock") { unlocking = true }
+                        .buttonStyle(.secondary)
                 }
             }
             .alert(model.unlockNote(for: plan.id), isPresented: $unlocking) {
@@ -244,16 +241,14 @@ struct FixtureBody: View {
             let tokens = model.tokens(for: plan)
             PitchBeside(layout: layout) {
                 TeamSheet(tokens: tokens, unfilled: [], selected: choosingStarter?.slot,
-                          select: { choosingStarter = RememberedSlot(slot: $0) }, showsKey: false)
+                          select: { choosingStarter = RememberedSlot(slot: $0) })
             } detail: {
                 VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                     if let note = plan.missedNote {
-                        MarkedText(note, colour: Theme.Colour.amber)
-                            .fixedSize(horizontal: false, vertical: true)
+                        CautionLine(note)
                     }
                     Text(MatchPresentation.rememberedHint)
-                        .font(Theme.Typeface.text())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.Colour.mutedInk)
                     NamesBySlot(tokens: tokens)
                 }
             }
@@ -269,9 +264,10 @@ struct FixtureBody: View {
         case .missed(.none):
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 if let note = plan.missedNote {
-                    MarkedText(note, colour: Theme.Colour.amber)
+                    CautionLine(note)
                 }
                 Button(MatchPresentation.goTo(.fixtures)) { showScreen(.fixtures) }
+                    .buttonStyle(.primary)
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: Theme.Layout.readingWidth, alignment: .leading)
@@ -279,18 +275,19 @@ struct FixtureBody: View {
     }
 }
 
-/// Each starter's slot and full name, in slot order.
+/// Each starter's slot and full name, in slot order, his magnet before them.
 struct NamesBySlot: View {
     let tokens: [TokenContent]
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: Theme.Spacing.m, verticalSpacing: Theme.Spacing.xs) {
+        Grid(alignment: .leading, horizontalSpacing: Theme.Spacing.m, verticalSpacing: Theme.Spacing.s) {
             ForEach(tokens) { token in
                 GridRow {
+                    Magnet.table(token.line)
                     Text(token.slotText)
-                        .font(Theme.Typeface.number(Theme.TypeSize.step1))
+                        .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
                     Text(token.name)
-                        .font(Theme.Typeface.text())
+                        .font(Theme.Typeface.display(Theme.TypeSize.noteHeading, weight: .bold))
                 }
             }
         }
@@ -308,19 +305,20 @@ struct NotReadyView: View {
         } else {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 Text(notReady.message)
-                    .font(Theme.Typeface.text(Theme.TypeSize.step1))
-                    .foregroundStyle(.secondary)
+                    .font(Theme.Typeface.text(Theme.TypeSize.noteHeading))
+                    .foregroundStyle(Theme.Colour.mutedInk)
                 ForEach(notReady.problems, id: \.self) { problem in
                     if notReady.isFailure {
                         Text(problem)
-                            .font(Theme.Typeface.text())
-                            .foregroundStyle(Theme.Colour.claret)
+                            .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .semibold))
+                            .foregroundStyle(Theme.Colour.redText)
+                            .fixedSize(horizontal: false, vertical: true)
                     } else {
-                        MarkedText(problem, colour: Theme.Colour.amber)
+                        CautionLine(problem)
                     }
                 }
                 Button(notReady.action) { showScreen(notReady.screen) }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.primary)
             }
             .frame(maxWidth: Theme.Layout.readingWidth, alignment: .leading)
         }

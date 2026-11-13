@@ -2,113 +2,104 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// One starter on the pitch: his slot and marks, his surname and, for a planned lineup, his match-day value. A
-/// caution outlines the token in amber. The selected token is chalk with turf text.
+/// One starter on the pitch: a magnet in his line's colour with his initials and marks, and beneath it on the board's
+/// white his surname and, for a planned lineup, his match-day value. The selected magnet has an ink ring.
 struct PlayerToken: View {
     let token: TokenContent
     let isSelected: Bool
     let select: () -> Void
 
-    private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: Theme.Pitch.tokenCornerRadius)
-    }
-
-    private var ink: Color { isSelected ? Theme.Colour.turf : Theme.Colour.chalk }
-
     var body: some View {
         Button(action: select) {
-            VStack(spacing: 0) {
-                HStack(alignment: .center, spacing: Theme.Spacing.xs) {
-                    Text(token.slotText)
-                        .font(Theme.Typeface.number(Theme.Match.tokenSlotSize))
-                        .opacity(Theme.Match.tokenSlotOpacity)
-                    Spacer(minLength: 0)
-                    ForEach(token.marks, id: \.self) { mark in
-                        TokenMarkView(mark: mark, onChalk: isSelected)
+            VStack(spacing: Theme.Spacing.xxs) {
+                Magnet.player(token.line, letters: token.initials)
+                    .overlay {
+                        if isSelected {
+                            Circle()
+                                .strokeBorder(Theme.Colour.ink, lineWidth: Theme.Magnet.ringWidth)
+                                .padding(-(Theme.Magnet.ringWidth + Theme.Magnet.ringGap))
+                        }
                     }
-                }
-                Spacer(minLength: 0)
+                    .overlay(alignment: .topLeading) {
+                        // Beside the magnet's top right, overlapping its edge a little.
+                        if !token.marks.isEmpty {
+                            HStack(spacing: Theme.Spacing.xxs) {
+                                ForEach(token.marks, id: \.self) { TokenMarkView(mark: $0) }
+                            }
+                            .fixedSize()
+                            .offset(x: Theme.Magnet.diameter - Theme.Pitch.markOffset.width,
+                                    y: Theme.Pitch.markOffset.height)
+                        }
+                    }
+                    .padding(.top, Theme.Magnet.ringWidth)
                 Text(token.surname)
-                    .font(Theme.Typeface.text(Theme.Match.tokenNameSize, weight: .semibold))
+                    .font(Theme.Typeface.display(Theme.Pitch.nameSize, weight: .bold))
                     .lineLimit(1)
-                    .minimumScaleFactor(Theme.Match.tokenNameMinimumScale)
+                    .minimumScaleFactor(Theme.Pitch.labelMinimumScale)
+                    .padding(.horizontal, Theme.Pitch.labelPadding)
+                    .background(Theme.Colour.board)
                 if let value = token.value {
                     Text(value)
-                        .font(Theme.Typeface.number(Theme.Match.tokenValueSize))
+                        .font(Theme.Typeface.text(Theme.Pitch.valueSize, weight: .bold))
+                        .foregroundStyle(Theme.Colour.markerBlue)
+                        .padding(.horizontal, Theme.Pitch.labelPadding)
+                        .background(Theme.Colour.board)
                 }
-                Spacer(minLength: 0)
             }
-            .foregroundStyle(ink)
-            .padding(Theme.Pitch.tokenPadding)
+            .foregroundStyle(Theme.Colour.ink)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background {
-                // Turf first, so the pitch's markings do not show through the token.
-                shape.fill(Theme.Colour.turf)
-                shape.fill(isSelected ? Theme.Colour.chalk : Theme.Colour.chalk.opacity(Theme.Pitch.tokenFillOpacity))
-            }
-            .overlay {
-                if token.marks.contains(.caution) {
-                    shape.strokeBorder(Theme.Colour.amber, lineWidth: Theme.Match.cautionLineWidth)
-                }
-            }
-            .contentShape(shape)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(token.name)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(token.value.map { "\(token.name), \(token.slotText), \($0)" } ?? "\(token.name), \(token.slotText)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
-/// A mark on a token or in the key: a pin for an override, an amber triangle for a caution, the squad for a youth
-/// player. `onChalk` draws it for a chalk background (a selected token, or the window) rather than the turf.
+/// A mark beside a magnet or in the key: a pin for a choice of the owner's, an amber triangle for a caution, the squad
+/// for a youth player.
 struct TokenMarkView: View {
     let mark: TokenMark
-    let onChalk: Bool
 
     var body: some View {
         switch mark {
         case .override:
             Image(systemName: "pin.fill")
-                .font(Theme.Typeface.text(Theme.Match.markSize, weight: .bold))
-                .foregroundStyle(onChalk ? Theme.Colour.hoopBlue : Theme.Colour.chalk)
+                .font(Theme.Typeface.text(Theme.Pitch.markSize, weight: .bold))
+                .foregroundStyle(Theme.Colour.markerBlue)
+                .padding(Theme.Spacing.xxs)
+                .background(Circle().fill(Theme.Colour.board))
                 .accessibilityLabel("Chosen by you")
         case .caution:
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(Theme.Typeface.text(Theme.Match.markSize, weight: .bold))
-                .foregroundStyle(Theme.Colour.amber)
+                .font(Theme.Typeface.text(Theme.Pitch.markSize, weight: .bold))
+                .foregroundStyle(Theme.Colour.markerAmber)
+                .padding(Theme.Spacing.xxs)
+                .background(Circle().fill(Theme.Colour.board))
                 .accessibilityLabel("Caution")
         case .youth:
             Text(mark.badgeText)
-                .font(Theme.Typeface.number(Theme.Match.youthMarkSize))
-                .padding(.horizontal, Theme.Match.youthMarkPadding)
+                .font(Theme.Typeface.text(Theme.Pitch.markSize, weight: .extraBold))
+                .foregroundStyle(Theme.Colour.ink)
+                .padding(.horizontal, Theme.Pitch.youthMarkPadding)
+                .background(Theme.Colour.board, in: RoundedRectangle(cornerRadius: Theme.Pitch.youthMarkCornerRadius))
                 .overlay {
-                    RoundedRectangle(cornerRadius: Theme.Match.youthMarkCornerRadius)
-                        .strokeBorder(lineWidth: Theme.Match.youthMarkLineWidth)
+                    RoundedRectangle(cornerRadius: Theme.Pitch.youthMarkCornerRadius)
+                        .strokeBorder(Theme.Colour.ink, lineWidth: Theme.Table.rowRule)
                 }
-                .foregroundStyle(onChalk ? Theme.Colour.teal : Theme.Colour.chalk)
         }
     }
 }
 
-/// A slot of the tactic nobody could be picked for: a dashed outline with its code.
+/// A slot of the tactic nobody could be picked for: a dashed circle with its code.
 struct UnfilledSlotToken: View {
     let slot: SlotID
 
-    private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: Theme.Pitch.tokenCornerRadius)
-    }
-
     var body: some View {
-        Text(slot.displayName)
-            .font(Theme.Typeface.number(Theme.Match.tokenSlotSize))
-            .foregroundStyle(Theme.Colour.chalk.opacity(Theme.Pitch.emptyTokenOpacity))
+        EmptyMagnet(letters: slot.displayName)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(shape.fill(Theme.Colour.turf))
-            .overlay {
-                shape.strokeBorder(Theme.Colour.chalk.opacity(Theme.Pitch.emptyTokenOpacity),
-                                   style: StrokeStyle(lineWidth: Theme.Pitch.emptyTokenLineWidth,
-                                                      dash: Theme.Pitch.emptyTokenDash))
-            }
             .help("Nobody could be picked for this slot")
     }
 }

@@ -16,12 +16,12 @@ public struct EmptyState: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             Text(message)
-                .font(Theme.Typeface.text(Theme.TypeSize.step1))
-                .foregroundStyle(.secondary)
+                .font(Theme.Typeface.text(Theme.TypeSize.noteHeading))
+                .foregroundStyle(Theme.Colour.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
             if let action, let perform {
                 Button(action, action: perform)
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.Colour.hoopBlue)
+                    .buttonStyle(.primary)
             }
         }
         .frame(maxWidth: Theme.Layout.readingWidth, alignment: .leading)

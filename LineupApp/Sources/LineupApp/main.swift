@@ -61,6 +61,8 @@ struct LineupApplication: App {
         Window("FM27 Lineup Optimizer", id: "main") {
             RootView(model: model)
         }
+        // The wall runs up under the window's buttons.
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(Theme.Layout.defaultWindow)
     }
 }
@@ -204,6 +206,11 @@ enum SampleState {
     return 0
 }
 
+/// Loads the two typefaces for this process, and the sentence for any that could not be loaded.
+func loadTypefaces() -> String? {
+    BoardText.fontNotice(missing: Theme.Typeface.missingFaces.map(\.rawValue))
+}
+
 let options: LaunchOptions
 do {
     options = try LaunchOptions.parse(Array(CommandLine.arguments.dropFirst()))
@@ -211,9 +218,12 @@ do {
     fail(error.description)
 }
 
+let typefaceNotice = loadTypefaces()
 if let pictures = options.picturesDirectory {
+    if let typefaceNotice { fail(typefaceNotice) }
     exit(drawPictures(to: pictures, sampleDataRoot: options.sampleDataRoot))
 }
 Startup.model = options.sampleDataRoot.map { sampleModel($0) }
     ?? AppModel(store: Store(directory: LiveEnvironment.storeDirectory), environment: LiveEnvironment.make())
+if let typefaceNotice { Startup.model?.addNotice(typefaceNotice) }
 LineupApplication.main()

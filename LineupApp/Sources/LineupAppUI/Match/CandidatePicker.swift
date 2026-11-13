@@ -19,26 +19,23 @@ public struct CandidatePicker: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text(text.title)
-                    .font(Theme.Typeface.text(Theme.TypeSize.step1, weight: .semibold))
+                BoardHeading(text.title)
                 Text(text.explanation)
-                    .font(Theme.Typeface.text())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.Colour.mutedInk)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let heading = text.ratingHeading, !rows.isEmpty {
                 HStack {
                     Spacer()
                     Text(heading)
-                        .font(Theme.Typeface.text(weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .font(Theme.Typeface.text(Theme.TypeSize.caption, weight: .extraBold))
                 }
             }
             if rows.isEmpty {
                 Text("Nobody can be chosen for this slot.")
-                    .font(Theme.Typeface.text())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.Colour.mutedInk)
             }
+            HeavyRule()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(rows) { row in
@@ -51,18 +48,23 @@ public struct CandidatePicker: View {
                         } else {
                             CandidateRowView(row: row)
                         }
-                        Divider()
+                        FaintRule()
                     }
                 }
             }
             HStack {
                 Spacer()
                 Button("Cancel", action: cancel)
+                    .buttonStyle(.secondary)
                     .keyboardShortcut(.cancelAction)
             }
         }
+        .font(Theme.Typeface.text())
+        .foregroundStyle(Theme.Colour.ink)
         .padding(Theme.Spacing.l)
         .frame(width: Theme.Match.pickerSize.width, height: Theme.Match.pickerSize.height)
+        .background(Theme.Colour.board)
+        .boardAppearance()
     }
 }
 
@@ -71,39 +73,36 @@ struct CandidateRowView: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs / 2) {
-                HStack(spacing: Theme.Spacing.s) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
                     Text(row.name)
-                        .font(Theme.Typeface.text(weight: .semibold))
+                        .font(Theme.Typeface.display(Theme.TypeSize.noteHeading, weight: .bold))
                     Text(row.squadText)
-                        .font(Theme.Typeface.text())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.Colour.mutedInk)
                     if row.isCurrent {
                         Text("In the eleven here now")
-                            .font(Theme.Typeface.text())
-                            .foregroundStyle(Theme.Colour.hoopBlue)
+                            .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
+                            .foregroundStyle(Theme.Colour.markerBlue)
                     }
                 }
                 if let note = row.note {
                     Text(note)
-                        .font(Theme.Typeface.text())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.Colour.mutedInk)
                 }
                 if let reason = row.unavailable {
                     Text(reason)
-                        .font(Theme.Typeface.text())
-                        .foregroundStyle(Theme.Colour.claret)
+                        .foregroundStyle(Theme.Colour.redText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: Theme.Spacing.m)
             if let rating = row.ratingText {
                 Text(rating)
-                    .font(Theme.Typeface.number(Theme.TypeSize.step1))
+                    .font(Theme.Typeface.text(Theme.TypeSize.button, weight: .extraBold))
             }
         }
         .padding(.vertical, Theme.Spacing.s)
-        .foregroundStyle(row.canChoose ? .primary : .secondary)
+        .opacity(row.canChoose ? 1 : Theme.Button.pressedOpacity)
         .contentShape(Rectangle())
     }
 }
