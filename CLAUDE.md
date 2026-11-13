@@ -6,7 +6,7 @@ The FM26 lineup optimizer is being rebuilt as a native Mac app for Football Mana
 
 - Design: `docs/superpowers/specs/2026-11-12-fm27-native-app-design.md`
 - Engine plan, complete (Tasks 1 to 18): `docs/superpowers/plans/2026-11-12-fm27-engine-foundation.md`. Its last two sections list the later plans (Planner, Advisors, the visual design pass, the App, Clean-up) and the notes and known small faults carried into them.
-- Planner plan, complete (Tasks 1 to 10): `docs/superpowers/plans/2026-11-13-fm27-planner.md`. Its last section lists the known limits of the planner and what follows it.
+- Planner plan, complete (Tasks 1 to 10): `docs/superpowers/plans/2026-11-13-fm27-planner.md`. Its closing sections list the planner's known limits, the decisions that changed during the build, what the plan showed on the real squad, the small faults left, and what is carried into the app plan.
 - Research: `docs/Research/fm27-*.md` and `docs/Research/fm27_roles.json` are FM27; the other files in `docs/Research/` are FM26. Prefer FM27 evidence. Where it is silent, use the FM26 research and label it as carried over (the owner's rule: a lot carries over between game years). An attribute FM27 tested and found to have no effect is a finding, not a gap.
 
 ## New code: `LineupEngine/`
