@@ -28,6 +28,8 @@ public enum Theme {
         public static let teal = adaptive(light: 0x1E8C8C, dark: 0x5CC4C4)
         /// Low importance has no colour of its own: the system's secondary grey.
         public static let lowImportance = Color.secondary
+        /// The system's separator, for the outline of a fixture not chosen.
+        public static let separator = Color(nsColor: .separatorColor)
 
         /// How much darker the pitch's mown stripes are than the turf.
         public static let turfStripeDarkening = 0.06
@@ -222,6 +224,49 @@ public enum Theme {
         public static let roleNameLines = 2
         /// How far a role name may shrink to fit its token, before it is cut.
         public static let roleNameMinimumScale: CGFloat = 0.85
+    }
+
+    // MARK: Match Selection
+
+    /// The fixture strip, the team sheet's tokens, the detail beside the pitch, the starts grid and the picker.
+    public enum Match {
+        /// The column beside the pitch: the selected pick and who was left out.
+        public static let detailWidth: CGFloat = 380
+        /// One fixture in the strip.
+        public static let stripCellWidth: CGFloat = 140
+        public static let stripCellPadding: CGFloat = 8
+        public static let stripCellCornerRadius: CGFloat = 6
+        /// The outline of the chosen fixture, and of any other.
+        public static let chosenLineWidth: CGFloat = 2
+        public static let otherLineWidth: CGFloat = 1
+        /// The chosen fixture's fill: hoop blue at this opacity.
+        public static let chosenFillOpacity: Double = 0.12
+        /// A token's slot code, surname and value.
+        public static let tokenSlotSize: CGFloat = TypeSize.base
+        public static let tokenNameSize: CGFloat = TypeSize.base
+        public static let tokenValueSize: CGFloat = TypeSize.step2
+        /// How strongly a token's slot code shows against the name under it.
+        public static let tokenSlotOpacity: Double = 0.75
+        /// How far a long surname may shrink to fit its token.
+        public static let tokenNameMinimumScale: CGFloat = 0.8
+        /// The marks on a token and in the key.
+        public static let markSize: CGFloat = 10
+        /// The outline of a token with a caution.
+        public static let cautionLineWidth: CGFloat = 2
+        /// The youth mark's figures and outline.
+        public static let youthMarkSize: CGFloat = 11
+        public static let youthMarkCornerRadius: CGFloat = 2
+        public static let youthMarkLineWidth: CGFloat = 1
+        public static let youthMarkPadding: CGFloat = 2
+        /// The starts grid's columns.
+        public static let startsNameWidth: CGFloat = 170
+        public static let startsCellWidth: CGFloat = 96
+        public static let startsCountWidth: CGFloat = 48
+        /// The candidate picker, as a popover or drawn on its own.
+        public static let pickerSize = CGSize(width: 440, height: 520)
+        /// The figures' columns in the pick's detail.
+        public static let figureLabelWidth: CGFloat = 150
+        public static let figureWidth: CGFloat = 56
     }
 
     // MARK: Tables

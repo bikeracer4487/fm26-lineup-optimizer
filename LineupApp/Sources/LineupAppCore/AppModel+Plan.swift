@@ -268,8 +268,11 @@ extension AppModel {
         let against = matches.sorted { ($0.opponent, $0.id.raw) < ($1.opponent, $1.id.raw) }.map { "against \($0.opponent)" }
         let listed = against.dropLast().joined(separator: ", ") + " and " + against.last!
         return "\(counts[matches.count] ?? "\(matches.count)") matches are on \(DayText.short(day)): \(listed). "
-            + "A club plays one match a day: change one of the dates on the Fixtures screen."
+            + sameDayAdvice
     }
+
+    /// How `sameDayProblem` ends, so Match Selection can tell that failure from the engine's.
+    nonisolated static let sameDayAdvice = "A club plays one match a day: change one of the dates on the Fixtures screen."
 
     /// The day the plan starts from: the latest day a squad was imported.
     var planStartDay: Day? {

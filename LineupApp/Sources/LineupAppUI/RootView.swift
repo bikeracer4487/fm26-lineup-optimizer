@@ -19,14 +19,18 @@ extension EnvironmentValues {
 public struct RootView: View {
     let model: AppModel
     let tacticSlot: TacticSlot?
+    let matchStart: MatchStart
     @State private var selection: Screen?
 
     /// - Parameters:
     ///   - screen: the screen the sidebar starts on.
     ///   - tacticSlot: the slot the Tactics editor opens with selected.
-    public init(model: AppModel, showing screen: Screen = .squad, tacticSlot: TacticSlot? = nil) {
+    ///   - matchStart: the fixture, pick and view Match Selection opens with.
+    public init(model: AppModel, showing screen: Screen = .squad, tacticSlot: TacticSlot? = nil,
+                matchStart: MatchStart = MatchStart()) {
         self.model = model
         self.tacticSlot = tacticSlot
+        self.matchStart = matchStart
         _selection = State(initialValue: screen)
     }
 
@@ -42,7 +46,7 @@ public struct RootView: View {
             VStack(alignment: .leading, spacing: 0) {
                 NoticeList(model: model)
                 if let selection {
-                    ScreenView(screen: selection, model: model, tacticSlot: tacticSlot)
+                    ScreenView(screen: selection, model: model, tacticSlot: tacticSlot, matchStart: matchStart)
                 } else {
                     EmptyState("Choose a screen in the sidebar.")
                         .padding(Theme.Spacing.xl)
@@ -83,27 +87,16 @@ struct ScreenView: View {
     let screen: Screen
     let model: AppModel
     let tacticSlot: TacticSlot?
+    let matchStart: MatchStart
 
     var body: some View {
         switch screen {
         case .squad: SquadScreen(model: model)
         case .tactics: TacticsScreen(model: model, startingSlot: tacticSlot)
         case .fixtures: FixturesScreen(model: model)
-        case .matchSelection: placeholder("No lineup yet. A lineup needs a squad, a tactic and the next fixture.")
+        case .matchSelection: MatchSelectionScreen(model: model, start: matchStart)
         case .settings: SettingsScreen(model: model)
         }
-    }
-
-    /// A screen not built yet: its title and what it will hold.
-    private func placeholder(_ message: String) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            Text(screen.title)
-                .font(Theme.Typeface.title())
-            EmptyState(message)
-            Spacer(minLength: 0)
-        }
-        .padding(Theme.Spacing.xl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

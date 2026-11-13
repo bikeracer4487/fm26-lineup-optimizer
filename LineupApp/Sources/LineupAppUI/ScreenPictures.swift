@@ -1,5 +1,6 @@
 import AppKit
 import LineupAppCore
+import LineupEngine
 import SwiftUI
 
 /// Draws the app's screens to PNG files without showing a window, so a screen can be
@@ -22,19 +23,21 @@ public enum ScreenPictures {
 
     /// Draws each of `screens` from `model` at the given size, in light and in dark, and writes
     /// "<screen>-light.png" and "<screen>-dark.png" into `directory`; with a variant,
-    /// "<screen>-<variant>-light.png" and "<screen>-<variant>-dark.png". With a tactic slot, the Tactics editor is
-    /// drawn with that slot selected.
+    /// "<screen>-<variant>-light.png" and "<screen>-<variant>-dark.png". Match Selection's pictures are named
+    /// "match-…". With a tactic slot, the Tactics editor is drawn with that slot selected; Match Selection is drawn
+    /// as `matchStart` says.
     @MainActor public static func write(
         model: AppModel, to directory: URL, size: CGSize, variant: String? = nil, screens: [Screen] = Screen.allCases,
-        tacticSlot: TacticSlot? = nil
+        tacticSlot: TacticSlot? = nil, matchStart: MatchStart = MatchStart()
     ) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let appearances: [(suffix: String, name: NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
         for screen in screens {
             for appearance in appearances {
-                let name = ([screen.rawValue] + [variant].compactMap { $0 } + [appearance.suffix]).joined(separator: "-") + ".png"
-                let png = try draw(RootView(model: model, showing: screen, tacticSlot: tacticSlot), size: size,
-                                   appearance: appearance.name, name: name)
+                let name = ([pictureName(of: screen)] + [variant].compactMap { $0 } + [appearance.suffix])
+                    .joined(separator: "-") + ".png"
+                let png = try draw(RootView(model: model, showing: screen, tacticSlot: tacticSlot, matchStart: matchStart),
+                                   size: size, appearance: appearance.name, name: name)
                 do {
                     try png.write(to: directory.appendingPathComponent(name), options: .atomic)
                 } catch {
@@ -59,6 +62,34 @@ public enum ScreenPictures {
             } catch {
                 throw PictureError.couldNotWrite(name, underlying: error)
             }
+        }
+    }
+
+    /// Draws the candidate picker on its own for `slot` in `fixture`, as its popover shows it, in light and in dark:
+    /// "match-picker-light.png" and "match-picker-dark.png". A popover cannot be drawn into a picture, so the picker
+    /// is drawn as a window of its own.
+    @MainActor public static func writeCandidatePicker(model: AppModel, fixture: FixtureID, slot: SlotID,
+                                                       to directory: URL) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let name = "match-picker-\(suffix).png"
+            let picker = CandidatePicker(title: MatchPresentation.pickerTitle(slot),
+                                         rows: model.candidateRows(for: slot, in: fixture), choose: { _ in }, cancel: {})
+                .tint(Theme.Colour.hoopBlue)
+            let png = try draw(picker, size: Theme.Match.pickerSize, appearance: appearance, name: name)
+            do {
+                try png.write(to: directory.appendingPathComponent(name), options: .atomic)
+            } catch {
+                throw PictureError.couldNotWrite(name, underlying: error)
+            }
+        }
+    }
+
+    /// The start of a screen's picture names.
+    static func pictureName(of screen: Screen) -> String {
+        switch screen {
+        case .matchSelection: "match"
+        case .squad, .tactics, .fixtures, .settings: screen.rawValue
         }
     }
 

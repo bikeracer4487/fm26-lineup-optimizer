@@ -17,6 +17,15 @@
 //                                              screen is drawn empty ("fixtures-empty-…"), five days on with one
 //                                              past fixture confirmed and one not ("fixtures-past-…"), and its
 //                                              editor on its own for the confirmed fixture ("fixtures-editor-…").
+//                                              Match Selection ("match-…") is drawn on the first fixture with the
+//                                              left back selected; as starts ("match-starts-…"); with the owner's
+//                                              choices in the first fixture, in a taller window
+//                                              ("match-choices-…"); after confirming the
+//                                              first fixture, on it ("match-confirmed-…") and on the next
+//                                              ("match-after-confirm-…"); on a missed fixture ("match-missed-…");
+//                                              empty ("match-empty-…"); with two matches on one day
+//                                              ("match-failed-…"); and its candidate picker on its own for the
+//                                              first fixture's goalkeeper ("match-picker-…").
 
 import AppKit
 import Foundation
@@ -71,6 +80,7 @@ func fail(_ message: String) -> Never {
 /// Which state of the sample data to start from.
 enum SampleState {
     case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange, pastFixtures
+    case afterConfirmingFirst, choices, missedFixture, twoMatchesOnOneDay
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -84,10 +94,40 @@ enum SampleState {
         case .tacticProblem: return try SampleData.modelWithTacticProblem(repositoryRoot: url)
         case .unsavedTacticChange: return try SampleData.modelWithUnsavedTacticChange(repositoryRoot: url)
         case .pastFixtures: return try SampleData.modelWithPastFixtures(repositoryRoot: url)
+        case .afterConfirmingFirst: return try SampleData.modelAfterConfirmingFirst(repositoryRoot: url)
+        case .choices: return try SampleData.modelWithChoices(repositoryRoot: url)
+        case .missedFixture: return try SampleData.modelWithMissedFixture(repositoryRoot: url)
+        case .twoMatchesOnOneDay: return try SampleData.modelWithTwoMatchesOnOneDay(repositoryRoot: url)
         }
     } catch {
         fail("\(error)")
     }
+}
+
+/// Match Selection's pictures beyond the first: see the usage at the top.
+@MainActor func drawMatchSelection(_ root: String, to directory: URL, size: CGSize) throws {
+    try ScreenPictures.write(model: sampleModel(root), to: directory, size: size, variant: "starts",
+                             screens: [.matchSelection], matchStart: MatchStart(view: .starts))
+    // The youth player fixed at AM C selected, so the pin, the youth mark and "Clear override" show; in a taller
+    // window, so the left-out list, "Left out by you" and the override not used show below the detail.
+    let tall = CGSize(width: size.width, height: size.height * 1.5)
+    try ScreenPictures.write(model: sampleModel(root, .choices), to: directory, size: tall, variant: "choices",
+                             screens: [.matchSelection], matchStart: MatchStart(slot: .AM_C))
+    let confirmed = sampleModel(root, .afterConfirmingFirst)
+    guard let first = confirmed.fixtures.first else { fail("The sample model has no fixtures.") }
+    try ScreenPictures.write(model: confirmed, to: directory, size: size, variant: "confirmed",
+                             screens: [.matchSelection], matchStart: MatchStart(fixture: first.id))
+    try ScreenPictures.write(model: confirmed, to: directory, size: size, variant: "after-confirm",
+                             screens: [.matchSelection], matchStart: MatchStart(slot: .D_L))
+    let missed = sampleModel(root, .missedFixture)
+    guard let early = missed.fixtures.first else { fail("The sample model has no fixtures.") }
+    try ScreenPictures.write(model: missed, to: directory, size: size, variant: "missed",
+                             screens: [.matchSelection], matchStart: MatchStart(fixture: early.id))
+    try ScreenPictures.write(model: sampleModel(root, .twoMatchesOnOneDay), to: directory, size: size,
+                             variant: "failed", screens: [.matchSelection])
+    let plain = sampleModel(root)
+    guard let next = plain.fixtures.first else { fail("The sample model has no fixtures.") }
+    try ScreenPictures.writeCandidatePicker(model: plain, fixture: next.id, slot: .GK, to: directory)
 }
 
 /// Draws the pictures and returns the process's exit status.
@@ -105,14 +145,16 @@ enum SampleState {
     let size = Theme.Layout.defaultWindow
     do {
         if let root = sampleDataRoot {
+            // The left back has the most reasons in the first fixture.
             try ScreenPictures.write(model: sampleModel(root), to: directory, size: size,
-                                     screens: Screen.allCases.filter { $0 != .tactics })
+                                     screens: Screen.allCases.filter { $0 != .tactics },
+                                     matchStart: MatchStart(slot: .D_L))
             // With an unsaved change, the left inside forward made a winger and selected, so the role menu,
             // "Remove", what he becomes and the marks for unsaved changes are all shown.
             try ScreenPictures.write(model: sampleModel(root, .unsavedTacticChange), to: directory, size: size,
                                      screens: [.tactics], tacticSlot: TacticSlot(.AM_L, in: .inPossession))
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size, variant: "empty",
-                                     screens: [.squad, .tactics, .fixtures])
+                                     screens: [.squad, .tactics, .fixtures, .matchSelection])
             try ScreenPictures.write(model: sampleModel(root, .pastFixtures), to: directory, size: size,
                                      variant: "past", screens: [.fixtures])
             // The editor for the confirmed fixture, so the note about its confirmed lineup is shown.
@@ -127,6 +169,7 @@ enum SampleState {
                                      variant: "failed", screens: [.squad])
             try ScreenPictures.write(model: sampleModel(root, .afterImport), to: directory, size: size,
                                      variant: "imported", screens: [.squad])
+            try drawMatchSelection(root, to: directory, size: size)
         } else {
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size)
         }

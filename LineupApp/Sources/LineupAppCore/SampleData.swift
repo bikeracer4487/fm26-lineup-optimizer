@@ -137,6 +137,48 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model with a lineup confirmed for the first fixture, as Match Selection's "Confirm this lineup"
+    /// records it.
+    @MainActor public static func modelAfterConfirmingFirst(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        guard let first = model.fixtures.first, model.canConfirm(first.id) else {
+            throw SampleDataError(description: "The sample model's first fixture cannot be confirmed.")
+        }
+        model.confirm(first.id)
+        return model
+    }
+
+    /// The sample model with the owner's choices in the first fixture: the best available U21 player fixed at AM C,
+    /// the injured goalkeeper fixed in goal (an override the engine cannot use) and the striker left out.
+    @MainActor public static func modelWithChoices(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        guard let first = model.fixtures.first,
+              let youth = model.candidates(for: .AM_C, in: first.id).first(where: { $0.squad == .u21 && $0.unavailable == nil }),
+              let injured = model.players.first(where: \.isInjured),
+              let striker = model.players.first(where: { $0.name == "Tyrone Marsh" }) else {
+            throw SampleDataError(description: "The sample model lacks a fixture, a U21 player, an injured player or its striker.")
+        }
+        model.setOverride(youth.player, at: .AM_C, in: first.id)
+        model.setOverride(injured.id, at: .GK, in: first.id)
+        model.reject(striker.id, in: first.id)
+        return model
+    }
+
+    /// The sample model with an unconfirmed fixture on 12 November, the day before the squads were imported: a
+    /// missed fixture.
+    @MainActor public static func modelWithMissedFixture(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        model.addFixture(date: Day(year: 2026, month: 11, day: 12)!, opponent: "Opponent Z", importance: .medium)
+        return model
+    }
+
+    /// The sample model with a second fixture on 17 November, so the plan stops: a club plays one match a day.
+    @MainActor public static func modelWithTwoMatchesOnOneDay(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        model.addFixture(date: Day(year: 2026, month: 11, day: 17)!, opponent: "Opponent F", importance: .low)
+        return model
+    }
+
     /// A model with nothing in it, on a new temporary directory, whose clipboard is empty.
     @MainActor public static func emptyModel() -> AppModel {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("lineup-empty-\(UUID().uuidString)")
