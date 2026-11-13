@@ -8,9 +8,10 @@ import Testing
     }
 
     @Test func allListsEveryStoredParameter() {
-        let stored = Mirror(reflecting: EngineParameters.fm27).children.filter { $0.value is any ParameterProtocol }
-        #expect(EngineParameters.fm27.all.count == stored.count)
-        #expect(Set(EngineParameters.fm27.all.map(\.name)).count == stored.count)
+        // Unfiltered: a stored property that is not a Parameter (no evidence label) fails here.
+        let stored = Mirror(reflecting: EngineParameters.fm27).children.count
+        #expect(EngineParameters.fm27.all.count == stored)
+        #expect(Set(EngineParameters.fm27.all.map(\.name)).count == stored)
     }
 
     @Test func familiarityStepsAreDescendingAndLabelled() {

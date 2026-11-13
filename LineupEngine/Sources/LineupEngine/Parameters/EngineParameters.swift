@@ -33,9 +33,21 @@ public struct EngineParameters: Sendable {
     public var defensivePhaseWeightIP: Parameter<Double>
     public var otherPhaseWeightIP: Parameter<Double>
     public var outOfPositionBelow: Parameter<Int>
-    // Task 11 adds the fitness and risk parameters
+    /// Condition (fraction of 1) to rating factor, interpolated between points and clamped at the ends.
+    public var conditionCurve: Parameter<[CurvePoint]>
+    /// Match sharpness (fraction of 1) to rating factor, interpolated between points and clamped at the ends.
+    public var sharpnessCurve: Parameter<[CurvePoint]>
+    /// Lowest `upTo` first. The first step with `upTo` at or above the jadedness gives the factor.
+    public var jadednessSteps: Parameter<[JadednessStep]>
+    /// The factor for a jadedness above every step.
+    public var jadednessAbove: Parameter<Double>
+    /// A player below this condition is kept out at every match importance.
+    public var conditionFloor: Parameter<Double>
+    /// A player above this jadedness is kept out of everything except high-importance matches.
+    public var jadedThreshold: Parameter<Int>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
+    private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
 
     public static let fm27: EngineParameters = {
         func carried(_ value: Double) -> Parameter<Double> { Parameter(value, .carriedOverFM26, source: pythonSource) }
@@ -58,7 +70,24 @@ public struct EngineParameters: Sendable {
                 source: "\(pythonSource); FM27 Match Lab Study 5 (cap 15 costs 0.26 points per game, cap 10 costs 0.85) is consistent with 0.95 and 0.80"),
             defensivePhaseWeightIP: carried(0.5),
             otherPhaseWeightIP: carried(0.7),
-            outOfPositionBelow: Parameter(10, .derived, source: "the Competent step of the familiarity table: below it a player is out of position"))
+            outOfPositionBelow: Parameter(10, .derived, source: "the Competent step of the familiarity table: below it a player is out of position"),
+            conditionCurve: Parameter(
+                [CurvePoint(x: 1.00, factor: 1.00), CurvePoint(x: 0.90, factor: 0.94), CurvePoint(x: 0.80, factor: 0.82),
+                 CurvePoint(x: 0.60, factor: 0.58), CurvePoint(x: 0.00, factor: 0.30)],
+                .derived,
+                source: "\(fitnessSource); anchors 90% and 80% from FM27 Match Lab (0.28 and 0.80 points per game)"),
+            sharpnessCurve: Parameter(
+                [CurvePoint(x: 1.00, factor: 1.00), CurvePoint(x: 0.75, factor: 0.92), CurvePoint(x: 0.50, factor: 0.78),
+                 CurvePoint(x: 0.35, factor: 0.70), CurvePoint(x: 0.00, factor: 0.70)],
+                .derived,
+                source: "\(fitnessSource); anchors 75% and 50% from FM27 Match Lab (0.37 and 1.00 points per game)"),
+            jadednessSteps: Parameter(
+                [JadednessStep(upTo: 200, factor: 1.00), JadednessStep(upTo: 400, factor: 0.90), JadednessStep(upTo: 700, factor: 0.70)],
+                .carriedOverFM26,
+                source: pythonSource),
+            jadednessAbove: Parameter(0.40, .carriedOverFM26, source: pythonSource),
+            conditionFloor: Parameter(0.85, .carriedOverFM26, source: pythonSource),
+            jadedThreshold: Parameter(400, .fm27Observation, source: "\(fitnessSource); FM Lens labels players \"Jaded\" above 400"))
     }()
 
     /// Every stored parameter, found by reflection so a new one cannot be left out.
