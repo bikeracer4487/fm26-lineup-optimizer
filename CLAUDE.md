@@ -9,7 +9,7 @@ The FM26 lineup optimizer is being rebuilt as a native Mac app for Football Mana
 - Planner plan, complete (Tasks 1 to 10): `docs/superpowers/plans/2026-11-13-fm27-planner.md`. Its closing sections list the planner's known limits, the decisions that changed during the build, what the plan showed on the real squad, the small faults left, and what is carried into the app plan.
 - Advisors plan, complete (Tasks 1 to 8; Task 8 changed the rules that gave wrong advice on the real squad): `docs/superpowers/plans/2026-11-13-fm27-advisors.md`. Its closing sections list the decisions that changed during the build and the advisors' known limits for the owner.
 - App plan, first screens, complete (Tasks 1 to 11; Task 10 was built before Task 8, and Task 11 restyled every screen). Its closing sections list the decisions that changed during the build and the limits and small faults left: `docs/superpowers/plans/2026-11-13-fm27-app-first-screens.md`, to the visual direction in `docs/superpowers/specs/2026-11-13-fm27-app-visual-direction.md`. Squad, Tactics, Fixtures, Match Selection and Settings exist. The advisor screens come after the advisors plan.
-- Advisor screens plan, approved by the owner on 13 November 2026 and being built task by task (see `git log` for how far it has got): `docs/superpowers/plans/2026-11-13-fm27-advisor-screens.md`. Until it is built the advisors are reachable only through `lineup-cli advise`.
+- Advisor screens plan, complete (Tasks 1 to 10): `docs/superpowers/plans/2026-11-13-fm27-advisor-screens.md`.
 - Research: `docs/Research/fm27-*.md` and `docs/Research/fm27_roles.json` are FM27; the other files in `docs/Research/` are FM26. Prefer FM27 evidence. Where it is silent, use the FM26 research and label it as carried over (the owner's rule: a lot carries over between game years). An attribute FM27 tested and found to have no effect is a finding, not a gap.
 
 ## New code: `LineupEngine/`
@@ -79,9 +79,11 @@ Rules for the engine:
 
 The Mac app: a second Swift package beside the engine, depending on it by path (Swift 6, macOS 26, SwiftUI and Observation, Swift Testing, no third-party code). Three targets:
 
-- `LineupAppCore`: the app's state and every action, with no views. `AppModel` (observable, on the main actor) holds the squads, tactics, fixtures, confirmed lineups and settings, saves each change through `Store` as versioned JSON, and works out the plan by calling the engine's `Planner`. Everything a screen shows that is built from data (labels, rows, which fixture is chosen, status words) is worked out here, with tests.
+- `LineupAppCore`: the app's state and every action, with no views. `AppModel` (observable, on the main actor) holds the squads, tactics, fixtures, confirmed lineups and settings, saves each change through `Store` as versioned JSON, and works out the plan by calling the engine's `Planner`. It works out the advice (the engine's `Advisors`, and each fixture's suggested importance) when it is first read after a change, and keeps it until the next. Everything a screen shows that is built from data (labels, rows, which fixture is chosen, status words) is worked out here, with tests.
 - `LineupAppUI`: the SwiftUI views and `Theme`. Views hold layout only.
 - `LineupApp`: the few lines that start the app.
+
+Besides Squad, Tactics, Fixtures, Match Selection and Settings, the app has the advisor screens: Elevens (First XI, Second XI and Depth, for any saved tactic), Rest, Training (accept or turn down a recommended retraining, and follow its progress at each import) and Player Removal (with the loans to the club). Fixtures shows each fixture's suggested importance beside the one chosen.
 
 Build and test it with:
 
@@ -98,11 +100,13 @@ Draw the screens without opening a window:
 
     cd LineupApp && swift run -q LineupApp --sample-data .. --pictures .build/pictures
 
-That writes a PNG of every screen and its variants (empty, failed, confirmed and so on), light and dark. A screen is not done until its pictures have been looked at. The pictures draw buttons as an inactive window would; judge the real look in the running app.
+That writes a PNG of every screen and its variants (empty, failed, confirmed and so on), light and dark. A screen is not done until its pictures have been looked at. The pictures draw buttons as an inactive window would; judge the real look in the running app. The advisor screens were checked in `.build/pictures-advice`: `elevens-*`, `rest-*`, `training-*`, `removal-*`, and the suggestions in `fixtures-*` and `fixture-editor-suggestion-*`.
 
 Rules for the app:
 
 - The engine decides; the app shows. A view never computes a rating, a reason or a rule. Sentences for errors, warnings and reasons are the engine's (`ErrorDescriptions.describe`, and the reasons on picks and omissions), shown as written. Where the engine has no sentence for something, add one to the engine.
+- Every word about advice (level names, actions, verdicts, evidence notes and sentences) comes from the engine (`AdvisorText`, `PositionText`, and the reasons on the reports), shown as written. Core holds only plain labels and headings.
+- The Training screen ignores a training action within half a second of the end of the last one (`AppModel.trainingActionInterval`): accepting or turning down a card moves the next card's buttons under the pointer, so a double-click would otherwise act on the next player too.
 - Logic for a screen lives in `LineupAppCore` with tests. If a view needs an `if` about data, that is a sign it belongs in Core.
 - The look is the Tactics board in `docs/superpowers/specs/2026-11-13-fm27-app-visual-direction.md`. Its two typefaces, Bricolage Grotesque and Figtree, ship with their licences in `LineupAppUI`'s resources and are registered when the app starts. Every colour, typeface and measure comes from `Theme`; no view holds a literal colour, font name or measure.
 - Nothing the owner reads is an id or a code: slots are "D L" on a token and "left back" in a sentence; fixtures are named by opponent and date.
