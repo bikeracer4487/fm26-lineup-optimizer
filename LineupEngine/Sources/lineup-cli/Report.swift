@@ -3,7 +3,7 @@ import LineupEngine
 
 /// Plain-words text for the command-line tool.
 enum Report {
-    /// What both commands print first: the import summary.
+    /// What every command prints first: the import summary.
     struct Header {
         let imports: [(squad: Squad, result: ImportResult)]
         let moves: [(name: String, from: Squad, to: Squad)]
@@ -38,16 +38,8 @@ enum Report {
         out.append("Rating profile: \(profile.name)")
         out.append("Training \(settings.trainingIntensity.rawValue), stability \(number(settings.stability)), "
                    + "saving players \(number(settings.savingPlayers)), horizon \(settings.horizon)")
-        let played = history.sorted { ($0.date, $0.fixture.raw) < ($1.date, $1.fixture.raw) }
-        out.append("Confirmed lineups: " + (played.isEmpty ? "none" : played.map { "\($0.fixture.raw) (\($0.date.iso))" }.joined(separator: ", ")))
+        out += confirmed(history, book: header.book)
         let names = Dictionary(header.book.allPlayers.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
-        for lineup in played {
-            for slot in SlotID.allCases {
-                guard let id = lineup.starters[slot], names[id] == nil else { continue }
-                out.append("Warning: the confirmed lineup \(lineup.fixture.raw) has '\(id.key)' at \(slot.rawValue), "
-                           + "who is not in the imported squads; his starts count for nobody here")
-            }
-        }
 
         let byID = Dictionary(fixtures.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let planned = plan.fixtures.map { (fixture: byID[$0.fixture]!, lineup: $0.lineup, projected: $0.fitnessIsProjected) }
@@ -66,6 +58,233 @@ enum Report {
         out += table(planned.map { ($0.fixture, $0.lineup) }, names: names)
         return out.joined(separator: "\n") + "\n"
     }
+
+    /// The confirmed lineups in date order, then a warning for each starter the imported squads do not have.
+    private static func confirmed(_ history: [ConfirmedLineup], book: SquadBook) -> [String] {
+        let played = history.sorted { ($0.date, $0.fixture.raw) < ($1.date, $1.fixture.raw) }
+        var out = ["Confirmed lineups: " + (played.isEmpty ? "none" : played.map { "\($0.fixture.raw) (\($0.date.iso))" }.joined(separator: ", "))]
+        let known = Set(book.allPlayers.map(\.id))
+        for lineup in played {
+            for slot in SlotID.allCases {
+                guard let id = lineup.starters[slot], !known.contains(id) else { continue }
+                out.append("Warning: the confirmed lineup \(lineup.fixture.raw) has '\(id.key)' at \(slot.rawValue), "
+                           + "who is not in the imported squads; his starts count for nobody here")
+            }
+        }
+        return out
+    }
+
+    // MARK: Advice
+
+    /// Everything the advisors said, for one tactic as of one day.
+    struct Advice {
+        let asOf: Day
+        let profile: RatingProfile
+        let intensity: TrainingIntensity
+        let history: [ConfirmedLineup]
+        let elevens: ElevensReport
+        let depth: DepthReport
+        let rest: [RestAdvice]
+        let training: TrainingReport
+        let removal: RemovalReport
+        /// In date order; nil when no fixtures were given.
+        let suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]?
+    }
+
+    /// The import summary, then each advisor's report under its heading.
+    static func render(_ header: Header, advice: Advice, parameters: EngineParameters) -> String {
+        var out = ["Tactic: \(header.tactic.name)   Advice as of \(advice.asOf.iso)", ""]
+        out += summary(header)
+        out.append("Rating profile: \(advice.profile.name)")
+        out.append("Training \(advice.intensity.rawValue) (for rest estimates)")
+        out += confirmed(advice.history, book: header.book)
+        let squadOf = Dictionary(header.book.allPlayers.map { ($0.id, $0.squad) }, uniquingKeysWith: { first, _ in first })
+
+        out += eleven("First XI", advice.elevens.first, average: advice.elevens.firstAverage,
+                      unfilled: advice.elevens.unfilledFirst, squadOf: squadOf)
+        out += eleven("Second XI", advice.elevens.second, average: advice.elevens.secondAverage,
+                      unfilled: advice.elevens.unfilledSecond, squadOf: squadOf)
+        out += depth(advice.depth, parameters: parameters)
+        out += rest(advice.rest)
+        out += training(advice.training)
+        out += removal(advice.removal)
+        if let suggestions = advice.suggestions { out += importance(suggestions) }
+        return out.joined(separator: "\n") + "\n"
+    }
+
+    private static func eleven(_ title: String, _ places: [ElevenPlace], average: Double?, unfilled: [SlotID],
+                               squadOf: [PlayerID: Squad]) -> [String] {
+        var out = ["", "=== \(title) ==="]
+        for place in places {
+            let squad = squadOf[place.player].map(squadName) ?? "?"
+            let rating = place.rating
+            out.append(("  \(pad(place.slot.rawValue, 6)) \(pad(place.name, 22)) \(pad(squad, 10)) rating \(fixed(rating.value, 1))"
+                        + "  familiarity \(rating.inPossession.familiarity) in possession, \(rating.outOfPossession.familiarity) out"
+                        + (place.isInjured ? "  INJURED" : "")).trimmingTrailingSpaces)
+        }
+        out.append("Average rating: " + (average.map { fixed($0, 1) } ?? "none"))
+        out.append("Unfilled slots: " + (unfilled.isEmpty ? "none" : unfilled.map(\.rawValue).joined(separator: ", ")))
+        return out
+    }
+
+    private static func depth(_ report: DepthReport, parameters: EngineParameters) -> [String] {
+        var out = ["", "=== Depth ===\(mark(report.basis))"]
+        out.append("Cover counts players solid in the slot (familiarity \(parameters.depthSolidFamiliarity.value) or over in both phases), "
+                   + "available today and not first choice elsewhere; fewer than \(parameters.depthThinBelow.value) is thin.")
+        for slot in report.slots {
+            let drop = slot.dropToSecond.map { "drop to second \(fixed($0, 1))" } ?? "no second choice"
+            let options = slot.options.isEmpty ? "nobody" : slot.options.map { option(slot.slot, $0, parameters: parameters) }
+                .joined(separator: ", ")
+            let loans = slot.onLoan.isEmpty ? "" : "; out on loan: "
+                + slot.onLoan.map { "\($0.name) \(fixed($0.rating, 1))" }.joined(separator: ", ")
+            out.append("  \(pad(slot.slot.rawValue, 6)) cover \(slot.cover), \(drop)\(slot.isThin ? ", THIN" : ""): \(options)\(loans)")
+        }
+        out.append("Recruit first: " + (report.thin.isEmpty ? "none" : report.thin.map(\.rawValue).joined(separator: ", ")))
+        return out
+    }
+
+    /// One option with his rating and, in brackets, what stops him counting as cover or what else he is.
+    private static func option(_ slot: SlotID, _ option: DepthOption, parameters: EngineParameters) -> String {
+        var marks: [String] = []
+        if option.squad != .firstTeam { marks.append(squadName(option.squad)) }
+        if let unavailable = option.unavailable { marks.append(ErrorDescriptions.describe(unavailable, parameters: parameters)) }
+        if !option.isSolid { marks.append("familiarity \(option.ipFamiliarity)/\(option.oopFamiliarity)") }
+        switch option.tier {
+        case .first(let other)?: marks.append(other == slot ? "first choice" : "first choice at \(other.rawValue)")
+        case .second(let other)?: marks.append(other == slot ? "second choice" : "second choice at \(other.rawValue)")
+        case .backup?, nil: break
+        }
+        return "\(option.name) \(fixed(option.rating, 1))" + (marks.isEmpty ? "" : " (\(marks.joined(separator: "; ")))")
+    }
+
+    private static func rest(_ advice: [RestAdvice]) -> [String] {
+        var out = ["", "=== Rest ==="]
+        if advice.isEmpty { out.append("  nobody") }
+        for one in advice {
+            let limit = "limit \(one.limit)" + (one.limitNotes.isEmpty ? "" : " (\(one.limitNotes.joined(separator: ", ")))")
+            let days: String
+            switch one.level {
+            case .holiday, .rest: days = one.days.map { ", clear in about \($0) \($0 == 1 ? "day" : "days")" } ?? ", clear in more days than the estimate covers"
+            case .watch: days = ""
+            }
+            out.append("  \(pad(one.level.rawValue.uppercased(), 8)) \(pad(one.name, 22)) jadedness \(one.jadedness), \(limit), "
+                       + "condition \(Display.percent(one.condition)), \(one.consecutiveStarts) in a row\(days)\(mark(one.basis))")
+            for reason in one.reasons { out.append("        - \(reason)") }
+        }
+        return out
+    }
+
+    private static func training(_ report: TrainingReport) -> [String] {
+        var out = ["", "=== Training ==="]
+        out.append("Recommendations")
+        if report.recommendations.isEmpty { out.append("  none") }
+        for one in report.recommendations {
+            let slots = one.needs.map { "\($0.slot.rawValue) in \($0.tactic)" }.joined(separator: ", ")
+            out.append("  \(one.name) (\(one.age)): learn \(one.choice.position.rawValue), familiarity \(one.currentFamiliarity) now, "
+                       + "for \(slots); learnability \(fixed(one.learnability, 2))\(mark(one.basis))")
+            for reason in one.reasons { out.append("        - \(reason)") }
+            for caution in one.cautions { out.append("        ! \(caution)") }
+        }
+        func needs(_ list: [RetrainingNeed]) -> String {
+            list.isEmpty ? "none" : list.map { "\($0.slot.rawValue) in \($0.tactic)" }.joined(separator: ", ")
+        }
+        out.append("Already being retrained for: \(needs(report.needsBeingRetrained))")
+        out.append("Needs nobody suits (recruit): \(needs(report.needsWithoutCandidates))")
+        return out
+    }
+
+    private static func removal(_ report: RemovalReport) -> [String] {
+        var out = ["", "=== Player Removal ==="]
+        out.append("Squad average ability: " + (report.squadAverageAbility.map { fixed($0, 1) } ?? "none")
+                   + "   Wages of the critical and high players: \(Display.perWeek(report.weeklyWagesAtStake))")
+        var medium = 0, keep = 0
+        for one in report.advice {
+            switch one.level {
+            case .critical, .high: break
+            case .medium: medium += 1; continue
+            case .keep: keep += 1; continue
+            }
+            var cost = "release cost unknown"
+            if let release = one.releaseCost, let mutual = one.mutualCost {
+                cost = "release costs \(Display.pounds(release)), a mutual termination about \(Display.pounds(mutual))"
+            }
+            out.append("  \(pad(one.level.rawValue.uppercased(), 8)) \(pad(action(one.action), 9)) \(pad(one.name, 22)) "
+                       + "score \(one.score); \(cost)\(mark(one.basis))")
+            for reason in one.reasons { out.append("        \(points(reason.points)) \(reason.text)") }
+        }
+        out.append("Medium (monitor): \(count(medium))   Keep: \(count(keep))")
+        out.append("Loan review")
+        if report.loans.isEmpty { out.append("  nobody on loan here") }
+        for loan in report.loans {
+            out.append("  \(pad(verdict(loan.verdict), 16)) \(pad(loan.name, 22)) score \(loan.score)\(mark(loan.basis))")
+            for reason in loan.reasons { out.append("        \(points(reason.points)) \(reason.text)") }
+        }
+        return out
+    }
+
+    private static func importance(_ suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]) -> [String] {
+        var out = ["", "=== Importance ==="]
+        if suggestions.isEmpty { out.append("  no fixtures") }
+        for (fixture, suggestion) in suggestions {
+            let about = [fixture.competition.map(competition), fixture.opponentStrength.map(strength)].compactMap { $0 }
+            out.append("  \(fixture.date.iso)  v \(fixture.opponent)" + (about.isEmpty ? "" : " (\(about.joined(separator: ", ")))")
+                       + ": set \(fixture.importance.rawValue), suggested \(suggestion.importance.rawValue)"
+                       + (fixture.importance == suggestion.importance ? "" : "  *") + mark(suggestion.basis))
+            for reason in suggestion.reasons { out.append("        - \(reason)") }
+        }
+        return out
+    }
+
+    /// How well backed a piece of advice is, as a note after it; nothing for FM27 evidence.
+    private static func mark(_ basis: Evidence) -> String {
+        switch basis {
+        case .fm27Measured, .fm27Official, .fm27Observation: ""
+        case .carriedOverFM26: " (FM26-era numbers)"
+        case .derived: " (this tool's estimate)"
+        }
+    }
+
+    private static func action(_ action: RemovalAction) -> String {
+        switch action {
+        case .release: "release"
+        case .loan: "loan out"
+        case .terminate: "terminate"
+        case .sell: "sell"
+        case .monitor: "monitor"
+        case .keep: "keep"
+        }
+    }
+
+    private static func verdict(_ verdict: LoanVerdict) -> String {
+        switch verdict {
+        case .endEarly: "end early"
+        case .doNotExtend: "do not extend"
+        case .keepToEnd: "keep to the end"
+        case .makePermanent: "make permanent"
+        }
+    }
+
+    private static func competition(_ competition: Competition) -> String {
+        switch competition {
+        case .league: "league"
+        case .cup: "cup"
+        case .minorCup: "minor cup"
+        case .friendly: "friendly"
+        }
+    }
+
+    private static func strength(_ strength: OpponentStrength) -> String {
+        switch strength {
+        case .muchStronger: "much stronger"
+        case .stronger: "stronger"
+        case .similar: "similar"
+        case .weaker: "weaker"
+        case .muchWeaker: "much weaker"
+        }
+    }
+
+    private static func count(_ n: Int) -> String { n == 1 ? "1 player" : "\(n) players" }
+    private static func points(_ n: Int) -> String { n > 0 ? "+\(n)" : "\(n)" }
 
     /// One row per player who starts at least once, in the order of his first start (slot order within a fixture),
     /// with his slot or "-" for each fixture.

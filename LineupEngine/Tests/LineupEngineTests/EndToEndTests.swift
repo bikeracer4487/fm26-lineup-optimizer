@@ -78,6 +78,8 @@ import Testing
         let importance: Importance
         let overrides: [SlotID: PlayerID]?
         let rejected: [PlayerID]?
+        let competition: Competition?
+        let opponentStrength: OpponentStrength?
     }
 
     /// The sample fixtures, each with the sample tactic, and the sample history, planned for the real squads as of
@@ -243,5 +245,88 @@ import Testing
             #expect(player.condition >= parameters.conditionFloor.value, "\(player.name) is below the condition floor")
         }
         #expect(!lineup.picks.map(\.name).contains("Max Treml"))
+    }
+
+    @Test func theAdvisorsRunOnTheRealSquad() throws {
+        let book = try realBook()
+        let players = book.allPlayers
+        let ownClub = book.ownClub(override: ownClubName)
+        let tactic = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
+        let catalog = try RoleCatalog.fm27()
+        let profile = try RatingProfile.standard()
+        let parameters = EngineParameters.fm27
+        let asOf = try #require(Day(iso: "2026-11-13"))
+        let history = try JSONDecoder().decode([ConfirmedLineup].self, from: Fixtures.data("plans/sample-history.json"))
+
+        let onLoan = Set(players.filter { if case .loanedOut = LoanStatus.of($0, ownClub: ownClub) { true } else { false } }.map(\.id))
+        let own = Set(players.filter { LoanStatus.of($0, ownClub: ownClub) == .own }.map(\.id))
+        #expect(!onLoan.isEmpty)
+
+        // The elevens: a full first eleven, nobody twice, nobody out on loan.
+        let elevens = try Elevens.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                         profile: profile, parameters: parameters)
+        #expect(elevens.first.count == 11)
+        let placed = (elevens.first + elevens.second).map(\.player)
+        #expect(Set(placed).count == placed.count)
+        #expect(onLoan.isDisjoint(with: placed))
+
+        // Depth: nobody out on loan among the options; the goalkeeper's slot is thin with no cover, because one
+        // goalkeeper is injured and the other is out on loan, where he is listed.
+        let depth = try Depth.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                     profile: profile, parameters: parameters)
+        for slot in depth.slots { #expect(onLoan.isDisjoint(with: slot.options.map(\.player)), "\(slot.slot.rawValue)") }
+        let keeper = try #require(depth.slots.first { $0.slot == .GK })
+        #expect(keeper.isThin && keeper.cover == 0)
+        #expect(depth.thin.contains(.GK))
+        #expect(keeper.onLoan.map(\.name).contains("Max Treml"))
+        #expect(keeper.options.contains { $0.name == "Jonny Maxted" && $0.unavailable == .injured })
+
+        // Rest: nobody out on loan.
+        let rest = try Rest.advice(players: players, ownClub: ownClub, history: StartHistory(history), asOf: asOf,
+                                   intensity: PlanSettings.standard.trainingIntensity, parameters: parameters)
+        #expect(onLoan.isDisjoint(with: rest.map(\.player)))
+        #expect(rest.allSatisfy { !$0.reasons.isEmpty })
+
+        // Training: every thin slot is covered by a recommendation, already being retrained, or a need nobody suits;
+        // every recommendation is explained and names one of the club's own players.
+        let training = try Training.report(tactics: [tactic], players: players, ownClub: ownClub, accepted: [], rejected: [],
+                                           catalog: catalog, profile: profile, parameters: parameters)
+        let recommended = Set(training.recommendations.flatMap(\.needs).map(\.slot))
+        for slot in depth.thin {
+            let need = RetrainingNeed(tactic: tactic.name, slot: slot)
+            #expect(recommended.contains(slot) || training.needsBeingRetrained.contains(need)
+                    || training.needsWithoutCandidates.contains(need), "\(slot.rawValue)")
+        }
+        for recommendation in training.recommendations {
+            #expect(!recommendation.reasons.isEmpty && !recommendation.cautions.isEmpty, "\(recommendation.name)")
+            #expect(own.contains(recommendation.choice.player), "\(recommendation.name)")
+        }
+
+        // Player Removal: nobody out on loan; every piece of advice has a reason, and its score is their sum.
+        let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                         profile: profile, parameters: parameters)
+        #expect(onLoan.isDisjoint(with: removal.advice.map(\.player) + removal.loans.map(\.player)))
+        for advice in removal.advice {
+            #expect(!advice.reasons.isEmpty, "\(advice.name)")
+            #expect(advice.score == advice.reasons.map(\.points).reduce(0, +), "\(advice.name)")
+        }
+
+        // The importance suggestion: every fixture gets one, with reasons.
+        let entries = try JSONDecoder().decode([FixtureEntry].self,
+                                               from: Fixtures.data("plans/sample-fixtures-with-competitions.json"))
+        #expect(entries.count == 5)
+        #expect(entries.allSatisfy { $0.competition != nil && $0.opponentStrength != nil })
+        let fixtures = entries.map {
+            Fixture(id: $0.id, date: $0.date, opponent: $0.opponent, importance: $0.importance, tactic: tactic,
+                    overrides: $0.overrides ?? [:], rejected: Set($0.rejected ?? []),
+                    competition: $0.competition, opponentStrength: $0.opponentStrength)
+        }
+        let tiers = try SquadTiers.compute(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                           profile: profile, parameters: parameters)
+        for fixture in fixtures {
+            let suggestion = ImportanceAdvisor.suggest(for: fixture, among: fixtures, confirmed: history, players: players,
+                                                       tiers: tiers, parameters: parameters)
+            #expect(!suggestion.reasons.isEmpty, "\(fixture.id.raw)")
+        }
     }
 }

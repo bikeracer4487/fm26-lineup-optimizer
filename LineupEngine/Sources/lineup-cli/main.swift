@@ -14,6 +14,10 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
                          [--first-team <paste.tsv>] [--u21 <paste.tsv>] [--u18 <paste.tsv>] [--own-club <name>]
                          [--history <confirmed.json>] [--intensity low|medium|high] [--stability <0...1>]
                          [--saving <0...10>] [--horizon <n>] [--profile fm27|carried-over]
+       lineup-cli advise --grids <fmrte config or grids snapshot> --tactic <tactic.json> --as-of <YYYY-MM-DD>
+                         [--first-team <paste.tsv>] [--u21 <paste.tsv>] [--u18 <paste.tsv>] [--own-club <name>]
+                         [--history <confirmed.json>] [--fixtures <fixtures.json>] [--intensity low|medium|high]
+                         [--profile fm27|carried-over]
        At least one of --first-team, --u21, --u18 is required.
        --profile picks the rating profile: fm27 (FM27 engine tests, the default), carried-over (carried over from FM26),
        or, for select only, both, which prints the FM27 lineup, then the carried-over one, and compares them.
@@ -21,14 +25,19 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        select chooses the lineup for the next fixture.
        plan chooses the lineups for the next fixtures in date order, every one with the --tactic tactic, projecting
        fitness from the day the squads were exported (--as-of) and printing a table of who starts where.
+       advise prints the advisors' reports for the --tactic tactic as of --as-of: the first and second elevens, depth
+       at each slot, who needs rest, who could retrain to cover thin slots, who to sell, loan out or release, and the
+       loan review; with --fixtures, a suggested importance beside each fixture's own.
        --fixtures is a JSON array of {"id", "date", "opponent", "importance", "overrides"?: {"<slot>": "<player key>"},
-       "rejected"?: ["<player key>"]}. --history is a JSON array of confirmed lineups:
+       "rejected"?: ["<player key>"], "competition"?: "league|cup|minorCup|friendly",
+       "opponentStrength"?: "muchStronger|stronger|similar|weaker|muchWeaker"}. Only advise reads competition and
+       opponentStrength. --history is a JSON array of confirmed lineups:
        {"fixture", "date", "starters": {"<slot>": "<player key>"}}. Dates are YYYY-MM-DD. A player's key is "fmrte:<Id>"
        when the paste has FMRTE's Id column, otherwise his name in lower case.
        Unless given, training intensity is medium, stability 0.5, saving players 1 (0 turns it off) and horizon 5.
 """
 
-enum Command { case select, plan }
+enum Command: String { case select, plan, advise }
 
 /// The rating profiles `--profile` can name, by the ids `RatingProfile` gives them, in the order they print.
 let profileChoices: [String: [String]] = [
@@ -59,7 +68,8 @@ func parse(_ arguments: [String]) throws -> Options {
     switch args.popFirst() {
     case "select": command = .select
     case "plan": command = .plan
-    default: throw UsageError(reason: "the commands are 'select' and 'plan'")
+    case "advise": command = .advise
+    default: throw UsageError(reason: "the commands are 'select', 'plan' and 'advise'")
     }
     var options = Options(command: command)
     let squads: [String: Squad] = ["--first-team": .firstTeam, "--u21": .u21, "--u18": .u18]
@@ -67,8 +77,9 @@ func parse(_ arguments: [String]) throws -> Options {
     let allowed = switch command {
     case .select: shared + ["--importance"]
     case .plan: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--stability", "--saving", "--horizon"]
+    case .advise: shared + ["--fixtures", "--history", "--as-of", "--intensity"]
     }
-    let name = command == .select ? "select" : "plan"
+    let name = command.rawValue
     while let flag = args.popFirst() {
         guard allowed.contains(flag) || squads[flag] != nil else { throw UsageError(reason: "unknown option \(flag) for \(name)") }
         guard let value = args.popFirst() else { throw UsageError(reason: "\(flag) needs a value") }
@@ -111,8 +122,12 @@ func parse(_ arguments: [String]) throws -> Options {
     guard options.grids != nil else { throw UsageError(reason: "--grids is required") }
     guard options.tactic != nil else { throw UsageError(reason: "--tactic is required") }
     guard !options.pastes.isEmpty else { throw UsageError(reason: "give at least one of --first-team, --u21, --u18") }
-    if command == .plan {
+    switch command {
+    case .select: break
+    case .plan:
         guard options.fixtures != nil else { throw UsageError(reason: "--fixtures is required") }
+        guard options.asOf != nil else { throw UsageError(reason: "--as-of is required") }
+    case .advise:
         guard options.asOf != nil else { throw UsageError(reason: "--as-of is required") }
     }
     return options
@@ -148,6 +163,28 @@ struct FixtureEntry: Decodable {
     let importance: Importance
     let overrides: [SlotID: PlayerID]?
     let rejected: [PlayerID]?
+    let competition: Competition?
+    let opponentStrength: OpponentStrength?
+}
+
+/// The entries of the fixtures file at `path` as fixtures with `tactic`. A key the squads do not have is a mistake in
+/// the file, not a player to leave out quietly.
+func resolveFixtures(_ entries: [FixtureEntry], file path: String, tactic: Tactic, book: SquadBook) -> [Fixture] {
+    let known = Set(book.allPlayers.map(\.id))
+    for (index, entry) in entries.enumerated() {
+        let named = (entry.overrides ?? [:]).sorted { $0.key.rawValue < $1.key.rawValue }
+            .map { (field: "overrides.\($0.key.rawValue)", id: $0.value) }
+            + (entry.rejected ?? []).map { (field: "rejected", id: $0) }
+        if let unknown = named.first(where: { !known.contains($0.id) }) {
+            fail("The fixtures file \(path) is not valid: fixture \(index + 1) (\(entry.id.raw)), field "
+                 + "'\(unknown.field)', names '\(unknown.id.key)', who is not in the imported squads", showUsage: true)
+        }
+    }
+    return entries.map {
+        Fixture(id: $0.id, date: $0.date, opponent: $0.opponent, importance: $0.importance, tactic: tactic,
+                overrides: $0.overrides ?? [:], rejected: Set($0.rejected ?? []),
+                competition: $0.competition, opponentStrength: $0.opponentStrength)
+    }
 }
 
 let options: Options
@@ -199,21 +236,7 @@ do {
         output = Report.render(header, importance: options.importance, results: results, parameters: .fm27)
 
     case .plan:
-        // A key the squads do not have is a mistake in the file, not a player to leave out quietly.
-        let known = Set(book.allPlayers.map(\.id))
-        for (index, entry) in (fixtureEntries ?? []).enumerated() {
-            let named = (entry.overrides ?? [:]).sorted { $0.key.rawValue < $1.key.rawValue }
-                .map { (field: "overrides.\($0.key.rawValue)", id: $0.value) }
-                + (entry.rejected ?? []).map { (field: "rejected", id: $0) }
-            if let unknown = named.first(where: { !known.contains($0.id) }) {
-                fail("The fixtures file \(options.fixtures!) is not valid: fixture \(index + 1) (\(entry.id.raw)), field "
-                     + "'\(unknown.field)', names '\(unknown.id.key)', who is not in the imported squads", showUsage: true)
-            }
-        }
-        let fixtures = (fixtureEntries ?? []).map {
-            Fixture(id: $0.id, date: $0.date, opponent: $0.opponent, importance: $0.importance, tactic: tactic,
-                    overrides: $0.overrides ?? [:], rejected: Set($0.rejected ?? []))
-        }
+        let fixtures = resolveFixtures(fixtureEntries ?? [], file: options.fixtures!, tactic: tactic, book: book)
         let profile = profiles[0]
         let parameters = EngineParameters.fm27
         let plan = try Planner(catalog: catalog, profile: profile, parameters: parameters).plan(PlanRequest(
@@ -221,6 +244,36 @@ do {
             retraining: [], settings: options.settings))
         output = Report.render(header, plan: plan, fixtures: fixtures, history: history, asOf: options.asOf!,
                                profile: profile, parameters: parameters, settings: options.settings)
+
+    case .advise:
+        let fixtures = fixtureEntries.map { resolveFixtures($0, file: options.fixtures!, tactic: tactic, book: book) }
+        let profile = profiles[0]
+        let parameters = EngineParameters.fm27
+        let players = book.allPlayers
+        let elevens = try Elevens.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                         profile: profile, parameters: parameters)
+        let depth = try Depth.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                     profile: profile, parameters: parameters)
+        let rest = try Rest.advice(players: players, ownClub: ownClub, history: StartHistory(history), asOf: options.asOf!,
+                                   intensity: options.settings.trainingIntensity, parameters: parameters)
+        let training = try Training.report(tactics: [tactic], players: players, ownClub: ownClub, accepted: [], rejected: [],
+                                           catalog: catalog, profile: profile, parameters: parameters)
+        let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                         profile: profile, parameters: parameters)
+        var suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]?
+        if let fixtures {
+            // The planner's tiers: injured players left out, as they cannot play.
+            let tiers = try SquadTiers.compute(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                               profile: profile, parameters: parameters)
+            suggestions = fixtures.sorted { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }.map { fixture in
+                (fixture, ImportanceAdvisor.suggest(for: fixture, among: fixtures, confirmed: history, players: players,
+                                                    tiers: tiers, parameters: parameters))
+            }
+        }
+        output = Report.render(header, advice: Report.Advice(
+            asOf: options.asOf!, profile: profile, intensity: options.settings.trainingIntensity, history: history,
+            elevens: elevens, depth: depth, rest: rest, training: training, removal: removal, suggestions: suggestions),
+            parameters: parameters)
     }
 } catch {
     // The library describes FMRTE's configuration without knowing where it was read from.

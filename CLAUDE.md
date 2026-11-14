@@ -7,13 +7,13 @@ The FM26 lineup optimizer is being rebuilt as a native Mac app for Football Mana
 - Design: `docs/superpowers/specs/2026-11-12-fm27-native-app-design.md`
 - Engine plan, complete (Tasks 1 to 18): `docs/superpowers/plans/2026-11-12-fm27-engine-foundation.md`. Its last two sections list the later plans (Planner, Advisors, the visual design pass, the App, Clean-up) and the notes and known small faults carried into them.
 - Planner plan, complete (Tasks 1 to 10): `docs/superpowers/plans/2026-11-13-fm27-planner.md`. Its closing sections list the planner's known limits, the decisions that changed during the build, what the plan showed on the real squad, the small faults left, and what is carried into the app plan.
-- Advisors plan, approved by the owner on 13 November 2026 and being built task by task (see `git log` for how far it has got): `docs/superpowers/plans/2026-11-13-fm27-advisors.md`.
+- Advisors plan, complete (Tasks 1 to 7): `docs/superpowers/plans/2026-11-13-fm27-advisors.md`. Its closing section lists the advisors' known limits for the owner.
 - App plan, first screens, complete (Tasks 1 to 11; Task 10 was built before Task 8, and Task 11 restyled every screen). Its closing sections list the decisions that changed during the build and the limits and small faults left: `docs/superpowers/plans/2026-11-13-fm27-app-first-screens.md`, to the visual direction in `docs/superpowers/specs/2026-11-13-fm27-app-visual-direction.md`. Squad, Tactics, Fixtures, Match Selection and Settings exist. The advisor screens come after the advisors plan.
 - Research: `docs/Research/fm27-*.md` and `docs/Research/fm27_roles.json` are FM27; the other files in `docs/Research/` are FM26. Prefer FM27 evidence. Where it is silent, use the FM26 research and label it as carried over (the owner's rule: a lot carries over between game years). An attribute FM27 tested and found to have no effect is a finding, not a gap.
 
 ## New code: `LineupEngine/`
 
-A Swift package (Swift 6, macOS 26, Swift Testing, Foundation only). Built so far: the domain model, the FMRTE clipboard importer, the squad book, the FM27 role catalogue and tactics, the rating core, fitness and risk rules, an exact assignment solver, lineup selection with a reason for every pick and omission, and the planner (looking ahead across fixtures). Not built yet: the advisors (First and Second XI, Depth, Rest, Training, Player Removal). The app is a second package, `LineupApp/`, described below. The engine has no UI and reads no files itself; it is handed data.
+A Swift package (Swift 6, macOS 26, Swift Testing, Foundation only). Built so far: the domain model, the FMRTE clipboard importer, the squad book, the FM27 role catalogue and tactics, the rating core, fitness and risk rules, an exact assignment solver, lineup selection with a reason for every pick and omission, the planner (looking ahead across fixtures), and the advisors (First and Second XI, Depth, Rest, Training, Player Removal, and a suggested importance for each fixture). The app is a second package, `LineupApp/`, described below. The engine has no UI and reads no files itself; it is handed data.
 
 Test it with:
 
@@ -39,6 +39,16 @@ Plan the next five fixtures for the same squad (prints each lineup with reasons,
       --fixtures Tests/LineupEngineTests/Fixtures/plans/sample-fixtures.json \
       --history Tests/LineupEngineTests/Fixtures/plans/sample-history.json --as-of 2026-11-13
 
+Run every advisor on the same squad (prints the two elevens, depth at each slot, rest, retraining, who to move on and the loan review, then a suggested importance beside each fixture's own):
+
+    cd LineupEngine && swift run -q lineup-cli advise \
+      --grids Tests/LineupEngineTests/Fixtures/captures/first-team.grids.json \
+      --tactic Tests/LineupEngineTests/Fixtures/tactics/sample-4231.json \
+      --first-team Tests/LineupEngineTests/Fixtures/captures/first-team.tsv \
+      --u21 Tests/LineupEngineTests/Fixtures/captures/u21.tsv --own-club "Oxford City" \
+      --fixtures Tests/LineupEngineTests/Fixtures/plans/sample-fixtures-with-competitions.json \
+      --history Tests/LineupEngineTests/Fixtures/plans/sample-history.json --as-of 2026-11-13
+
 Usage is at the top of `LineupEngine/Sources/lineup-cli/main.swift`.
 
 How the engine works, where it is not obvious:
@@ -49,6 +59,7 @@ How the engine works, where it is not obvious:
 - **The port check.** The `.fm26Reference` configuration reproduces the old Python (role thresholds, current-ability factor, rounding) and is tested against 594 cases exported from it. Nothing else uses it.
 - **Selection.** Rating times condition, sharpness and jadedness factors, solved exactly as an assignment problem, with manual overrides and risk rules that depend on match importance.
 - **Planning.** `Planner` picks the lineups for the next fixtures in date order. Each player's value is adjusted, with a reason, by the importance rules (consecutive starts, sharpness, development, loans, retraining, stability) and by a cost for starting him when a bigger fixture follows soon. Condition, sharpness and jadedness are projected from one fixture to the next; starters are assumed to play 90 minutes and nobody else plays.
+- **Advisors.** They advise; the planner decides who starts. Each is a function of the data it is handed (`Advisors/`). `Elevens` gives the best and second-best elevens at full fitness, injured players kept in and marked; Depth, Training and Player Removal build on those tiers. Depth calls a slot thin when fewer than two players are solid there (familiarity 15 or over in both phases), available today and not first choice elsewhere. Training recommends position retraining for thin slots; Rest flags players over their own jadedness limit, under the condition floor or on a run of starts; Player Removal scores every player of the club's own with a points reason for each rule, and reviews loans to the club; `ImportanceAdvisor` suggests an importance from the competition, the opponent and the schedule, and the owner's choice always wins. Every piece of advice carries the weakest evidence behind it, and most of the numbers are carried over from FM26 or the tool's own estimates.
 
 Tools:
 
