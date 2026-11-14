@@ -67,7 +67,7 @@ import Testing
         #expect(sentence(.nobodyBetter) == "Dunn (17): nobody who stands above him in this squad is better where it counts.")
         #expect(sentence(.wouldHarm(.pressure))
                 == "Dunn (17): those who are better where it counts would do him harm in Pressure.")
-        #expect(sentence(.leadsTaken) == "Dunn (17): the leads who suit him are leading others with more to gain.")
+        #expect(sentence(.leadsTaken) == "Dunn (17): the players who could lead him are already in a group.")
         #expect(sentence(.noThird) == "Dunn (17): no third player could be found to make up a group with him and his lead.")
     }
 
@@ -90,24 +90,33 @@ import Testing
     @Test func whatChangedReadsPlainly() {
         #expect(AdvisorText.change(change(.professionalism, 9, 10, weeks: 5, .improved)) == "Professionalism 9 to 10 in 5 weeks")
         #expect(AdvisorText.change(change(.professionalism, 9, 10, weeks: 1, .improved)) == "Professionalism 9 to 10 in 1 week")
+        #expect(AdvisorText.change(change(.professionalism, 9, 10, weeks: 3.0 / 7, .improved))
+                == "Professionalism 9 to 10 in under a week")
+        #expect(AdvisorText.change(change(.professionalism, 10, 8, weeks: 0, .worse))
+                == "Professionalism 10 to 8 in under a week")
         #expect(AdvisorText.change(change(.pressure, 5, 5, weeks: 5, .noChange)) == "Pressure 5, no change")
         #expect(AdvisorText.change(change(.professionalism, 10, 8, weeks: 4, .worse)) == "Professionalism 10 to 8 in 4 weeks")
         #expect(AdvisorText.change(change(.pressure, 14, 13, weeks: 5, .noChange)) == "Pressure 14 to 13, above where it counts")
         #expect(AdvisorText.change(change(.pressure, nil, nil, weeks: 0, .noReading)) == nil)
     }
 
-    func review(harm: Bool, stopped: Bool) -> GroupReview {
+    func review(harm: Bool, stopped: Bool, lead: PlayerID?) -> GroupReview {
         let group = MentoringGroup(id: UUID(), squad: .firstTeam, startedOn: Day(year: 2026, month: 9, day: 1)!, members: [])
-        return GroupReview(group: group, lead: nil, members: [], warnings: [], isDoingHarm: harm, hasStoppedWorking: stopped,
-                           basis: .derived)
+        return GroupReview(group: group, lead: lead, members: [], warnings: [], isDoingHarm: harm,
+                           hasStoppedWorking: stopped, basis: .derived)
     }
 
     @Test func aGroupDoingHarmOrStoppedSaysSoAndOtherwiseNothing() {
-        #expect(AdvisorText.state(of: review(harm: true, stopped: false), parameters: parameters)
+        #expect(AdvisorText.state(of: review(harm: true, stopped: false, lead: hart), parameters: parameters)
                 == "This group is doing harm: a member is worth less than when he joined. Consider regrouping.")
-        #expect(AdvisorText.state(of: review(harm: false, stopped: true), parameters: parameters)
+        #expect(AdvisorText.state(of: review(harm: true, stopped: false, lead: nil), parameters: parameters)
+                == "This group is doing harm: a member is worth less than when he joined. Consider regrouping.")
+        #expect(AdvisorText.state(of: review(harm: false, stopped: true, lead: hart), parameters: parameters)
                 == "This group has stopped working: nobody but the lead has changed in 13 weeks. Consider regrouping.")
-        #expect(AdvisorText.state(of: review(harm: false, stopped: false), parameters: parameters) == nil)
+        #expect(AdvisorText.state(of: review(harm: false, stopped: true, lead: nil), parameters: parameters)
+                == "This group has stopped working: nobody has changed in 13 weeks. Consider regrouping.")
+        #expect(AdvisorText.state(of: review(harm: false, stopped: false, lead: hart), parameters: parameters) == nil)
+        #expect(AdvisorText.state(of: review(harm: false, stopped: false, lead: nil), parameters: parameters) == nil)
     }
 
     @Test func recordingAGroupSaysToSetItInTheGame() {

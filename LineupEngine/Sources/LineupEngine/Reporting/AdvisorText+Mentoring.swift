@@ -71,7 +71,7 @@ extension AdvisorText {
         case .nobodyBetter: "\(who): nobody who stands above him in this squad is better where it counts."
         case .wouldHarm(let attribute):
             "\(who): those who are better where it counts would do him harm in \(attribute.rawValue)."
-        case .leadsTaken: "\(who): the leads who suit him are leading others with more to gain."
+        case .leadsTaken: "\(who): the players who could lead him are already in a group."
         case .noThird: "\(who): no third player could be found to make up a group with him and his lead."
         }
     }
@@ -92,15 +92,21 @@ extension AdvisorText {
         }
     }
 
-    /// What changed in one attribute since the member joined; nil when there is no reading to compare.
+    /// What changed in one attribute since the member joined; nil when there is no reading to compare. A change read
+    /// within a few days, whose weeks round to 0, reads "in under a week".
     public static func change(_ change: AttributeChange) -> String? {
         let name = change.attribute.rawValue
         let weeks = Int(change.weeks.rounded())
+        let span = switch weeks {
+        case 0: "under a week"
+        case 1: "1 week"
+        default: "\(weeks) weeks"
+        }
         switch change.change {
         case .noReading: return nil
         case .improved, .worse:
             guard let start = change.start, let latest = change.latest else { return nil }
-            return "\(name) \(start) to \(latest) in \(weeks) \(weeks == 1 ? "week" : "weeks")"
+            return "\(name) \(start) to \(latest) in \(span)"
         case .noChange:
             guard let start = change.start, let latest = change.latest else { return nil }
             return start == latest ? "\(name) \(latest), no change" : "\(name) \(start) to \(latest), above where it counts"
@@ -109,14 +115,16 @@ extension AdvisorText {
 
     public static let noReadingYet = "No reading yet: values are read at each import"
 
-    /// What a recorded group is doing, when that is bad: doing harm, or stopped; nil otherwise.
+    /// What a recorded group is doing, when that is bad: doing harm, or stopped; nil otherwise. A stopped group with
+    /// nobody clearly leading says nobody has changed, since there is no lead to set apart.
     public static func state(of review: GroupReview, parameters: EngineParameters) -> String? {
         if review.isDoingHarm {
             return "This group is doing harm: a member is worth less than when he joined. Consider regrouping."
         }
         if review.hasStoppedWorking {
             let weeks = parameters.mentoringStoppedAfterWeeks.value
-            return "This group has stopped working: nobody but the lead has changed in \(weeks) weeks. Consider regrouping."
+            let who = review.lead == nil ? "nobody" : "nobody but the lead"
+            return "This group has stopped working: \(who) has changed in \(weeks) weeks. Consider regrouping."
         }
         return nil
     }
