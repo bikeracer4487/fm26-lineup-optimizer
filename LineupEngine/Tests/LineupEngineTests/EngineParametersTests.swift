@@ -86,4 +86,16 @@ import Testing
         #expect(listed["sharpnessNeedMost"]?.evidence == .derived)
         #expect(listed["loanedInFactor"]?.evidence == .carriedOverFM26)
     }
+
+    @Test func theDepthParametersAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        for name in ["depthCoverFamiliarity", "depthSolidFamiliarity", "depthThinBelow"] {
+            #expect(listed[name] != nil, "\(name) is not listed")
+            #expect(listed[name]?.evidence == .derived)
+            #expect(!(listed[name]?.source.isEmpty ?? true), "\(name) has no source")
+        }
+        #expect(EngineParameters.fm27.depthCoverFamiliarity.value == 10)
+        #expect(EngineParameters.fm27.depthSolidFamiliarity.value == 15)
+        #expect(EngineParameters.fm27.depthThinBelow.value == 2)
+    }
 }

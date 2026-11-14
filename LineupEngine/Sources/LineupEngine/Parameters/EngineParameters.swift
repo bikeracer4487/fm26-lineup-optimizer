@@ -131,6 +131,12 @@ public struct EngineParameters: Sendable {
     /// An adjustment that costs a left-out player less than this many rating points is not named as the reason,
     /// unless no adjustment that held him back reaches it.
     public var omissionReasonMinimumLoss: Parameter<Double>
+    /// The least familiarity, in both phases, at which a player counts as an option for a slot at all.
+    public var depthCoverFamiliarity: Parameter<Int>
+    /// The least familiarity, in both phases, at which an option counts as solid cover.
+    public var depthSolidFamiliarity: Parameter<Int>
+    /// A slot with fewer solid, available options than this is thin.
+    public var depthThinBelow: Parameter<Int>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -278,7 +284,13 @@ public struct EngineParameters: Sendable {
                     + "and values stay far below the assignment solver's empty-slot cost"),
             omissionReasonMinimumLoss: Parameter(
                 1.0, .derived,
-                source: "an adjustment that costs a player less than one rating point is not given as the reason he was left out"))
+                source: "an adjustment that costs a player less than one rating point is not given as the reason he was left out"),
+            depthCoverFamiliarity: Parameter(
+                10, .derived, source: "the Competent step of the familiarity table: below it a player is out of position"),
+            depthSolidFamiliarity: Parameter(
+                15, .derived,
+                source: "design spec 8.7's starting rule; FM27 Match Lab Study 5 puts a cap of 15 at 0.26 points a game and a cap of 10 at 0.85 (docs/Research/fm27-tactical-effectiveness-and-roles.md)"),
+            depthThinBelow: Parameter(2, .derived, source: "design spec 8.7's starting rule: fewer than two is thin"))
     }()
 
     /// Every stored parameter, found by reflection so a new one cannot be left out.
