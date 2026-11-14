@@ -247,6 +247,23 @@ import Testing
         #expect(!lineup.picks.map(\.name).contains("Max Treml"))
     }
 
+    @Test func theReportEqualsTheAdvisorsCalledOneByOne() throws {
+        let book = try realBook()
+        let tactic = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
+        var other = tactic
+        other.name = "Second Sample"
+        let catalog = try RoleCatalog.fm27()
+        let profile = try RatingProfile.standard()
+        let history = try JSONDecoder().decode([ConfirmedLineup].self, from: Fixtures.data("plans/sample-history.json"))
+        let request = AdvisorsRequest(primary: tactic, tactics: [tactic, other], players: book.allPlayers,
+                                      ownClub: book.ownClub(override: ownClubName), history: StartHistory(history),
+                                      asOf: try #require(Day(iso: "2026-11-13")), intensity: .medium, accepted: [],
+                                      rejected: [])
+        let together = try Advisors.report(request, catalog: catalog, profile: profile, parameters: .fm27)
+        #expect(together == (try AdvisorsTests.oneByOne(request, catalog: catalog, profile: profile, parameters: .fm27)))
+        #expect(!together.removal.advisedToLeave.isEmpty && !together.depth.thin.isEmpty)
+    }
+
     @Test func theAdvisorsRunOnTheRealSquad() throws {
         let book = try realBook()
         let players = book.allPlayers

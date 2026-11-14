@@ -31,8 +31,8 @@ public struct RemovalAdvice: Equatable, Sendable {
     public let isProspect: Bool
     public let isFalseProspect: Bool
     public let isMentor: Bool
-    /// Wages left on the contract, in pounds: 0 for a player out of contract; nil when months left is unknown, or for a
-    /// contract type this tool does not read.
+    /// Wages left on the contract, in pounds: 0 for a player out of contract, or on a full-time contract with 0 months
+    /// left; nil when months left is unknown, or for a contract type this tool does not read.
     public let releaseCost: Int?
     /// The likely cost of a mutual termination, in pounds; 0 and nil as `releaseCost`.
     public let mutualCost: Int?
@@ -84,10 +84,19 @@ public enum Removal {
                               profile: RatingProfile, parameters: EngineParameters) throws -> RemovalReport {
         let problems = FitnessModel.problems(in: parameters)
         guard problems.isEmpty else { throw PlanError.badParameters(problems) }
-        let tiers = try Elevens.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
-                                       profile: profile, parameters: parameters).tiers
-        let depth = try Depth.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
-                                     profile: profile, parameters: parameters).slots
+        let elevens = try Elevens.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                         profile: profile, parameters: parameters)
+        let depth = try Depth.report(tactic: tactic, players: players, ownClub: ownClub, elevens: elevens, catalog: catalog,
+                                     profile: profile, parameters: parameters)
+        return try report(players: players, ownClub: ownClub, elevens: elevens, depth: depth, parameters: parameters)
+    }
+
+    /// The same, from `elevens` and `depth` already worked out for the tactic and these players. The caller has
+    /// checked the parameters with `FitnessModel.problems(in:)`. Throws `RatingError.missingAttribute` as above.
+    static func report(players: [Player], ownClub: String?, elevens: ElevensReport, depth depthReport: DepthReport,
+                       parameters: EngineParameters) throws -> RemovalReport {
+        let tiers = elevens.tiers
+        let depth = depthReport.slots
 
         // Sorting by key makes every list, and the first error, independent of input order.
         var own: [Player] = []
@@ -145,10 +154,14 @@ public enum Removal {
         var evidence = [parameters.removalRules.evidence, parameters.removalLevels.evidence]
 
         // Only a player out of contract can go at no cost; a type this tool does not read (a youth or part-time
-        // contract, say) says nothing about the cost either way.
+        // contract, say) says nothing about the cost either way. A full-time contract with 0 months left is read as no
+        // contract (the owner's decision of 13 November 2026, to be checked against the game); unknown months are not.
         let outOfContract: Bool
         let costsKnown: Bool
         switch player.contractType {
+        case .fullTime where player.monthsLeft == 0:
+            (outOfContract, costsKnown) = (true, true)
+            reasons.add(rules.notFullTimePoints, "No contract: 0 months left")
         case .fullTime:
             (outOfContract, costsKnown) = (false, true)
         case .outOfContract:

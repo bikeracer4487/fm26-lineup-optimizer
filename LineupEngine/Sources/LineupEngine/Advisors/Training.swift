@@ -70,7 +70,8 @@ public enum Training {
 
     /// Who should learn a position to cover the thin slots of `tactics`. A player in `leaving`, whom the owner is advised
     /// to move on, is never a candidate; the caller passes `RemovalReport.advisedToLeave` there, since Training does not
-    /// run Player Removal itself. Throws `PlanError.badParameters` when
+    /// run Player Removal itself. A player with an accepted retraining, at any position, is not a candidate for another:
+    /// one retraining at a time. Throws `PlanError.badParameters` when
     /// `FitnessModel.problems(in:)` finds problems, what `Depth.report` throws, `RatingError.missingAttribute` for a
     /// candidate without Versatility or Professionalism, and `RatingError.missingFamiliarity` for a missing position.
     public static func report(tactics: [Tactic], players: [Player], ownClub: String?,
@@ -79,11 +80,28 @@ public enum Training {
                               parameters: EngineParameters) throws -> TrainingReport {
         let problems = FitnessModel.problems(in: parameters)
         guard problems.isEmpty else { throw PlanError.badParameters(problems) }
+        return try report(tactics: tactics, players: players, ownClub: ownClub, accepted: accepted, rejected: rejected,
+                          leaving: leaving, catalog: catalog, profile: profile, parameters: parameters) { tactic in
+            let elevens = try Elevens.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                             profile: profile, parameters: parameters)
+            let depth = try Depth.report(tactic: tactic, players: players, ownClub: ownClub, elevens: elevens,
+                                         catalog: catalog, profile: profile, parameters: parameters)
+            return (elevens, depth)
+        }
+    }
 
+    /// The same, with each tactic's elevens and depth for these players from `solved`, called once per entry of
+    /// `tactics` in order, when that tactic is reached. The caller has checked the parameters with
+    /// `FitnessModel.problems(in:)`. Throws what `solved` throws, and the rating errors above.
+    static func report(tactics: [Tactic], players: [Player], ownClub: String?,
+                       accepted: [Retraining], rejected: Set<RetrainingChoice>, leaving: Set<PlayerID>,
+                       catalog: RoleCatalog, profile: RatingProfile, parameters: EngineParameters,
+                       solved: (Tactic) throws -> (elevens: ElevensReport, depth: DepthReport)) throws -> TrainingReport {
         let engine = RatingEngine(profile: profile, parameters: parameters, configuration: .fm27)
         // Sorting by key makes every list independent of input order.
         let sorted = players.sorted { $0.id.key < $1.id.key }
-        let skipped = rejected.union(accepted.map { RetrainingChoice(player: $0.player, position: $0.position) })
+        // One retraining at a time: a player with an accepted retraining is not offered another.
+        let retraining = Set(accepted.map(\.player))
         var needs: [NeedFacts] = []
         var pairs: [RetrainingChoice: Pair] = [:]
         var learnabilities: [PlayerID: Double] = [:]
@@ -102,10 +120,8 @@ public enum Training {
         }
 
         for tactic in tactics {
-            let depth = try Depth.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
-                                         profile: profile, parameters: parameters)
-            let firstEleven = try Elevens.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
-                                                 profile: profile, parameters: parameters).first
+            let (elevens, depth) = try solved(tactic)
+            let firstEleven = elevens.first
             let firstChoice = Dictionary(uniqueKeysWithValues: firstEleven.map { ($0.slot, $0) })
             let firstAt = Dictionary(uniqueKeysWithValues: firstEleven.map { ($0.player, $0.slot) })
             let assignments = Dictionary(uniqueKeysWithValues: try tactic.assignments(catalog: catalog).map { ($0.slot, $0) })
@@ -119,13 +135,13 @@ public enum Training {
                                        isBeingRetrained: try isBeingRetrained(assignment)))
                 // Without a first choice there is nothing to measure a candidate against.
                 guard let first = firstChoice[slot], first.rating.value > 0 else { continue }
-                for player in sorted where !leaving.contains(player.id) {
+                for player in sorted where !leaving.contains(player.id) && !retraining.contains(player.id) {
                     guard let candidate = try candidate(player, for: assignment, firstRating: first.rating.value,
                                                         firstAt: firstAt, ownClub: ownClub, engine: engine,
                                                         learnabilities: &learnabilities, parameters: parameters)
                     else { continue }
                     let choice = RetrainingChoice(player: player.id, position: candidate.position)
-                    guard !skipped.contains(choice) else { continue }
+                    guard !rejected.contains(choice) else { continue }
                     if pairs[choice] == nil {
                         pairs[choice] = Pair(choice: choice, player: player, needs: [index], candidate: candidate)
                     } else {

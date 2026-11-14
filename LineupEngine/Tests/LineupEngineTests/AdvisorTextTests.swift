@@ -49,13 +49,18 @@ import Testing
         #expect(AdvisorText.costs(of: removal(release: nil, mutual: nil)) == "The cost of releasing him is not known")
     }
 
+    @Test func costsWithOnlyOneKnownAreNotKnown() {
+        #expect(AdvisorText.costs(of: removal(release: 26_000, mutual: nil)) == "The cost of releasing him is not known")
+        #expect(AdvisorText.costs(of: removal(release: nil, mutual: 14_300)) == "The cost of releasing him is not known")
+    }
+
     @Test func whyEachAction() {
         let advice = removal(release: nil, mutual: nil)
         #expect(AdvisorText.why(.release, for: advice) == "He is out of contract, so releasing him costs nothing")
         #expect(AdvisorText.why(.loan, for: advice) == "A young player with room to grow: a loan gives him matches")
         #expect(AdvisorText.why(.terminate, for: advice)
                 == "His contract is nearly over and no fee is likely to beat the cost of ending it")
-        #expect(AdvisorText.why(.sell, for: advice) == "A fee is the best way out of his contract")
+        #expect(AdvisorText.why(.sell, for: advice) == "Selling is the way left: nothing cheaper applies")
         #expect(AdvisorText.why(.monitor, for: advice) == "Not enough against him to act: watch how he does")
         #expect(AdvisorText.why(.keep, for: advice) == "Nothing here says he should go")
     }
@@ -108,7 +113,16 @@ import Testing
     }
 
     @Test func aReasonNamesThePositionInWords() throws {
-        // Position words in an advisor sentence, not codes.
-        #expect(!PositionText.plain(Position.defenderLeft).contains("("))
+        // A real Player Removal reason for the planner squad's first-choice left back.
+        let players = try PlannerFixture.squad()
+        let report = try Removal.report(tactic: try PlannerFixture.tactic(), players: players, ownClub: "Oxford City",
+                                        catalog: try RoleCatalog.fm27(), profile: try RatingProfile.standard(),
+                                        parameters: parameters)
+        let advice = try #require(report.advice.first { $0.player == PlannerFixture.id(.D_L, "first") })
+        let sentence = try #require(advice.reasons.map(\.text).first { $0.hasPrefix("In the first eleven") })
+        #expect(sentence == "In the first eleven at left back")
+        for code in [Position.defenderLeft.rawValue, Position.defenderLeft.tableKey, SlotID.D_L.rawValue, "D L", "("] {
+            #expect(!sentence.contains(code), "\(code)")
+        }
     }
 }

@@ -103,7 +103,7 @@ public enum AdvisorText {
         case .release: "He is out of contract, so releasing him costs nothing"
         case .loan: "A young player with room to grow: a loan gives him matches"
         case .terminate: "His contract is nearly over and no fee is likely to beat the cost of ending it"
-        case .sell: "A fee is the best way out of his contract"
+        case .sell: "Selling is the way left: nothing cheaper applies"
         case .monitor: "Not enough against him to act: watch how he does"
         case .keep: "Nothing here says he should go"
         }

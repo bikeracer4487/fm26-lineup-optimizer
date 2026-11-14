@@ -75,8 +75,17 @@ public enum Depth {
     /// Throws what `Elevens.report` throws, and `RatingError` for a player with missing data.
     public static func report(tactic: Tactic, players: [Player], ownClub: String?, catalog: RoleCatalog,
                               profile: RatingProfile, parameters: EngineParameters) throws -> DepthReport {
-        let tiers = try Elevens.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
-                                       profile: profile, parameters: parameters).tiers
+        let elevens = try Elevens.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                         profile: profile, parameters: parameters)
+        return try report(tactic: tactic, players: players, ownClub: ownClub, elevens: elevens, catalog: catalog,
+                          profile: profile, parameters: parameters)
+    }
+
+    /// The same, from `elevens` already worked out for `tactic` and these players, so they are not solved again.
+    /// Throws `RatingError` for a player with missing data.
+    static func report(tactic: Tactic, players: [Player], ownClub: String?, elevens: ElevensReport, catalog: RoleCatalog,
+                       profile: RatingProfile, parameters: EngineParameters) throws -> DepthReport {
+        let tiers = elevens.tiers
         let assignments = try tactic.assignments(catalog: catalog)
         let engine = RatingEngine(profile: profile, parameters: parameters, configuration: .fm27)
         // Sorting by key makes every list independent of input order.

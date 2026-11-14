@@ -237,7 +237,9 @@ public struct LoanReviewRules: Sendable, Equatable {
 /// and the loan review's. Of a pair of lines ("under 8 / exactly 8") only the stronger applies. "Room to grow" is
 /// potential ability minus current ability over current ability.
 public struct RemovalRules: Sendable, Equatable {
-    /// A player out of contract. A contract type this tool does not read takes no points.
+    /// A player out of contract, or on a full-time contract with 0 months left: reading 0 months as no contract is the
+    /// owner's decision of 13 November 2026, to be double checked against the game. Unknown months left take no points
+    /// here. A contract type this tool does not read takes no points.
     public var notFullTimePoints: Int
     public var firstElevenPoints: Int
     public var secondElevenPoints: Int
@@ -887,7 +889,9 @@ public struct EngineParameters: Sendable {
                         weakestPoints: 30, firstElevenPoints: -30, secondElevenPoints: -15, neitherElevenPoints: 20,
                         farBelowAveragePoints: 25, belowAveragePoints: 10, consistencyLowPoints: 20, importantMatchesPoints: 15,
                         injuryPronenessPoints: 25, endEarlyFrom: 50, doNotExtendFrom: 25)),
-                .carriedOverFM26, source: removalSource),
+                .carriedOverFM26,
+                source: "\(removalSource); a full-time contract with 0 months left is read as no contract, the owner's "
+                    + "decision of 13 November 2026, to be double checked against the game"),
             removalWageRules: Parameter(
                 RemovalWageRules(highMultiple: 1.5, highPoints: 35, abovePoints: 20),
                 .derived,

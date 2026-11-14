@@ -380,9 +380,20 @@ import Testing
         let players = try thinAtLeftBack([rightBack()])
         let accepted = Retraining(player: id("Right Back"), position: .defenderLeft, acceptedOn: Day(iso: "2026-11-01")!)
         #expect(try report(players, accepted: [accepted]).recommendations.isEmpty)
-        // Accepting another position for him does not hide this one.
-        let elsewhere = Retraining(player: id("Right Back"), position: .defenderCentral, acceptedOn: Day(iso: "2026-11-01")!)
-        #expect(choices(try report(players, accepted: [elsewhere])) == [RetrainingChoice(player: id("Right Back"), position: .defenderLeft)])
+    }
+
+    @Test func aPlayerAlreadyRetrainingIsNotOfferedASecondPosition() throws {
+        let players = try thinAtTheBack([rightBack()])
+        let offered = try #require(try report(players).recommendations.first).choice
+        #expect(offered.player == id("Right Back"))
+        // Retraining at a position no thin slot needs, or at one it does, he is offered nothing more.
+        for position in [Position.midfielderCentral, offered.position == .defenderLeft ? .defenderCentral : .defenderLeft] {
+            let retraining = Retraining(player: id("Right Back"), position: position, acceptedOn: acceptedOn)
+            #expect(try report(players, accepted: [retraining]).recommendations.isEmpty, "\(position.rawValue)")
+        }
+        // Once that retraining is no longer accepted, he is offered a position again.
+        let other = Retraining(player: id("Back A"), position: .midfielderCentral, acceptedOn: acceptedOn)
+        #expect(choices(try report(players, accepted: [other])) == [offered])
     }
 
     // MARK: Needs already being retrained
@@ -434,10 +445,13 @@ import Testing
         let need = RetrainingNeed(tactic: sample, slot: .AM_L)
         let short = try report(players, accepted: [Retraining(player: id("Winger"), position: .midfielderLeft, acceptedOn: acceptedOn)])
         #expect(short.needsBeingRetrained == [need])
-        // Accepting the position he already knows does not cover the need; he is still offered M (L).
+        // Accepting the position he already knows does not cover the need; being retrained, he is not offered M (L)
+        // as well, so the need is for recruitment.
         let known = try report(players, accepted: [Retraining(player: id("Winger"), position: .attackingMidLeft, acceptedOn: acceptedOn)])
         #expect(known.needsBeingRetrained.isEmpty)
-        #expect(choices(known) == [RetrainingChoice(player: id("Winger"), position: .midfielderLeft)])
+        #expect(known.recommendations.isEmpty)
+        #expect(known.needsWithoutCandidates == [need])
+        #expect(choices(try report(players)) == [RetrainingChoice(player: id("Winger"), position: .midfielderLeft)])
     }
 
     @Test func needsBeingRetrainedComeInTacticOrderThenNeed() throws {

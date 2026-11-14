@@ -414,6 +414,27 @@ import Testing
         }
     }
 
+    @Test func zeroMonthsLeftIsNoContract() throws {
+        // 0 months on a full-time contract: the out-of-contract points, no cost, and release.
+        let none = try advice(target { $0.monthsLeft = 0; $0.wagePerWeek = 900 })
+        #expect(none.reasons.first == reason("No contract: 0 months left", 50))
+        #expect(reasons(none.reasons, "Not on").isEmpty && reasons(none.reasons, "Contract").isEmpty)
+        #expect(none.releaseCost == 0 && none.mutualCost == 0)
+        #expect([RemovalLevel.high, .critical].contains(none.level))
+        #expect(none.action == .release)
+        // 1 month: the contract-ends rule as before, and a cost.
+        let one = try advice(target { $0.monthsLeft = 1; $0.wagePerWeek = 900 })
+        #expect(reasons(one.reasons, "No contract").isEmpty)
+        #expect(reasons(one.reasons, "Contract") == [reason("Contract ends in 1 month", 25)])
+        #expect(one.releaseCost == 3_900)
+        #expect(one.action != .release)
+        // Unknown: neither rule, and no cost given.
+        let unknown = try advice(target { $0.monthsLeft = nil })
+        #expect(reasons(unknown.reasons, "No contract").isEmpty && reasons(unknown.reasons, "Contract").isEmpty)
+        #expect(unknown.releaseCost == nil && unknown.mutualCost == nil)
+        #expect(unknown.action != .release)
+    }
+
     // MARK: Hidden and personality attributes
 
     func attributeReasons(_ attribute: Attribute, _ value: Int) throws -> [RemovalReason] {

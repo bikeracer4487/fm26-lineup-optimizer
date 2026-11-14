@@ -250,18 +250,10 @@ do {
         let profile = profiles[0]
         let parameters = EngineParameters.fm27
         let players = book.allPlayers
-        let elevens = try Elevens.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
-                                         profile: profile, parameters: parameters)
-        let depth = try Depth.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
-                                     profile: profile, parameters: parameters)
-        let rest = try Rest.advice(players: players, ownClub: ownClub, history: StartHistory(history), asOf: options.asOf!,
-                                   intensity: options.settings.trainingIntensity, parameters: parameters)
-        // Removal first: nobody it advises moving on is put forward for retraining.
-        let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
-                                         profile: profile, parameters: parameters)
-        let training = try Training.report(tactics: [tactic], players: players, ownClub: ownClub, accepted: [], rejected: [],
-                                           leaving: removal.advisedToLeave, catalog: catalog, profile: profile,
-                                           parameters: parameters)
+        let advisors = try Advisors.report(AdvisorsRequest(
+            primary: tactic, tactics: [tactic], players: players, ownClub: ownClub, history: StartHistory(history),
+            asOf: options.asOf!, intensity: options.settings.trainingIntensity, accepted: [], rejected: []),
+            catalog: catalog, profile: profile, parameters: parameters)
         var suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]?
         if let fixtures {
             // The planner's tiers: injured players left out, as they cannot play.
@@ -274,7 +266,8 @@ do {
         }
         output = Report.render(header, advice: Report.Advice(
             asOf: options.asOf!, profile: profile, intensity: options.settings.trainingIntensity, history: history,
-            elevens: elevens, depth: depth, rest: rest, training: training, removal: removal, suggestions: suggestions),
+            elevens: advisors.elevens, depth: advisors.depth, rest: advisors.rest, training: advisors.training,
+            removal: advisors.removal, suggestions: suggestions),
             parameters: parameters)
     }
 } catch {
