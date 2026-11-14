@@ -159,9 +159,10 @@ public enum Removal {
         var reasons = Reasons()
         var evidence = [parameters.removalRules.evidence, parameters.removalLevels.evidence]
 
-        // Only a player out of contract can go at no cost; a type this tool does not read (a youth or part-time
-        // contract, say) says nothing about the cost either way. A full-time contract with 0 months left is read as no
-        // contract (the owner's decision of 13 November 2026, to be checked against the game); unknown months are not.
+        // Only a player out of contract can go at no cost. A youth contract is read and costed like a full-time one; a
+        // type this tool does not read (a part-time contract, say) says nothing about the cost either way. A full-time
+        // or youth contract with 0 months left is read as no contract (the owner's decision of 13 November 2026, to be
+        // checked against the game); unknown months are not.
         let outOfContract: Bool
         let costsKnown: Bool
         switch player.contractType {
