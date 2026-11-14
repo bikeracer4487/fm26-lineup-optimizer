@@ -18,8 +18,10 @@ import LineupEngine
 
     @Test func theStateEqualsItsOwnJSONRoundTrip() throws {
         var state = MentoringState()
-        state.dynamics = [alice: PlayerDynamics(standing: .teamLeader, socialGroup: .secondary("A")),
-                          bob: PlayerDynamics(standing: .others, socialGroup: .core)]
+        state.hierarchy = [
+            alice: HierarchyEntry(squad: .firstTeam,
+                                  dynamics: PlayerDynamics(standing: .teamLeader, socialGroup: .secondary("A"))),
+            bob: HierarchyEntry(squad: .u21, dynamics: PlayerDynamics(standing: .others, socialGroup: .core))]
         state.dynamicsUpdatedOn = [.firstTeam: first, .u21: first.adding(days: 3)]
         state.groups = [MentoringGroup(id: UUID(), squad: .firstTeam, startedOn: first,
                                        members: [MentoringMember(player: alice, joinedOn: first, leftOn: first.adding(days: 2))])]
@@ -27,6 +29,16 @@ import LineupEngine
         state.record([player(alice, professionalism: 8)], on: first)
         let data = try JSONEncoder().encode(state)
         #expect(try JSONDecoder().decode(MentoringState.self, from: data) == state)
+    }
+
+    @Test func aSquadReadsOnlyTheEntriesEnteredForIt() {
+        var state = MentoringState()
+        let leader = PlayerDynamics(standing: .teamLeader), core = PlayerDynamics(standing: .others, socialGroup: .core)
+        state.hierarchy = [alice: HierarchyEntry(squad: .firstTeam, dynamics: leader),
+                           bob: HierarchyEntry(squad: .u21, dynamics: core)]
+        #expect(state.dynamics(for: .firstTeam) == [alice: leader])
+        #expect(state.dynamics(for: .u21) == [bob: core])
+        #expect(state.dynamics(for: .u18).isEmpty)
     }
 
     @Test func aSecondReadingOnOneDayReplacesTheFirst() {

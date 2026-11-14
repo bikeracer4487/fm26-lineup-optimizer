@@ -5,8 +5,9 @@ import LineupEngine
 /// reading of every player at each import, so what a group changed can be measured. Nothing is forgotten when a player
 /// leaves: the file is the record.
 public struct MentoringState: Equatable, Codable, Sendable {
-    /// What the owner entered for each player; a player with no entry is `.others` with no social group.
-    public var dynamics: [PlayerID: PlayerDynamics]
+    /// What the owner entered for each player, and the squad he entered it for. An entry is used only while its player
+    /// is in that squad (`dynamics(for:)`); a player with no entry in use is `.others` with no social group.
+    public var hierarchy: [PlayerID: HierarchyEntry]
     /// The day the owner last saved the hierarchy of each squad.
     public var dynamicsUpdatedOn: [Squad: Day]
     /// By start day, then id.
@@ -17,7 +18,27 @@ public struct MentoringState: Equatable, Codable, Sendable {
     public var names: [PlayerID: String]
 
     public init() {
-        dynamics = [:]; dynamicsUpdatedOn = [:]; groups = []; readings = [:]; names = [:]
+        hierarchy = [:]; dynamicsUpdatedOn = [:]; groups = []; readings = [:]; names = [:]
+    }
+
+    private enum CodingKeys: String, CodingKey { case hierarchy, dynamicsUpdatedOn, groups, readings, names }
+
+    /// A file written before each entry kept its squad holds its entries under `dynamics`, with no squad. They are not
+    /// read, so they are dropped the next time the state is saved.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hierarchy = try container.decodeIfPresent([PlayerID: HierarchyEntry].self, forKey: .hierarchy) ?? [:]
+        dynamicsUpdatedOn = try container.decode([Squad: Day].self, forKey: .dynamicsUpdatedOn)
+        groups = try container.decode([MentoringGroup].self, forKey: .groups)
+        readings = try container.decode([PlayerID: [PersonalityReading]].self, forKey: .readings)
+        names = try container.decode([PlayerID: String].self, forKey: .names)
+    }
+
+    /// The entries entered for the squad: what its advice, its hierarchy lines and its editor read. One entered for
+    /// another squad is left out, so a player who has moved reads as `.others` with no social group until he is
+    /// entered in his new squad, and has it back if he returns.
+    public func dynamics(for squad: Squad) -> [PlayerID: PlayerDynamics] {
+        hierarchy.compactMapValues { $0.squad == squad ? $0.dynamics : nil }
     }
 
     /// By start day, then by id's text, so the order never depends on how groups were added.
@@ -42,6 +63,18 @@ public struct MentoringState: Equatable, Codable, Sendable {
             }
             readings[player.id] = list
         }
+    }
+}
+
+/// What the owner entered for one player, and the squad he entered it for: a level and a social group belong to that
+/// squad.
+public struct HierarchyEntry: Equatable, Codable, Sendable {
+    public var squad: Squad
+    public var dynamics: PlayerDynamics
+
+    public init(squad: Squad, dynamics: PlayerDynamics) {
+        self.squad = squad
+        self.dynamics = dynamics
     }
 }
 

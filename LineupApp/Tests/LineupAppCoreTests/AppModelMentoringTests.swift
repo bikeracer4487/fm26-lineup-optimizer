@@ -65,12 +65,12 @@ import LineupEngine
         let first = ids(t.model, .firstTeam)[0], young = ids(t.model, .u21)[0]
         t.model.setDynamics([young: PlayerDynamics(standing: .influential, socialGroup: .core)], for: .u21)
         t.model.setDynamics([first: PlayerDynamics(standing: .teamLeader, socialGroup: .core)], for: .firstTeam)
-        #expect(t.model.mentoring.dynamics[young]?.standing == .influential)
-        #expect(t.model.mentoring.dynamics[first]?.standing == .teamLeader)
+        #expect(t.model.mentoring.dynamics(for: .u21)[young]?.standing == .influential)
+        #expect(t.model.mentoring.dynamics(for: .firstTeam)[first]?.standing == .teamLeader)
         #expect(t.model.mentoring.dynamicsUpdatedOn == [.firstTeam: today, .u21: today])
         t.model.setDynamics([first: PlayerDynamics()], for: .firstTeam)
-        #expect(t.model.mentoring.dynamics[first] == nil)
-        #expect(t.model.mentoring.dynamics[young]?.standing == .influential)
+        #expect(t.model.mentoring.dynamics(for: .firstTeam)[first] == nil)
+        #expect(t.model.mentoring.dynamics(for: .u21)[young]?.standing == .influential)
         #expect(t.reopened().mentoring == t.model.mentoring)
     }
 
@@ -88,43 +88,182 @@ import LineupEngine
         return t
     }
 
-    @Test func aHierarchyEntryIsDroppedWhenItsPlayerMovesToAnotherSquad() throws {
+    private func paste(_ rows: [String]) -> String { rows.joined(separator: "\r\n") + "\r\n" }
+
+    /// The U21 team-grid capture's rows, and the first team's.
+    private func youthRows() throws -> [String] { rows(try Captures.text("u21-team-grid.tsv")) }
+    private func firstRows() throws -> [String] { rows(try Captures.firstTeam) }
+
+    private func importU21(_ t: TestModel, _ rows: [String]) throws {
+        t.importSquad(.u21, paste: paste(rows), grids: try Captures.firstTeamGrids)
+    }
+
+    private func importFirstTeam(_ t: TestModel, _ rows: [String]) throws {
+        t.importSquad(.firstTeam, paste: paste(rows), grids: try Captures.firstTeamGrids)
+    }
+
+    private func lastChange(_ model: AppModel) -> SquadChange? {
+        if case .imported(let summary)? = model.lastImport { summary.change } else { nil }
+    }
+
+    /// The entries the engine is handed for the squad's own players.
+    private func inUse(_ model: AppModel, _ squad: Squad) -> [PlayerID: PlayerDynamics] {
+        let players = Set(ids(model, squad))
+        let request = model.mentoringRequest(for: squad, asOf: model.settings.currentDate)
+        return request.dynamics.filter { players.contains($0.key) }
+    }
+
+    /// The squads from their team grids, with the U21 player in the capture's second row (the one to be promoted)
+    /// entered as Team Leader and another as Influential, and two first-team players entered.
+    private struct Promotion {
+        let t: TestModel
+        let promoted: Player
+        let staysYoung: Player
+        let u21Entries: [PlayerID: PlayerDynamics]
+        let firstEntries: [PlayerID: PlayerDynamics]
+    }
+
+    private func promotion() throws -> Promotion {
         let t = try bothTeamGrids()
-        let youth = rows(try Captures.text("u21-team-grid.tsv"))
+        let youth = try youthRows()
         let promoted = try #require(t.model.squad.book.current[.u21]?.first { youth[1].contains("\"\($0.name)\"") })
         let staysYoung = try #require(t.model.squad.book.current[.u21]?.first { $0.id != promoted.id })
         let first = ids(t.model, .firstTeam)
-        t.model.setDynamics([promoted.id: PlayerDynamics(standing: .teamLeader, socialGroup: .core),
-                             staysYoung.id: PlayerDynamics(standing: .influential, socialGroup: .core)], for: .u21)
-        t.model.setDynamics([first[0]: PlayerDynamics(standing: .teamLeader, socialGroup: .core),
-                             first[1]: PlayerDynamics(standing: .others, socialGroup: .secondary("A"))],
-                            for: .firstTeam)
-        var expected = t.model.mentoring.dynamics
-        expected[promoted.id] = nil
+        let u21Entries = [promoted.id: PlayerDynamics(standing: .teamLeader, socialGroup: .core),
+                          staysYoung.id: PlayerDynamics(standing: .influential, socialGroup: .core)]
+        let firstEntries = [first[0]: PlayerDynamics(standing: .influential, socialGroup: .core),
+                            first[1]: PlayerDynamics(standing: .others, socialGroup: .secondary("A"))]
+        t.model.setDynamics(u21Entries, for: .u21)
+        t.model.setDynamics(firstEntries, for: .firstTeam)
+        return Promotion(t: t, promoted: promoted, staysYoung: staysYoung, u21Entries: u21Entries,
+                         firstEntries: firstEntries)
+    }
 
-        // He is promoted: the first team imported with his row added.
-        let paste = (rows(try Captures.firstTeam) + [youth[1]]).joined(separator: "\r\n") + "\r\n"
-        t.importSquad(.firstTeam, paste: paste, grids: try Captures.firstTeamGrids)
-        guard case .imported(let summary)? = t.model.lastImport else {
-            Issue.record("expected an import, got \(String(describing: t.model.lastImport))")
-            return
+    /// He reads as Others with no social group in the squad: in what the engine is handed, the advice, the hierarchy
+    /// lines and the editor's row; and the squad's own entries are those given.
+    private func expectOthers(_ model: AppModel, _ player: Player, in squad: Squad,
+                              entries: [PlayerID: PlayerDynamics]) throws {
+        #expect(ids(model, squad).contains(player.id))
+        let request = model.mentoringRequest(for: squad, asOf: model.settings.currentDate)
+        #expect(request.dynamics[player.id] == nil)
+        #expect(inUse(model, squad) == entries)
+        var expected = request
+        expected.dynamics = entries
+        #expect(model.mentoringAdvice(for: squad) == .ready(try Mentoring.report(expected, parameters: .fm27)))
+        #expect(!model.mentoringSheet(for: squad).hierarchyLines.contains { $0.contains(player.name) })
+        #expect(model.dynamicsRows(for: squad).first { $0.id == player.id }?.dynamics == PlayerDynamics())
+    }
+
+    @Test func anEntryIsNotUsedInAnotherSquadWhenTheOldSquadIsImportedFirst() throws {
+        let p = try promotion()
+        let youth = try youthRows()
+        try importU21(p.t, youth.enumerated().filter { $0.offset != 1 }.map(\.element))
+        try importFirstTeam(p.t, try firstRows() + [youth[1]])
+        // He left the U21s and joined the first team: the squad book sees no move.
+        #expect(lastChange(p.t.model)?.movedIn == [])
+        #expect(lastChange(p.t.model)?.added == [p.promoted.id])
+
+        for model in [p.t.model, p.t.reopened()] {
+            try expectOthers(model, p.promoted, in: .firstTeam, entries: p.firstEntries)
+            #expect(inUse(model, .u21) == [p.staysYoung.id: p.u21Entries[p.staysYoung.id]!])
         }
-        #expect(summary.change.movedIn == [promoted.id])
+    }
 
-        #expect(t.model.mentoring.dynamics[promoted.id] == nil)
-        #expect(t.model.mentoring.dynamics == expected)
-        #expect(t.reopened().mentoring.dynamics == expected)
+    @Test func anEntryIsNotUsedInAnotherSquadWhenTheNewSquadIsImportedFirst() throws {
+        let p = try promotion()
+        let youth = try youthRows()
+        try importFirstTeam(p.t, try firstRows() + [youth[1]])
+        #expect(lastChange(p.t.model)?.movedIn == [p.promoted.id])
+        try importU21(p.t, youth.enumerated().filter { $0.offset != 1 }.map(\.element))
+
+        for model in [p.t.model, p.t.reopened()] {
+            try expectOthers(model, p.promoted, in: .firstTeam, entries: p.firstEntries)
+            #expect(inUse(model, .u21) == [p.staysYoung.id: p.u21Entries[p.staysYoung.id]!])
+        }
+    }
+
+    @Test func enteringHimInHisNewSquadGivesHimTheLevelEnteredThere() throws {
+        let p = try promotion()
+        let youth = try youthRows()
+        try importFirstTeam(p.t, try firstRows() + [youth[1]])
+        var entries = Dictionary(p.t.model.dynamicsRows(for: .firstTeam).map { ($0.id, $0.dynamics) },
+                                 uniquingKeysWith: { first, _ in first })
+        let entered = PlayerDynamics(standing: .highlyInfluential, socialGroup: .secondary("B"))
+        entries[p.promoted.id] = entered
+        p.t.model.setDynamics(entries, for: .firstTeam)
+        for model in [p.t.model, p.t.reopened()] {
+            #expect(inUse(model, .firstTeam)[p.promoted.id] == entered)
+            #expect(model.mentoringSheet(for: .firstTeam).hierarchyLines
+                .contains("Highly Influential: \(p.promoted.name)."))
+        }
+
+        // His entry is now the first team's: back in the U21s he reads as Others until entered there again.
+        try importU21(p.t, youth)
+        #expect(lastChange(p.t.model)?.movedIn == [p.promoted.id])
+        for model in [p.t.model, p.t.reopened()] {
+            try expectOthers(model, p.promoted, in: .u21, entries: [p.staysYoung.id: p.u21Entries[p.staysYoung.id]!])
+        }
+    }
+
+    @Test func anEntryIsInUseAgainWhenItsPlayerComesBackToItsSquad() throws {
+        let p = try promotion()
+        let youth = try youthRows()
+        try importFirstTeam(p.t, try firstRows() + [youth[1]])
+        try importU21(p.t, youth)
+        #expect(lastChange(p.t.model)?.movedIn == [p.promoted.id])
+        for model in [p.t.model, p.t.reopened()] {
+            #expect(inUse(model, .u21) == p.u21Entries)
+            #expect(model.mentoringSheet(for: .u21).hierarchyLines.contains("Team Leader: \(p.promoted.name)."))
+            #expect(inUse(model, .firstTeam) == p.firstEntries)
+        }
+    }
+
+    @Test func aPartialPasteThenTheFullOneLosesNoEntry() throws {
+        let p = try promotion()
+        let first = try firstRows()
+        try importFirstTeam(p.t, Array(first.dropFirst(2)))
+        #expect(lastChange(p.t.model)?.removed.count == 2)
+        try importFirstTeam(p.t, first)
+        for model in [p.t.model, p.t.reopened()] {
+            #expect(inUse(model, .firstTeam) == p.firstEntries)
+            #expect(inUse(model, .u21) == p.u21Entries)
+        }
     }
 
     @Test func aPlayerWhoStaysInHisSquadAcrossAnImportKeepsHisEntry() throws {
-        let t = try bothTeamGrids()
-        let first = ids(t.model, .firstTeam), young = ids(t.model, .u21)
-        t.model.setDynamics([first[0]: PlayerDynamics(standing: .teamLeader, socialGroup: .core)], for: .firstTeam)
-        t.model.setDynamics([young[0]: PlayerDynamics(standing: .influential)], for: .u21)
-        let before = t.model.mentoring.dynamics
-        try t.importFirstTeam()
-        #expect(t.model.mentoring.dynamics == before)
-        #expect(t.reopened().mentoring.dynamics == before)
+        let p = try promotion()
+        try importFirstTeam(p.t, try firstRows())
+        for model in [p.t.model, p.t.reopened()] {
+            #expect(inUse(model, .firstTeam) == p.firstEntries)
+            #expect(inUse(model, .u21) == p.u21Entries)
+        }
+    }
+
+    @Test func aMentoringFileWhoseEntriesHaveNoSquadOpensWithNoNoticeAndUsesNone() throws {
+        let p = try promotion()
+        // The file as written before each entry kept its squad: the entries under "dynamics", with no squad.
+        let file = p.t.directory.appendingPathComponent("mentoring.json")
+        var root = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        var value = try #require(root["value"] as? [String: Any])
+        value.removeValue(forKey: "hierarchy")
+        let old = p.u21Entries.merging(p.firstEntries) { first, _ in first }
+        value["dynamics"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(old))
+        root["value"] = value
+        try JSONSerialization.data(withJSONObject: root).write(to: file)
+
+        let reopened = p.t.reopened()
+        #expect(reopened.notices.isEmpty)
+        #expect(inUse(reopened, .firstTeam).isEmpty)
+        #expect(inUse(reopened, .u21).isEmpty)
+        #expect(reopened.mentoring.readings == p.t.model.mentoring.readings)
+        #expect(reopened.mentoring.dynamicsUpdatedOn == p.t.model.mentoring.dynamicsUpdatedOn)
+
+        // The next save drops them.
+        let first = try #require(ids(reopened, .firstTeam).first)
+        reopened.setDynamics([first: PlayerDynamics(standing: .teamLeader)], for: .firstTeam)
+        let saved = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        #expect((saved["value"] as? [String: Any])?["dynamics"] == nil)
+        #expect(p.t.reopened().mentoring.dynamics(for: .firstTeam) == [first: PlayerDynamics(standing: .teamLeader)])
     }
 
     @Test func savingAHierarchyKeepsTheEntryOfAPlayerOutOnLoan() throws {
@@ -154,9 +293,10 @@ import LineupEngine
         entries[home.id] = PlayerDynamics()
         t.model.setDynamics(entries, for: .firstTeam)
 
-        #expect(t.model.mentoring.dynamics[away.id] == PlayerDynamics(standing: .teamLeader, socialGroup: .core))
-        #expect(t.model.mentoring.dynamics[home.id] == nil)
-        #expect(t.reopened().mentoring.dynamics == t.model.mentoring.dynamics)
+        #expect(t.model.mentoring.dynamics(for: .firstTeam)[away.id]
+                == PlayerDynamics(standing: .teamLeader, socialGroup: .core))
+        #expect(t.model.mentoring.dynamics(for: .firstTeam)[home.id] == nil)
+        #expect(t.reopened().mentoring.hierarchy == t.model.mentoring.hierarchy)
     }
 
     @Test func savingTheSameHierarchyAgainStampsTheNewDay() throws {
@@ -174,9 +314,9 @@ import LineupEngine
         let ids = ids(t.model, .firstTeam)
         t.model.setDynamics([ids[0]: PlayerDynamics(), ids[1]: PlayerDynamics(standing: .others, socialGroup: .core),
                              ids[2]: PlayerDynamics(standing: .influential)], for: .firstTeam)
-        #expect(t.model.mentoring.dynamics[ids[0]] == nil)
-        #expect(t.model.mentoring.dynamics[ids[1]] != nil)
-        #expect(t.model.mentoring.dynamics[ids[2]] != nil)
+        #expect(t.model.mentoring.dynamics(for: .firstTeam)[ids[0]] == nil)
+        #expect(t.model.mentoring.dynamics(for: .firstTeam)[ids[1]] != nil)
+        #expect(t.model.mentoring.dynamics(for: .firstTeam)[ids[2]] != nil)
     }
 
     // MARK: Groups
@@ -426,7 +566,7 @@ import LineupEngine
     private func engineReport(_ model: AppModel, _ squad: Squad, leaving: Set<PlayerID>) throws -> MentoringReport {
         let request = MentoringRequest(
             squad: squad, players: model.squad.book.allPlayers, ownClub: model.ownClub,
-            dynamics: model.mentoring.dynamics, dynamicsUpdatedOn: model.mentoring.dynamicsUpdatedOn[squad],
+            dynamics: model.mentoring.dynamics(for: squad), dynamicsUpdatedOn: model.mentoring.dynamicsUpdatedOn[squad],
             groups: model.mentoring.groups, readings: model.mentoring.readings, names: model.mentoring.names,
             leaving: leaving, asOf: model.settings.currentDate)
         return try Mentoring.report(request, parameters: .fm27)
@@ -565,7 +705,8 @@ import LineupEngine
         t.model.setDynamics([chosen: PlayerDynamics(standing: .influential)], for: .u21)
         let rows = t.model.dynamicsRows(for: .u21)
         #expect(rows == MentoringPresentation.dynamicsRows(
-            t.model.squad.book.current[.u21] ?? [], ownClub: t.model.ownClub, dynamics: t.model.mentoring.dynamics))
+            t.model.squad.book.current[.u21] ?? [], ownClub: t.model.ownClub,
+            dynamics: t.model.mentoring.dynamics(for: .u21)))
         #expect(rows.first { $0.id == chosen }?.dynamics.standing == .influential)
         #expect(rows.filter { $0.id != chosen }.allSatisfy { $0.dynamics == PlayerDynamics() })
         t.model.saveGroup(MentoringGroupDraft(squad: .firstTeam, members: Array(ids(t.model, .firstTeam)[0..<3])))
@@ -603,13 +744,14 @@ import LineupEngine
 
     @Test func theHierarchySampleRaisesThreeFirstTeamPlayersAndHasSuggestions() throws {
         let model = try SampleData.modelWithHierarchy(repositoryRoot: Captures.repositoryRoot)
-        let raised = model.mentoring.dynamics.filter { $0.value.standing != .others }
+        let raised = model.mentoring.dynamics(for: .firstTeam).filter { $0.value.standing != .others }
         #expect(raised.count == 3)
         #expect(Set(raised.values.map(\.standing)) == [.teamLeader, .highlyInfluential, .influential])
         #expect(Set(raised.keys).isSubset(of: Set(firstTeam(model).map(\.id))))
         // Social groups for some players, not all.
-        #expect(model.mentoring.dynamics.values.contains { $0.socialGroup != nil })
-        #expect(model.mentoring.dynamics.count < firstTeam(model).count)
+        #expect(model.mentoring.dynamics(for: .firstTeam).values.contains { $0.socialGroup != nil })
+        #expect(model.mentoring.dynamics(for: .firstTeam).count < firstTeam(model).count)
+        #expect(model.mentoring.hierarchy.values.allSatisfy { $0.squad == .firstTeam })
         #expect(model.mentoring.dynamicsUpdatedOn == [.firstTeam: model.settings.currentDate])
         let report = try report(model)
         #expect(!report.byAgeAlone && !report.isStale)
@@ -622,7 +764,7 @@ import LineupEngine
     @Test func theStaleSampleHasTheFirstTeamsHierarchyEnteredFiveWeeksAgo() throws {
         let model = try SampleData.modelWithStaleHierarchy(repositoryRoot: Captures.repositoryRoot)
         let fresh = try SampleData.modelWithHierarchy(repositoryRoot: Captures.repositoryRoot)
-        #expect(model.mentoring.dynamics == fresh.mentoring.dynamics)
+        #expect(model.mentoring.hierarchy == fresh.mentoring.hierarchy)
         #expect(model.mentoring.dynamicsUpdatedOn == [.firstTeam: model.settings.currentDate.adding(days: -35)])
         #expect(model.settings.currentDate == fresh.settings.currentDate)
         #expect(try report(model).isStale)

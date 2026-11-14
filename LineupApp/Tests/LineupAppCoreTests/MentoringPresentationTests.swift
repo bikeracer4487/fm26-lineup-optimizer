@@ -32,7 +32,7 @@ import Testing
     private func advice(_ players: [Player], _ state: MentoringState = MentoringState(), on day: Day? = nil) throws -> MentoringAdvice {
         let squad = players.first?.squad ?? .firstTeam
         let request = MentoringRequest(
-            squad: squad, players: players, ownClub: club, dynamics: state.dynamics,
+            squad: squad, players: players, ownClub: club, dynamics: state.dynamics(for: squad),
             dynamicsUpdatedOn: state.dynamicsUpdatedOn[squad], groups: state.groups, readings: state.readings,
             names: state.names, leaving: [], asOf: day ?? asOf)
         return .ready(try Mentoring.report(request, parameters: parameters))
@@ -52,10 +52,16 @@ import Testing
                                notPlaced: notPlaced, groups: groups, basis: .carriedOverFM26))
     }
 
+    /// Enters each player's level and group for the squad, as its hierarchy editor would.
+    private func enter(_ entries: [PlayerID: PlayerDynamics], into state: inout MentoringState,
+                       squad: Squad = .firstTeam) {
+        for (id, entry) in entries { state.hierarchy[id] = HierarchyEntry(squad: squad, dynamics: entry) }
+    }
+
     private var hierarchy: MentoringState {
         var state = MentoringState()
-        state.dynamics = [hart: PlayerDynamics(standing: .teamLeader), okafor: PlayerDynamics(standing: .teamLeader),
-                          mills: PlayerDynamics(standing: .influential)]
+        enter([hart: PlayerDynamics(standing: .teamLeader), okafor: PlayerDynamics(standing: .teamLeader),
+               mills: PlayerDynamics(standing: .influential)], into: &state)
         return state
     }
 
@@ -86,10 +92,34 @@ import Testing
         #expect(shown.socialGroupsLine == "Social groups entered for 0 of 3.")
     }
 
+    @Test func anEntryEnteredForAnotherSquadIsNotShown() throws {
+        let players = [player(hart, "Hart", age: 34), player(young, "Young", age: 18)]
+        let entry = PlayerDynamics(standing: .teamLeader, socialGroup: .core)
+        var elsewhere = MentoringState()
+        enter([hart: entry], into: &elsewhere, squad: .u21)
+        var here = MentoringState()
+        enter([hart: entry], into: &here)
+
+        let hidden = try sheet(players, elsewhere)
+        #expect(hidden.hierarchyLines.isEmpty)
+        #expect(hidden.socialGroupsLine == "Social groups entered for 0 of 2.")
+        let shown = try sheet(players, here)
+        #expect(shown.hierarchyLines.first == "Team Leader: Hart.")
+        #expect(shown.socialGroupsLine == "Social groups entered for 1 of 2.")
+
+        let draft = MentoringGroupDraft(squad: .firstTeam)
+        func detail(_ state: MentoringState) -> String? {
+            MentoringPresentation.memberChoices(draft, players: players, ownClub: club, state: state)
+                .first { $0.id == hart }?.detailText
+        }
+        #expect(detail(elsewhere) == "34 · Others")
+        #expect(detail(here) == "34 · Team Leader")
+    }
+
     @Test func theSocialGroupsLineCountsThoseEntered() throws {
         var state = hierarchy
-        state.dynamics[young] = PlayerDynamics(standing: .others, socialGroup: .core)
-        state.dynamics[hart] = PlayerDynamics(standing: .teamLeader, socialGroup: .secondary("A"))
+        enter([young: PlayerDynamics(standing: .others, socialGroup: .core),
+               hart: PlayerDynamics(standing: .teamLeader, socialGroup: .secondary("A"))], into: &state)
         let players = [player(hart, "Hart", age: 34), player(okafor, "Okafor", age: 30),
                        player(mills, "Mills", age: 28), player(young, "Young", age: 18)]
         #expect(try sheet(players, state).socialGroupsLine == "Social groups entered for 2 of 4.")
@@ -375,7 +405,7 @@ import Testing
         let long = "Maximilian-Alexander Bartholomew Featherstonehaugh-Montgomery"
         let players = [player(hart, long, age: 34), player(young, "Young", age: 18)]
         var state = MentoringState()
-        state.dynamics[hart] = PlayerDynamics(standing: .teamLeader)
+        enter([hart: PlayerDynamics(standing: .teamLeader)], into: &state)
         let shown = try sheet(players, state)
         #expect(shown.hierarchyLines.first == "Team Leader: \(long).")
         let given = SuggestedGroup(lead: hart, leadName: long, leadAge: 34, leadStanding: .teamLeader,
@@ -438,7 +468,7 @@ import Testing
                        player(young, "Young", age: 18), player(reid, "Reid", age: 19, loanedTo: "Rovers"),
                        player(hart, "Hart", age: 34)]
         var state = MentoringState()
-        state.dynamics[hart] = PlayerDynamics(standing: .teamLeader)
+        enter([hart: PlayerDynamics(standing: .teamLeader)], into: &state)
         var ended = MentoringGroup(id: UUID(), squad: .firstTeam, startedOn: started,
                                    members: [MentoringMember(player: hart, joinedOn: started)])
         ended.endedOn = asOf

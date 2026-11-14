@@ -10,16 +10,18 @@ extension AppModel {
         static let inAnotherGroup = "A player already in another group cannot be added."
     }
 
-    /// Replaces the entries of the squad's current players among those given, keeping none that is `.others` with no
-    /// social group, and dates the squad's hierarchy with the game's current date even when nothing changed: saving is
-    /// the owner saying he has checked. A player not handed back keeps his entry: the editor leaves out the players
-    /// out on loan. Other squads' entries are left alone.
+    /// Replaces the entries of the squad's current players among those given, each recorded as entered for this squad
+    /// (whatever squad an entry he had was entered for), keeping none that is `.others` with no social group, and dates
+    /// the squad's hierarchy with the game's current date even when nothing changed: saving is the owner saying he has
+    /// checked. A player not handed back keeps his entry: the editor leaves out the players out on loan. Other squads'
+    /// players are left alone.
     public func setDynamics(_ entries: [PlayerID: PlayerDynamics], for squad: Squad) {
         let current = Set((self.squad.book.current[squad] ?? []).map(\.id))
         let today = settings.currentDate
         changeMentoring { state in
             for (id, entry) in entries where current.contains(id) {
-                state.dynamics[id] = entry.standing == .others && entry.socialGroup == nil ? nil : entry
+                state.hierarchy[id] = entry.standing == .others && entry.socialGroup == nil
+                    ? nil : HierarchyEntry(squad: squad, dynamics: entry)
             }
             state.dynamicsUpdatedOn[squad] = today
         }
@@ -109,15 +111,6 @@ extension AppModel {
         changeMentoring { $0.record(imported, on: day) }
     }
 
-    /// Drops the hierarchy entry of each player an import showed moving in from another squad: a level and a social
-    /// group belong to the squad they were entered for, so he is `.others` with no social group in his new squad until
-    /// the owner enters him there. Saves without replanning.
-    func dropHierarchy(ofPlayersMovedIn movedIn: [PlayerID]) {
-        changeMentoring { state in
-            for id in movedIn { state.dynamics[id] = nil }
-        }
-    }
-
     // MARK: The advice
 
     /// The mentoring advice for the squad: every imported player, the club, the saved hierarchy, groups, readings and
@@ -150,7 +143,7 @@ extension AppModel {
     /// The hierarchy editor's rows for the squad.
     public func dynamicsRows(for squad: Squad) -> [DynamicsRow] {
         MentoringPresentation.dynamicsRows(self.squad.book.current[squad] ?? [], ownClub: ownClub,
-                                           dynamics: mentoring.dynamics)
+                                           dynamics: mentoring.dynamics(for: squad))
     }
 
     /// The players the group editor offers for the draft.
@@ -159,16 +152,20 @@ extension AppModel {
                                             state: mentoring)
     }
 
+    /// What the engine is handed for the squad's mentoring advice.
+    func mentoringRequest(for squad: Squad, asOf: Day) -> MentoringRequest {
+        let leaving = AdvicePresentation.report(adviceState)?.removal.advisedToLeave ?? []
+        return MentoringRequest(
+            squad: squad, players: self.squad.book.allPlayers, ownClub: ownClub,
+            dynamics: mentoring.dynamics(for: squad), dynamicsUpdatedOn: mentoring.dynamicsUpdatedOn[squad],
+            groups: mentoring.groups, readings: mentoring.readings, names: mentoring.names, leaving: leaving, asOf: asOf)
+    }
+
     private func workedOutMentoring(for squad: Squad, asOf: Day) -> MentoringAdvice {
         timesMentoringWorkedOut += 1
         guard !(self.squad.book.current[squad] ?? []).isEmpty else { return .needsSquad }
-        let leaving = AdvicePresentation.report(adviceState)?.removal.advisedToLeave ?? []
-        let request = MentoringRequest(
-            squad: squad, players: self.squad.book.allPlayers, ownClub: ownClub, dynamics: mentoring.dynamics,
-            dynamicsUpdatedOn: mentoring.dynamicsUpdatedOn[squad], groups: mentoring.groups,
-            readings: mentoring.readings, names: mentoring.names, leaving: leaving, asOf: asOf)
         do {
-            return .ready(try Mentoring.report(request, parameters: planParameters))
+            return .ready(try Mentoring.report(mentoringRequest(for: squad, asOf: asOf), parameters: planParameters))
         } catch {
             return .failed([ErrorDescriptions.describe(error)])
         }

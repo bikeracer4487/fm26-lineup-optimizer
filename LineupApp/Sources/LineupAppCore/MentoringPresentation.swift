@@ -260,9 +260,10 @@ public enum MentoringPresentation {
         }
 
         let present = notOutOnLoan(players, ownClub: ownClub)
-        let levels = levelLines(present, dynamics: state.dynamics)
+        let dynamics = state.dynamics(for: squad)
+        let levels = levelLines(present, dynamics: dynamics)
         let byAgeAlone = report?.byAgeAlone ?? levels.isEmpty
-        let entered = present.filter { state.dynamics[$0.id]?.socialGroup != nil }.count
+        let entered = present.filter { dynamics[$0.id]?.socialGroup != nil }.count
         let updatedOn = state.dynamicsUpdatedOn[squad]
 
         let yours: [RecordedGroupCard]
@@ -309,27 +310,29 @@ public enum MentoringPresentation {
         let offeredIDs = Set(offered.map(\.id))
         let held = Dictionary(players.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let saved = draft.isNew ? [] : state.groups.first { $0.id == draft.id }?.current.map(\.player) ?? []
+        let dynamics = state.dynamics(for: draft.squad)
 
         var gone: [PlayerID] = []
         for id in saved + draft.members where !offeredIDs.contains(id) && !gone.contains(id) { gone.append(id) }
         let goneRows = gone.map { id in
             let player = held[id]
             return MemberChoice(id: id, name: state.names[id] ?? player?.name ?? TrainingPresentation.unnamed,
-                                detailText: player.map { detailText($0, state: state) }, isChosen: chosen.contains(id),
+                                detailText: player.map { detailText($0, dynamics: dynamics) },
+                                isChosen: chosen.contains(id),
                                 unavailableText: player == nil ? noLongerInSquad : outOnLoan, canToggle: chosen.contains(id))
         }
         return goneRows + offered.map { player in
             let isChosen = chosen.contains(player.id)
             let unavailable = elsewhere.contains(player.id) ? inAnotherGroup : nil
-            return MemberChoice(id: player.id, name: player.name, detailText: detailText(player, state: state),
+            return MemberChoice(id: player.id, name: player.name, detailText: detailText(player, dynamics: dynamics),
                                 isChosen: isChosen, unavailableText: unavailable,
                                 canToggle: isChosen || (unavailable == nil && !isFull))
         }
     }
 
-    /// "18 · Others": his age and his level as entered.
-    private static func detailText(_ player: Player, state: MentoringState) -> String {
-        "\(player.age) · \(AdvisorText.name(state.dynamics[player.id]?.standing ?? .others))"
+    /// "18 · Others": his age and his level as entered for the squad.
+    private static func detailText(_ player: Player, dynamics: [PlayerID: PlayerDynamics]) -> String {
+        "\(player.age) · \(AdvisorText.name(dynamics[player.id]?.standing ?? .others))"
     }
 
     // MARK: The editors
