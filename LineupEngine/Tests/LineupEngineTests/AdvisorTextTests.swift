@@ -36,6 +36,30 @@ import Testing
         #expect(AdvisorText.clear(in: rest(.watch, days: nil)) == nil)
     }
 
+    func rest(jadedness: Int, limit: Int, notes: [String] = []) -> RestAdvice {
+        RestAdvice(player: PlayerID(key: "p"), name: "P", level: .rest, jadedness: jadedness, limit: limit,
+                   limitNotes: notes, condition: 0.9, consecutiveStarts: 0, days: nil, reasons: [], basis: .derived)
+    }
+
+    @Test func jadednessAgainstHisLimit() {
+        #expect(AdvisorText.jadedness(of: rest(jadedness: 450, limit: 400)) == "450 against a limit of 400")
+        #expect(AdvisorText.jadedness(of: rest(jadedness: 0, limit: 300)) == "0 against a limit of 300")
+    }
+
+    @Test func aNegativeJadednessIsWrittenWithATrueMinusSign() {
+        #expect(AdvisorText.jadedness(of: rest(jadedness: -121, limit: 300)) == "\u{2212}121 against a limit of 300")
+    }
+
+    @Test func limitNotesJoinedInTheirOrder() {
+        #expect(AdvisorText.limitNotes(of: rest(jadedness: 450, limit: 250, notes: ["aged 32 or over", "Stamina below 10"]))
+                == "aged 32 or over, Stamina below 10")
+        #expect(AdvisorText.limitNotes(of: rest(jadedness: 450, limit: 350, notes: ["under 19"])) == "under 19")
+    }
+
+    @Test func noLimitNotesWhenHisLimitIsTheStandardOne() {
+        #expect(AdvisorText.limitNotes(of: rest(jadedness: 450, limit: 400)) == nil)
+    }
+
     func removal(action: RemovalAction = .sell, release: Int?, mutual: Int?) -> RemovalAdvice {
         RemovalAdvice(player: PlayerID(key: "p"), name: "P", level: .high, action: action, score: 10, reasons: [],
                       tier: nil, isProspect: false, isFalseProspect: false, isMentor: false,

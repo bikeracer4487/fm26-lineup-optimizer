@@ -140,12 +140,12 @@ struct MeterView: View {
     }
 }
 
-/// A status stamped beside a player: an outlined pill in marker red when it keeps him out, else amber, leaning.
+/// A status stamped beside a player: an outlined pill in its tone's colour, leaning.
 struct StampView: View {
     let stamp: StatusStamp
 
     var body: some View {
-        let colour = stamp.isOut ? Theme.Colour.redText : Theme.Colour.amberText
+        let colour = Theme.Colour.stamp(stamp.tone)
         Text(stamp.text)
             .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .extraBold))
             .foregroundStyle(colour)

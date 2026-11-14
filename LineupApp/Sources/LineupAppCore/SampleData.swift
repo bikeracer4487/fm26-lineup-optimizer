@@ -207,6 +207,45 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model with two first-team players' jadedness raised in its copy of the squads, so the rest advice has
+    /// every level: Alfie Potter, whose limit is lowered for his age and Stamina, far enough over it for a holiday, and
+    /// Ludwig Francillette over the standard limit for rest.
+    @MainActor public static func modelWithJadedPlayers(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        let raised = ["Alfie Potter": 520, "Ludwig Francillette": 460]
+        guard Set(model.players.map(\.name)).isSuperset(of: raised.keys) else {
+            throw SampleDataError(description: "The sample model lacks \(raised.keys.sorted().joined(separator: " or ")).")
+        }
+        edit(model) { player in
+            if let jadedness = raised[player.name] { player.jadedness = jadedness }
+        }
+        return model
+    }
+
+    /// The sample model with every player fresh and fully fit and no confirmed lineups, so nobody needs rest.
+    @MainActor public static func modelWithNobodyNeedingRest(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        model.history = []
+        model.save(.history)
+        edit(model) { player in
+            player.jadedness = 0
+            player.condition = 1
+        }
+        return model
+    }
+
+    /// Changes every player in the model's copy of the squads as `change` says, as an import of the changed squads
+    /// would, saves the squads and works the plan and advice out again.
+    @MainActor private static func edit(_ model: AppModel, _ change: (inout Player) -> Void) {
+        for squad in Squad.allCases {
+            guard var players = model.squad.book.current[squad] else { continue }
+            for index in players.indices { change(&players[index]) }
+            _ = model.squad.book.apply(ImportResult(grid: "sample", players: players, warnings: []), to: squad)
+        }
+        model.save(.squad)
+        model.replan()
+    }
+
     /// The sample squads' pastes and grid layouts, in the order they are imported.
     private static let samplePastes = [(Squad.firstTeam, "first-team.tsv", "first-team.grids.json"),
                                        (Squad.u21, "u21.tsv", "u21.grids.json")]

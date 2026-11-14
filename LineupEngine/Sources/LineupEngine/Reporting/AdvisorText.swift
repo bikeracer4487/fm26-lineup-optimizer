@@ -88,6 +88,18 @@ public enum AdvisorText {
         }
     }
 
+    /// "450 against a limit of 400"; a negative jadedness with a true minus sign (U+2212), as the app writes it.
+    public static func jadedness(of advice: RestAdvice) -> String {
+        let figure = advice.jadedness < 0 ? "\u{2212}\(advice.jadedness.magnitude)" : String(advice.jadedness)
+        return "\(figure) against a limit of \(advice.limit)"
+    }
+
+    /// Why his limit differs from the standard one, the notes in their order: "aged 32 or over, Stamina below 10";
+    /// nil when it does not.
+    public static func limitNotes(of advice: RestAdvice) -> String? {
+        advice.limitNotes.isEmpty ? nil : advice.limitNotes.joined(separator: ", ")
+    }
+
     public static func costs(of advice: RemovalAdvice) -> String {
         guard let release = advice.releaseCost, let mutual = advice.mutualCost else {
             return "The cost of releasing him is not known"

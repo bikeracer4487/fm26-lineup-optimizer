@@ -84,6 +84,15 @@ public enum Theme {
             }
         }
 
+        /// A stamp's text and outline: marker red or amber as text, or ink.
+        public static func stamp(_ tone: StampTone) -> Color {
+            switch tone {
+            case .red: redText
+            case .amber: amberText
+            case .ink: ink
+            }
+        }
+
         /// A meter's lit blocks, by level.
         public static func meter(_ level: MeterLevel) -> Color {
             switch level {
@@ -568,6 +577,24 @@ public enum Theme {
         public static let chosenRingOffset: CGFloat = 2 * (Magnet.ringWidth + Magnet.ringGap)
         /// The sticky note naming the slots to recruit for is no wider than this.
         public static let recruitNoteMaximumWidth: CGFloat = 360
+    }
+
+    // MARK: Rest
+
+    public enum Rest {
+        /// The stamp's room before a name, the width of the widest level's stamp, so the names line up.
+        public static let stampWidth: CGFloat = 72
+        /// The name's column; a longer name wraps to a second line.
+        public static let nameWidth: CGFloat = 250
+        /// The figures' columns, the same in every block so they line up down the screen. Jadedness has room for its
+        /// sentence; the limit's notes under it wrap.
+        public static let jadednessColumn: CGFloat = 230
+        public static let conditionColumn: CGFloat = 130
+        public static let startsColumn: CGFloat = 110
+        /// The most lines a name wraps to.
+        public static let nameLines = 2
+        /// Brings the sentence saying when he is clear down to the figures, under their labels.
+        public static let clearTopPadding: CGFloat = TypeSize.small + Spacing.xs + Spacing.xxs
     }
 
     // MARK: Columns

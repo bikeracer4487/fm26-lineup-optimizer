@@ -41,6 +41,12 @@
 //                                              taller ("elevens-first-tall-…", and "elevens-depth-tall-…"
 //                                              on the right attacking midfielder), and with the primary
 //                                              tactic changed but not saved ("elevens-unsaved-…").
+//                                              The Rest screen is drawn with nobody to list
+//                                              ("rest-nobody-…"), tall enough for the whole
+//                                              sample list ("rest-tall-…"), and with two players' jadedness
+//                                              raised so a holiday and a rest over the limit show
+//                                              ("rest-levels-…"), that also in the smallest window
+//                                              ("rest-levels-small-…").
 //                                              Every screen is drawn again in a narrow window, 800 by 700
 //                                              ("<screen>-narrow-…"), and Match Selection, Tactics, Fixtures
 //                                              and the advisor screens in the smallest window
@@ -106,6 +112,7 @@ func fail(_ message: String) -> Never {
 enum SampleState {
     case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange, pastFixtures
     case afterConfirmingFirst, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
+    case jadedPlayers, nobodyNeedingRest
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -125,6 +132,8 @@ enum SampleState {
         case .missedEleven: return try SampleData.modelWithMissedEleven(repositoryRoot: url)
         case .missedElevenWhileStopped: return try SampleData.modelWithMissedElevenWhileThePlanIsStopped(repositoryRoot: url)
         case .twoMatchesOnOneDay: return try SampleData.modelWithTwoMatchesOnOneDay(repositoryRoot: url)
+        case .jadedPlayers: return try SampleData.modelWithJadedPlayers(repositoryRoot: url)
+        case .nobodyNeedingRest: return try SampleData.modelWithNobodyNeedingRest(repositoryRoot: url)
         }
     } catch {
         fail("\(error)")
@@ -211,6 +220,19 @@ let narrowWindow = CGSize(width: 800, height: 700)
     }
 }
 
+/// The Rest screen with nobody to list, and with every level: see the usage at the top.
+@MainActor func drawRest(_ root: String, to directory: URL, size: CGSize) throws {
+    try ScreenPictures.write(model: sampleModel(root, .nobodyNeedingRest), to: directory, size: size, variant: "nobody",
+                             screens: [.rest])
+    // Tall enough for the whole sample list, down to the regulars to watch.
+    try ScreenPictures.write(model: sampleModel(root), to: directory, size: CGSize(width: size.width, height: size.height * 2),
+                             variant: "tall", screens: [.rest])
+    let jaded = sampleModel(root, .jadedPlayers)
+    try ScreenPictures.write(model: jaded, to: directory, size: size, variant: "levels", screens: [.rest])
+    try ScreenPictures.write(model: jaded, to: directory, size: Theme.Layout.minimumWindow, variant: "levels-small",
+                             screens: [.rest])
+}
+
 /// Draws the pictures and returns the process's exit status.
 @MainActor func drawPictures(to path: String, sampleDataRoot: String?) -> Int32 {
     do {
@@ -253,6 +275,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
                                      variant: "imported", screens: [.squad])
             try drawMatchSelection(root, to: directory, size: size)
             try drawElevens(root, to: directory, size: size)
+            try drawRest(root, to: directory, size: size)
         } else {
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size)
         }

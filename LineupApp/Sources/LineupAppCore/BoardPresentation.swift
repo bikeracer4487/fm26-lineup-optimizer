@@ -177,14 +177,27 @@ public enum NoteTilt {
     }
 }
 
-/// A status written as a stamp: in sentence case, and whether it keeps him out of a lineup.
+/// The colour a stamp is inked in: marker red, marker amber, or ink.
+public enum StampTone: Hashable, Sendable {
+    case red, amber, ink
+}
+
+/// A status written as a stamp: in sentence case, in its colour.
 public struct StatusStamp: Hashable, Sendable {
     public let text: String
-    public let isOut: Bool
+    public let tone: StampTone
 
-    public init(text: String, isOut: Bool) {
-        self.text = text; self.isOut = isOut
+    public init(text: String, tone: StampTone) {
+        self.text = text; self.tone = tone
     }
+
+    /// A status's stamp: red when it keeps him out of a lineup, amber when it does not.
+    public init(text: String, isOut: Bool) {
+        self.init(text: text, tone: isOut ? .red : .amber)
+    }
+
+    /// Whether the stamp says he is out of a lineup.
+    public var isOut: Bool { tone == .red }
 }
 
 extension PlayerStatus {
