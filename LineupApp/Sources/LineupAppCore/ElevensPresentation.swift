@@ -194,9 +194,9 @@ public enum ElevensPresentation {
         selectedSlot(chosen, slots: depth.slots.map(\.slot), thin: depth.thin)
     }
 
-    /// The engine's sticky note naming the slots to recruit for; nil when no slot is thin.
-    public static func recruitNote(_ depth: DepthReport) -> String? {
-        AdvisorText.recruitFirst(depth)
+    /// The engine's sticky note naming the thin slots; nil when no slot is thin.
+    public static func thinCoverNote(_ depth: DepthReport) -> String? {
+        AdvisorText.thinCover(depth)
     }
 
     /// What cover counts, in the engine's sentence with its evidence note.

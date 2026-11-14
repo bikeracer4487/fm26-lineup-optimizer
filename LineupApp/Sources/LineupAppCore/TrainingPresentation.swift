@@ -107,11 +107,13 @@ public struct RetrainingRow: Identifiable, Equatable, Sendable {
     public let progressText: String?
     /// "No longer in the squad" when he is in no squad; nil otherwise.
     public let departedStamp: StatusStamp?
+    /// The engine's sentence when Player Removal advises moving him on, shown as a caution; nil otherwise.
+    public let leavingText: String?
 
     /// The row as said to assistive technology.
     public var spokenText: String {
         let parts: [String?] = [name, positionText, acceptedText, departedStamp?.text, track?.startText,
-                                track?.latestText, track?.solidText, progressText]
+                                track?.latestText, track?.solidText, progressText, leavingText]
         return parts.compactMap { $0 }.joined(separator: ", ")
     }
 }
@@ -132,12 +134,14 @@ public struct TurnedDownRow: Identifiable, Equatable, Sendable {
     }
 }
 
-/// One of the Training screen's four parts, in the order the screen shows them.
+/// One of the Training screen's four parts, in the order the screen shows them. The parts about the advice carry the
+/// engine's sentence for when they list nothing.
 public enum TrainingPart: Identifiable, Equatable, Sendable {
-    case recommended([RecommendationCard])
+    case recommended([RecommendationCard], emptyText: String?)
     case underWay([RetrainingRow])
-    /// The engine's sentence for each need nobody suits, and its sentence for those already being retrained for.
-    case recruit(needs: [String], alreadyRetraining: String?)
+    /// The engine's sentence for each need nobody suits, its sentence for those already being retrained for, and its
+    /// sentence for when no need is left to recruit for.
+    case recruit(needs: [String], alreadyRetraining: String?, emptyText: String?)
     case turnedDown([TurnedDownRow])
 
     public var id: String { heading }
@@ -154,9 +158,9 @@ public enum TrainingPart: Identifiable, Equatable, Sendable {
     /// The muted line the part shows in place of rows when it has none; nil when it has some.
     public var emptyText: String? {
         switch self {
-        case .recommended(let cards): cards.isEmpty ? "No retraining is recommended today." : nil
+        case .recommended(_, let emptyText): emptyText
         case .underWay(let rows): rows.isEmpty ? "Nobody is being retrained." : nil
-        case .recruit(let needs, _): needs.isEmpty ? "Every thin slot has someone who could learn it." : nil
+        case .recruit(_, _, let emptyText): emptyText
         case .turnedDown(let rows): rows.isEmpty ? "Nothing has been turned down." : nil
         }
     }
@@ -181,22 +185,24 @@ public enum TrainingPresentation {
 
     /// A row for each accepted retraining, in the saved order, with each player's name from `inSquads` (the players in
     /// any squad), else as saved. The track runs from the first counted observation to the latest, with the solid line
-    /// at `depthSolidFamiliarity`.
-    public static func underWay(_ state: TrainingState, inSquads names: [PlayerID: String],
-                                parameters: EngineParameters) -> [RetrainingRow] {
+    /// at `depthSolidFamiliarity`. A player in `advisedToLeave`, Player Removal's list, has the engine's sentence saying so.
+    public static func underWay(_ state: TrainingState, inSquads names: [PlayerID: String], parameters: EngineParameters,
+                                advisedToLeave: Set<PlayerID> = []) -> [RetrainingRow] {
         state.accepted.map { retraining in
             let choice = TrainingState.choice(retraining)
             let inSquad = names[retraining.player] != nil
             let progress = RetrainingTracker.progress(of: retraining, observations: state.observations[choice] ?? [],
                                                       parameters: parameters)
+            let shownName = name(of: retraining.player, inSquads: names, saved: state.names)
             return RetrainingRow(
-                choice: choice, name: name(of: retraining.player, inSquads: names, saved: state.names),
+                choice: choice, name: shownName,
                 positionText: AdvisorText.learning(retraining.position),
                 acceptedText: "Accepted on \(DayText.dayAndMonth(retraining.acceptedOn))",
                 track: inSquad ? RetrainingTrack(start: progress.start, latest: progress.latest,
                                                  solid: parameters.depthSolidFamiliarity.value) : nil,
                 progressText: inSquad ? AdvisorText.progress(progress, toward: retraining.position, parameters: parameters) : nil,
-                departedStamp: inSquad ? nil : departed)
+                departedStamp: inSquad ? nil : departed,
+                leavingText: advisedToLeave.contains(retraining.player) ? AdvisorText.advisedToLeave(shownName) : nil)
         }
     }
 
@@ -212,7 +218,8 @@ public enum TrainingPresentation {
     /// The needs nobody suits, then those already being retrained for, in the engine's words.
     public static func recruit(_ report: TrainingReport) -> TrainingPart {
         .recruit(needs: report.needsWithoutCandidates.map(AdvisorText.need),
-                 alreadyRetraining: AdvisorText.alreadyBeingRetrained(report.needsBeingRetrained))
+                 alreadyRetraining: AdvisorText.alreadyBeingRetrained(report.needsBeingRetrained),
+                 emptyText: AdvisorText.nothingToRecruit(report))
     }
 
     /// With the advice ready, all four parts; without it, only the parts kept in the saved state that have entries.
@@ -221,7 +228,8 @@ public enum TrainingPresentation {
         guard let report else {
             return (underWay.isEmpty ? [] : [.underWay(underWay)]) + (turnedDown.isEmpty ? [] : [.turnedDown(turnedDown)])
         }
-        return [.recommended(cards(report)), .underWay(underWay), recruit(report), .turnedDown(turnedDown)]
+        return [.recommended(cards(report), emptyText: AdvisorText.nothingRecommended(report)), .underWay(underWay),
+                recruit(report), .turnedDown(turnedDown)]
     }
 
     private static func name(of player: PlayerID, inSquads names: [PlayerID: String], saved: [PlayerID: String]) -> String {
@@ -230,12 +238,15 @@ public enum TrainingPresentation {
 }
 
 extension AppModel {
-    /// The Training screen's parts for the advice and the saved retraining choices.
+    /// The Training screen's parts for the advice and the saved retraining choices; a retraining of a player Player
+    /// Removal advises moving on says so while the advice is ready.
     public var trainingParts: [TrainingPart] {
         let names = Dictionary(squad.book.allPlayers.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let report = AdvicePresentation.report(adviceState)
         return TrainingPresentation.parts(
-            report: AdvicePresentation.report(adviceState)?.training,
-            underWay: TrainingPresentation.underWay(training, inSquads: names, parameters: planParameters),
+            report: report?.training,
+            underWay: TrainingPresentation.underWay(training, inSquads: names, parameters: planParameters,
+                                                    advisedToLeave: report?.removal.advisedToLeave ?? []),
             turnedDown: TrainingPresentation.turnedDown(training, inSquads: names))
     }
 }

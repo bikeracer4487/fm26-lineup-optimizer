@@ -178,6 +178,18 @@ import Testing
         #expect(empty.solidText == "Solid at 15")
     }
 
+    @Test func aRetraineePlayerRemovalAdvisesMovingOnIsMarkedSo() {
+        let state = TrainingState(accepted: [Retraining(player: alice, position: .defenderLeft, acceptedOn: today),
+                                             Retraining(player: bob, position: .striker, acceptedOn: today)])
+        let names = [alice: "Alice Archer", bob: "Bob Baker"]
+        let rows = TrainingPresentation.underWay(state, inSquads: names, parameters: parameters, advisedToLeave: [alice])
+        #expect(rows.map(\.leavingText) == [AdvisorText.advisedToLeave("Alice Archer"), nil])
+        #expect(rows.first?.leavingText == "Player Removal advises moving him on.")
+        #expect(rows.first?.spokenText.hasSuffix("Player Removal advises moving him on.") == true)
+        // Without the advice, nobody is marked.
+        #expect(TrainingPresentation.underWay(state, inSquads: names, parameters: parameters).map(\.leavingText) == [nil, nil])
+    }
+
     // MARK: Recruit instead
 
     @Test func theRecruitPartListsTheNeedsNobodySuitsAndThoseBeingRetrainedFor() {
@@ -185,15 +197,32 @@ import Testing
             without: [RetrainingNeed(tactic: sample, slot: .GK), RetrainingNeed(tactic: "Another", slot: .D_CL)],
             beingRetrained: [RetrainingNeed(tactic: sample, slot: .D_L)]))
         #expect(part == .recruit(needs: ["Goalkeeper in Sample 4-2-3-1", "Left centre-back in Another"],
-                                 alreadyRetraining: "Already being retrained for: left back in Sample 4-2-3-1"))
+                                 alreadyRetraining: "Already being retrained for: left back in Sample 4-2-3-1",
+                                 emptyText: nil))
         #expect(part.emptyText == nil)
     }
 
     @Test func theRecruitPartWithNothingToRecruitSaysSoAndStillNamesThoseBeingRetrainedFor() {
-        let part = TrainingPresentation.recruit(report(beingRetrained: [RetrainingNeed(tactic: sample, slot: .D_L)]))
-        #expect(part == .recruit(needs: [], alreadyRetraining: "Already being retrained for: left back in Sample 4-2-3-1"))
-        #expect(part.emptyText == "Every thin slot has someone who could learn it.")
-        #expect(TrainingPresentation.recruit(report()) == .recruit(needs: [], alreadyRetraining: nil))
+        let retraining = report(beingRetrained: [RetrainingNeed(tactic: sample, slot: .D_L)])
+        let part = TrainingPresentation.recruit(retraining)
+        #expect(part == .recruit(needs: [], alreadyRetraining: "Already being retrained for: left back in Sample 4-2-3-1",
+                                 emptyText: AdvisorText.nothingToRecruit(retraining)))
+        #expect(part.emptyText == "Every thin slot has someone learning it or recommended for it.")
+        // A thin slot covered by a recommendation alone says the same.
+        #expect(TrainingPresentation.recruit(report([recommendation(alice, name: "A")])).emptyText
+                == "Every thin slot has someone learning it or recommended for it.")
+        // No thin slot at all says that instead.
+        #expect(TrainingPresentation.recruit(report()) == .recruit(needs: [], alreadyRetraining: nil,
+                                                                   emptyText: "No slot is thin."))
+    }
+
+    @Test func theRecommendedPartsEmptyLineIsTheEnginesSentence() {
+        let none = report(without: [RetrainingNeed(tactic: sample, slot: .GK)])
+        let empty = TrainingPresentation.parts(report: none, underWay: [], turnedDown: []).first
+        #expect(empty == .recommended([], emptyText: AdvisorText.nothingRecommended(none)))
+        #expect(empty?.emptyText == "No retraining is recommended today.")
+        let some = report([recommendation(alice, name: "A")])
+        #expect(TrainingPresentation.parts(report: some, underWay: [], turnedDown: []).first?.emptyText == nil)
     }
 
     // MARK: Turned down
@@ -221,7 +250,7 @@ import Testing
         let parts = TrainingPresentation.parts(report: report(), underWay: [], turnedDown: [])
         #expect(parts.map(\.heading) == ["Recommended", "Being retrained", "Recruit instead", "Turned down"])
         #expect(parts.map(\.emptyText) == ["No retraining is recommended today.", "Nobody is being retrained.",
-                                           "Every thin slot has someone who could learn it.", "Nothing has been turned down."])
+                                           "No slot is thin.", "Nothing has been turned down."])
     }
 
     @Test func aPartWithEntriesHasNoEmptyLine() {
@@ -278,7 +307,7 @@ import Testing
     }
 
     private func cards(_ model: AppModel) -> [RecommendationCard] {
-        model.trainingParts.compactMap { if case .recommended(let cards) = $0 { cards } else { nil } }.first ?? []
+        model.trainingParts.compactMap { if case .recommended(let cards, _) = $0 { cards } else { nil } }.first ?? []
     }
 
     private func underWay(_ model: AppModel) -> [RetrainingRow] {
@@ -333,6 +362,24 @@ import Testing
         model.allowAgain(card.choice)
         #expect(turnedDown(model).isEmpty)
         #expect(cards(model).map(\.choice).contains(card.choice))
+    }
+
+    @Test func theModelMarksARetraineeThePlayerRemovalAdviceWouldMoveOn() throws {
+        let t = try TestModel()
+        let model = try squad(t)
+        let report = try readyReport(model)
+        let leaving = try #require(report.removal.advisedToLeave.sorted { $0.key < $1.key }.first)
+        let player = try #require(model.players.first { $0.id == leaving })
+        let position = try #require(Position.allCases.min { (player.familiarity[$0] ?? 0) < (player.familiarity[$1] ?? 0) })
+        let staying = try #require(model.players.first { $0.squad == .firstTeam && !report.removal.advisedToLeave.contains($0.id) })
+        let other = try #require(Position.allCases.min { (staying.familiarity[$0] ?? 0) < (staying.familiarity[$1] ?? 0) })
+        model.accept(RetrainingChoice(player: leaving, position: position))
+        model.accept(RetrainingChoice(player: staying.id, position: other))
+        let after = try readyReport(model)
+        #expect(after.removal.advisedToLeave.contains(leaving))
+        let rows = underWay(model)
+        #expect(rows.first { $0.choice.player == leaving }?.leavingText == AdvisorText.advisedToLeave(player.name))
+        #expect(rows.first { $0.choice.player == staying.id }?.leavingText == nil)
     }
 
     @Test func theRecruitPartIsTheAdvicesNeeds() throws {

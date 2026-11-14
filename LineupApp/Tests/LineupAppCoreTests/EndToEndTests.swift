@@ -174,7 +174,7 @@ import LineupEngine
     }
 
     private func recommended(_ model: AppModel) -> [RecommendationCard] {
-        for part in model.trainingParts { if case .recommended(let cards) = part { return cards } }
+        for part in model.trainingParts { if case .recommended(let cards, _) = part { return cards } }
         return []
     }
 
@@ -189,7 +189,7 @@ import LineupEngine
     }
 
     private func recruit(_ model: AppModel) -> [String]? {
-        for part in model.trainingParts { if case .recruit(let needs, _) = part { return needs } }
+        for part in model.trainingParts { if case .recruit(let needs, _, _) = part { return needs } }
         return nil
     }
 
@@ -201,7 +201,7 @@ import LineupEngine
         // The advice is ready, and is what the engine gives for the saved state.
         let before = try #require(report(model))
         #expect(before == (try engineReport(model)))
-        #expect(model.adviceLine == AdvicePresentation.readyLine(players: model.squad.book.allPlayers.count))
+        #expect(model.adviceImportLine == AdvicePresentation.importLine(try #require(model.planStartDay)))
 
         // Elevens: the primary tactic's elevens, as the engine solves them alone; a row for every slot, each place's
         // player, rating and familiarity on the row for his slot, and "Nobody" in each slot left unfilled.
@@ -243,7 +243,8 @@ import LineupEngine
             let suggestion = try #require(suggestions[fixture.id], "no suggestion for \(fixture.opponent)")
             let draft = model.fixtureDraft(for: fixture)
             #expect(model.suggestionNote(for: draft)?.text == AdvisorText.suggested(suggestion))
-            #expect((model.suggestionLine(for: fixture) != nil) == (suggestion.importance != fixture.importance))
+            #expect(model.suggestionLine(for: fixture)?.text
+                    == (suggestion.importance != fixture.importance ? AdvisorText.suggested(suggestion) : nil))
         }
 
         // Training: the engine's recommendations as cards; accepting the first moves it to "being retrained" and hands
@@ -282,7 +283,8 @@ import LineupEngine
         #expect(recruit(model) == afterRejecting.training.needsWithoutCandidates.map(AdvisorText.need))
         #expect(model.trainingParts.contains(.recruit(
             needs: afterRejecting.training.needsWithoutCandidates.map(AdvisorText.need),
-            alreadyRetraining: AdvisorText.alreadyBeingRetrained(afterRejecting.training.needsBeingRetrained))))
+            alreadyRetraining: AdvisorText.alreadyBeingRetrained(afterRejecting.training.needsBeingRetrained),
+            emptyText: AdvisorText.nothingToRecruit(afterRejecting.training))))
         for need in next.needs {
             let offered = afterRejecting.training.recommendations.contains { $0.needs.contains(need) }
             let listed = afterRejecting.training.needsWithoutCandidates.contains(need)
@@ -322,6 +324,7 @@ import LineupEngine
         #expect(observedAfter.last == FamiliarityObservation(day: SampleData.date.adding(days: 1),
                                                              familiarity: try #require(learner.familiarity[first.choice.position])))
         #expect(reopened.retrainingForPlan == [retraining])
-        #expect(report(reopened) != nil)
+        let reopenedReport = try #require(report(reopened))
+        #expect(reopenedReport == (try engineReport(reopened)))
     }
 }

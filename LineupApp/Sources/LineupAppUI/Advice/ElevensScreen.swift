@@ -38,7 +38,7 @@ public struct ElevensScreen: View {
     }
 
     private var page: some View {
-        AdviceGate(screen: .elevens, state: model.adviceState) {
+        AdviceGate(screen: .elevens, state: model.adviceState, importLine: model.adviceImportLine) {
             controls
         } content: { _ in
             if let unsaved = model.elevensUnsavedLine(navigation.elevensTacticID) {

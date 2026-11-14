@@ -81,7 +81,7 @@ public struct FixtureDraft: Equatable, Sendable {
 
     public static let notSet = "Not set"
     public static let competitionLabel = "Competition"
-    public static let opponentStrengthLabel = "Opponent"
+    public static let opponentStrengthLabel = "Their strength"
 
     /// Takes the suggested importance as the draft's; the fixture changes only when the draft is saved.
     public mutating func take(_ suggestion: SuggestionNote) {
@@ -158,9 +158,9 @@ extension AppModel {
     }
 
     /// The line under a fixture's importance in the table: its suggestion, only when that differs from the importance
-    /// the owner chose and no lineup is confirmed for it.
+    /// the owner chose, no lineup is confirmed for it and it is not past (`isPast`).
     public func suggestionLine(for fixture: StoredFixture) -> SuggestionNote? {
-        guard state(of: fixture) != .confirmed, let suggestion = suggestions[fixture.id],
+        guard state(of: fixture) != .confirmed, !isPast(fixture.date), let suggestion = suggestions[fixture.id],
               suggestion.importance != fixture.importance else { return nil }
         return SuggestionNote(suggestion, chosen: fixture.importance)
     }

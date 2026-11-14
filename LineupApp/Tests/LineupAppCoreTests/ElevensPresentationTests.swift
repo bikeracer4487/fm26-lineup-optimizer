@@ -180,14 +180,15 @@ import LineupEngine
         #expect(ElevensPresentation.sentenceCase("left back") == "Left back")
     }
 
-    @Test func theRecruitNoteAndTheCoverLineAreTheEnginesWords() throws {
+    @Test func theThinCoverNoteAndTheCoverLineAreTheEnginesWords() throws {
         let t = try TestModel()
         let model = try squad(t)
         let (_, depth) = try ready(model)
         #expect(!depth.thin.isEmpty)
         #expect(ElevensPresentation.selectedSlot(nil, in: depth) == depth.thin.first)
         #expect(ElevensPresentation.selectedSlot(depth.slots.last?.slot, in: depth) == depth.slots.last?.slot)
-        #expect(ElevensPresentation.recruitNote(depth) == AdvisorText.recruitFirst(depth))
+        #expect(ElevensPresentation.thinCoverNote(depth) == AdvisorText.thinCover(depth))
+        #expect(ElevensPresentation.thinCoverNote(depth)?.hasPrefix("Thin cover: ") == true)
         let parameters = model.planParameters
         #expect(ElevensPresentation.coverLine(parameters, basis: .derived)
                 == AdvisorText.whatCoverCounts(parameters, basis: .derived))

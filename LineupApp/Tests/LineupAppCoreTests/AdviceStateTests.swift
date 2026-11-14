@@ -402,16 +402,33 @@ import LineupEngine
         #expect(AdvicePresentation.notReady(.failed(["Bad."], fix: .squad))?.action == "Go to Squad")
     }
 
-    @Test func readyAdviceSaysHowManyPlayersItCovers() throws {
+    @Test func readyAdviceSaysWhichDaysImportItRestsOn() throws {
         let t = try TestModel()
         let model = try squad(t)
         #expect(AdvicePresentation.notReady(model.adviceState) == nil)
         #expect(AdvicePresentation.report(model.adviceState) == report(model))
         #expect(AdvicePresentation.report(.needsSquad) == nil)
-        let count = model.squad.book.allPlayers.count
-        #expect(model.adviceLine == "Advice worked out for \(count) players")
-        #expect(AdvicePresentation.readyLine(players: 1) == "Advice worked out for 1 player")
-        #expect(SampleData.emptyModel().adviceLine == nil)
+        // The plan's own starting day, the latest import, in the app's words for a day.
+        #expect(model.planStartDay == TestModel.today)
+        #expect(model.adviceImportLine == "From the squad as imported on Fri 13 Nov.")
+        #expect(AdvicePresentation.importLine(Day(iso: "2026-11-14")!) == "From the squad as imported on Sat 14 Nov.")
+        #expect(SampleData.emptyModel().adviceImportLine == nil)
+    }
+
+    @Test func theImportLineFollowsTheLatestImportAndGoesWhileTheAdviceIsNotReady() throws {
+        let t = try TestModel()
+        let model = try squad(t)
+        // The U21s imported again two days on: the advice rests on that day.
+        model.moveToday(by: 2)
+        try t.importU21()
+        #expect(model.planStartDay == Day(iso: "2026-11-15")!)
+        #expect(model.adviceImportLine == "From the squad as imported on Sun 15 Nov.")
+        // Without a primary tactic there is no advice, and no line about it.
+        var settings = model.settings
+        settings.primaryTacticID = nil
+        model.update(settings)
+        #expect(AdvicePresentation.report(model.adviceState) == nil)
+        #expect(model.adviceImportLine == nil)
     }
 
     @Test func theElevensScreenStartsOnTheFirstElevenOfThePrimaryWithNoSlotChosen() {

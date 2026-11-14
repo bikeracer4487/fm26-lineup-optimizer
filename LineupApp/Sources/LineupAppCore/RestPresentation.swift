@@ -21,18 +21,22 @@ public struct RestRow: Identifiable, Equatable, Sendable {
     public let reasons: [MarkedReason]
     /// The evidence note in brackets: "(this tool's estimate)"; nil for FM27 evidence.
     public let noteText: String?
+    /// "In the plan to start v Opponent A on Sat 14 Nov." when the plan starts him in its next planned fixture; nil
+    /// otherwise, or without a plan.
+    public let planText: String?
 
     /// The row as said to assistive technology.
     public var spokenText: String {
         let parts: [String?] = [stamp.text, name, squadText, "\(RestPresentation.jadednessLabel) \(jadednessText)",
                                 limitNotesText, "\(RestPresentation.conditionLabel) \(conditionText)",
                                 "\(RestPresentation.startsLabel) \(startsText)", clearText]
-        return (parts.compactMap { $0 } + reasons.map(\.text) + [spokenNote].compactMap { $0 }).joined(separator: ", ")
+        return (parts.compactMap { $0 } + reasons.map(\.text) + [planText, spokenNote].compactMap { $0 })
+            .joined(separator: ", ")
     }
 
     private let spokenNote: String?
 
-    init(_ advice: RestAdvice, squad: Squad?) {
+    init(_ advice: RestAdvice, squad: Squad?, planText: String?) {
         id = advice.player
         name = advice.name
         squadText = squad?.displayName
@@ -46,6 +50,7 @@ public struct RestRow: Identifiable, Equatable, Sendable {
         reasons = advice.reasons.map { MarkedReason(text: $0, direction: .unchanged) }
         spokenNote = AdvisorText.note(for: advice.basis)
         noteText = spokenNote.map { "(\($0))" }
+        self.planText = planText
     }
 }
 
@@ -67,9 +72,18 @@ public enum RestPresentation {
         return StatusStamp(text: AdvisorText.name(level), tone: tone)
     }
 
-    /// A row for each piece of advice, in the engine's order, with the player's squad from `squads`.
-    public static func rows(_ advice: [RestAdvice], squads: [PlayerID: Squad]) -> [RestRow] {
-        advice.map { RestRow($0, squad: squads[$0.player]) }
+    /// A row for each piece of advice, in the engine's order, with the player's squad from `squads`, each saying when
+    /// `next`, the plan's next planned fixture, starts him.
+    public static func rows(_ advice: [RestAdvice], squads: [PlayerID: Squad], next: FixturePlan? = nil) -> [RestRow] {
+        advice.map { RestRow($0, squad: squads[$0.player], planText: planText(for: $0.player, next: next)) }
+    }
+
+    /// "In the plan to start v Opponent A on Sat 14 Nov." when `next` is a planned fixture whose lineup starts the
+    /// player; nil otherwise. A plain statement about the plan, so the Rest screen can show where the two differ.
+    public static func planText(for player: PlayerID, next: FixturePlan?) -> String? {
+        guard let next, case .planned(let lineup, _) = next.body,
+              lineup.picks.contains(where: { $0.player == player }) else { return nil }
+        return "In the plan to start v \(next.fixture.opponent) on \(DayText.short(next.fixture.date))."
     }
 
     /// "Nobody needs rest today." when there are no rows; nil otherwise.
@@ -79,9 +93,10 @@ public enum RestPresentation {
 }
 
 extension AppModel {
-    /// The Rest screen's rows for `report`, each player's squad as imported.
+    /// The Rest screen's rows for `report`, each player's squad as imported, each saying when the plan starts him in
+    /// its next planned fixture.
     public func restRows(_ report: AdvisorsReport) -> [RestRow] {
         let squads = Dictionary(squad.book.allPlayers.map { ($0.id, $0.squad) }, uniquingKeysWith: { first, _ in first })
-        return RestPresentation.rows(report.rest, squads: squads)
+        return RestPresentation.rows(report.rest, squads: squads, next: nextToPlay)
     }
 }

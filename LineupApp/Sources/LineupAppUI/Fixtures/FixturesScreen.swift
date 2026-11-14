@@ -106,6 +106,46 @@ public struct FixturesScreen: View {
     }
 
     private func row(_ fixture: StoredFixture, index: Int, actionsBeside: Bool) -> some View {
+        FixtureRow(model: model, navigation: navigation, fixture: fixture, index: index, actionsBeside: actionsBeside,
+                   edit: { navigation.fixtureEditing = FixtureEditing(draft: model.fixtureDraft(for: fixture)) },
+                   delete: { delete(fixture) })
+    }
+
+    private var isDeleting: Binding<Bool> {
+        Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
+    }
+
+    private func add() {
+        navigation.fixtureEditing = FixtureEditing(draft: model.newFixtureDraft())
+    }
+
+    private func delete(_ fixture: StoredFixture) {
+        if model.asksBeforeDeleting(fixture) {
+            deleting = fixture
+        } else {
+            model.deleteFixture(fixture.id)
+        }
+    }
+}
+
+/// One fixture's row: date, opponent, importance with the suggestion under it, tactic, state and, when they fit, Edit
+/// and Delete. A suggestion's reasons, once shown, sit under the row starting at the importance note's left edge and
+/// wrap before the row's end; where that leaves too little room they take the row's whole width.
+private struct FixtureRow: View {
+    let model: AppModel
+    let navigation: Navigation
+    let fixture: StoredFixture
+    let index: Int
+    let actionsBeside: Bool
+    let edit: () -> Void
+    let delete: () -> Void
+    /// Where the importance column starts in the row, and the row's width, as last laid out.
+    @State private var importanceLeading: CGFloat = 0
+    @State private var rowWidth: CGFloat = 0
+
+    private nonisolated static let space = "fixture row"
+
+    var body: some View {
         let suggestion = model.suggestionLine(for: fixture)
         let showsReasons = suggestion != nil && navigation.showsReasons(of: fixture.id)
         return VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
@@ -128,6 +168,9 @@ public struct FixturesScreen: View {
                 }
                 .padding(.trailing, Theme.Spacing.s)
                 .frame(width: Theme.Column.importance, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.space)).minX } action: {
+                    importanceLeading = $0
+                }
                 Text(model.tacticText(for: fixture))
                     .lineLimit(Theme.Table.wrappedLines)
                     .padding(.trailing, Theme.Spacing.s)
@@ -136,28 +179,35 @@ public struct FixturesScreen: View {
                     .lineLimit(Theme.Table.wrappedLines)
                     .frame(width: Theme.Column.fixtureState, alignment: .leading)
                 if actionsBeside {
-                    actions(fixture)
+                    actions
                         .frame(width: Theme.Column.fixtureActions, alignment: .trailing)
                 }
             }
             if let suggestion, showsReasons {
                 SuggestionReasons(note: suggestion)
-                    .padding(.leading, Theme.Column.fixtureDate)
+                    .padding(.leading, reasonsLeading)
                     .padding(.bottom, Theme.Spacing.xs)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             if !actionsBeside {
-                actions(fixture)
+                actions
             }
         }
         .padding(.vertical, Theme.Spacing.xs)
         .frame(minHeight: Theme.Table.rowHeight + Theme.Spacing.s)
+        .coordinateSpace(.named(Self.space))
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
     }
 
-    private func actions(_ fixture: StoredFixture) -> some View {
+    /// The importance note's left edge, unless the reasons would then have less than their least width.
+    private var reasonsLeading: CGFloat {
+        rowWidth - importanceLeading >= Theme.Column.suggestionReasonsMinimum ? importanceLeading : 0
+    }
+
+    private var actions: some View {
         HStack(spacing: Theme.Spacing.s) {
-            Button("Edit") { navigation.fixtureEditing = FixtureEditing(draft: model.fixtureDraft(for: fixture)) }
-            Button("Delete") { delete(fixture) }
+            Button("Edit", action: edit)
+            Button("Delete", action: delete)
         }
         .buttonStyle(.secondary)
         .fixedSize()
@@ -174,22 +224,6 @@ public struct FixturesScreen: View {
         case .toPlay: Theme.Colour.ink
         case .confirmed: Theme.Colour.mutedInk
         case .pastNotConfirmed: Theme.Colour.amberText
-        }
-    }
-
-    private var isDeleting: Binding<Bool> {
-        Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
-    }
-
-    private func add() {
-        navigation.fixtureEditing = FixtureEditing(draft: model.newFixtureDraft())
-    }
-
-    private func delete(_ fixture: StoredFixture) {
-        if model.asksBeforeDeleting(fixture) {
-            deleting = fixture
-        } else {
-            model.deleteFixture(fixture.id)
         }
     }
 }

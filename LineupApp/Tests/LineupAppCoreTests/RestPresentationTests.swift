@@ -143,6 +143,66 @@ import Testing
         }
     }
 
+    // MARK: The plan
+
+    /// The earliest fixture the plan has a lineup for, and that lineup's starters.
+    private func nextPlanned(_ model: AppModel) throws -> (plan: FixturePlan, starters: [Pick]) {
+        let plan = try #require(model.fixturePlans.first { if case .planned = $0.body { true } else { false } })
+        guard case .planned(let lineup, _) = plan.body else { throw CancellationError() }
+        return (plan, lineup.picks)
+    }
+
+    @Test func aRowSaysWhenThePlanStartsHimInItsNextFixture() throws {
+        let model = try SampleData.model(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let (next, starters) = try nextPlanned(model)
+        #expect(next.fixture.opponent == "Opponent A")
+        let starter = try #require(starters.first)
+        let benched = try #require(model.squad.book.allPlayers.first { player in !starters.contains { $0.player == player.id } })
+        let given = [advice(starter.player.key, name: starter.name), advice(benched.id.key, name: benched.name)]
+        let rows = RestPresentation.rows(given, squads: [:], next: next)
+        #expect(rows.map(\.planText) == ["In the plan to start v Opponent A on Sat 14 Nov.", nil])
+        #expect(rows[0].spokenText.contains("In the plan to start v Opponent A on Sat 14 Nov."))
+        // Without a plan, nothing.
+        #expect(RestPresentation.rows(given, squads: [:]).map(\.planText) == [nil, nil])
+        #expect(RestPresentation.planText(for: starter.player, next: nil) == nil)
+    }
+
+    @Test func theModelsRowsSayWhoTheNextPlannedFixtureStarts() throws {
+        // With the first fixture confirmed, the next planned fixture is the second.
+        let model = try SampleData.modelAfterConfirmingFirst(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let (next, starters) = try nextPlanned(model)
+        #expect(next.fixture.opponent == "Opponent B")
+        guard case .ready(let report) = model.adviceState else {
+            Issue.record("expected advice, got \(model.adviceState)")
+            return
+        }
+        let rows = model.restRows(report)
+        #expect(!rows.isEmpty)
+        let starting = Set(starters.map(\.player))
+        for row in rows {
+            #expect(row.planText == (starting.contains(row.id) ? "In the plan to start v Opponent B on Tue 17 Nov." : nil))
+        }
+        // A player the engine lists who starts it says so.
+        let given = advice(try #require(starters.first).player.key, name: "Starter")
+        #expect(RestPresentation.rows([given], squads: [:], next: next).first?.planText
+                == "In the plan to start v Opponent B on Tue 17 Nov.")
+    }
+
+    @Test func noRowSaysAnythingAboutThePlanWhileThereIsNone() throws {
+        // No fixtures: the plan is not ready.
+        let t = try TestModel()
+        let model = try squad(t)
+        #expect(model.planState == .needsFixtures)
+        guard case .ready(let report) = model.adviceState else {
+            Issue.record("expected advice, got \(model.adviceState)")
+            return
+        }
+        #expect(!model.restRows(report).isEmpty)
+        #expect(model.restRows(report).allSatisfy { $0.planText == nil })
+    }
+
     @Test func theModelListsNobodyWhenNobodyNeedsABreak() throws {
         let t = try TestModel()
         let model = try squad(t)

@@ -587,8 +587,8 @@ public enum Theme {
         /// The red ring round a thin slot's magnet sits this far out; the ink ring of the chosen slot outside it.
         public static let thinRingOffset: CGFloat = Magnet.ringWidth + Magnet.ringGap
         public static let chosenRingOffset: CGFloat = 2 * (Magnet.ringWidth + Magnet.ringGap)
-        /// The sticky note naming the slots to recruit for is no wider than this.
-        public static let recruitNoteMaximumWidth: CGFloat = 360
+        /// The sticky note naming the thin slots is no wider than this.
+        public static let thinCoverNoteMaximumWidth: CGFloat = 360
     }
 
     // MARK: Rest
@@ -683,5 +683,8 @@ public enum Theme {
         public static let tacticMinimum: CGFloat = 110
         public static let fixtureState: CGFloat = 104
         public static let fixtureActions: CGFloat = 150
+        /// A fixture's suggestion reasons start under its importance note unless that leaves them less than this; then
+        /// they take the row's whole width.
+        public static let suggestionReasonsMinimum: CGFloat = 280
     }
 }

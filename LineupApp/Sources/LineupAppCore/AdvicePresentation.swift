@@ -33,8 +33,8 @@ public enum AdvicePresentation {
         if case .ready(let report) = state { report } else { nil }
     }
 
-    /// "Advice worked out for 23 players".
-    public static func readyLine(players: Int) -> String {
-        "Advice worked out for \(players) \(players == 1 ? "player" : "players")"
+    /// "From the squad as imported on Fri 13 Nov.": the day the advice's figures were imported.
+    public static func importLine(_ day: Day) -> String {
+        "From the squad as imported on \(DayText.short(day))."
     }
 }

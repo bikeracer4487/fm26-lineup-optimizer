@@ -41,10 +41,11 @@ extension AppModel {
         return elevens
     }
 
-    /// "Advice worked out for N players" while the advice is ready; nil otherwise.
-    public var adviceLine: String? {
-        guard case .ready = adviceState else { return nil }
-        return AdvicePresentation.readyLine(players: squad.book.allPlayers.count)
+    /// The muted line under every advisor screen's heading while the advice is ready, naming the day it rests on: the
+    /// plan's own starting day, the latest import. Nil while the advice is not ready.
+    public var adviceImportLine: String? {
+        guard case .ready = adviceState, let day = planStartDay else { return nil }
+        return AdvicePresentation.importLine(day)
     }
 
     // MARK: Working it out
@@ -80,9 +81,9 @@ extension AppModel {
     /// tactic (the primary when it names none, or names one no longer saved), among the other saved fixtures with no
     /// confirmed lineup whose tactic the engine accepts, with the history's lineups and the planner's tiers for the
     /// draft's tactic. Nil while the advice is not ready, for a tactic the engine refuses, for a fixture whose lineup
-    /// is confirmed (it is played), and when the engine cannot work it out.
+    /// is confirmed (it is played), for a day that is past (`isPast`), and when the engine cannot work it out.
     public func suggestion(for draft: FixtureDraft) -> ImportanceSuggestion? {
-        guard case .ready = adviceState else { return nil }
+        guard case .ready = adviceState, !isPast(draft.date) else { return nil }
         if let id = draft.id, history.contains(where: { $0.lineup.fixture == id }) { return nil }
         let stored = StoredFixture(id: draft.id ?? Self.draftFixtureID, date: draft.date, opponent: draft.opponent,
                                    importance: draft.importance, tacticID: draft.tacticID,
@@ -92,6 +93,12 @@ extension AppModel {
         let among = openFixtures().map(\.fixture).filter { $0.id != draft.id }
         return try? ImportanceAdvisor.suggest(for: fixture, among: among, confirmed: history.map(\.lineup),
                                               players: squad.book.allPlayers, tiers: tiers, parameters: planParameters)
+    }
+
+    /// Whether a fixture on `day` is past, so its importance no longer matters: before the game's current date, or
+    /// before the plan's starting day, where Match Selection shows it as missed.
+    func isPast(_ day: Day) -> Bool {
+        day < settings.currentDate || planStartDay.map { day < $0 } ?? false
     }
 
     /// The id a fixture not saved yet is handed to the engine with: no saved fixture's id is blank.

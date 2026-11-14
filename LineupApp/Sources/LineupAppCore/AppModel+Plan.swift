@@ -452,8 +452,8 @@ extension AppModel {
         if case .ready(let plans) = planState { plans } else { [] }
     }
 
-    /// The earliest fixture with a planned lineup.
-    private var nextToPlay: FixturePlan? {
+    /// The earliest fixture with a planned lineup; nil without a plan.
+    var nextToPlay: FixturePlan? {
         fixturePlans.first { if case .planned = $0.body { true } else { false } }
     }
 

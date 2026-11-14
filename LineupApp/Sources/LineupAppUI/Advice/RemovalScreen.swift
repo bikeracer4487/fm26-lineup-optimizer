@@ -24,7 +24,7 @@ public struct RemovalScreen: View {
     }
 
     public var body: some View {
-        AdviceGate(screen: .removal, state: model.adviceState) { report in
+        AdviceGate(screen: .removal, state: model.adviceState, importLine: model.adviceImportLine) { report in
             RemovalBody(sheet: model.removalSheet(report), navigation: navigation)
         }
     }

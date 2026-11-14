@@ -12,7 +12,7 @@ public struct RestScreen: View {
     }
 
     public var body: some View {
-        AdviceGate(screen: .rest, state: model.adviceState) { report in
+        AdviceGate(screen: .rest, state: model.adviceState, importLine: model.adviceImportLine) { report in
             RestList(rows: model.restRows(report))
         }
     }
@@ -65,6 +65,9 @@ private struct RestBlock: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                 // Keyed by place, so two identical reasons are both shown.
                 ForEach(Array(row.reasons.enumerated()), id: \.offset) { ReasonLine(reason: $0.element) }
+                if let plan = row.planText {
+                    CautionLine(plan, alignsWithReasons: true)
+                }
             }
             .foregroundStyle(Theme.Colour.ink)
             .padding(.leading, nameIndent)

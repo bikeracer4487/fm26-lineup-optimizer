@@ -2,7 +2,7 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// Depth: what to recruit for on a sticky note and what cover counts, then each slot's magnet on the pitch with its
+/// Depth: the thin slots on a sticky note and what cover counts, then each slot's magnet on the pitch with its
 /// cover count, thin slots ringed in red and stamped, and beside it who could play in the chosen slot.
 struct DepthView: View {
     let model: AppModel
@@ -14,8 +14,8 @@ struct DepthView: View {
         let selected = ElevensPresentation.selectedSlot(chosen, in: depth)
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             HStack(alignment: .center, spacing: Theme.Spacing.xl) {
-                if let note = ElevensPresentation.recruitNote(depth) {
-                    RecruitNote(text: note)
+                if let note = ElevensPresentation.thinCoverNote(depth) {
+                    ThinCoverNote(text: note)
                 }
                 Text(model.coverLine(depth))
                     .font(Theme.Typeface.text(Theme.TypeSize.caption))
@@ -34,8 +34,8 @@ struct DepthView: View {
     }
 }
 
-/// The slots to recruit for, written on a yellow note held up by a magnet.
-private struct RecruitNote: View {
+/// The thin slots, written on a yellow note held up by a magnet.
+private struct ThinCoverNote: View {
     let text: String
 
     var body: some View {
@@ -50,7 +50,7 @@ private struct RecruitNote: View {
                     .accessibilityHidden(true)
             }
             .stickyNote(Theme.Note.yellow, tilt: NoteTilt.degrees(at: 0))
-            .frame(maxWidth: Theme.Elevens.recruitNoteMaximumWidth, alignment: .leading)
+            .frame(maxWidth: Theme.Elevens.thinCoverNoteMaximumWidth, alignment: .leading)
             .padding(.top, Theme.Magnet.noteDiameter / 2)
     }
 }

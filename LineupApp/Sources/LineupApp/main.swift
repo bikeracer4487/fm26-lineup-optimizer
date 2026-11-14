@@ -21,7 +21,8 @@
 //                                              The Fixtures screen itself ("fixtures-…", "fixtures-narrow-…",
 //                                              "fixtures-small-…") is drawn with the second fixture made high
 //                                              importance, so its suggested importance differs and shows; so
-//                                              with that suggestion's reasons shown ("fixtures-reasons-…"); and
+//                                              with that suggestion's reasons shown ("fixtures-reasons-…", and
+//                                              "fixtures-reasons-small-…" in the smallest window); and
 //                                              the editor on its own for that fixture
 //                                              ("fixture-editor-suggestion-…").
 //                                              Match Selection ("match-…") is drawn on the first fixture with the
@@ -232,8 +233,10 @@ let narrowWindow = CGSize(width: 800, height: 700)
     for (variant, window) in [(String?.none, size), ("narrow", narrowWindow), ("small", Theme.Layout.minimumWindow)] {
         try ScreenPictures.write(model: model, to: directory, size: window, variant: variant, screens: [.fixtures])
     }
-    try ScreenPictures.write(model: model, to: directory, size: size, variant: "reasons", screens: [.fixtures],
-                             fixturesStart: FixturesStart(reasonsOf: differing.id))
+    for (variant, window) in [("reasons", size), ("reasons-small", Theme.Layout.minimumWindow)] {
+        try ScreenPictures.write(model: model, to: directory, size: window, variant: variant, screens: [.fixtures],
+                                 fixturesStart: FixturesStart(reasonsOf: differing.id))
+    }
     try ScreenPictures.writeFixtureEditor(model: model, draft: model.fixtureDraft(for: differing), to: directory,
                                           name: "fixture-editor-suggestion",
                                           size: Theme.Layout.fixtureEditorSuggestionPicture)

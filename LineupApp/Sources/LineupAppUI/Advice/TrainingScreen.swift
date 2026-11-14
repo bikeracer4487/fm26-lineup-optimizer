@@ -14,7 +14,7 @@ public struct TrainingScreen: View {
     public var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: Theme.Training.partGap) {
-                AdviceGate(screen: .training, state: model.adviceState) { _ in
+                AdviceGate(screen: .training, state: model.adviceState, importLine: model.adviceImportLine) { _ in
                     Text(TrainingPresentation.explanation)
                         .font(Theme.Typeface.text(Theme.TypeSize.body))
                         .foregroundStyle(Theme.Colour.mutedInk)
@@ -46,7 +46,7 @@ private struct TrainingPartView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             switch part {
-            case .recommended(let cards):
+            case .recommended(let cards, _):
                 VStack(alignment: .leading, spacing: Theme.Spacing.l) {
                     ForEach(cards) { card in
                         RetrainingCard(card: card, accept: { model.accept(card.choice) },
@@ -57,7 +57,7 @@ private struct TrainingPartView: View {
                 RuledRows(rows) { row in
                     UnderWayRow(row: row) { model.stopRetraining(row.choice) }
                 }
-            case .recruit(let needs, let alreadyRetraining):
+            case .recruit(let needs, let alreadyRetraining, _):
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                     ForEach(Array(needs.enumerated()), id: \.offset) { need in
                         ReasonLine(reason: MarkedReason(text: need.element, direction: .unchanged))
@@ -168,6 +168,11 @@ private struct UnderWayRow: View {
                     .font(Theme.Typeface.text(Theme.TypeSize.body))
                     .foregroundStyle(Theme.Colour.ink)
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityHidden(true)
+            }
+            if let leaving = row.leavingText {
+                // The row's spoken text already says it.
+                CautionLine(leaving)
                     .accessibilityHidden(true)
             }
         }

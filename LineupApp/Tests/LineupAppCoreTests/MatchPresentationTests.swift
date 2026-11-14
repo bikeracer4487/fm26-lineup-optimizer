@@ -421,6 +421,27 @@ import LineupEngine
         #expect(model.pickDetail(at: .M_C, in: plan) == nil)
     }
 
+    @Test func thePickAndOmissionReasonsNamePositionsInWords() throws {
+        let model = try sample()
+        let plan = try firstPlan(model)
+        guard case .planned(let lineup, _) = plan.body else { Issue.record("not planned"); return }
+        let codes = Position.allCases.map(\.rawValue).filter { $0.contains("(") }
+        for pick in lineup.picks {
+            let detail = try #require(model.pickDetail(at: pick.slot, in: plan))
+            for reason in detail.reasons {
+                for code in codes { #expect(!reason.contains(code), "\(reason)") }
+            }
+        }
+        for omission in lineup.omissions {
+            for code in codes { #expect(!omission.reason.contains(code), "\(omission.reason)") }
+        }
+        let wide = try #require(model.pickDetail(at: .AM_L, in: plan))
+        let rating = try #require(wide.reasons.first)
+        #expect(rating.hasPrefix("Rating "))
+        #expect(rating.contains(": left attacking midfield familiarity "))
+        #expect(rating.contains(", left midfield familiarity "))
+    }
+
     @Test func aPlayerWithNoFitnessForTheDayShowsDashesNotTodaysFigures() throws {
         let model = try sample()
         let plan = try firstPlan(model)

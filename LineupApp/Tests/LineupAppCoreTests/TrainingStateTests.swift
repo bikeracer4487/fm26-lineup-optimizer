@@ -360,6 +360,42 @@ import LineupEngine
         #expect(t.model.training.accepted.isEmpty)
     }
 
+    /// Records, at each reading of the clock, how many times the model has worked the advice out.
+    private final class AdviceProbe: @unchecked Sendable {
+        weak var model: AppModel?
+        var advisedAtReadings: [Int] = []
+    }
+
+    @Test func theEndOfATrainingActionIsReadAfterTheAdviceIsWorkedOutAgain() throws {
+        let input = ScriptedInput(today: TestModel.today)
+        let probe = AdviceProbe()
+        var environment = input.environment
+        let clock = environment.now
+        environment.now = {
+            MainActor.assumeIsolated { probe.advisedAtReadings.append(probe.model?.timesAdvised ?? -1) }
+            return clock()
+        }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("app-model-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let model = AppModel(store: Store(directory: directory), environment: environment)
+        probe.model = model
+        input.clipboard = try Captures.firstTeam
+        input.config = .data(try Captures.firstTeamGrids)
+        model.importSquad(.firstTeam)
+        model.addTactic(named: "4-2-3-1")
+        let choice = try learner(model)
+        _ = model.adviceState
+        let before = model.timesAdvised
+        probe.advisedAtReadings = []
+        model.accept(choice)
+        // Two readings: the start, before the advice is worked out again, and the end, after it.
+        #expect(probe.advisedAtReadings == [before, before + 1])
+        // Read once more, the advice is not worked out again.
+        _ = model.adviceState
+        #expect(model.timesAdvised == before + 1)
+    }
+
     @Test func allowingAgainWithinTheIntervalIsIgnored() throws {
         let t = try TestModel()
         try t.importFirstTeam()

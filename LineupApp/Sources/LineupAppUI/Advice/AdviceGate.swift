@@ -4,17 +4,21 @@ import SwiftUI
 
 /// An advisor screen's heading over the advice, or, while there is none, over what is missing or why the advisors
 /// stopped, in the engine's sentences, with the button for the screen that puts it right, as Match Selection shows it.
-/// While the advice is ready, the screen's own controls sit beside the heading, or under it when the row is narrow.
+/// While the advice is ready, the screen's own controls sit beside the heading, or under it when the row is narrow, and
+/// one muted line under them says which day's import the advice rests on.
 struct AdviceGate<Header: View, Content: View>: View {
     let screen: Screen
     let state: AdviceState
+    /// The model's line naming the import day; nil while the advice is not ready.
+    let importLine: String?
     @ViewBuilder let header: () -> Header
     @ViewBuilder let content: (AdvisorsReport) -> Content
 
-    init(screen: Screen, state: AdviceState, @ViewBuilder header: @escaping () -> Header,
+    init(screen: Screen, state: AdviceState, importLine: String?, @ViewBuilder header: @escaping () -> Header,
          @ViewBuilder content: @escaping (AdvisorsReport) -> Content) {
         self.screen = screen
         self.state = state
+        self.importLine = importLine
         self.header = header
         self.content = content
     }
@@ -22,11 +26,16 @@ struct AdviceGate<Header: View, Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             if AdvicePresentation.report(state) != nil {
-                WrappingRow(alignment: .center, spacing: Theme.Spacing.m, pushesTrailing: false) {
-                    BoardHeading(screen.title, size: Theme.TypeSize.title)
-                        .padding(.trailing, Theme.Spacing.m)
-                } trailing: {
-                    header()
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    WrappingRow(alignment: .center, spacing: Theme.Spacing.m, pushesTrailing: false) {
+                        BoardHeading(screen.title, size: Theme.TypeSize.title)
+                            .padding(.trailing, Theme.Spacing.m)
+                    } trailing: {
+                        header()
+                    }
+                    if let importLine {
+                        AdviceImportLine(text: importLine)
+                    }
                 }
             } else {
                 BoardHeading(screen.title, size: Theme.TypeSize.title)
@@ -42,20 +51,20 @@ struct AdviceGate<Header: View, Content: View>: View {
 }
 
 extension AdviceGate where Header == EmptyView {
-    init(screen: Screen, state: AdviceState, @ViewBuilder content: @escaping (AdvisorsReport) -> Content) {
-        self.init(screen: screen, state: state, header: { EmptyView() }, content: content)
+    init(screen: Screen, state: AdviceState, importLine: String?,
+         @ViewBuilder content: @escaping (AdvisorsReport) -> Content) {
+        self.init(screen: screen, state: state, importLine: importLine, header: { EmptyView() }, content: content)
     }
 }
 
-/// One muted line saying the advice is worked out, until the screen shows the advice itself.
-struct AdviceReadyLine: View {
-    let model: AppModel
+/// The muted line under an advisor screen's heading saying which day's import its figures come from.
+struct AdviceImportLine: View {
+    let text: String
 
     var body: some View {
-        if let line = model.adviceLine {
-            Text(line)
-                .font(Theme.Typeface.text(Theme.TypeSize.body))
-                .foregroundStyle(Theme.Colour.mutedInk)
-        }
+        Text(text)
+            .font(Theme.Typeface.text(Theme.TypeSize.caption))
+            .foregroundStyle(Theme.Colour.mutedInk)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

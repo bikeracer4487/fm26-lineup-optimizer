@@ -368,13 +368,26 @@ import Testing
     @Test func aDraftsSuggestionLeavesAConfirmedFixtureOutOfThoseStillToPlay() throws {
         let model = try SampleData.modelAfterConfirmingFirst(repositoryRoot: Captures.repositoryRoot)
         defer { try? FileManager.default.removeItem(at: model.store.directory) }
-        let confirmed = try #require(model.fixtures.first)
-        #expect(model.state(of: confirmed) == .confirmed)
+        let first = try #require(model.fixtures.first)
+        #expect(model.state(of: first) == .confirmed)
         let saved = model.fixtures[1]
+        // The confirmed match moved to the day after the draft's and made a high-importance cup match: counted among
+        // those still to play, it would be the bigger match that follows a day later.
+        var moved = model.fixtureDraft(for: first)
+        moved.date = saved.date.adding(days: 1)
+        moved.importance = .high
+        moved.competition = .cup
+        try #require(model.save(moved) == first.id)
+        let confirmed = try #require(model.fixtures.first { $0.id == first.id })
+        #expect(model.state(of: confirmed) == .confirmed)
+        #expect(confirmed.date > saved.date)
         var draft = model.fixtureDraft(for: saved)
         draft.competition = .cup
         let toPlay = model.fixtures.filter { $0.id != confirmed.id && $0.id != saved.id }
         let expected = try engineSuggestion(model, for: try engineFixture(model, draft, id: saved.id), among: toPlay)
+        let wronglyIncluded = try engineSuggestion(model, for: try engineFixture(model, draft, id: saved.id),
+                                                   among: toPlay + [confirmed])
+        #expect(expected != wronglyIncluded)
         #expect(model.suggestion(for: draft) == expected)
         #expect(model.history.map(\.lineup).contains { $0.fixture == confirmed.id })
     }
@@ -447,6 +460,47 @@ import Testing
         #expect(confirmedModel.suggestionLine(for: first) == nil)
     }
 
+    @Test func aPastFixtureWithNoConfirmedLineupShowsNoSuggestion() throws {
+        // Five days on: the first fixture is confirmed and the second, on 17 November, is past and not confirmed.
+        let model = try SampleData.modelWithPastFixtures(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let past = model.fixtures[1]
+        #expect(model.state(of: past) == .pastNotConfirmed)
+        // Made to differ from its suggestion, it would show one if it were still to play.
+        var changed = past
+        changed.importance = Importance.allCases.first { $0 != model.suggestions[past.id]?.importance } ?? .high
+        model.update(changed)
+        let differing = try #require(model.fixtures.first { $0.id == past.id })
+        #expect(model.suggestionLine(for: differing) == nil)
+        #expect(model.suggestion(for: model.fixtureDraft(for: differing)) == nil)
+        #expect(model.suggestionNote(for: model.fixtureDraft(for: differing)) == nil)
+        // Moved to a day still to play, it shows one again.
+        var later = model.fixtureDraft(for: differing)
+        later.date = Day(iso: "2026-11-19")!
+        #expect(model.suggestion(for: later) != nil)
+    }
+
+    @Test func aMissedFixtureShowsNoSuggestion() throws {
+        // A fixture on 12 November, the day before the squads were imported, never confirmed: missed in Match Selection.
+        let model = try SampleData.modelWithMissedFixture(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let missed = try #require(model.fixtures.first { $0.opponent == "Opponent Z" })
+        #expect(model.fixturePlans.first { $0.id == missed.id }?.body == .missed(nil))
+        // Today in the game moved back before it, so the Fixtures screen alone would call it still to play.
+        var settings = model.settings
+        settings.currentDate = Day(iso: "2026-11-11")!
+        model.update(settings)
+        #expect(model.state(of: missed) == .toPlay)
+        for importance in Importance.allCases {
+            var changed = try #require(model.fixtures.first { $0.id == missed.id })
+            changed.importance = importance
+            model.update(changed)
+            let shown = try #require(model.fixtures.first { $0.id == missed.id })
+            #expect(model.suggestionLine(for: shown) == nil)
+            #expect(model.suggestion(for: model.fixtureDraft(for: shown)) == nil)
+        }
+    }
+
     // MARK: How the suggestion is shown
 
     private func suggestion(_ importance: Importance, basis: Evidence = .derived) -> ImportanceSuggestion {
@@ -466,7 +520,7 @@ import Testing
         #expect(SuggestionNote.clickHelp(false) == "Show the reasons")
         #expect(SuggestionNote.clickHelp(true) == "Hide the reasons")
         #expect(FixtureDraft.competitionLabel == "Competition")
-        #expect(FixtureDraft.opponentStrengthLabel == "Opponent")
+        #expect(FixtureDraft.opponentStrengthLabel == "Their strength")
     }
 
     @Test func useItShowsOnlyWhenTheSuggestionDiffersFromTheChoice() {
