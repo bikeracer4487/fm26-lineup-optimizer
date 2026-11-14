@@ -144,7 +144,7 @@ private struct TrainingPartView: View {
 }
 
 /// Rows, each with a faint rule under it; nothing at all for no rows.
-struct RuledRows<Row: Identifiable, Content: View>: View {
+private struct RuledRows<Row: Identifiable, Content: View>: View {
     let rows: [Row]
     @ViewBuilder let content: (Row) -> Content
 

@@ -34,13 +34,16 @@ public struct MemberLine: Identifiable, Equatable, Sendable {
     public let id: PlayerID
     /// "Young (18)"; the name alone for a player no longer imported.
     public let nameText: String
+    /// "Lead" for the lead of a recorded group, as the engine read it; nil for everyone else, for every member of a
+    /// group nobody is clearly leading, and in a suggested group, whose lead is in its title.
+    public let leadText: String?
     /// In a suggested group his pulls, in a recorded one his changes, in the engine's words joined with " · "; nil
     /// when there are none.
     public let detailText: String?
     /// The engine's words: making up the group, a different social group from the lead, no reading yet.
     public let notes: [String]
 
-    var spokenParts: [String] { [nameText] + [detailText].compactMap { $0 } + notes }
+    var spokenParts: [String] { [nameText] + [leadText, detailText].compactMap { $0 } + notes }
 }
 
 /// A suggested group as its card shows it.
@@ -71,7 +74,8 @@ public struct SuggestedGroupCard: Identifiable, Equatable, Sendable {
             if member.isMakingUp { notes.append(AdvisorText.makingUpTheGroup) }
             if member.inDifferentSocialGroup { notes.append(AdvisorText.otherSocialGroup(leadName: suggestion.leadName)) }
             return MemberLine(id: member.player, nameText: MentoringPresentation.nameText(member.name, age: member.age),
-                              detailText: MentoringPresentation.joined(member.pulls.map(AdvisorText.pull)), notes: notes)
+                              leadText: nil, detailText: MentoringPresentation.joined(member.pulls.map(AdvisorText.pull)),
+                              notes: notes)
         }
         cautions = suggestion.cautions.map { AdvisorText.caution($0, leadName: suggestion.leadName) }
         spokenNote = AdvisorText.note(for: suggestion.basis)
@@ -116,6 +120,7 @@ public struct RecordedGroupCard: Identifiable, Equatable, Sendable {
             let noReading = member.changes.allSatisfy { $0.change == .noReading }
             return MemberLine(id: member.player,
                               nameText: member.age.map { MentoringPresentation.nameText(member.name, age: $0) } ?? member.name,
+                              leadText: member.isLead ? MentoringPresentation.leadTitle : nil,
                               detailText: MentoringPresentation.joined(changes),
                               notes: noReading ? [AdvisorText.noReadingYet] : [])
         }
@@ -154,11 +159,15 @@ public struct DynamicsRow: Identifiable, Equatable, Sendable {
 public struct MemberChoice: Identifiable, Equatable, Sendable {
     public let id: PlayerID
     public let name: String
-    /// His age and level: "18 · Others".
-    public let detailText: String
+    /// His age and level: "18 · Others"; nil for a member who is no longer imported in the squad.
+    public let detailText: String?
     public let isChosen: Bool
-    /// "In another group" when he cannot be chosen; nil when he can.
+    /// Why he cannot be put in: "In another group", or, for a member of the group being changed, "No longer in the
+    /// squad" or "Out on loan"; nil when he can.
     public let unavailableText: String?
+    /// Whether ticking his row does anything: a player chosen can always be taken out; one not chosen can be put in
+    /// when nothing stops him and fewer than three are chosen.
+    public let canToggle: Bool
 }
 
 public enum MentoringPresentation {
@@ -171,9 +180,15 @@ public enum MentoringPresentation {
     public static let endTitle = "End group"
     public static let saveTitle = "Save"
     public static let cancelTitle = "Cancel"
+    public static let leadTitle = "Lead"
+    public static let levelLabel = "Level"
+    public static let socialGroupLabel = "Social group"
     static let everyoneElse = "Everyone else: others."
     static let inAnotherGroup = "In another group"
+    static let noLongerInSquad = "No longer in the squad"
+    static let outOnLoan = "Out on loan"
     static let notEntered = "Not entered"
+    static let noGroupRecorded = "No group recorded yet."
     /// The letters of the secondary social groups the game shows.
     static let secondaryGroups = ["A", "B", "C", "D"]
 
@@ -190,6 +205,13 @@ public enum MentoringPresentation {
     public static func noSuggestionsText(_ sheet: MentoringSheet) -> String? {
         guard sheet.notReady == nil, sheet.failures.isEmpty, sheet.suggested.isEmpty else { return nil }
         return AdvisorText.noGroupToSuggest
+    }
+
+    /// The muted line in place of the owner's groups when the squad has none; nil when it has one, and when it has not
+    /// been imported.
+    public static func noRecordedGroupsText(_ sheet: MentoringSheet) -> String? {
+        guard sheet.notReady == nil, sheet.yours.isEmpty else { return nil }
+        return noGroupRecorded
     }
 
     /// The heading over the players not placed; nil when there is nobody to list, so the part is not drawn.
@@ -274,18 +296,79 @@ public enum MentoringPresentation {
         }
     }
 
-    /// The squad's players not out on loan, in squad order: those in the draft chosen, and one in another live group
-    /// unavailable.
+    /// First, the members of the group being changed and any player in the draft who are not among the squad's players
+    /// not out on loan, in the group's order, each named from the saved names and saying why he is not: he can only be
+    /// taken out, and once out cannot be put back. Then the squad's players not out on loan, in squad order: those in
+    /// the draft chosen, one in another live group unavailable, and nobody else can be put in once three are chosen.
     static func memberChoices(_ draft: MentoringGroupDraft, players: [Player], ownClub: String?,
                               state: MentoringState) -> [MemberChoice] {
         let elsewhere = Set(state.groups.filter { $0.isLive && $0.id != draft.id }.flatMap(\.current).map(\.player))
         let chosen = Set(draft.members)
-        return notOutOnLoan(players, ownClub: ownClub).map { player in
-            let standing = state.dynamics[player.id]?.standing ?? .others
-            return MemberChoice(id: player.id, name: player.name, detailText: "\(player.age) · \(AdvisorText.name(standing))",
-                                isChosen: chosen.contains(player.id),
-                                unavailableText: elsewhere.contains(player.id) ? inAnotherGroup : nil)
+        let isFull = chosen.count >= Mentoring.groupSize
+        let offered = notOutOnLoan(players, ownClub: ownClub)
+        let offeredIDs = Set(offered.map(\.id))
+        let held = Dictionary(players.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let saved = draft.isNew ? [] : state.groups.first { $0.id == draft.id }?.current.map(\.player) ?? []
+
+        var gone: [PlayerID] = []
+        for id in saved + draft.members where !offeredIDs.contains(id) && !gone.contains(id) { gone.append(id) }
+        let goneRows = gone.map { id in
+            let player = held[id]
+            return MemberChoice(id: id, name: state.names[id] ?? player?.name ?? TrainingPresentation.unnamed,
+                                detailText: player.map { detailText($0, state: state) }, isChosen: chosen.contains(id),
+                                unavailableText: player == nil ? noLongerInSquad : outOnLoan, canToggle: chosen.contains(id))
         }
+        return goneRows + offered.map { player in
+            let isChosen = chosen.contains(player.id)
+            let unavailable = elsewhere.contains(player.id) ? inAnotherGroup : nil
+            return MemberChoice(id: player.id, name: player.name, detailText: detailText(player, state: state),
+                                isChosen: isChosen, unavailableText: unavailable,
+                                canToggle: isChosen || (unavailable == nil && !isFull))
+        }
+    }
+
+    /// "18 · Others": his age and his level as entered.
+    private static func detailText(_ player: Player, state: MentoringState) -> String {
+        "\(player.age) · \(AdvisorText.name(state.dynamics[player.id]?.standing ?? .others))"
+    }
+
+    // MARK: The editors
+
+    /// "First team hierarchy".
+    public static func hierarchyEditorTitle(_ squad: Squad) -> String {
+        switch squad {
+        case .firstTeam: "First team hierarchy"
+        case .u21: "U21 hierarchy"
+        case .u18: "U18 hierarchy"
+        }
+    }
+
+    /// Where in the game to read the levels and social groups: the Dynamics screen for the first team; each player's
+    /// own page for the U21s and U18s, whose Dynamics screen may list nobody.
+    public static func hierarchyEditorHint(_ squad: Squad) -> String {
+        let blank = "A social group can be left not entered."
+        return switch squad {
+        case .firstTeam:
+            "Set each player's level and social group as the game's Dynamics screen shows them. \(blank)"
+        case .u21, .u18:
+            "Set each player's level and social group as his own page in the game shows them: the "
+                + "\(squad.displayName)' Dynamics screen may list nobody. \(blank)"
+        }
+    }
+
+    /// "Add a first-team group" for a new group; "Change the group" for one recorded.
+    public static func groupEditorTitle(_ draft: MentoringGroupDraft) -> String {
+        guard draft.isNew else { return "Change the group" }
+        return switch draft.squad {
+        case .firstTeam: "Add a first-team group"
+        case .u21: "Add a U21 group"
+        case .u18: "Add a U18 group"
+        }
+    }
+
+    /// "2 of 3 chosen".
+    public static func chosenText(_ count: Int) -> String {
+        "\(count) of \(Mentoring.groupSize) chosen"
     }
 
     // MARK: Words

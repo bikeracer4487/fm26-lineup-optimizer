@@ -87,19 +87,24 @@ struct RecordedGroupCardView: View {
     }
 }
 
-/// A group's members, one row each, spaced by the stack they are put in: his name and age in a column, then what
-/// pulls him or what has changed, and the engine's notes on him under it in muted ink.
+/// A group's members, one row each, spaced by the stack they are put in: his name and age in a column, with the lead's
+/// mark beside it, then what pulls him or what has changed, and the engine's notes on him under it in muted ink.
 private struct MemberRows: View {
     let members: [MemberLine]
 
     var body: some View {
         ForEach(members) { member in
             HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
-                Text(member.nameText)
-                    .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
-                    .lineLimit(Theme.Mentoring.nameLines)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(width: Theme.Mentoring.memberNameWidth, alignment: .leading)
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
+                    Text(member.nameText)
+                        .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
+                        .lineLimit(Theme.Mentoring.nameLines)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let lead = member.leadText {
+                        LeadMark(text: lead)
+                    }
+                }
+                .frame(width: Theme.Mentoring.memberNameWidth, alignment: .leading)
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                     if let detail = member.detailText {
                         Text(detail)
@@ -116,6 +121,26 @@ private struct MemberRows: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+}
+
+/// "Lead" beside the lead's name: small, in marker blue, in an outline. The card's spoken text already says it.
+private struct LeadMark: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .extraBold))
+            .foregroundStyle(Theme.Colour.markerBlue)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, Theme.Mentoring.leadMarkHorizontalPadding)
+            .padding(.vertical, Theme.Stamp.verticalPadding)
+            .overlay {
+                RoundedRectangle(cornerRadius: Theme.Mentoring.leadMarkCornerRadius)
+                    .strokeBorder(Theme.Colour.markerBlue, lineWidth: Theme.Stamp.lineWidth)
+            }
+            .accessibilityHidden(true)
     }
 }
 

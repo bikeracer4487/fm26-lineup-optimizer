@@ -390,6 +390,21 @@ public enum SampleData {
     /// entry. The U21s have none, so their advice goes by age alone.
     @MainActor public static func modelWithHierarchy(repositoryRoot: URL) throws -> AppModel {
         let model = try build(repositoryRoot: repositoryRoot).model
+        try enterHierarchy(in: model)
+        return model
+    }
+
+    /// The hierarchy sample with the hierarchy entered five weeks before the game's current date, so it is stale.
+    @MainActor public static func modelWithStaleHierarchy(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        model.moveToday(by: -35)
+        try enterHierarchy(in: model)
+        model.moveToday(by: 35)
+        return model
+    }
+
+    /// Enters the first team's hierarchy as `modelWithHierarchy` describes, dated the game's current date.
+    @MainActor private static func enterHierarchy(in model: AppModel) throws {
         let own = (model.squad.book.current[.firstTeam] ?? []).filter { LoanStatus.of($0, ownClub: model.ownClub) == .own }
         let oldest = own.sorted { ($1.age, $0.name) < ($0.age, $1.name) }
         let youngest = own.sorted { ($0.age, $0.name) < ($1.age, $1.name) }
@@ -404,7 +419,6 @@ public enum SampleData {
             entries[player.id] = PlayerDynamics(standing: .others, socialGroup: .secondary("A"))
         }
         model.setDynamics(entries, for: .firstTeam)
-        return model
     }
 
     /// The hierarchy sample with the advice's first suggested first-team group recorded five weeks before the game's

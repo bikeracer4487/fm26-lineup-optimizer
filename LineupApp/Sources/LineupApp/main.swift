@@ -65,7 +65,8 @@
 //                                              ("training-none-…"). Its Mentoring tab is drawn, taller, with the
 //                                              first team's hierarchy entered so its groups are suggested
 //                                              ("training-mentoring-…"), on the sample with no hierarchy
-//                                              ("training-mentoring-no-hierarchy-…"), empty
+//                                              ("training-mentoring-no-hierarchy-…"), with the hierarchy entered
+//                                              five weeks ago ("training-mentoring-stale-…"), empty
 //                                              ("training-mentoring-empty-…"), on the U21s
 //                                              ("training-mentoring-u21-…"), with a group recorded five weeks ago
 //                                              and a member risen since ("training-mentoring-recorded-…"), the same
@@ -75,6 +76,11 @@
 //                                              first-team player missing a Pressure value
 //                                              ("training-mentoring-failed-…"), and the warning's state in the
 //                                              smallest window's width, tall ("training-mentoring-small-…").
+//                                              Its editors are drawn on their own: the first team's hierarchy
+//                                              as entered ("training-mentoring-hierarchy-editor-…"), the U21s'
+//                                              ("training-mentoring-hierarchy-editor-u21-…"), and a new group
+//                                              with two ticked beside a player in the recorded group
+//                                              ("training-mentoring-group-editor-…").
 //                                              The Player Removal screen ("removal-…", its critical and high
 //                                              rows open) is drawn with every row open, tall enough for a
 //                                              medium and a keep row's reasons ("removal-all-open-…"), and
@@ -148,7 +154,7 @@ enum SampleState {
     case afterConfirmingFirst, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
     case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, nothingToRetrain, loanee
     case differingSuggestion
-    case hierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
+    case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -176,6 +182,7 @@ enum SampleState {
         case .loanee: return try SampleData.modelWithLoanee(repositoryRoot: url)
         case .differingSuggestion: return try SampleData.modelWithDifferingSuggestion(repositoryRoot: url)
         case .hierarchy: return try SampleData.modelWithHierarchy(repositoryRoot: url)
+        case .staleHierarchy: return try SampleData.modelWithStaleHierarchy(repositoryRoot: url)
         case .mentoringGroup: return try SampleData.modelWithMentoringGroup(repositoryRoot: url)
         case .mentoringWarning: return try SampleData.modelWithMentoringWarning(repositoryRoot: url)
         case .stoppedGroup: return try SampleData.modelWithStoppedGroup(repositoryRoot: url)
@@ -320,6 +327,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
     let pictures: [(String, AppModel, CGSize, TrainingStart)] = [
         ("mentoring", sampleModel(root, .hierarchy), tall, mentoring),
         ("mentoring-no-hierarchy", sampleModel(root), tall, mentoring),
+        ("mentoring-stale", sampleModel(root, .staleHierarchy), tall, mentoring),
         ("mentoring-empty", SampleData.emptyModel(), size, mentoring),
         ("mentoring-u21", sampleModel(root, .hierarchy), size, TrainingStart(view: .mentoring, squad: .u21)),
         ("mentoring-recorded", sampleModel(root, .mentoringGroup), tall, mentoring),
@@ -333,6 +341,23 @@ let narrowWindow = CGSize(width: 800, height: 700)
         try ScreenPictures.write(model: model, to: directory, size: window, variant: variant, screens: [.training],
                                  trainingStart: start)
     }
+
+    // The editors on their own: the first team's hierarchy as entered, the U21s' with nothing entered, and a new
+    // first-team group beside the recorded one, two ticked next to a player in that group.
+    let entered = sampleModel(root, .hierarchy)
+    try ScreenPictures.writeMentoringEditor(model: entered, editing: .hierarchy(.firstTeam), to: directory,
+                                            name: "training-mentoring-hierarchy-editor")
+    try ScreenPictures.writeMentoringEditor(model: entered, editing: .hierarchy(.u21), to: directory,
+                                            name: "training-mentoring-hierarchy-editor-u21")
+    let recorded = sampleModel(root, .mentoringGroup)
+    var draft = MentoringGroupDraft(squad: .firstTeam)
+    let choices = recorded.memberChoices(for: draft)
+    guard let taken = choices.firstIndex(where: { $0.unavailableText != nil }) else {
+        fail("The sample's recorded group has no member in the first team's list.")
+    }
+    for choice in choices.suffix(from: max(0, taken - 2)).filter(\.canToggle).prefix(2) { draft.toggle(choice.id) }
+    try ScreenPictures.writeMentoringEditor(model: recorded, editing: .group(draft), to: directory,
+                                            name: "training-mentoring-group-editor")
 }
 
 /// The Player Removal screen with every row open, with a loanee, and with two players marked: see the usage at the top.

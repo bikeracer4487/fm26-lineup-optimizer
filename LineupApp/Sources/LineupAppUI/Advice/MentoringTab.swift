@@ -33,6 +33,9 @@ struct MentoringTab: View {
             }
         }
         .frame(maxWidth: Theme.Training.columnMaximumWidth, alignment: .leading)
+        .sheet(item: $navigation.mentoringEditing) { editing in
+            MentoringEditorSheet(model: model, editing: editing) { navigation.mentoringEditing = nil }
+        }
     }
 }
 
@@ -145,7 +148,7 @@ private struct SuggestedPart: View {
     }
 }
 
-/// A card for each of the owner's groups, with Add a group beside the heading.
+/// A card for each of the owner's groups, or a muted line saying there is none, with Add a group beside the heading.
 private struct YourGroupsPart: View {
     let sheet: MentoringSheet
     let add: () -> Void
@@ -158,6 +161,11 @@ private struct YourGroupsPart: View {
                 Button(MentoringPresentation.addTitle, action: add)
                     .buttonStyle(.secondary)
                     .fixedSize()
+            }
+            if let none = MentoringPresentation.noRecordedGroupsText(sheet) {
+                Text(none)
+                    .font(Theme.Typeface.text(Theme.TypeSize.body))
+                    .foregroundStyle(Theme.Colour.mutedInk)
             }
             ForEach(sheet.yours) { card in
                 RecordedGroupCardView(card: card, edit: { edit(card.draft) }, end: { end(card.id) })

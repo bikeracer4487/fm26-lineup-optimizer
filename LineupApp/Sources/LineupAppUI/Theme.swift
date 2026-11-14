@@ -467,6 +467,8 @@ public enum Theme {
         public static let fixtureEditorPicture = CGSize(width: 560, height: 420)
         /// The picture of the fixture editor with a suggestion, its reasons and "Use it".
         public static let fixtureEditorSuggestionPicture = CGSize(width: 560, height: 600)
+        /// The picture of a mentoring editor on its own: the editor and the board round it.
+        public static let mentoringEditorPicture = CGSize(width: 740, height: 660)
         /// The picture of the two typefaces at each weight.
         public static let typeSpecimenPicture = CGSize(width: 760, height: 640)
         /// The widest a setting's control runs, so a slider is not stretched across a wide window.
@@ -643,6 +645,19 @@ public enum Theme {
         public static let noteMaximumWidth: CGFloat = Layout.readingWidth
         /// The pink band across the top of a card whose group is doing harm or has stopped working.
         public static let stateNote = Note.warning
+        /// The mark beside the lead's name on a recorded group's card.
+        public static let leadMarkHorizontalPadding: CGFloat = 7
+        public static let leadMarkCornerRadius: CGFloat = 6
+        /// The hierarchy editor and the group editor, each a sheet over the Training screen: no taller than the
+        /// smallest window, their rows scrolling.
+        public static let editorSize = CGSize(width: 640, height: 540)
+        /// A player's name and age in an editor's row; a longer name wraps to a second line.
+        public static let editorNameWidth: CGFloat = 230
+        /// Each menu's column in the hierarchy editor, room for the longest choice: "Highly Influential".
+        public static let editorMenuWidth: CGFloat = 170
+        /// The box ticked for a member in the group editor.
+        public static let tickBox: CGFloat = 20
+        public static let tickBoxCornerRadius: CGFloat = 5
     }
 
     // MARK: Player Removal

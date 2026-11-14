@@ -260,6 +260,54 @@ import LineupEngine
         #expect(t.reopened().mentoring.names[gone.player] == gone.name)
     }
 
+    @Test func aGroupWithAMemberWhoHasLeftCanBeChangedBySwappingHimOut() throws {
+        let t = try both()
+        let group = try suggestion(t.model, .firstTeam)
+        t.model.recordGroup(group, in: .firstTeam)
+        let gone = group.members[0]
+        let rows = try Captures.firstTeam.split(whereSeparator: \.isNewline).map(String.init)
+        let kept = rows.filter { !$0.contains("\t\(gone.name)\t") && !$0.contains("\"\(gone.name)\"") }
+        t.importSquad(.firstTeam, paste: kept.joined(separator: "\n") + "\n", grids: try Captures.firstTeamGrids)
+        var settings = t.model.settings
+        settings.currentDate = today.adding(days: 7)
+        t.model.update(settings)
+
+        var draft = MentoringGroupDraft(editing: try #require(live(t.model).first))
+        #expect(t.model.mentoringProblem(of: draft) == AppModel.MentoringProblemLabel.notInSquad)
+        let row = try #require(t.model.memberChoices(for: draft).first { $0.id == gone.player })
+        #expect(row.name == gone.name)
+        #expect(row.isChosen && row.canToggle)
+        #expect(row.unavailableText == "No longer in the squad")
+
+        draft.toggle(gone.player)
+        let free = try #require(t.model.memberChoices(for: draft).first { !$0.isChosen && $0.canToggle })
+        draft.toggle(free.id)
+        #expect(t.model.mentoringProblem(of: draft) == nil)
+        t.model.saveGroup(draft)
+
+        let saved = try #require(live(t.model).first)
+        #expect(Set(saved.current.map(\.player)) == Set(members(group).filter { $0 != gone.player } + [free.id]))
+        #expect(saved.members.first { $0.player == gone.player }?.leftOn == today.adding(days: 7))
+        #expect(saved.members.first { $0.player == free.id }?.joinedOn == today.adding(days: 7))
+    }
+
+    @Test func aGroupBeingChangedIsCheckedAgainstItsOwnSquad() throws {
+        let t = try both()
+        let young = ids(t.model, .u21), first = ids(t.model, .firstTeam)
+        let choosable = t.model.memberChoices(for: MentoringGroupDraft(squad: .u21)).filter(\.canToggle).map(\.id)
+        t.model.saveGroup(MentoringGroupDraft(squad: .u21, members: Array(choosable.prefix(3))))
+        let group = try #require(live(t.model).first)
+        #expect(group.squad == .u21)
+
+        var draft = MentoringGroupDraft(editing: group)
+        #expect(draft.squad == .u21)
+        #expect(t.model.memberChoices(for: draft).map(\.id).allSatisfy(young.contains))
+        // A first-team player put in is not a player of the group's squad.
+        draft.toggle(draft.members[0])
+        draft.toggle(first[0])
+        #expect(t.model.mentoringProblem(of: draft) == AppModel.MentoringProblemLabel.notInSquad)
+    }
+
     @Test func changingMentoringDoesNotReplan() throws {
         let t = try both()
         let planned = t.model.timesPlanned
@@ -483,6 +531,18 @@ import LineupEngine
         #expect(!report.suggestions.isEmpty)
         #expect(model.mentoring.groups.isEmpty)
         #expect(model.mentoringSheet(for: .firstTeam).hierarchyLines.count == 4)
+        #expect(model.notices.isEmpty)
+    }
+
+    @Test func theStaleSampleHasTheFirstTeamsHierarchyEnteredFiveWeeksAgo() throws {
+        let model = try SampleData.modelWithStaleHierarchy(repositoryRoot: Captures.repositoryRoot)
+        let fresh = try SampleData.modelWithHierarchy(repositoryRoot: Captures.repositoryRoot)
+        #expect(model.mentoring.dynamics == fresh.mentoring.dynamics)
+        #expect(model.mentoring.dynamicsUpdatedOn == [.firstTeam: model.settings.currentDate.adding(days: -35)])
+        #expect(model.settings.currentDate == fresh.settings.currentDate)
+        #expect(try report(model).isStale)
+        let sheet = model.mentoringSheet(for: .firstTeam)
+        #expect(sheet.staleText?.contains("Dynamics screen") == true)
         #expect(model.notices.isEmpty)
     }
 

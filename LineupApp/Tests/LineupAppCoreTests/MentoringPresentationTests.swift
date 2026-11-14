@@ -260,11 +260,41 @@ import Testing
     @Test func aRecordedCardIsSpokenWithEverythingOnIt() throws {
         let card = try #require(try sheet([], advice: pinned(groups: [review(doingHarm: false)])).yours.first)
         #expect(card.spokenText == "Okafor, Lane, Pike, since Mon 12 Oct, "
-                + "Okafor (30), Professionalism 15, no change, "
+                + "Okafor (30), Lead, Professionalism 15, no change, "
                 + "Lane (20), Professionalism 9 to 10 in 5 weeks · Pressure 5, no change, "
                 + "Pike (17), No reading yet: values are read at each import, "
                 + "Warning: Okafor stands above Pike and has Ambition 6 against 9: Pike may be dragged down., "
                 + "this tool's estimate")
+    }
+
+    @Test func theLeadOfARecordedGroupIsMarked() throws {
+        let card = try #require(try sheet([], advice: pinned(groups: [review()])).yours.first)
+        #expect(card.members.map(\.leadText) == ["Lead", nil, nil])
+        // A suggested group's lead is in its title, not among its members.
+        let suggested = try #require(try sheet([], advice: pinned(suggestions: [suggestion])).suggested.first)
+        #expect(suggested.members.allSatisfy { $0.leadText == nil })
+    }
+
+    @Test func aGroupWithNobodyClearlyLeadingMarksNobody() throws {
+        let members = review().members.map {
+            MemberReview(player: $0.player, name: $0.name, age: $0.age, isLead: false, pulls: [], changes: $0.changes)
+        }
+        let leaderless = GroupReview(group: recorded, lead: nil, members: members, warnings: [.nobodyLeads],
+                                     isDoingHarm: false, hasStoppedWorking: false, basis: .derived)
+        let card = try #require(try sheet([], advice: pinned(groups: [leaderless])).yours.first)
+        #expect(card.members.allSatisfy { $0.leadText == nil })
+        #expect(card.warnings == ["Nobody is clearly leading this group."])
+    }
+
+    @Test func aSquadWithNoGroupRecordedSaysSo() throws {
+        let none = try sheet([player(hart, "Hart", age: 34)])
+        #expect(none.yours.isEmpty)
+        #expect(MentoringPresentation.noRecordedGroupsText(none) == "No group recorded yet.")
+        // Nor when the advice stopped and nothing is saved.
+        #expect(MentoringPresentation.noRecordedGroupsText(try sheet([], advice: .failed(["Something"])))
+                == "No group recorded yet.")
+        #expect(MentoringPresentation.noRecordedGroupsText(try sheet([], advice: pinned(groups: [review()]))) == nil)
+        #expect(MentoringPresentation.noRecordedGroupsText(try sheet([], advice: .needsSquad)) == nil)
     }
 
     @Test func aMemberNoLongerImportedIsShownByNameWithoutAnAge() throws {
@@ -427,6 +457,97 @@ import Testing
         let own = MentoringPresentation.memberChoices(editing, players: players, ownClub: club, state: state)
         #expect(own.map(\.isChosen) == [true, true, true, false, false])
         #expect(own.allSatisfy { $0.unavailableText == nil })
+    }
+
+    @Test func aGroupBeingChangedListsItsMembersWhoHaveGoneFirstWithWhy() {
+        // Pike has left the squad; Lane is out on loan.
+        let players = [player(okafor, "Okafor", age: 30), player(lane, "Lane", age: 20, loanedTo: "Rovers"),
+                       player(young, "Young", age: 18)]
+        var state = MentoringState()
+        state.groups = [recorded]
+        state.names = [okafor: "Okafor", lane: "Lane", pike: "Pike"]
+        var draft = MentoringGroupDraft(editing: recorded)
+        let choices = MentoringPresentation.memberChoices(draft, players: players, ownClub: club, state: state)
+        #expect(choices.map(\.id) == [lane, pike, okafor, young])
+        #expect(choices.map(\.name) == ["Lane", "Pike", "Okafor", "Young"])
+        #expect(choices.map(\.detailText) == ["20 · Others", nil, "30 · Others", "18 · Others"])
+        #expect(choices.map(\.unavailableText) == ["Out on loan", "No longer in the squad", nil, nil])
+        #expect(choices.map(\.isChosen) == [true, true, true, false])
+        // A member who has gone can be taken out; with three chosen nobody else can be put in.
+        #expect(choices.map(\.canToggle) == [true, true, true, false])
+
+        // Pike taken out: his row stays, and he cannot be put back.
+        draft.toggle(pike)
+        let after = MentoringPresentation.memberChoices(draft, players: players, ownClub: club, state: state)
+        #expect(after.map(\.id) == [lane, pike, okafor, young])
+        #expect(after.map(\.isChosen) == [true, false, true, false])
+        #expect(after.map(\.canToggle) == [true, false, true, true])
+    }
+
+    @Test func aGoneMemberWithNoSavedNameIsNeverShownByHisKey() {
+        var state = MentoringState()
+        state.groups = [recorded]
+        let choices = MentoringPresentation.memberChoices(MentoringGroupDraft(editing: recorded), players: [],
+                                                          ownClub: club, state: state)
+        #expect(choices.map(\.id) == [okafor, lane, pike])
+        #expect(choices.allSatisfy { $0.name == TrainingPresentation.unnamed })
+    }
+
+    @Test func aNewGroupListsOnlyTheSquadsPlayers() {
+        // Pike is in another group and has left: he is nowhere in a new group's list.
+        var state = MentoringState()
+        state.groups = [recorded]
+        let players = [player(okafor, "Okafor", age: 30), player(young, "Young", age: 18)]
+        let choices = MentoringPresentation.memberChoices(MentoringGroupDraft(squad: .firstTeam), players: players,
+                                                          ownClub: club, state: state)
+        #expect(choices.map(\.id) == [okafor, young])
+        #expect(choices.map(\.canToggle) == [false, true])
+    }
+
+    @Test func aRowCanBeTickedOnlyWhileFewerThanThreeAreChosen() {
+        let players = [player(okafor, "Okafor", age: 30), player(lane, "Lane", age: 20), player(pike, "Pike", age: 17),
+                       player(young, "Young", age: 18)]
+        var draft = MentoringGroupDraft(squad: .firstTeam)
+        func toggles() -> [Bool] {
+            MentoringPresentation.memberChoices(draft, players: players, ownClub: club, state: MentoringState()).map(\.canToggle)
+        }
+        #expect(toggles() == [true, true, true, true])
+        draft.toggle(okafor); draft.toggle(lane)
+        #expect(toggles() == [true, true, true, true])
+        draft.toggle(pike)
+        #expect(draft.members == [okafor, lane, pike])
+        #expect(toggles() == [true, true, true, false])
+        draft.toggle(lane)
+        #expect(draft.members == [okafor, pike])
+        #expect(toggles() == [true, true, true, true])
+    }
+
+    @Test func theEditorsLabels() {
+        #expect(Squad.allCases.map(MentoringPresentation.hierarchyEditorTitle)
+                == ["First team hierarchy", "U21 hierarchy", "U18 hierarchy"])
+        let first = MentoringPresentation.hierarchyEditorHint(.firstTeam)
+        #expect(first.contains("Dynamics screen"))
+        #expect(!first.contains("own page"))
+        for squad in [Squad.u21, .u18] {
+            #expect(MentoringPresentation.hierarchyEditorHint(squad).contains("own page"))
+        }
+        #expect(MentoringPresentation.hierarchyEditorHint(.u21).contains("U21s"))
+        #expect(MentoringPresentation.hierarchyEditorHint(.u18).contains("U18s"))
+
+        #expect(MentoringPresentation.groupEditorTitle(MentoringGroupDraft(squad: .firstTeam)) == "Add a first-team group")
+        #expect(MentoringPresentation.groupEditorTitle(MentoringGroupDraft(squad: .u21)) == "Add a U21 group")
+        #expect(MentoringPresentation.groupEditorTitle(MentoringGroupDraft(squad: .u18)) == "Add a U18 group")
+        #expect(MentoringPresentation.groupEditorTitle(MentoringGroupDraft(editing: recorded)) == "Change the group")
+
+        #expect((0...3).map(MentoringPresentation.chosenText)
+                == ["0 of 3 chosen", "1 of 3 chosen", "2 of 3 chosen", "3 of 3 chosen"])
+    }
+
+    @Test func aDraftBeingChangedKeepsItsGroupsSquad() {
+        var group = recorded
+        group.squad = .u21
+        #expect(MentoringGroupDraft(editing: group).squad == .u21)
+        #expect(MentoringGroupDraft(squad: .u18).squad == .u18)
     }
 
     @Test func theTwoChoiceLists() {

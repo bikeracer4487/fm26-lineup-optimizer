@@ -49,7 +49,9 @@ public struct MentoringState: Equatable, Codable, Sendable {
 public struct MentoringGroupDraft: Identifiable, Equatable, Sendable {
     /// A new one for a new group; the group's own when editing.
     public let id: UUID
-    public var squad: Squad
+    /// Chosen for a new group when it is started; the group's own when editing, and never changed, so a draft is checked
+    /// against the squad its group is saved under.
+    public let squad: Squad
     public var members: [PlayerID]
     public let isNew: Bool
 
@@ -61,5 +63,15 @@ public struct MentoringGroupDraft: Identifiable, Equatable, Sendable {
     /// A change to the group, starting from the members who have not left.
     public init(editing group: MentoringGroup) {
         id = group.id; squad = group.squad; members = group.current.map(\.player); isNew = false
+    }
+
+    /// Takes the player out when he is chosen, and otherwise puts him in last. Whether he may be put in is the choice's
+    /// `canToggle`.
+    public mutating func toggle(_ player: PlayerID) {
+        if let index = members.firstIndex(of: player) {
+            members.remove(at: index)
+        } else {
+            members.append(player)
+        }
     }
 }

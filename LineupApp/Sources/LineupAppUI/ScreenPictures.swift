@@ -73,6 +73,29 @@ public enum ScreenPictures {
         }
     }
 
+    /// Draws the Mentoring tab's editor for `editing` on its own on the board, for `model`, in light and in dark:
+    /// "<name>-light.png" and "<name>-dark.png". A sheet cannot be drawn into a picture, so the editor is drawn on the
+    /// board with a card's outline round it, as the fixture editor's picture is.
+    @MainActor public static func writeMentoringEditor(model: AppModel, editing: MentoringEditing, to directory: URL,
+                                                       name: String,
+                                                       size: CGSize = Theme.Layout.mentoringEditorPicture) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let file = "\(name)-\(suffix).png"
+            let editor = BoardFrame {
+                MentoringEditorSheet(model: model, editing: editing) {}
+                    .boardCard()
+            }
+            .boardAppearance()
+            let png = try draw(editor, size: size, appearance: appearance, name: file)
+            do {
+                try png.write(to: directory.appendingPathComponent(file), options: .atomic)
+            } catch {
+                throw PictureError.couldNotWrite(file, underlying: error)
+            }
+        }
+    }
+
     /// Draws the candidate picker on its own with `text` and `rows`, as its popover or sheet shows it, in light and in
     /// dark: "<name>-light.png" and "<name>-dark.png". A popover cannot be drawn into a picture, so the picker is
     /// drawn as a window of its own.
