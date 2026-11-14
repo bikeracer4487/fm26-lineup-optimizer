@@ -95,6 +95,13 @@ struct TokenMarkView: View {
                 .padding(Theme.Spacing.xxs)
                 .background(Circle().fill(Theme.Colour.board))
                 .accessibilityLabel("Caution")
+        case .injured:
+            Image(systemName: "cross.circle.fill")
+                .font(Theme.Typeface.text(Theme.Pitch.markSize, weight: .bold))
+                .foregroundStyle(Theme.Colour.markerRed)
+                .padding(Theme.Spacing.xxs)
+                .background(Circle().fill(Theme.Colour.board))
+                .accessibilityLabel("Injured")
         case .youth:
             Text(mark.badgeText)
                 .font(Theme.Typeface.text(Theme.Pitch.markSize, weight: .extraBold))

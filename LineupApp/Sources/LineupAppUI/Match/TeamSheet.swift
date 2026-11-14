@@ -24,13 +24,15 @@ struct TeamSheet: View {
 
 /// What each mark beside a magnet means.
 struct MarkKey: View {
+    var key: [TokenMark.KeyEntry] = TokenMark.key
+
     var body: some View {
         FlowLayout(spacing: Theme.Spacing.m, lineSpacing: Theme.Spacing.xs) { entries }
         .accessibilityElement(children: .combine)
     }
 
     private var entries: some View {
-        ForEach(TokenMark.key, id: \.self) { entry in
+        ForEach(key, id: \.self) { entry in
             HStack(spacing: Theme.Spacing.xs) {
                 TokenMarkView(mark: entry.mark)
                 Text(entry.text)

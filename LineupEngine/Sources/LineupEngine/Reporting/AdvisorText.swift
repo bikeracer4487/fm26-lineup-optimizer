@@ -116,6 +116,21 @@ public enum AdvisorText {
         return slot.cover < line ? "\(count); \(line) needed" : count
     }
 
+    /// "Recruit first: goalkeeper, left back": the thin slots, most in need first; nil when no slot is thin.
+    public static func recruitFirst(_ depth: DepthReport) -> String? {
+        guard !depth.thin.isEmpty else { return nil }
+        return "Recruit first: " + depth.thin.map { PositionText.plain($0) }.joined(separator: ", ")
+    }
+
+    /// "Next best: Josh Ashby, 6.7 lower": who would step in at the slot, `name` being the next best's, and how far his
+    /// rating there is below the first choice's, to one decimal; "Nobody else can step in" when nobody could.
+    public static func nextBest(_ slot: SlotDepth, name: String?) -> String {
+        guard let drop = slot.dropToNextBest, let name else { return "Nobody else can step in" }
+        let gap = String(format: "%.1f", abs(drop))
+        if gap == String(format: "%.1f", 0.0) { return "Next best: \(name), rated the same" }
+        return "Next best: \(name), \(gap) \(drop > 0 ? "lower" : "higher")"
+    }
+
     public static func whatCoverCounts(_ parameters: EngineParameters) -> String {
         "Cover counts players solid in the slot (familiarity \(parameters.depthSolidFamiliarity.value) or over in both phases), "
             + "not injured and not first choice elsewhere; fewer than \(parameters.depthThinBelow.value) is thin."

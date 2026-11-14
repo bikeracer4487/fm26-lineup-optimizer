@@ -238,6 +238,51 @@ import LineupEngine
         #expect(model.timesAdvised == count + 1)
     }
 
+    @Test func aChangeOfTrainingIntensityChangesRestsDayEstimates() throws {
+        let model = try sample()
+        func days(_ intensity: TrainingIntensity) throws -> [PlayerID: Int?] {
+            var settings = model.settings
+            settings.plan.trainingIntensity = intensity
+            model.update(settings)
+            let rest = try #require(report(model)?.rest)
+            return Dictionary(uniqueKeysWithValues: rest.map { ($0.player, $0.days) })
+        }
+        let low = try days(.low)
+        let high = try days(.high)
+        #expect(Set(low.keys) == Set(high.keys))
+        let changed = low.keys.filter { low[$0]! != high[$0]! }
+        #expect(!changed.isEmpty, "a player short of condition clears it sooner with lighter training")
+        for player in changed {
+            if let l = low[player]!, let h = high[player]! { #expect(l < h) }
+        }
+    }
+
+    @Test func unlockingAConfirmedFixtureWorksTheAdviceOutAgain() throws {
+        let model = try SampleData.modelAfterConfirmingFirst(repositoryRoot: Captures.repositoryRoot)
+        let confirmed = try #require(model.history.first).lineup.fixture
+        _ = model.adviceState
+        let count = model.timesAdvised
+        model.unlock(confirmed)
+        #expect(!model.history.contains { $0.lineup.fixture == confirmed })
+        let after = model.adviceState
+        #expect(model.timesAdvised == count + 1)
+        #expect(after == (try .ready(engineReport(model))))
+    }
+
+    @Test func changingThePrimaryTacticWorksTheAdviceOutAgainForTheNewOne() throws {
+        let t = try TestModel()
+        let model = try squad(t)
+        let other = try addOtherTactic(model)
+        let before = try #require(report(model))
+        let count = model.timesAdvised
+        model.makePrimary(other)
+        let after = try #require(report(model))
+        #expect(model.timesAdvised == count + 1)
+        #expect(after == (try engineReport(model)))
+        #expect(model.primaryTactic?.id == other)
+        #expect(after.elevens != before.elevens)
+    }
+
     // MARK: Suggestions
 
     /// The engine's suggestion for `fixture` among `among`, with the planner's tiers for `tactic`.

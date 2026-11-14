@@ -28,8 +28,9 @@ public struct RootView: View {
     ///   - screen: the screen the board starts on.
     ///   - tacticSlot: the slot the Tactics editor opens with selected.
     ///   - matchStart: the fixture, pick and view Match Selection opens with.
+    ///   - elevensStart: the view and slot the Elevens screen opens with.
     public init(model: AppModel, showing screen: Screen = .squad, tacticSlot: TacticSlot? = nil,
-                matchStart: MatchStart = MatchStart()) {
+                matchStart: MatchStart = MatchStart(), elevensStart: ElevensStart = ElevensStart()) {
         self.model = model
         self.tacticSlot = tacticSlot
         var selection: PickSelection?
@@ -37,8 +38,11 @@ public struct RootView: View {
            let plan = MatchPresentation.chosen(matchStart.fixture, in: plans) {
             selection = MatchPresentation.selection(at: slot, in: plan)
         }
-        _navigation = State(initialValue: Navigation(screen: screen, matchFixture: matchStart.fixture,
-                                                     matchSelection: selection, matchView: matchStart.view))
+        let navigation = Navigation(screen: screen, matchFixture: matchStart.fixture, matchSelection: selection,
+                                    matchView: matchStart.view)
+        navigation.elevensView = elevensStart.view
+        navigation.elevensSlot = elevensStart.slot
+        _navigation = State(initialValue: navigation)
     }
 
     public var body: some View {

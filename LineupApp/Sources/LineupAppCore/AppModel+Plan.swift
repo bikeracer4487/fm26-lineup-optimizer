@@ -412,7 +412,7 @@ extension AppModel {
         return found
     }
 
-    static let noPrimaryTactic = "No tactic is the primary one. Make one primary on the Tactics screen."
+    nonisolated static let noPrimaryTactic = "No tactic is the primary one. Make one primary on the Tactics screen."
 
     /// "<name> cannot be used: <the engine's problems>."; nil when the engine accepts the tactic.
     func unusableSentence(_ tactic: Tactic) -> String? {

@@ -58,11 +58,13 @@ public enum TokenMark: Hashable, Sendable {
     case caution
     /// From a youth squad.
     case youth(Squad)
+    /// Injured: on the Elevens screen, where an injured player keeps his place.
+    case injured
 
     /// What a youth mark says on the token.
     public var badgeText: String {
         switch self {
-        case .override, .caution, .youth(.firstTeam): ""
+        case .override, .caution, .injured, .youth(.firstTeam): ""
         case .youth(.u21): "U21"
         case .youth(.u18): "U18"
         }
@@ -73,6 +75,20 @@ public enum TokenMark: Hashable, Sendable {
         var marks: [TokenMark] = []
         if isOverride { marks.append(.override) }
         if !warnings.isEmpty { marks.append(.caution) }
+        switch squad {
+        case .u21?: marks.append(.youth(.u21))
+        case .u18?: marks.append(.youth(.u18))
+        case .firstTeam?, nil: break
+        }
+        return marks
+    }
+
+    /// The marks for a place in an eleven on the Elevens screen, in the order a token shows them: injured, out of
+    /// position, youth.
+    public static func marks(isInjured: Bool, isOutOfPosition: Bool, squad: Squad?) -> [TokenMark] {
+        var marks: [TokenMark] = []
+        if isInjured { marks.append(.injured) }
+        if isOutOfPosition { marks.append(.caution) }
         switch squad {
         case .u21?: marks.append(.youth(.u21))
         case .u18?: marks.append(.youth(.u18))

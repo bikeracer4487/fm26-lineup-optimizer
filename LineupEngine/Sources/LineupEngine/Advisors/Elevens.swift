@@ -1,12 +1,19 @@
 import Foundation
 
-/// One player in an eleven: where he plays, how well he rates there, and whether he is injured.
+/// One player in an eleven: where he plays, how well he rates there, how familiar he is with the slot, and whether he
+/// is injured.
 public struct ElevenPlace: Equatable, Sendable {
     public let slot: SlotID
     public let player: PlayerID
     public let name: String
     public let rating: SlotRating
+    /// His familiarity at the slot's in-possession and out-of-possession positions.
+    public let ipFamiliarity: Int
+    public let oopFamiliarity: Int
     public let isInjured: Bool
+
+    /// His familiarity is below `depthCoverFamiliarity` in either phase: he is not even an option for the slot in Depth.
+    public let isOutOfPosition: Bool
 }
 
 /// The squad's first and second elevens as the advisors see them: injured players keep their places
@@ -34,6 +41,15 @@ public enum Elevens {
         let engine = RatingEngine(profile: profile, parameters: parameters, configuration: .fm27)
         let byID = Dictionary(uniqueKeysWithValues: players.map { ($0.id, $0) })
 
+        let coverFrom = parameters.depthCoverFamiliarity.value
+
+        func familiarity(_ player: Player, _ position: Position) throws -> Int {
+            guard let value = player.familiarity[position] else {
+                throw RatingError.missingFamiliarity(player: player.name, position: position)
+            }
+            return value
+        }
+
         func places(_ chosen: [SlotID: PlayerID]) throws -> (places: [ElevenPlace], unfilled: [SlotID]) {
             var places: [ElevenPlace] = []
             var unfilled: [SlotID] = []
@@ -42,9 +58,12 @@ public enum Elevens {
                     unfilled.append(assignment.slot)
                     continue
                 }
-                places.append(ElevenPlace(slot: assignment.slot, player: id, name: player.name,
-                                          rating: try engine.rating(for: player, in: assignment),
-                                          isInjured: player.isInjured))
+                let rating = try engine.rating(for: player, in: assignment)
+                let ip = try familiarity(player, assignment.ipPosition)
+                let oop = try familiarity(player, assignment.oopPosition)
+                places.append(ElevenPlace(slot: assignment.slot, player: id, name: player.name, rating: rating,
+                                          ipFamiliarity: ip, oopFamiliarity: oop, isInjured: player.isInjured,
+                                          isOutOfPosition: ip < coverFrom || oop < coverFrom))
             }
             return (places, unfilled)
         }

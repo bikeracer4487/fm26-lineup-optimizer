@@ -80,6 +80,50 @@ import Testing
         #expect(!r.second.contains { $0.player == PlannerFixture.id(.AM_C, "first") })
     }
 
+    @Test func eachPlaceCarriesHisFamiliarityInEachPhase() throws {
+        let name = PlannerFixture.name(.AM_L, "first")
+        let squad = try PlannerFixture.squad().map { p -> Player in
+            var p = p
+            if p.name == name { p.familiarity[.attackingMidLeft] = 18; p.familiarity[.midfielderLeft] = 12 }
+            return p
+        }
+        let r = try report(squad)
+        let place = try #require(r.first.first { $0.slot == .AM_L })
+        #expect(place.player == PlannerFixture.id(.AM_L, "first"))
+        #expect(place.ipFamiliarity == 18 && place.oopFamiliarity == 12)
+        #expect(!place.isOutOfPosition, "12 is above the cover line")
+        let natural = try #require(r.first.first { $0.slot == .ST_C })
+        #expect(natural.ipFamiliarity == 20 && natural.oopFamiliarity == 20)
+    }
+
+    /// The squad with both left attacking midfielders replaced by one player at `ip` and `oop` familiarity in the
+    /// slot's in-possession and out-of-possession positions, and 1 everywhere else.
+    func oneLeftAttackingMid(ip: Int, oop: Int) throws -> (report: ElevensReport, place: ElevenPlace) {
+        let squad = try PlannerFixture.squad().filter { !$0.name.hasPrefix(SlotID.AM_L.rawValue + " ") }
+            + [Player.fixture(name: "Odd One", all: 14, familiarity: [.attackingMidLeft: ip, .midfielderLeft: oop])]
+        let r = try report(squad)
+        return (r, try #require(r.first.first { $0.slot == .AM_L }))
+    }
+
+    @Test func aPlayerBelowTheCoverLineInEitherPhaseIsOutOfPosition() throws {
+        let cover = EngineParameters.fm27.depthCoverFamiliarity.value
+        let (r, place) = try oneLeftAttackingMid(ip: 20, oop: cover - 1)
+        #expect(place.name == "Odd One")
+        #expect(place.ipFamiliarity == 20 && place.oopFamiliarity == cover - 1)
+        #expect(place.isOutOfPosition)
+        #expect(r.first.filter(\.isOutOfPosition).count == 1)
+        let (_, inPossession) = try oneLeftAttackingMid(ip: cover - 1, oop: 20)
+        #expect(inPossession.name == "Odd One" && inPossession.isOutOfPosition)
+    }
+
+    @Test func aPlayerAtTheCoverLineInBothPhasesIsNotOutOfPosition() throws {
+        let cover = EngineParameters.fm27.depthCoverFamiliarity.value
+        let (r, place) = try oneLeftAttackingMid(ip: cover, oop: cover)
+        #expect(place.name == "Odd One")
+        #expect(!place.isOutOfPosition)
+        #expect(r.first.allSatisfy { !$0.isOutOfPosition })
+    }
+
     @Test func inputOrderDoesNotMatter() throws {
         let squad = try PlannerFixture.squad()
         let a = try report(squad)

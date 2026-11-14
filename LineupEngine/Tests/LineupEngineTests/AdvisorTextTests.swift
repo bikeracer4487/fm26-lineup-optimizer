@@ -78,6 +78,32 @@ import Testing
         #expect(AdvisorText.cover(depth(cover: 4), parameters: parameters) == "4 solid players")
     }
 
+    @Test func recruitFirstNamesTheThinSlotsInTheirOrder() {
+        #expect(AdvisorText.recruitFirst(DepthReport(slots: [], thin: [.GK, .D_L], basis: .derived))
+                == "Recruit first: goalkeeper, left back")
+        #expect(AdvisorText.recruitFirst(DepthReport(slots: [], thin: [.D_CL], basis: .derived))
+                == "Recruit first: left centre-back")
+        #expect(AdvisorText.recruitFirst(DepthReport(slots: [], thin: [], basis: .derived)) == nil)
+    }
+
+    func stepIn(drop: Double?) -> SlotDepth {
+        SlotDepth(slot: .D_L, ipPosition: .defenderLeft, oopPosition: .defenderLeft, options: [], onLoan: [], cover: 1,
+                  isThin: true, dropToNextBest: drop, nextBest: drop.map { _ in PlayerID(key: "josh ashby") })
+    }
+
+    @Test func nextBestSaysWhoStepsInAndHowFarBelow() {
+        #expect(AdvisorText.nextBest(stepIn(drop: 6.66), name: "Josh Ashby") == "Next best: Josh Ashby, 6.7 lower")
+        #expect(AdvisorText.nextBest(stepIn(drop: 12), name: "Josh Ashby") == "Next best: Josh Ashby, 12.0 lower")
+        #expect(AdvisorText.nextBest(stepIn(drop: -1.24), name: "Josh Ashby") == "Next best: Josh Ashby, 1.2 higher")
+        #expect(AdvisorText.nextBest(stepIn(drop: 0.02), name: "Josh Ashby") == "Next best: Josh Ashby, rated the same")
+        #expect(AdvisorText.nextBest(stepIn(drop: -0.04), name: "Josh Ashby") == "Next best: Josh Ashby, rated the same")
+    }
+
+    @Test func nextBestWithNobodyToStepIn() {
+        #expect(AdvisorText.nextBest(stepIn(drop: nil), name: nil) == "Nobody else can step in")
+        #expect(AdvisorText.nextBest(stepIn(drop: nil), name: "Josh Ashby") == "Nobody else can step in")
+    }
+
     @Test func whatCoverCounts() {
         #expect(AdvisorText.whatCoverCounts(parameters)
                 == "Cover counts players solid in the slot (familiarity 15 or over in both phases), not injured and not first choice elsewhere; fewer than 2 is thin.")

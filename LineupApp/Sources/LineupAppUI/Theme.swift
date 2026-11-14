@@ -551,6 +551,25 @@ public enum Theme {
         public static let pickerSize = CGSize(width: 460, height: 540)
     }
 
+    // MARK: Elevens
+
+    public enum Elevens {
+        /// The columns of the lists beside the pitch: a rating, the familiarity in each phase under a heading that
+        /// wraps to two lines, and the cover tick.
+        public static let ratingColumn: CGFloat = 64
+        public static let familiarityColumn: CGFloat = 132
+        public static let coverColumn: CGFloat = 56
+        /// The most lines a name in a list wraps to, so a long name is never cut short.
+        public static let nameLines = 2
+        /// The cover count on a slot's magnet in Depth.
+        public static let coverCountSize: CGFloat = TypeSize.boardTitle
+        /// The red ring round a thin slot's magnet sits this far out; the ink ring of the chosen slot outside it.
+        public static let thinRingOffset: CGFloat = Magnet.ringWidth + Magnet.ringGap
+        public static let chosenRingOffset: CGFloat = 2 * (Magnet.ringWidth + Magnet.ringGap)
+        /// The sticky note naming the slots to recruit for is no wider than this.
+        public static let recruitNoteMaximumWidth: CGFloat = 360
+    }
+
     // MARK: Columns
 
     /// Column widths for the tables on the board. The name and status columns share what a wider window gives.

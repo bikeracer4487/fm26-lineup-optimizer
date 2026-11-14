@@ -32,7 +32,14 @@
 //                                              The advisor screens ("elevens-…", "rest-…", "training-…",
 //                                              "removal-…") are drawn on the sample, empty ("<screen>-empty-…")
 //                                              and with a primary tactic that has a problem
-//                                              ("<screen>-problem-…").
+//                                              ("<screen>-problem-…"). The Elevens screen is drawn
+//                                              on each of its views ("elevens-first-…",
+//                                              "elevens-second-…", "elevens-depth-…"), Depth with the left
+//                                              centre-back chosen ("elevens-depth-slot-…"), and Depth in the
+//                                              smallest window ("elevens-depth-small-…") and, to see
+//                                              the lists under the pitch, in a window as narrow and
+//                                              taller ("elevens-first-tall-…", and "elevens-depth-tall-…"
+//                                              on the right attacking midfielder).
 //                                              Every screen is drawn again in a narrow window, 800 by 700
 //                                              ("<screen>-narrow-…"), and Match Selection, Tactics, Fixtures
 //                                              and the advisor screens in the smallest window
@@ -180,6 +187,26 @@ let narrowWindow = CGSize(width: 800, height: 700)
     }
 }
 
+/// The Elevens screen's views: see the usage at the top.
+@MainActor func drawElevens(_ root: String, to directory: URL, size: CGSize) throws {
+    let plain = sampleModel(root)
+    for (variant, view) in [("first", ElevensView.first), ("second", .second), ("depth", .depth)] {
+        try ScreenPictures.write(model: plain, to: directory, size: size, variant: variant, screens: [.elevens],
+                                 elevensStart: ElevensStart(view: view))
+    }
+    // The left centre-back chosen: options who count as cover and one needed at another slot.
+    try ScreenPictures.write(model: plain, to: directory, size: size, variant: "depth-slot", screens: [.elevens],
+                             elevensStart: ElevensStart(view: .depth, slot: .D_CL))
+    try ScreenPictures.write(model: plain, to: directory, size: Theme.Layout.minimumWindow, variant: "depth-small",
+                             screens: [.elevens], elevensStart: ElevensStart(view: .depth))
+    let tall = CGSize(width: Theme.Layout.minimumWindow.width, height: Theme.Layout.minimumWindow.height * 3)
+    // Depth on the right attacking midfielder, whose options include the longest name in the sample.
+    for (variant, start) in [("first-tall", ElevensStart(view: .first)), ("depth-tall", ElevensStart(view: .depth, slot: .AM_R))] {
+        try ScreenPictures.write(model: plain, to: directory, size: tall, variant: variant, screens: [.elevens],
+                                 elevensStart: start)
+    }
+}
+
 /// Draws the pictures and returns the process's exit status.
 @MainActor func drawPictures(to path: String, sampleDataRoot: String?) -> Int32 {
     do {
@@ -221,6 +248,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
             try ScreenPictures.write(model: sampleModel(root, .afterImport), to: directory, size: size,
                                      variant: "imported", screens: [.squad])
             try drawMatchSelection(root, to: directory, size: size)
+            try drawElevens(root, to: directory, size: size)
         } else {
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size)
         }

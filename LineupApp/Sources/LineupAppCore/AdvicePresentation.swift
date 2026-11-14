@@ -15,6 +15,9 @@ public enum AdvicePresentation {
         case .needsTactic(let problems) where problems.isEmpty:
             return NotReady(message: "No tactic yet. Add one on the Tactics screen to get advice.",
                             problems: [], isFailure: false, action: MatchPresentation.goTo(.tactics), screen: .tactics)
+        case .needsTactic(let problems) where problems == [AppModel.noPrimaryTactic]:
+            return NotReady(message: "No tactic is the primary one, so there is no advice.",
+                            problems: [], isFailure: false, action: MatchPresentation.goTo(.tactics), screen: .tactics)
         case .needsTactic(let problems):
             return NotReady(message: "The primary tactic cannot be used, so there is no advice.",
                             problems: problems, isFailure: false, action: MatchPresentation.goTo(.tactics),
