@@ -31,8 +31,8 @@ public struct RemovalAdvice: Equatable, Sendable {
     public let isProspect: Bool
     public let isFalseProspect: Bool
     public let isMentor: Bool
-    /// Wages left on the contract, in pounds: 0 for a player out of contract, or on a full-time contract with 0 months
-    /// left; nil when months left is unknown, or for a contract type this tool does not read.
+    /// Wages left on the contract, in pounds: 0 for a player out of contract, or on a full-time or youth contract with 0
+    /// months left; nil when months left is unknown, or for a contract type this tool does not read.
     public let releaseCost: Int?
     /// The likely cost of a mutual termination, in pounds; 0 and nil as `releaseCost`.
     public let mutualCost: Int?
@@ -159,10 +159,10 @@ public enum Removal {
         let outOfContract: Bool
         let costsKnown: Bool
         switch player.contractType {
-        case .fullTime where player.monthsLeft == 0:
+        case .fullTime where player.monthsLeft == 0, .youth where player.monthsLeft == 0:
             (outOfContract, costsKnown) = (true, true)
             reasons.add(rules.notFullTimePoints, "No contract: 0 months left")
-        case .fullTime:
+        case .fullTime, .youth:
             (outOfContract, costsKnown) = (false, true)
         case .outOfContract:
             (outOfContract, costsKnown) = (true, true)
@@ -276,12 +276,16 @@ public enum Removal {
         if outOfContract {
             (releaseCost, mutualCost) = (0, 0)
         } else if costsKnown, let months = player.monthsLeft {
-            let release = Int((Double(player.wagePerWeek) * weeksPerYear / monthsPerYear * Double(months)).rounded())
+            let monthsOfWages = Double(months) + parameters.contractMonthsAllowance.value
+            let release = Int((Double(player.wagePerWeek) * weeksPerYear / monthsPerYear * monthsOfWages).rounded())
             (releaseCost, mutualCost) = (release, Int((parameters.mutualTerminationShare.value * Double(release)).rounded()))
         } else {
             (releaseCost, mutualCost) = (nil, nil)
         }
-        if mutualCost != nil { evidence.append(parameters.mutualTerminationShare.evidence) }
+        if mutualCost != nil {
+            evidence.append(parameters.mutualTerminationShare.evidence)
+            evidence.append(parameters.contractMonthsAllowance.evidence)
+        }
 
         let action: RemovalAction
         switch level {

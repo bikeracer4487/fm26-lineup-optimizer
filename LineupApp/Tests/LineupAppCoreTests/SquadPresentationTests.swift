@@ -45,6 +45,10 @@ private func player(
             == ["injured", "banned", "out of contract", "out on loan to Banbury United", "on loan from Reading", "on loan"])
     }
 
+    @Test func aYouthContractIsNotAStatus() {
+        #expect(PlayerStatus.of(player(contractType: .youth), loan: .own).isEmpty)
+    }
+
     @Test func aContractTypeTheToolDoesNotReadIsNotAStatus() {
         #expect(PlayerStatus.of(player(contractType: .other("NonContract")), loan: .own).isEmpty)
     }

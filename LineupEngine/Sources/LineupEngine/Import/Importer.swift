@@ -139,6 +139,7 @@ public enum Importer {
             let contractType: ContractType
             switch cell("Contract.ContractType") {
             case "FullTime": contractType = .fullTime
+            case "Youth": contractType = .youth
             case "4":
                 contractType = .outOfContract
                 warnings.append(.outOfContract(display))

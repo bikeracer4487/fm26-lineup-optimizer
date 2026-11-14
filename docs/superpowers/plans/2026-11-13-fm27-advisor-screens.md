@@ -396,5 +396,5 @@ Decisions taken during the build that differ from, or add to, the tasks above. E
 - Depth's magnets keep the colours of their line of the pitch, so a well-covered attacking slot is a red magnet.
 - An accept or turn-down notice is drawn on the pink paper also used for an import's summary and warnings.
 - The injured mark sits over the top of a magnet's initials.
-- The "not on a full-time contract" rows in Player Removal rest on what FMRTE pasted; what it pastes for youth contracts is still to be seen.
+- The "not on a full-time contract" rows in Player Removal rest on what FMRTE pasted; FMRTE pastes `Youth` for a youth contract (the owner's first, 14 November 2026), now read as a youth contract and treated as a full-time one; what it pastes for part-time and amateur contracts is still to be seen.
 - A sentence for two players sharing an identity still shows the identity key.

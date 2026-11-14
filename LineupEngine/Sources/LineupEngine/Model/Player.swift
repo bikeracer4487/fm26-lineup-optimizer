@@ -67,6 +67,10 @@ extension Squad: CodingKeyRepresentable {
 public enum ContractType: Equatable, Codable, Sendable {
     case fullTime
     case outOfContract
+    /// A youth contract, which FMRTE pastes as `Youth` and the tool treats as a full-time one. A squad saved before
+    /// this case existed holds `.other("Youth")` for such a player; it is not migrated, and reads the new way at the
+    /// next import.
+    case youth
     /// A value FMRTE pasted that this tool does not interpret, kept as pasted.
     case other(String)
 }

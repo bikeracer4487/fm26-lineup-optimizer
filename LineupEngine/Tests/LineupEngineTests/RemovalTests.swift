@@ -86,9 +86,9 @@ import Testing
     @Test func aContractTypeTheToolDoesNotReadGivesNoPointsAndNoCost() throws {
         // +15 in neither eleven, +30 among the weakest, +15 for 12 months, +25 for Controversy 17: 85, critical.
         // Read as not full time it would have been 135, released at no cost.
-        let youth = target(attributes: [.controversy: 17]) { $0.contractType = .other("Youth") }
-        let a = try advice(youth)
-        #expect(a.reasons.first == reason("Contract type Youth is not one this tool reads: no release cost is given", 0))
+        let unread = target(attributes: [.controversy: 17]) { $0.contractType = .other("Amateur") }
+        let a = try advice(unread)
+        #expect(a.reasons.first == reason("Contract type Amateur is not one this tool reads: no release cost is given", 0))
         #expect(reasons(a.reasons, "Not on").isEmpty)
         #expect(a.score == 85 && a.level == .critical)
         #expect(a.releaseCost == nil && a.mutualCost == nil)
@@ -96,14 +96,43 @@ import Testing
         #expect(a.action == .sell)
         // A prospect is loaned out.
         let prospect = try advice(target(age: 19, attributes: [.controversy: 17, .temperament: 7], potentialAbility: 134) {
-            $0.contractType = .other("Youth")
+            $0.contractType = .other("Amateur")
         })
         #expect(prospect.level == .high && prospect.action == .loan)
         #expect(prospect.releaseCost == nil && prospect.mutualCost == nil)
         // A full-time contract is unchanged: costs from the wage and months left.
         let full = try advice(target(attributes: [.controversy: 17]))
         #expect(full.score == 85 && full.action == .terminate)
-        #expect(full.releaseCost == 26_000 && full.mutualCost == 14_300)
+        #expect(full.releaseCost == 27_083 && full.mutualCost == 14_896)
+    }
+
+    @Test func aYouthContractHasCostsAndNoContractTypeLine() throws {
+        // £50 a week, 22 months: 50 x 52 / 12 x 22.5 = 4,875; mutual 0.55 of that.
+        let a = try advice(target(age: 16) { $0.contractType = .youth; $0.wagePerWeek = 50; $0.monthsLeft = 22 })
+        #expect(a.releaseCost == 4_875 && a.mutualCost == 2_681)
+        #expect(a.reasons.allSatisfy { !$0.text.contains("full-time contract") && !$0.text.contains("is not one this tool reads") })
+    }
+
+    @Test func aContractTypeTheToolDoesNotReadStillHasNoCosts() throws {
+        let a = try advice(target { $0.contractType = .other("Amateur") })
+        #expect(a.releaseCost == nil && a.mutualCost == nil)
+        #expect(a.reasons.contains(reason("Contract type Amateur is not one this tool reads: no release cost is given", 0)))
+    }
+
+    @Test func aYouthContractWithZeroMonthsLeftIsNoContract() throws {
+        let none = try advice(target { $0.contractType = .youth; $0.monthsLeft = 0; $0.wagePerWeek = 50 })
+        #expect(none.reasons.first == reason("No contract: 0 months left", 50))
+        #expect(none.releaseCost == 0 && none.mutualCost == 0)
+    }
+
+    @Test func theReleaseCostAllowsForThePartMonth() throws {
+        let player = target { $0.wagePerWeek = 600; $0.monthsLeft = 9 }
+        let a = try advice(player)
+        #expect(a.releaseCost == 24_700 && a.mutualCost == 13_585)
+        var without = parameters
+        without.contractMonthsAllowance = Parameter(0, .derived, source: "test")
+        let before = try advice(player, parameters: without)
+        #expect(before.releaseCost == 23_400 && before.mutualCost == 12_870)
     }
 
     // MARK: The elevens
@@ -426,7 +455,7 @@ import Testing
         let one = try advice(target { $0.monthsLeft = 1; $0.wagePerWeek = 900 })
         #expect(reasons(one.reasons, "No contract").isEmpty)
         #expect(reasons(one.reasons, "Contract") == [reason("Contract ends in 1 month", 25)])
-        #expect(one.releaseCost == 3_900)
+        #expect(one.releaseCost == 5_850)
         #expect(one.action != .release)
         // Unknown: neither rule, and no cost given.
         let unknown = try advice(target { $0.monthsLeft = nil })
@@ -632,17 +661,17 @@ import Testing
     }
 
     @Test func aCriticalPlayerWithAShortContractAndNoBuyerIsTerminated() throws {
-        // 15 + 30 + 15 for 8 months + 25 for Controversy 17. Release £17,333, mutual £9,533.
+        // 15 + 30 + 15 for 8 months + 25 for Controversy 17. Release £18,417, mutual £10,129.
         func critical(asking: Int?) -> Player {
             target(attributes: [.controversy: 17]) { $0.monthsLeft = 8; $0.askingPrice = asking }
         }
         let a = try advice(critical(asking: nil))
         #expect(a.score == 85 && a.level == .critical)
-        #expect(a.releaseCost == 17_333 && a.mutualCost == 9_533)
+        #expect(a.releaseCost == 18_417 && a.mutualCost == 10_129)
         #expect(a.action == .terminate)
-        #expect(try advice(critical(asking: 9_532)).action == .terminate)
-        #expect(try advice(critical(asking: 9_533)).action == .sell)
-        #expect(try advice(critical(asking: 9_534)).action == .sell)
+        #expect(try advice(critical(asking: 10_128)).action == .terminate)
+        #expect(try advice(critical(asking: 10_129)).action == .sell)
+        #expect(try advice(critical(asking: 10_130)).action == .sell)
         // 12 months left: 15 + 30 + 15 + 25. 13 months: 15 + 30 + 25 + 15 for Temperament 7.
         let twelve = try advice(target(attributes: [.controversy: 17]) { $0.monthsLeft = 12 })
         #expect(twelve.level == .critical && twelve.action == .terminate)
@@ -672,8 +701,8 @@ import Testing
 
     @Test func costsFollowTheWageAndMonthsLeft() throws {
         let a = try advice(target { $0.wagePerWeek = 1_200; $0.monthsLeft = 10 })
-        #expect(a.releaseCost == 52_000)
-        #expect(a.mutualCost == 28_600)
+        #expect(a.releaseCost == 54_600)
+        #expect(a.mutualCost == 30_030)
         let unknown = try advice(target { $0.monthsLeft = nil })
         #expect(unknown.releaseCost == nil && unknown.mutualCost == nil)
     }

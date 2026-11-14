@@ -69,7 +69,7 @@ public enum PlayerStatus: Equatable, Sendable {
         if player.isBanned { statuses.append(.banned) }
         switch player.contractType {
         case .outOfContract: statuses.append(.outOfContract)
-        case .fullTime, .other: break
+        case .fullTime, .youth, .other: break
         }
         return statuses
     }

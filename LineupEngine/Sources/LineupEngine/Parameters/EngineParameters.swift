@@ -237,7 +237,7 @@ public struct LoanReviewRules: Sendable, Equatable {
 /// and the loan review's. Of a pair of lines ("under 8 / exactly 8") only the stronger applies. "Room to grow" is
 /// potential ability minus current ability over current ability.
 public struct RemovalRules: Sendable, Equatable {
-    /// A player out of contract, or on a full-time contract with 0 months left: reading 0 months as no contract is the
+    /// A player out of contract, or on a full-time or youth contract with 0 months left: reading 0 months as no contract is the
     /// owner's decision of 13 November 2026, to be double checked against the game. Unknown months left take no points
     /// here. A contract type this tool does not read takes no points.
     public var notFullTimePoints: Int
@@ -618,6 +618,9 @@ public struct EngineParameters: Sendable {
     public var removalWageRules: Parameter<RemovalWageRules>
     /// A mutual termination's cost as a share of the wages left on the contract.
     public var mutualTerminationShare: Parameter<Double>
+    /// Months added to the months left FMRTE shows when working out the wages left on a contract: its months left is
+    /// whole months rounded down.
+    public var contractMonthsAllowance: Parameter<Double>
     /// The scores that make a removal advice critical, high or medium.
     public var removalLevels: Parameter<RemovalLevels>
     /// The points Player Removal and the loan review give, once per player, to the first choice of a slot where Depth
@@ -923,6 +926,12 @@ public struct EngineParameters: Sendable {
                 0.55, .carriedOverFM26,
                 source: "docs/Research/player-management-and-sales.md: a mutual termination often costs 50% to 60% of the remaining contract; "
                     + "\(removalSource) used 0.55"),
+            contractMonthsAllowance: Parameter(
+                0.5, .fm27Observation,
+                source: "the owner's five release quotes in FM27 on 14 November 2026 (four full-time contracts shown with 9 months "
+                    + "left, one youth contract with 22) are the wages for the whole remaining contract, with about 0.8 of a month "
+                    + "more than the months FMRTE shows: its months left is whole months rounded down, so half a month is added, "
+                    + "the average"),
             removalLevels: Parameter(
                 RemovalLevels(critical: 80, high: 50, medium: 30), .carriedOverFM26, source: removalSource),
             removalThinCoverPoints: Parameter(

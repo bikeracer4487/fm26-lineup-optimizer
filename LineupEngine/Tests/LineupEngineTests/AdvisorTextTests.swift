@@ -88,8 +88,8 @@ import Testing
     }
 
     @Test func costs() {
-        #expect(AdvisorText.costs(of: removal(release: 26_000, mutual: 14_300))
-                == "Releasing him costs £26,000; a mutual termination about £14,300")
+        #expect(AdvisorText.costs(of: removal(release: 24_700, mutual: 13_585))
+                == "Releasing him costs about £24,700; a mutual termination about £13,585")
         #expect(AdvisorText.costs(of: removal(release: 0, mutual: 0)) == "Releasing him costs nothing")
         #expect(AdvisorText.costs(of: removal(release: nil, mutual: nil)) == "The cost of releasing him is not known")
     }

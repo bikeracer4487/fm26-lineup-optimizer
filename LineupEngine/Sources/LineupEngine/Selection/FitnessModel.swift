@@ -226,6 +226,11 @@ public enum FitnessModel {
         if !(mutualShare >= 0 && mutualShare <= 1) {
             found.append("mutualTerminationShare is \(mutualShare), not between 0 and 1")
         }
+        // The part-month added to the months left is less than a month.
+        let allowance = parameters.contractMonthsAllowance.value
+        if !(allowance >= 0 && allowance <= 1) {
+            found.append("contractMonthsAllowance is \(allowance), not between 0 and 1")
+        }
         // The levels are tried highest first, so a lower level above a higher one is never reached.
         let levels = parameters.removalLevels.value
         if levels.critical < levels.high {

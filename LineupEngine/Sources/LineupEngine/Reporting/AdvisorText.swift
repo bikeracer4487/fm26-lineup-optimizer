@@ -131,7 +131,7 @@ public enum AdvisorText {
             return "The cost of releasing him is not known"
         }
         if release == 0 && mutual == 0 { return "Releasing him costs nothing" }
-        return "Releasing him costs \(Display.pounds(release)); a mutual termination about \(Display.pounds(mutual))"
+        return "Releasing him costs about \(Display.pounds(release)); a mutual termination about \(Display.pounds(mutual))"
     }
 
     /// A reason's points with their sign: "+25" against him, "−40" (a true minus, U+2212) for him, "0" for neither.

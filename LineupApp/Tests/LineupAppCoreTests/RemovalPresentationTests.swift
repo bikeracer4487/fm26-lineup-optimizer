@@ -99,7 +99,7 @@ import Testing
         #expect(row.squadText == "First team")
         #expect(row.ageText == "33")
         #expect(row.scoreText == "85")
-        #expect(row.costsText == "Releasing him costs £26,000; a mutual termination about £14,300")
+        #expect(row.costsText == "Releasing him costs about £26,000; a mutual termination about £14,300")
         #expect(row.costsText == AdvisorText.costs(of: given))
         #expect(row.reasons == [PointedReason(text: "In neither eleven", pointsText: "+25", tone: .red),
                                 PointedReason(text: "Aged 33", pointsText: "+60", tone: .red)])
@@ -137,7 +137,7 @@ import Testing
                                               squads: [PlayerID(key: "p"): .u21], ages: [PlayerID(key: "p"): 19])
         let row = try #require(sheet.rows.first)
         #expect(row.spokenText == "High, Sell, Josh Ashby, U21s, Age 19, Score 85, "
-                + "Releasing him costs £26,000; a mutual termination about £14,300")
+                + "Releasing him costs about £26,000; a mutual termination about £14,300")
     }
 
     // MARK: Marks
@@ -179,7 +179,7 @@ import Testing
         let marked = RemovalPresentation.sheet(report([advice("p", name: "Josh Ashby", score: 85)]), squads: squads,
                                                ages: ages, marks: [PlayerID(key: "p"): .toSell])
         #expect(try #require(marked.rows.first).spokenText == "High, Sell, To sell, Josh Ashby, U21s, Age 19, Score 85, "
-                + "Releasing him costs £26,000; a mutual termination about £14,300")
+                + "Releasing him costs about £26,000; a mutual termination about £14,300")
         let unmarked = RemovalPresentation.sheet(report([advice("p", name: "Josh Ashby", score: 85)]), squads: squads,
                                                  ages: ages)
         #expect(!(try #require(unmarked.rows.first).spokenText.contains("No mark")))

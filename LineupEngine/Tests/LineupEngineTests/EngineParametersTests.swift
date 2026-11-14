@@ -361,6 +361,7 @@ import Testing
             ("removalRules", .carriedOverFM26, "ui/api/api_player_removal.py"),
             ("removalWageRules", .derived, "median"),
             ("mutualTerminationShare", .carriedOverFM26, "docs/Research/player-management-and-sales.md"),
+            ("contractMonthsAllowance", .fm27Observation, "five release quotes in FM27 on 14 November 2026"),
             ("removalLevels", .carriedOverFM26, "ui/api/api_player_removal.py"),
             ("removalThinCoverPoints", .derived, "Player Removal told the only goalkeeper to leave"),
         ]
@@ -404,6 +405,7 @@ import Testing
         let w = p.removalWageRules.value
         #expect(w.highMultiple == 1.5 && w.highPoints == 35 && w.abovePoints == 20)
         #expect(p.mutualTerminationShare.value == 0.55)
+        #expect(p.contractMonthsAllowance.value == 0.5)
         let levels = p.removalLevels.value
         #expect(levels.critical == 80 && levels.high == 50 && levels.medium == 30)
         #expect(p.removalThinCoverPoints.value == -30)
@@ -429,6 +431,13 @@ import Testing
         #expect(FitnessModel.problems(in: q).isEmpty)
         q.mutualTerminationShare = Parameter(1.1, .derived, source: "test")
         #expect(FitnessModel.problems(in: q) == ["mutualTerminationShare is 1.1, not between 0 and 1"])
+        q.mutualTerminationShare = Parameter(0.55, .derived, source: "test")
+        q.contractMonthsAllowance = Parameter(1, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+        q.contractMonthsAllowance = Parameter(1.5, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["contractMonthsAllowance is 1.5, not between 0 and 1"])
+        q.contractMonthsAllowance = Parameter(.nan, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["contractMonthsAllowance is nan, not between 0 and 1"])
     }
 
     @Test func removalLevelsOutOfOrderAreReported() {

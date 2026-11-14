@@ -362,6 +362,22 @@ private func isNameWarning(_ warning: ImportWarning) -> Bool {
         }
     }
 
+    @Test func aYouthContractIsReadAsYouthAndAnUnknownWordIsKeptAsPasted() throws {
+        let contract = try column("Contract.ContractType")
+        let youth = try importU21 { rows in
+            var rows = rows
+            rows[0][contract] = quoted("Youth")
+            return rows
+        }
+        #expect(try #require(youth.players.first { $0.name == "Brayden Daniel" }).contractType == .youth)
+        let amateur = try importU21 { rows in
+            var rows = rows
+            rows[0][contract] = quoted("Amateur")
+            return rows
+        }
+        #expect(try #require(amateur.players.first { $0.name == "Brayden Daniel" }).contractType == .other("Amateur"))
+    }
+
     @Test(arguments: ["", "  "])
     func blankNameIsRejectedAndNamedByRow(blank: String) throws {
         let name = try column("DisplayedName")
