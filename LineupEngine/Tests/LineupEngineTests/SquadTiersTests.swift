@@ -9,9 +9,9 @@ import Testing
     /// Slots whose position and roles no other slot shares, so the player there is not interchangeable.
     let untwinned: [SlotID] = [.GK, .D_L, .D_R, .AM_L, .AM_C, .AM_R, .ST_C]
 
-    func tiers(_ players: [Player], ownClub: String? = "Oxford City") throws -> SquadTiers {
+    func tiers(_ players: [Player], ownClub: String? = "Oxford City", ignoringInjuries: Bool = false) throws -> SquadTiers {
         try SquadTiers.compute(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
-                               profile: profile, parameters: .fm27)
+                               profile: profile, parameters: .fm27, ignoringInjuries: ignoringInjuries)
     }
 
     func changing(_ slot: SlotID, _ tier: String, in players: [Player], _ change: (inout Player) -> Void) -> [Player] {
@@ -127,5 +127,41 @@ import Testing
         // Fixed permutations, so a failure repeats.
         #expect(try tiers(squad.reversed()) == a)
         #expect(try tiers(Array(squad[7...] + squad[..<7])) == a)
+    }
+
+    @Test func ignoringInjuriesKeepsAnInjuredFirstChoice() throws {
+        let squad = changing(.ST_C, "first", in: try PlannerFixture.squad()) { $0.isInjured = true }
+        let injured = PlannerFixture.id(.ST_C, "first")
+        let kept = try tiers(squad, ignoringInjuries: true)
+        #expect(kept.first[.ST_C] == injured)
+        #expect(kept.second[.ST_C] == PlannerFixture.id(.ST_C, "second"))
+        let left = try tiers(squad)
+        #expect(left.first[.ST_C] != injured)
+        #expect(left.ratings[injured] == nil)
+    }
+
+    @Test func ignoringInjuriesStillLeavesOutAPlayerOnLoan() throws {
+        let squad = changing(.AM_C, "first", in: try PlannerFixture.squad()) { $0.loanedTo = "Elsewhere FC"; $0.isInjured = true }
+        let t = try tiers(squad, ignoringInjuries: true)
+        #expect(t.ratings[PlannerFixture.id(.AM_C, "first")] == nil)
+    }
+
+    @Test func ignoringInjuriesChangesNothingWhenNobodyIsInjured() throws {
+        let squad = try PlannerFixture.squad()
+        #expect(try tiers(squad, ignoringInjuries: true) == tiers(squad))
+    }
+
+    @Test func tierOfAPlayer() throws {
+        var squad = try PlannerFixture.squad()
+        squad.append(Player.fixture(name: "Spare", all: 8, familiarity: [.striker: 20]))
+        var lent = Player.fixture(name: "Lent", all: 12, familiarity: [.striker: 20])
+        lent.loanedTo = "Elsewhere FC"
+        squad.append(lent)
+        let t = try tiers(squad)
+        #expect(t.tier(of: PlannerFixture.id(.D_L, "first")) == .first(.D_L))
+        #expect(t.tier(of: PlannerFixture.id(.D_L, "second")) == .second(.D_L))
+        #expect(t.tier(of: PlayerID(key: PlayerID.normalise("Spare"))) == .backup)
+        #expect(t.tier(of: PlayerID(key: PlayerID.normalise("Lent"))) == nil)
+        #expect(t.tier(of: PlayerID(key: "nobody")) == nil)
     }
 }

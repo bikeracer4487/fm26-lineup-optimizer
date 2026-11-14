@@ -16,6 +16,13 @@ public struct DuplicatePlayerError: Error, Equatable {
     }
 }
 
+/// Where a rated player stands in the squad: first or second choice at a slot, or neither.
+public enum SquadTier: Equatable, Sendable {
+    case first(SlotID)
+    case second(SlotID)
+    case backup
+}
+
 /// The first and second elevens at full fitness: who the first-choice players are and who covers them.
 public struct SquadTiers: Equatable, Sendable {
     public let first: [SlotID: PlayerID]
@@ -32,6 +39,13 @@ public struct SquadTiers: Equatable, Sendable {
         return nil
     }
 
+    /// His tier, or nil when the tiers did not rate him (out on loan, or injured and not kept in).
+    public func tier(of player: PlayerID) -> SquadTier? {
+        guard ratings[player] != nil else { return nil }
+        guard let (slot, tier) = slot(of: player) else { return .backup }
+        return tier == 1 ? .first(slot) : .second(slot)
+    }
+
     /// For a first-eleven player: his rating in his slot minus the second eleven's player in that
     /// slot (minus nothing when the slot has no second player). nil for everyone else.
     public func advantage(of player: PlayerID) -> Double? {
@@ -40,12 +54,14 @@ public struct SquadTiers: Equatable, Sendable {
         return own - covering
     }
 
-    /// Injured players and players out on loan are left out; condition, sharpness, jadedness and bans
+    /// Players out on loan are left out, and so are injured players unless `ignoringInjuries` is true
+    /// (the advisors ask who the best players are, the planner who can play); condition, sharpness, jadedness and bans
     /// are ignored. The second eleven is the best assignment from the players the first did not use.
     /// Throws `DuplicatePlayerError` when two players share an id (checked first), `TacticError` for an
     /// unusable tactic and `RatingError` for a player with missing data.
     public static func compute(tactic: Tactic, players: [Player], ownClub: String?, catalog: RoleCatalog,
-                               profile: RatingProfile, parameters: EngineParameters) throws -> SquadTiers {
+                               profile: RatingProfile, parameters: EngineParameters,
+                               ignoringInjuries: Bool = false) throws -> SquadTiers {
         try DuplicatePlayerError.check(players)
         let assignments = try tactic.assignments(catalog: catalog)
         let engine = RatingEngine(profile: profile, parameters: parameters, configuration: .fm27)
@@ -53,7 +69,7 @@ public struct SquadTiers: Equatable, Sendable {
         let eligible = players
             .sorted { $0.id.key < $1.id.key }
             .filter { player in
-                if player.isInjured { return false }
+                if player.isInjured && !ignoringInjuries { return false }
                 if case .loanedOut = LoanStatus.of(player, ownClub: ownClub) { return false }
                 return true
             }
