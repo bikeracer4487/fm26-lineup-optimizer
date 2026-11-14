@@ -150,7 +150,7 @@ Candidates left without a group are listed as **not placed**, each with the firs
 - nobody in the squad stands above him;
 - nobody who stands above him is better where it counts;
 - those who are better where it counts would do him harm in a named attribute;
-- the leads who suit him are leading others with more to gain;
+- the players who could lead him are already in a group;
 - no third player could be found to make up a group with him and his lead.
 
 ### 8.7 Recorded groups
@@ -188,7 +188,7 @@ A new versioned file beside the others, handled by `Store` as `TrainingState` is
 
 It holds:
 
-- each player's standing and social group, and for each squad the day they were last changed;
+- each player's standing and social group, and for each squad the day they were last changed. A standing and a social group belong to the squad they were entered for: in another squad they are not used, and the player reads as others with no group there until he is entered again;
 - the recorded groups: squad, the day started, the day ended if it has been, and for each member the day he joined and, if he was taken out, the day he left;
 - every player's personality readings: at each import of a squad, Determination and the eight personality attributes for each of its players, one reading a day, a later import on the same day replacing the earlier;
 - the names of players in recorded groups, so a group still reads properly after a member has left.
