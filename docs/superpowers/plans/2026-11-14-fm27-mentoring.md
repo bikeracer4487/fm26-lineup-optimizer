@@ -679,9 +679,16 @@ Decided during the build:
 
 An inserted task, not part of this plan, landed between Tasks 5 and 6 at the owner's request: a youth contract (FMRTE pastes `Youth`) is now read and costed like a full-time one, and a release is costed as the wages for the months left plus half a month, because FMRTE's months left is rounded down. Player Removal's costs changed with it.
 
-The app was installed part-way, after Task 6, at the owner's request, so the release-cost change could be used. It was then installed once more from the final reviewed commit by the controller, not by Task 9.
+Changed after the final review of the whole branch, in one pass of fixes:
 
-The hands-on check the plan's Task 9 asked for (opening Training, switching tabs and squads, entering a hierarchy, recording a suggestion, double-clicking "Record as set", adding, swapping and ending a group, leaving the screen and coming back) was left to the owner. So was opening the real app on the state saved before this plan, to see that it opens with no notice and the tab has readings. Task 9 ran the engine's suite (900 tests), the app's suite (619 tests) and the full picture run (176 pictures, 26 of them `training-mentoring-*`, the editors' included), with no build warnings.
+- A hierarchy entry no longer follows a player to another squad. A level and a social group belong to the squad they were entered for, so when an import shows a player arriving from another squad, his entry is dropped and he reads as Others with no social group until the owner enters him in his new squad. Before, a U21 player entered as Team Leader and then promoted stood above every first-team player still at Others.
+- Saving the hierarchy no longer deletes the level and social group of the squad's players who are out on loan. The editor leaves them out, and saving now changes only the players it shows.
+- Three sentences that could say something untrue were reworded. A change read within a few days of a member joining said "in 0 weeks"; it now says "in under a week". A group with nobody clearly leading that has stopped working said "nobody but the lead has changed"; it now says "nobody has changed". A player not placed because his possible leads are taken was told they "are leading others with more to gain", which is false when the lead is in a group the owner recorded, or is himself placed in a group; it now says "the players who could lead him are already in a group".
+- A comment in Player Removal that still said a youth contract is not read was corrected. Nothing it does changed.
+
+The app was installed part-way, after Task 6, at the owner's request, so the release-cost change could be used. The controller installs it again after the fixes from the final review.
+
+The hands-on check the plan's Task 9 asked for (opening Training, switching tabs and squads, entering a hierarchy, recording a suggestion, double-clicking "Record as set", adding, swapping and ending a group, leaving the screen and coming back) is left to the owner. So is opening the real app on the state saved before this plan, to see that it opens with no notice and the tab has readings. Neither has been done by anyone. Task 9 ran the engine's suite (900 tests), the app's suite (619 tests) and the full picture run (176 pictures, 26 of them `training-mentoring-*`, the editors' included), with no build warnings.
 
 ## Known limits and small faults left
 
@@ -702,10 +709,21 @@ Found while building and left (small):
 - The review function is about 95 lines; its warnings could be a helper. Two readings on one day are ordered by input, harmless while the app keeps one a day.
 - The words: the tests were written after the words file, never seen failing (a reviewer judged they would fail if the sentences were wrong). A test pins the order of the hierarchy levels. The sentence for a recorded group is ungrammatical for fewer than two names, which cannot happen since a group is three. A standings file for the command line drops without a word any key that matches no player, and sets no update day, so the stale-hierarchy line never prints there.
 - The app's state: a draft whose squad was changed would be checked against one squad and saved under another (the editor now fixes the squad when editing). An ended or unknown group cannot be saved and says nothing. `saveGroup` does not check a new draft's id against existing groups and is not under the half-second guard; neither can be reached from the editor. A force unwrap in the mentoring actions is safe only by the line above. Two lines are over-long. The test of a second click within half a second passes its `saveGroup` step by accident; the migration test cannot tell the import day from today; a new group made through the editor is not tested to keep all three names; changing mentoring is not tested to leave the plan alone when recording a group.
-- Saving the hierarchy deletes the saved level and social group of the squad's players who are out on loan, since the editor leaves them out.
 - The tab: the swap test does not check that the two members who stayed kept their joining day. A failed squad shows no stale-hierarchy sentence, though the updated day is shown. Change lines can break inside a phrase ("Ambition 12," then "no change"). Spoken text joins sentences ending in a full stop with a comma. The accessibility label "Warning" is written in a view, beside the existing "Caution". The squad shown is worked out in two views with the same call. There is no test of mentoring ready while the other advice has failed. Warnings and cautions share one triangle, red and amber.
 - The hierarchy editor is hard to scan: raised players look like the rest, about seven rows show, and the two menus are different widths. There is no picture of a departed member's row; it is covered by tests only. The group editor's picture cannot be made narrower than 660 points.
-- The inserted task: a comment in Player Removal still says a youth contract is not read; there is no test that the allowance's evidence reaches the advice's basis; one doc comment line is over-long and the part-month line has no comment. Its tests were first seen failing only as a build failure, after the source was written.
+- The inserted task: there is no test that the allowance's evidence reaches the advice's basis; one doc comment line is over-long and the part-month line has no comment. Its tests were first seen failing only as a build failure, after the source was written.
+
+Found in the final review of the whole branch and left:
+
+- A recorded group's card shows what has changed for each member and any warning, not the values he is being pulled towards; a suggested group's card shows those.
+- Members who are out on loan or have moved squads still count when a group is judged to be doing harm or to have stopped.
+- A lone member still present in a recorded group is marked as its lead.
+- A member who has left can show two warnings: that he is no longer in the squad, and that he is advised to leave.
+- A player promoted while still in his old squad's live group is left out of his new squad's suggestions until that group is edited or ended; only the old squad's card says why.
+- "End group" asks for no confirmation and cannot be undone; adding the group again starts its measurement afresh.
+- If a player's identity changes (a paste without FMRTE's Id column and then one with it), his hierarchy entry, group membership and readings stay under the old identity. This does not arise while the grid has the Id column.
+- After going back to an earlier save, readings taken on the later dates stay the latest until the game's date passes them.
+- A hierarchy entry is dropped when a player moves between squads, so he must be entered again in his new squad. This is by intent: it is the first fix from the final review, above.
 
 Dealt with in Task 8 rather than left: the three points above under "Decided during the build", the group editor being unable to remove a departed member, and the stale-hierarchy line, which was drawn there for the first time.
 
