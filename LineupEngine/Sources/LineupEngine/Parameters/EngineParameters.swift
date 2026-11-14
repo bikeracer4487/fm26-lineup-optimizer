@@ -625,6 +625,21 @@ public struct EngineParameters: Sendable {
     public var removalThinCoverPoints: Parameter<Int>
     /// The numbers behind a fixture's suggested importance.
     public var importanceRules: Parameter<ImportanceSuggestionRules>
+    /// What each attribute is worth, per point, when picking who a young player should learn from.
+    /// Only the order of who gets first call on a lead depends on these.
+    public var mentoringWeights: Parameter<[Attribute: Int]>
+    /// The value past which an attribute adds nothing to what it is worth as a lead's trait.
+    public var mentoringCeilings: Parameter<[Attribute: Int]>
+    /// A player this age or younger can be a mentee.
+    public var mentoringMenteeMaxAge: Parameter<Int>
+    /// A player this many years older than another of the same standing stands above him.
+    public var mentoringSeniorityYears: Parameter<Int>
+    /// The share of a mentee's gain kept when the lead is in a different social group.
+    public var mentoringOtherSocialGroupShare: Parameter<Double>
+    /// A recorded group that has had no personality change in this many weeks is reviewed as not working.
+    public var mentoringStoppedAfterWeeks: Parameter<Int>
+    /// The standings and social groups the owner entered are called stale after this many days.
+    public var mentoringDynamicsStaleAfterDays: Parameter<Int>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -927,7 +942,20 @@ public struct EngineParameters: Sendable {
                 source: "scoring_parameters.py (branch customizable-tactics; its automatic importance tables, never called by the old app); "
                     + "docs/Research/player-rotation-guide.md. Nothing is published for FM27. The branch's table needed the stage of the "
                     + "competition and the state of the title race, which a fixture does not carry: league is its in-contention value, "
-                    + "cup lies between its early round and quarter-final"))
+                    + "cup lies between its early round and quarter-final"),
+            mentoringWeights: Parameter(
+                [.professionalism: 3, .pressure: 2, .determination: 1, .ambition: 1], .derived,
+                source: "this design's choice: they only order who gets first call on a lead"),
+            mentoringCeilings: Parameter(
+                [.professionalism: 20, .pressure: 6, .determination: 10, .ambition: 10], .carriedOverFM26,
+                source: "docs/Research/fm27-mentoring.md findings 9 to 11 and section 5: Pressure matters below about 6 "
+                    + "(FM24 test; FM27 measured Pressure 1), Ambition and Determination little above 10 (FM24 and older)"),
+            mentoringMenteeMaxAge: Parameter(23, .derived, source: "this design's choice"),
+            mentoringSeniorityYears: Parameter(5, .derived, source: "this design's choice"),
+            mentoringOtherSocialGroupShare: Parameter(0.5, .derived, source: "this design's choice"),
+            mentoringStoppedAfterWeeks: Parameter(
+                13, .derived, source: "this design's choice, from the research's three months, taken as thirteen weeks"),
+            mentoringDynamicsStaleAfterDays: Parameter(28, .derived, source: "this design's choice"))
     }()
 
     private static let removalSource = "ui/api/api_player_removal.py (branch customizable-tactics)"

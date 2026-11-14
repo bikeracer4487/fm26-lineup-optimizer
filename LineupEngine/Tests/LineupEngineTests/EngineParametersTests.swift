@@ -88,6 +88,26 @@ import Testing
         #expect(listed["loanedInFactor"]?.evidence == .carriedOverFM26)
     }
 
+    @Test func theMentoringParametersAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        let expected: [(String, Evidence)] = [
+            ("mentoringWeights", .derived), ("mentoringCeilings", .carriedOverFM26), ("mentoringMenteeMaxAge", .derived),
+            ("mentoringSeniorityYears", .derived), ("mentoringOtherSocialGroupShare", .derived),
+            ("mentoringStoppedAfterWeeks", .derived), ("mentoringDynamicsStaleAfterDays", .derived)]
+        for (name, evidence) in expected {
+            #expect(listed[name]?.evidence == evidence, "\(name)")
+            #expect(!(listed[name]?.source.isEmpty ?? true), "\(name) has no source")
+        }
+        let q = EngineParameters.fm27
+        #expect(q.mentoringWeights.value == [.professionalism: 3, .pressure: 2, .determination: 1, .ambition: 1])
+        #expect(q.mentoringCeilings.value == [.professionalism: 20, .pressure: 6, .determination: 10, .ambition: 10])
+        #expect(q.mentoringMenteeMaxAge.value == 23)
+        #expect(q.mentoringSeniorityYears.value == 5)
+        #expect(q.mentoringOtherSocialGroupShare.value == 0.5)
+        #expect(q.mentoringStoppedAfterWeeks.value == 13)
+        #expect(q.mentoringDynamicsStaleAfterDays.value == 28)
+    }
+
     @Test func theDepthParametersAreListedWithEvidenceAndSource() {
         let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
         for name in ["depthCoverFamiliarity", "depthSolidFamiliarity", "depthThinBelow"] {
