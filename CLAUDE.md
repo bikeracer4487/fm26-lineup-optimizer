@@ -95,7 +95,7 @@ The tests take about a minute: each plan of the sample data takes most of a seco
 Run it:
 
 - `cd LineupApp && swift run LineupApp --sample-data ..` opens it on the engine's captures in a temporary directory. It does not touch real data, the clipboard or FMRTE's file.
-- `tools/build_app.sh`, from the repository root, builds `build/FM27 Lineup Optimizer.app` and checks it can load the engine's resources. That is the real app: it reads the clipboard and `~/Library/Application Support/FMRTE27/config.json`, and saves under `~/Library/Application Support/FM27 Lineup Optimizer/`. It is signed for this Mac only.
+- `tools/build_app.sh`, from the repository root, builds `build/FM27 Lineup Optimizer.app`, checks it can load the engine's resources, closes any open copy of the app and installs the build as `/Applications/FM27 Lineup Optimizer.app`, replacing what is there; if it closed an open copy, it opens the new one. That is the real app: it reads the clipboard and `~/Library/Application Support/FMRTE27/config.json`, and saves under `~/Library/Application Support/FM27 Lineup Optimizer/`. It is signed for this Mac only.
 
 Draw the screens without opening a window:
 
