@@ -89,6 +89,8 @@ enum Report {
         let removal: RemovalReport
         /// In date order; nil when no fixtures were given.
         let suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]?
+        /// One entry for each squad given, in the order given.
+        let mentoring: [(squad: Squad, result: Result<MentoringReport, Error>)]
     }
 
     /// The import summary, then each advisor's report under its heading.
@@ -109,6 +111,7 @@ enum Report {
         out += training(advice.training)
         out += removal(advice.removal)
         if let suggestions = advice.suggestions { out += importance(suggestions) }
+        out += mentoring(advice.mentoring)
         return out.joined(separator: "\n") + "\n"
     }
 
@@ -227,6 +230,39 @@ enum Report {
                        + ": set \(fixture.importance.rawValue), suggested \(suggestion.importance.rawValue)"
                        + (fixture.importance == suggestion.importance ? "" : "  *") + mark(suggestion.basis))
             for reason in suggestion.reasons { out.append("        - \(reason)") }
+        }
+        return out
+    }
+
+    private static func mentoring(_ squads: [(squad: Squad, result: Result<MentoringReport, Error>)]) -> [String] {
+        var out: [String] = []
+        for (squad, result) in squads {
+            out += ["", "=== Mentoring: \(squadName(squad)) ==="]
+            let report: MentoringReport
+            switch result {
+            case .failure(let error):
+                out.append("  " + ErrorDescriptions.describe(error))
+                continue
+            case .success(let value): report = value
+            }
+            out.append("  " + AdvisorText.mentoringNote)
+            if report.byAgeAlone { out.append("  " + AdvisorText.mentoringByAgeAlone) }
+            if report.suggestions.isEmpty { out.append("  " + AdvisorText.noGroupToSuggest) }
+            for group in report.suggestions {
+                out.append("  " + AdvisorText.lead(group) + mark(group.basis))
+                for caution in group.cautions { out.append("      ! " + AdvisorText.caution(caution, leadName: group.leadName)) }
+                for member in group.members {
+                    let pulls = member.pulls.map(AdvisorText.pull).joined(separator: " · ")
+                    out.append("    \(member.name) (\(member.age))   " + (member.isMakingUp ? AdvisorText.makingUpTheGroup + (pulls.isEmpty ? "" : ": ") : "") + pulls)
+                    if member.inDifferentSocialGroup {
+                        out.append("        " + AdvisorText.otherSocialGroup(leadName: group.leadName))
+                    }
+                }
+            }
+            if !report.notPlaced.isEmpty {
+                out += ["", "  Not placed"]
+                for player in report.notPlaced { out.append("    " + AdvisorText.notPlaced(player)) }
+            }
         }
         return out
     }

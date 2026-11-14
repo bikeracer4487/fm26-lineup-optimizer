@@ -641,7 +641,14 @@ Decisions:
 
 ## What the advice showed on the captured squads
 
-(Filled in by Task 4.)
+Read with `lineup-cli advise` on the captured squads, as of 2026-11-13, by age alone and then with a scratch standings file (Alfie Potter Team Leader, Fernando Forestieri Highly Influential, Darnell Johnson Influential).
+
+- **First team, by age alone.** Three groups, each of a lead and two players of 23 or under: Johnson (27) with Nelson and Humphries, Potter (37) with Clark and Bloom, Forestieri (36) with Tetek and De Silva, who makes up the group. Every lead is at least five years older than his members and has Professionalism 14 or more where the members have less. No group pulls anybody the wrong way: every pull printed is upward. Nobody in the first team is left unplaced.
+- **First team, with standings.** Same three leads and the same De Silva group. Clark and Humphries swap leads (Clark to Johnson, Humphries to Potter): the ranking of leads changed with the standings, and each group still pulls upward only. Each lead's standing is shown on his line.
+- **U21, by age alone.** No group. Four players (Daniel, Moir, Bitencourt de Oliveira, Njogu) are not placed, each because nobody in the U21 squad stands above him (no standings are entered, and nobody is five years older than another); a hierarchy entered for the U21s could change that. The advice for the U21s therefore waits on the owner's entries.
+- **Time.** `Mentoring.report` on the captured first team takes about 0.01 seconds in a debug build.
+
+The reasons printed are true of the data on both squads. Nothing seen needed a rule or a number changed.
 
 ## Changes made while building
 

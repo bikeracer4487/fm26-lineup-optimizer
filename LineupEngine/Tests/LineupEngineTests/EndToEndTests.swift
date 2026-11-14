@@ -375,4 +375,47 @@ import Testing
         }
         #expect(fixtures.contains { $0.date == Day(iso: "2026-11-21") })
     }
+
+    @Test func mentoringRunsOnTheCapturedSquads() throws {
+        let book = try realBook()
+        let asOf = Day(year: 2026, month: 11, day: 13)!
+        func report(_ squad: Squad) throws -> (report: MentoringReport, players: [Player]) {
+            let players = book.allPlayers.filter { $0.squad == squad }
+            let request = MentoringRequest(
+                squad: squad, players: book.allPlayers, ownClub: book.ownClub(override: ownClubName), dynamics: [:],
+                dynamicsUpdatedOn: nil, groups: [], readings: [:], names: [:], leaving: [], asOf: asOf)
+            return (try Mentoring.report(request, parameters: .fm27), players)
+        }
+        for squad in [Squad.firstTeam, .u21] {
+            let (result, players) = try report(squad)
+            #expect(result.byAgeAlone)
+            let keys = Set(players.map(\.id))
+            let members = result.suggestions.flatMap { [$0.lead] + $0.members.map(\.player) }
+            #expect(Set(members).count == members.count, "no player is in two groups")
+            #expect(members.allSatisfy(keys.contains), "every member is of the squad asked for")
+            for group in result.suggestions {
+                #expect(Set([group.lead] + group.members.map(\.player)).count == Mentoring.groupSize)
+                #expect(group.members.count == Mentoring.groupSize - 1)
+            }
+        }
+        let firstTeam = try report(.firstTeam).report
+        #expect(!firstTeam.suggestions.isEmpty)
+        let u21 = try report(.u21).report
+        let placed = Set(u21.suggestions.flatMap { [$0.lead] + $0.members.map(\.player) })
+        let unplaced = Set(u21.notPlaced.map(\.player))
+        #expect(!placed.isEmpty || !unplaced.isEmpty)
+        #expect(placed.isDisjoint(with: unplaced))
+        // Every own, young player with something to gain is placed or listed.
+        let q = EngineParameters.fm27
+        let candidates = book.allPlayers.filter { player in
+            guard player.squad == .u21, player.age <= q.mentoringMenteeMaxAge.value else { return false }
+            guard case .own = book.loanStatus(of: player, override: ownClubName) else { return false }
+            return Mentoring.counted(q).contains { attribute in
+                (player.attributes[attribute] ?? 0) < (q.mentoringCeilings.value[attribute] ?? 0)
+            }
+        }
+        for player in candidates {
+            #expect(placed.contains(player.id) || unplaced.contains(player.id), "\(player.name) is neither placed nor listed")
+        }
+    }
 }

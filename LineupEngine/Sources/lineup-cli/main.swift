@@ -17,7 +17,7 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        lineup-cli advise --grids <fmrte config or grids snapshot> --tactic <tactic.json> --as-of <YYYY-MM-DD>
                          [--first-team <paste.tsv>] [--u21 <paste.tsv>] [--u18 <paste.tsv>] [--own-club <name>]
                          [--history <confirmed.json>] [--fixtures <fixtures.json>] [--intensity low|medium|high]
-                         [--profile fm27|carried-over]
+                         [--profile fm27|carried-over] [--standings <standings.json>]
        At least one of --first-team, --u21, --u18 is required.
        --profile picks the rating profile: fm27 (FM27 engine tests, the default), carried-over (carried over from FM26),
        or, for select only, both, which prints the FM27 lineup, then the carried-over one, and compares them.
@@ -27,7 +27,11 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        fitness from the day the squads were exported (--as-of) and printing a table of who starts where.
        advise prints the advisors' reports for the --tactic tactic as of --as-of: the first and second elevens, depth
        at each slot, who needs rest, who could retrain to cover thin slots, who to sell, loan out or release, and the
-       loan review; with --fixtures, a suggested importance beside each fixture's own.
+       loan review; with --fixtures, a suggested importance beside each fixture's own; then, for each squad given,
+       the mentoring groups suggested and the players left without one.
+       --standings is a JSON object from a player's key to {"standing": "teamLeader|highlyInfluential|influential|others",
+       "socialGroup"?: "core|others|secondary:<name>"}: the hierarchy as the game's Dynamics screen shows it. Without it
+       the groups go by age alone.
        --fixtures is a JSON array of {"id", "date", "opponent", "importance", "overrides"?: {"<slot>": "<player key>"},
        "rejected"?: ["<player key>"], "competition"?: "league|cup|minorCup|friendly",
        "opponentStrength"?: "muchStronger|stronger|similar|weaker|muchWeaker"}. plan ignores competition and
@@ -56,6 +60,7 @@ struct Options {
     var profileIDs = profileChoices["fm27"]!
     var fixtures: String?
     var history: String?
+    var standings: String?
     var asOf: Day?
     var settings = PlanSettings.standard
 }
@@ -77,7 +82,7 @@ func parse(_ arguments: [String]) throws -> Options {
     let allowed = switch command {
     case .select: shared + ["--importance"]
     case .plan: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--stability", "--saving", "--horizon"]
-    case .advise: shared + ["--fixtures", "--history", "--as-of", "--intensity"]
+    case .advise: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--standings"]
     }
     let name = command.rawValue
     while let flag = args.popFirst() {
@@ -103,6 +108,7 @@ func parse(_ arguments: [String]) throws -> Options {
             options.profileIDs = ids
         case "--fixtures": options.fixtures = value
         case "--history": options.history = value
+        case "--standings": options.standings = value
         case "--as-of":
             guard let day = Day(iso: value) else { throw UsageError(reason: "--as-of needs a date in the form YYYY-MM-DD, not '\(value)'") }
             options.asOf = day
@@ -198,6 +204,10 @@ let pastes = options.pastes.map { (squad: $0.squad, path: $0.path, text: readTex
 let fixtureEntries = options.fixtures.map { path in decode([FixtureEntry].self, read(path), file: path, what: "fixtures") }
 let history = options.history.map { path in decode([ConfirmedLineup].self, read(path), file: path, what: "history") } ?? []
 
+let standings = options.standings.map { path in
+    decode([String: PlayerDynamics].self, read(path), file: path, what: "standings")
+}
+
 var output = ""
 do {
     var book = SquadBook()
@@ -264,10 +274,19 @@ do {
                                                         tiers: tiers, parameters: parameters))
             }
         }
+        let dynamics = Dictionary(uniqueKeysWithValues: (standings ?? [:]).map { (PlayerID(key: $0.key), $0.value) })
+        let names = Dictionary(players.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        // A mentoring error for one squad stops that squad's advice only.
+        let mentoring = imports.map { imported in
+            let request = MentoringRequest(
+                squad: imported.squad, players: players, ownClub: ownClub, dynamics: dynamics, dynamicsUpdatedOn: nil,
+                groups: [], readings: [:], names: names, leaving: advisors.removal.advisedToLeave, asOf: options.asOf!)
+            return (squad: imported.squad, result: Result { try Mentoring.report(request, parameters: parameters) })
+        }
         output = Report.render(header, advice: Report.Advice(
             asOf: options.asOf!, profile: profile, intensity: options.settings.trainingIntensity, history: history,
             elevens: advisors.elevens, depth: advisors.depth, rest: advisors.rest, training: advisors.training,
-            removal: advisors.removal, suggestions: suggestions),
+            removal: advisors.removal, suggestions: suggestions, mentoring: mentoring),
             parameters: parameters)
     }
 } catch {
