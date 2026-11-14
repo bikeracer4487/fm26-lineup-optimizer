@@ -87,6 +87,10 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
     public let whyText: String
     /// The evidence note in brackets: "(this tool's estimate)"; nil for FM27 evidence.
     public let noteText: String?
+    /// The owner's mark on him, to sell or to loan out; nil when he has none.
+    public let mark: SaleMark?
+    /// The mark in the engine's words: "To sell"; nil when he has none.
+    public let markText: String?
 
     /// Critical and high rows are open until the owner closes them; medium and keep rows closed until opened.
     public var opensByDefault: Bool {
@@ -98,12 +102,12 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
 
     /// The row as said to assistive technology.
     public var spokenText: String {
-        let parts: [String?] = [stamp.text, actionText, name, squadText, ageText.map { "Age \($0)" },
+        let parts: [String?] = [stamp.text, actionText, markText, name, squadText, ageText.map { "Age \($0)" },
                                 "\(RemovalPresentation.scoreLabel) \(scoreText)", costsText]
         return parts.compactMap { $0 }.joined(separator: ", ")
     }
 
-    init(_ advice: RemovalAdvice, squad: Squad?, age: Int?) {
+    init(_ advice: RemovalAdvice, squad: Squad?, age: Int?, mark: SaleMark?) {
         id = advice.player
         name = advice.name
         level = advice.level
@@ -116,7 +120,16 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
         reasons = advice.reasons.map(PointedReason.init)
         whyText = AdvisorText.why(advice.action, for: advice)
         noteText = AdvisorText.note(for: advice.basis).map { "(\($0))" }
+        self.mark = mark
+        markText = mark.map(AdvisorText.name)
     }
+}
+
+/// One choice of the control that marks a player: no mark, or one of the marks in the engine's words.
+public struct MarkChoice: Identifiable, Equatable, Sendable {
+    public var id: String { title }
+    public let mark: SaleMark?
+    public let title: String
 }
 
 /// One player on loan at the club: the verdict's stamp, his name, his score and his reasons with their points.
@@ -239,6 +252,13 @@ public enum RemovalPresentation {
     public static let noLoans = "Nobody is on loan here."
     public static let loansHeading = "Loans to the club"
     public static let scoreLabel = "Score"
+    /// The label beside the control that marks a player.
+    public static let markLabel = "Mark"
+    /// What a mark does and how far to trust it, in the engine's words.
+    public static let marksNote = AdvisorText.marksNote
+    /// The control's choices: no mark, then each mark in the engine's words.
+    public static let markChoices = [MarkChoice(mark: nil, title: "No mark")]
+        + SaleMark.allCases.map { MarkChoice(mark: $0, title: AdvisorText.name($0)) }
     public static let averageLabel = "First team's average ability"
     public static let wagesLabel = "Wages of the critical and high players"
     /// The table's headings, in its order.
@@ -279,16 +299,20 @@ public enum RemovalPresentation {
         return StatusStamp(text: AdvisorText.name(verdict), tone: tone)
     }
 
-    /// The sheet for `report`, with each player's squad and age from `squads` and `ages`. The average ability is shown
-    /// to the nearest whole number, and only when the report has one.
-    public static func sheet(_ report: RemovalReport, squads: [PlayerID: Squad], ages: [PlayerID: Int]) -> RemovalSheet {
+    /// The sheet for `report`, with each player's squad and age from `squads` and `ages`, and the owner's mark on him
+    /// from `marks`. The average ability is shown to the nearest whole number, and only when the report has one. The
+    /// loans to the club take no mark.
+    public static func sheet(_ report: RemovalReport, squads: [PlayerID: Squad], ages: [PlayerID: Int],
+                             marks: [PlayerID: SaleMark] = [:]) -> RemovalSheet {
         let average = report.squadAverageAbility.map {
             RemovalFigure(label: averageLabel, figure: String(Int($0.rounded())))
         }
         let wages = RemovalFigure(label: wagesLabel, figure: Display.perWeek(report.weeklyWagesAtStake))
         return RemovalSheet(
             figures: [average].compactMap { $0 } + [wages],
-            rows: report.advice.map { RemovalRow($0, squad: squads[$0.player], age: ages[$0.player]) },
+            rows: report.advice.map {
+                RemovalRow($0, squad: squads[$0.player], age: ages[$0.player], mark: marks[$0.player])
+            },
             loans: report.loans.map(LoanBlock.init))
     }
 }
@@ -297,6 +321,7 @@ extension AppModel {
     /// The Player Removal screen's sheet for `report`, each player's squad and age as imported.
     public func removalSheet(_ report: AdvisorsReport) -> RemovalSheet {
         let players = Dictionary(squad.book.allPlayers.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        return RemovalPresentation.sheet(report.removal, squads: players.mapValues(\.squad), ages: players.mapValues(\.age))
+        return RemovalPresentation.sheet(report.removal, squads: players.mapValues(\.squad), ages: players.mapValues(\.age),
+                                         marks: marks)
     }
 }

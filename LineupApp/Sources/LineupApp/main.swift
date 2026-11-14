@@ -67,7 +67,8 @@
 //                                              rows open) is drawn with every row open, tall enough for a
 //                                              medium and a keep row's reasons ("removal-all-open-…"), and
 //                                              with a U21 player on loan here so the loan review shows
-//                                              ("removal-loanee-…").
+//                                              ("removal-loanee-…"), and with its first two players marked,
+//                                              one to sell and one to loan out ("removal-marked-…").
 //                                              Every screen is drawn again in a narrow window, 800 by 700
 //                                              ("<screen>-narrow-…"), and Match Selection, Tactics, Fixtures
 //                                              and the advisor screens in the smallest window
@@ -293,12 +294,20 @@ let narrowWindow = CGSize(width: 800, height: 700)
                              screens: [.training])
 }
 
-/// The Player Removal screen with every row open and with a loanee: see the usage at the top.
+/// The Player Removal screen with every row open, with a loanee, and with two players marked: see the usage at the top.
 @MainActor func drawRemoval(_ root: String, to directory: URL, size: CGSize) throws {
     try ScreenPictures.write(model: sampleModel(root), to: directory, size: CGSize(width: size.width, height: size.height * 4),
                              variant: "all-open", screens: [.removal], removalStart: RemovalStart(allOpen: true))
     try ScreenPictures.write(model: sampleModel(root, .loanee), to: directory,
                              size: CGSize(width: size.width, height: size.height * 3), variant: "loanee", screens: [.removal])
+    let marked = sampleModel(root)
+    if case .ready(let report) = marked.adviceState {
+        for (player, mark) in zip(report.removal.advice.map(\.player), SaleMark.allCases) {
+            marked.setMark(mark, for: player)
+        }
+    }
+    try ScreenPictures.write(model: marked, to: directory, size: CGSize(width: size.width, height: size.height * 2),
+                             variant: "marked", screens: [.removal])
 }
 
 /// Draws the pictures and returns the process's exit status.

@@ -25,7 +25,9 @@ public struct RemovalScreen: View {
 
     public var body: some View {
         AdviceGate(screen: .removal, state: model.adviceState, importLine: model.adviceImportLine) { report in
-            RemovalBody(sheet: model.removalSheet(report), navigation: navigation)
+            RemovalBody(sheet: model.removalSheet(report), navigation: navigation) { mark, player in
+                model.setMark(mark, for: player)
+            }
         }
     }
 }
@@ -33,6 +35,8 @@ public struct RemovalScreen: View {
 private struct RemovalBody: View {
     let sheet: RemovalSheet
     @Bindable var navigation: Navigation
+    /// Marks a player to sell or to loan out, or with nil takes his mark off.
+    let setMark: (SaleMark?, PlayerID) -> Void
     @State private var wide = true
 
     var body: some View {
@@ -49,7 +53,8 @@ private struct RemovalBody: View {
                                 .padding(.vertical, Theme.Spacing.m)
                         }
                         ForEach(rows) { row in
-                            RemovalRowView(row: row, wide: wide, isOpen: navigation.removalDisclosure.isOpen(row)) {
+                            RemovalRowView(row: row, wide: wide, isOpen: navigation.removalDisclosure.isOpen(row),
+                                           setMark: { setMark($0, row.id) }) {
                                 navigation.removalDisclosure.toggle(row)
                             }
                             FaintRule()
@@ -71,7 +76,10 @@ private struct RemovalBody: View {
     /// The line, the figures and the filter.
     private var top: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            MutedLine(text: RemovalPresentation.explanation)
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                MutedLine(text: RemovalPresentation.explanation)
+                MutedLine(text: RemovalPresentation.marksNote)
+            }
             HStack(alignment: .top, spacing: Theme.Spacing.m) {
                 ForEach(sheet.figures) { FigureCard(label: $0.label, figure: $0.figure) }
             }
@@ -154,6 +162,7 @@ private struct RemovalRowView: View {
     let row: RemovalRow
     let wide: Bool
     let isOpen: Bool
+    let setMark: (SaleMark?) -> Void
     let toggle: () -> Void
 
     var body: some View {
@@ -177,7 +186,7 @@ private struct RemovalRowView: View {
             .accessibilityValue(RemovalPresentation.openText(isOpen))
             .accessibilityAddTraits(.isButton)
             if isOpen {
-                RemovalDetail(row: row)
+                RemovalDetail(row: row, setMark: setMark)
                     .padding(.leading, Theme.Removal.disclosureColumn + Theme.Removal.stampColumn)
                     .padding(.bottom, Theme.Spacing.m)
             }
@@ -189,9 +198,16 @@ private struct RemovalRowView: View {
         case .level:
             StampView(stamp: row.stamp)
         case .action:
-            Text(row.actionText)
-                .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .semibold))
-                .foregroundStyle(Theme.Colour.ink)
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                Text(row.actionText)
+                    .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .semibold))
+                    .foregroundStyle(Theme.Colour.ink)
+                if let mark = row.markText {
+                    Text(mark)
+                        .font(Theme.Typeface.text(Theme.TypeSize.small))
+                        .foregroundStyle(Theme.Colour.mutedInk)
+                }
+            }
         case .name:
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                 Text(row.name)
@@ -229,9 +245,11 @@ private struct RemovalRowView: View {
     }
 }
 
-/// An open row's reasons with their points, the sentence for why that action, and the evidence note.
+/// An open row's reasons with their points, the sentence for why that action, the evidence note, and the control that
+/// marks him to sell or to loan out.
 private struct RemovalDetail: View {
     let row: RemovalRow
+    let setMark: (SaleMark?) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
@@ -248,6 +266,15 @@ private struct RemovalDetail: View {
                     .foregroundStyle(Theme.Colour.mutedInk)
                     .padding(.leading, Theme.Removal.pointsColumn + Theme.Spacing.m)
             }
+            HStack(alignment: .center, spacing: Theme.Spacing.m) {
+                Text(RemovalPresentation.markLabel)
+                    .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
+                    .foregroundStyle(Theme.Colour.mutedInk)
+                BoardTabs(choices: RemovalPresentation.markChoices.map { ($0.mark, $0.title) },
+                          selection: Binding(get: { row.mark }, set: { setMark($0) }))
+            }
+            .padding(.top, Theme.Spacing.s)
+            .padding(.leading, Theme.Removal.pointsColumn + Theme.Spacing.m)
         }
         .textSelection(.enabled)
     }

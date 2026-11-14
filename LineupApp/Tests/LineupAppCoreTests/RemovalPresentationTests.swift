@@ -140,6 +140,60 @@ import Testing
                 + "Releasing him costs £26,000; a mutual termination about £14,300")
     }
 
+    // MARK: Marks
+
+    @Test func aMarkedRowShowsItsMarkInTheEnginesWords() throws {
+        let p = PlayerID(key: "p")
+        let sell = RemovalPresentation.sheet(report([advice("p", name: "Josh Ashby")]), squads: [:], ages: [:],
+                                             marks: [p: .toSell])
+        #expect(sell.rows.first?.mark == .toSell)
+        #expect(sell.rows.first?.markText == "To sell")
+        #expect(sell.rows.first?.markText == AdvisorText.name(SaleMark.toSell))
+        let loan = RemovalPresentation.sheet(report([advice("p", name: "Josh Ashby")]), squads: [:], ages: [:],
+                                             marks: [p: .toLoanOut])
+        #expect(loan.rows.first?.mark == .toLoanOut)
+        #expect(loan.rows.first?.markText == "To loan out")
+    }
+
+    @Test func anUnmarkedRowHasNoMark() throws {
+        let sheet = RemovalPresentation.sheet(report(everyLevel), squads: [:], ages: [:],
+                                              marks: [PlayerID(key: "h"): .toSell, PlayerID(key: "gone"): .toLoanOut])
+        #expect(sheet.rows.map(\.mark) == [nil, .toSell, nil, nil, nil])
+        #expect(sheet.rows.map(\.markText) == [nil, "To sell", nil, nil, nil])
+        #expect(sheet.rows == RemovalPresentation.sheet(report(everyLevel), squads: [:], ages: [:],
+                                                         marks: [PlayerID(key: "h"): .toSell]).rows)
+    }
+
+    @Test func theChoicesAreNoMarkThenEachMark() {
+        #expect(RemovalPresentation.markChoices.map(\.title) == ["No mark", "To sell", "To loan out"])
+        #expect(RemovalPresentation.markChoices.map(\.mark) == [nil, .toSell, .toLoanOut])
+        #expect(RemovalPresentation.markLabel == "Mark")
+    }
+
+    @Test func theNoteIsTheEngines() {
+        #expect(RemovalPresentation.marksNote == AdvisorText.marksNote)
+    }
+
+    @Test func aMarkedRowIsSpokenWithItsMark() throws {
+        let squads = [PlayerID(key: "p"): Squad.u21], ages = [PlayerID(key: "p"): 19]
+        let marked = RemovalPresentation.sheet(report([advice("p", name: "Josh Ashby", score: 85)]), squads: squads,
+                                               ages: ages, marks: [PlayerID(key: "p"): .toSell])
+        #expect(try #require(marked.rows.first).spokenText == "High, Sell, To sell, Josh Ashby, U21s, Age 19, Score 85, "
+                + "Releasing him costs £26,000; a mutual termination about £14,300")
+        let unmarked = RemovalPresentation.sheet(report([advice("p", name: "Josh Ashby", score: 85)]), squads: squads,
+                                                 ages: ages)
+        #expect(!(try #require(unmarked.rows.first).spokenText.contains("No mark")))
+    }
+
+    @Test func theLoansToTheClubHaveNoMark() {
+        let given = loan("l", name: "Kauan Bitencourt de Oliveira")
+        let plain = RemovalPresentation.sheet(report(everyLevel, loans: [given]), squads: [:], ages: [:])
+        let marked = RemovalPresentation.sheet(report(everyLevel, loans: [given]), squads: [:], ages: [:],
+                                               marks: [PlayerID(key: "l"): .toSell])
+        #expect(marked.loans == plain.loans)
+        #expect(marked.rows == plain.rows)
+    }
+
     // MARK: Open and closed
 
     @Test func criticalAndHighRowsOpenByDefaultAndMediumAndKeepRowsDoNot() {
