@@ -188,33 +188,54 @@ import Testing
         #expect(a < g)
     }
 
-    @Test func slotsWithTheSameCoverAndNoSecondChoiceGoInSlotOrder() throws {
-        let all = try PlannerFixture.squad()
-        let r = try report(all.filter { $0.name.hasSuffix("first") })
-        // Eleven first choices and nobody else: every slot has no second choice and, apart from the
-        // shared positions, one option.
-        #expect(r.slots.allSatisfy { $0.dropToSecond == nil })
-        let order = SlotID.allCases
-        let thin = r.thin
-        #expect(thin == thin.sorted { order.firstIndex(of: $0)! < order.firstIndex(of: $1)! })
-        #expect(thin.contains(.GK) && thin.contains(.ST_C))
+    @Test func slotsTiedOnCoverAndDropGoInSlotOrder() throws {
+        // Eleven first choices and nobody else: every slot has exactly one fit option and no second choice.
+        let r = try report(PlannerFixture.squad().filter { $0.name.hasSuffix("first") })
+        #expect(r.slots.allSatisfy { $0.cover == 1 && $0.dropToSecond == nil })
+        #expect(r.thin == (try tactic.assignments(catalog: catalog)).map(\.slot))
     }
 
     @Test func aSlotWithoutASecondChoiceRanksAheadOfOneWithAnyDrop() throws {
         let all = try PlannerFixture.squad()
-        // Everyone injured-free; AM_C and ST_C each lose their second choice's fitness, but ST_C's
-        // second eleven is also missing, so its drop is nil.
         let firsts = all.filter { $0.name.hasSuffix("first") }
+        // ST_C has no second player; AM_C has one, injured, so both have cover 1.
         let seconds = all.filter { $0.name.hasSuffix("second") && !$0.name.hasPrefix("ST_C") }.map { p -> Player in
             var p = p; if p.name.hasPrefix("AM_C") { p.isInjured = true }; return p
         }
         let r = try report(firsts + seconds)
         let st = try depth(r, .ST_C), am = try depth(r, .AM_C)
         #expect(st.cover == 1 && am.cover == 1)
-        if st.dropToSecond == nil {
-            let a = try #require(r.thin.firstIndex(of: .ST_C)), b = try #require(r.thin.firstIndex(of: .AM_C))
-            #expect(a < b)
+        try #require(st.dropToSecond == nil)
+        _ = try #require(am.dropToSecond)
+        // AM_C comes first in slot order, so only the rule puts ST_C ahead of it.
+        let a = try #require(r.thin.firstIndex(of: .ST_C)), b = try #require(r.thin.firstIndex(of: .AM_C))
+        #expect(a < b)
+    }
+
+    @Test func aSecondChoiceSolidInOnePhaseOnlyIsNotSolid() throws {
+        let name = named(.AM_L, "second")
+        func solid(ip: Int, oop: Int) throws -> Bool {
+            let r = try report(squad { if $0.name == name {
+                $0.familiarity[.attackingMidLeft] = ip; $0.familiarity[.midfielderLeft] = oop } })
+            return try #require(try depth(r, .AM_L).options.first { $0.player == PlannerFixture.id(.AM_L, "second") }).isSolid
         }
+        #expect(try solid(ip: 15, oop: 14) == false)
+        #expect(try solid(ip: 14, oop: 15) == false)
+        #expect(try solid(ip: 15, oop: 15) == true)
+    }
+
+    @Test func theReportSaysWhatItRestsOn() throws {
+        #expect(try report(PlannerFixture.squad()).basis == .derived)
+        var parameters = EngineParameters.fm27
+        parameters.depthCoverFamiliarity = Parameter(10, .fm27Measured, source: "test")
+        parameters.depthSolidFamiliarity = Parameter(15, .fm27Official, source: "test")
+        parameters.depthThinBelow = Parameter(2, .carriedOverFM26, source: "test")
+        let r = try Depth.report(tactic: tactic, players: PlannerFixture.squad(), ownClub: "Oxford City",
+                                 catalog: catalog, profile: profile, parameters: parameters)
+        #expect(r.basis == .carriedOverFM26)
+        parameters.depthThinBelow = Parameter(2, .fm27Measured, source: "test")
+        #expect(try Depth.report(tactic: tactic, players: PlannerFixture.squad(), ownClub: "Oxford City",
+                                 catalog: catalog, profile: profile, parameters: parameters).basis == .fm27Official)
     }
 
     @Test func inputOrderDoesNotMatter() throws {

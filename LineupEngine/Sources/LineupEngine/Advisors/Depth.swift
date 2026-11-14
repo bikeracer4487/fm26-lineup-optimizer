@@ -41,6 +41,8 @@ public struct DepthReport: Equatable, Sendable {
     /// The thin slots, most in need first: least cover, then the larger drop to second (no second choice
     /// counts as the largest), then slot order.
     public let thin: [SlotID]
+    /// The weakest evidence among the parameters behind this advice.
+    public let basis: Evidence
 }
 
 public enum Depth {
@@ -110,13 +112,15 @@ public enum Depth {
                                    cover: cover, isThin: cover < parameters.depthThinBelow.value, dropToSecond: drop))
         }
 
-        let order = Dictionary(uniqueKeysWithValues: SlotID.allCases.enumerated().map { ($1, $0) })
-        let thin = slots.filter(\.isThin).sorted { a, b in
-            if a.cover != b.cover { return a.cover < b.cover }
-            let da = a.dropToSecond ?? .infinity, db = b.dropToSecond ?? .infinity
+        // Ties fall back to the slot's index in `slots`, the tactic's slot order.
+        let thin = slots.enumerated().filter { $0.element.isThin }.sorted { a, b in
+            if a.element.cover != b.element.cover { return a.element.cover < b.element.cover }
+            let da = a.element.dropToSecond ?? .infinity, db = b.element.dropToSecond ?? .infinity
             if da != db { return da > db }
-            return order[a.slot]! < order[b.slot]!
-        }.map(\.slot)
-        return DepthReport(slots: slots, thin: thin)
+            return a.offset < b.offset
+        }.map(\.element.slot)
+        let basis = Evidence.weakest([parameters.depthCoverFamiliarity.evidence, parameters.depthSolidFamiliarity.evidence,
+                                      parameters.depthThinBelow.evidence])!
+        return DepthReport(slots: slots, thin: thin, basis: basis)
     }
 }
