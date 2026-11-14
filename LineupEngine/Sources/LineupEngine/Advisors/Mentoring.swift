@@ -112,6 +112,8 @@ public struct MentoringReport: Equatable, Sendable {
     public let suggestions: [SuggestedGroup]
     /// By player key.
     public let notPlaced: [NotPlaced]
+    /// The squad's live recorded groups: oldest first, then by id.
+    public let groups: [GroupReview]
     public let basis: Evidence
 }
 
@@ -176,13 +178,17 @@ extension Mentoring {
                              reason: judge.reason(for: index, present, used: used))
         }
 
+        let groups = request.groups.filter { $0.isLive && $0.squad == request.squad }.sorted {
+            $0.startedOn != $1.startedOn ? $0.startedOn < $1.startedOn : $0.id.uuidString < $1.id.uuidString
+        }.map { review($0, request: request, parameters: parameters) }
+
         let isStale = request.dynamicsUpdatedOn.map {
             $0.days(to: request.asOf) > parameters.mentoringDynamicsStaleAfterDays.value
         } ?? false
         return MentoringReport(
             squad: request.squad,
             byAgeAlone: !present.contains { $0.standing > .others },
-            isStale: isStale, suggestions: suggestions, notPlaced: notPlaced,
+            isStale: isStale, suggestions: suggestions, notPlaced: notPlaced, groups: groups,
             basis: Evidence.weakest(judge.evidence + [parameters.mentoringDynamicsStaleAfterDays.evidence])!)
     }
 
