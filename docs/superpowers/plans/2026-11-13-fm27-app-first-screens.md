@@ -600,5 +600,6 @@ Decisions taken during the build that differ from, or add to, the tasks above. E
 - The saving-players estimate does not see matches played between fixtures.
 - The left-out list needs a scroll at the default window size. Some long surnames print smaller than their neighbours on a confirmed pitch, and an empty slot sits slightly high on a pitch that shows no values.
 - A "could not be saved" notice is not cleared by a later save that works.
+- A file that could be neither read nor moved aside is never saved over: changes to it are held in the app only, a notice says so once each time it is dismissed, and the protection lasts until the app is reopened. There is no lasting "not saving" mark on the screen.
 - Not checked in pictures, so to be looked at in the running app: the sliders' tint, menus in dark appearance, dragging the window by the board's frame, focus rings, the choices popover.
 
