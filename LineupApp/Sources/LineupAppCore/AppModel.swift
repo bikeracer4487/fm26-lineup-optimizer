@@ -80,6 +80,9 @@ public struct AppEnvironment: Sendable {
     /// The retrainings accepted and turned down, and how the accepted ones are going. Changed only through
     /// `changeTraining`, which saves it and replans.
     public private(set) var training: TrainingState
+    /// The players the owner has marked to sell or to loan out. Changed only through `setMark(_:for:)` and
+    /// `dropSpentMarks()`.
+    public internal(set) var marks: [PlayerID: SaleMark]
     public let catalog: RoleCatalog
     /// The rating profile the plan is made with: the engine's standard one.
     let profile: RatingProfile
@@ -127,12 +130,14 @@ public struct AppEnvironment: Sendable {
         let squad = store.load(.squad, as: SquadState.self, otherwise: SquadState())
         let drafts = store.load(.drafts, as: [StoredTactic].self, otherwise: [])
         let training = store.load(.training, as: TrainingState.self, otherwise: TrainingState())
+        let marks = store.load(.marks, as: [PlayerID: SaleMark].self, otherwise: [:])
         self.settings = settings.value
         self.tactics = tactics.value
         self.fixtures = fixtures.value.sorted(by: Self.dateOrder)
         self.history = history.value
         self.squad = squad.value
         self.training = training.value
+        self.marks = marks.value
         // A draft is kept only for a saved tactic it differs from. When the tactics file could not be read and was left
         // where it is, its tactics are still on disk, so every draft is kept for them.
         let saved = Dictionary(tactics.value.map { ($0.id, $0.tactic) }, uniquingKeysWith: { first, _ in first })
@@ -142,7 +147,7 @@ public struct AppEnvironment: Sendable {
             : drafts.value.filter { saved[$0.id] != nil && saved[$0.id] != $0.tactic }
         self.tacticDrafts = Dictionary(kept.map { ($0.id, TacticDraft($0.tactic)) }, uniquingKeysWith: { first, _ in first })
         self.notices = [settings.notice, tactics.notice, fixtures.notice, history.notice, squad.notice, drafts.notice,
-                        training.notice]
+                        training.notice, marks.notice]
             .compactMap { $0 }.map(Notice.init(text:))
         self.lastImport = nil
         self.planState = .needsSquad
@@ -152,7 +157,7 @@ public struct AppEnvironment: Sendable {
                                             (.fixtures, fixtures.replaceOnDisk), (.history, history.replaceOnDisk),
                                             (.squad, squad.replaceOnDisk),
                                             (.drafts, drafts.replaceOnDisk || kept.count != drafts.value.count),
-                                            (.training, training.replaceOnDisk)]
+                                            (.training, training.replaceOnDisk), (.marks, marks.replaceOnDisk)]
         for (file, replace) in replaced where replace { save(file) }
         replan()
     }
@@ -183,6 +188,7 @@ public struct AppEnvironment: Sendable {
             case .squad: try store.save(squad, to: .squad)
             case .drafts: try store.save(savedDrafts, to: .drafts)
             case .training: try store.save(training, to: .training)
+            case .marks: try store.save(marks, to: .marks)
             }
             return true
         } catch {

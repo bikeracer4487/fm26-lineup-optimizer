@@ -22,6 +22,7 @@ import LineupEngine
         #expect(a.history == b.history, sourceLocation: sourceLocation)
         #expect(a.settings == b.settings, sourceLocation: sourceLocation)
         #expect(a.training == b.training, sourceLocation: sourceLocation)
+        #expect(a.marks == b.marks, sourceLocation: sourceLocation)
     }
 
     // MARK: Loading

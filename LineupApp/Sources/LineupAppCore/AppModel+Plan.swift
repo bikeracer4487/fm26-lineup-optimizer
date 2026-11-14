@@ -257,7 +257,8 @@ extension AppModel {
         let request = PlanRequest(
             fixtures: withinReach.compactMap(fixtureForPlanner),   // every one has a tactic: checked above
             players: players, ownClub: ownClub, asOf: asOf, confirmed: history.map(\.lineup),
-            played: countedSinceImport(players).map(\.lineup), retraining: retrainingForPlan, settings: settings.plan)
+            played: countedSinceImport(players).map(\.lineup), retraining: retrainingForPlan, marks: marks,
+            settings: settings.plan)
         let plan: Plan
         do {
             plan = try Planner(catalog: catalog, profile: profile, parameters: parameters).plan(request)

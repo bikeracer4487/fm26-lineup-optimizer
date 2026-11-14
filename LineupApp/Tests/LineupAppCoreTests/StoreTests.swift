@@ -344,6 +344,37 @@ import LineupEngine
         }
     }
 
+    @Test func aMissingMarksFileIsNotNoticedBesideOthers() throws {
+        // A missing marks file means nobody is marked, as for every app saved before the file existed.
+        try withStore { store, _ in
+            try store.save(settings, to: .settings)
+            let loaded = store.load(.marks, as: [PlayerID: SaleMark].self, otherwise: [:])
+            #expect(loaded.value.isEmpty)
+            #expect(loaded.notice == nil)
+            #expect(loaded.replaceOnDisk)
+        }
+    }
+
+    @Test func aMarksFileWithAnUnknownMarkIsKeptAsideWithANotice() throws {
+        try withStore { store, dir in
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data(#"{"version": 1, "value": {"fmrte:1": "toSwap"}}"#.utf8).write(to: dir.appendingPathComponent("marks.json"))
+            let loaded = store.load(.marks, as: [PlayerID: SaleMark].self, otherwise: [:])
+            #expect(loaded.value.isEmpty)
+            #expect(try #require(loaded.notice).hasPrefix("Your sale and loan marks could not be read"))
+            expectKeptAside(dir, original: "marks.json", kept: "marks.unreadable-1.json")
+        }
+    }
+
+    @Test func marksRoundTripAsAJSONObject() throws {
+        try withStore { store, dir in
+            try store.save([alice: SaleMark.toSell, bob: .toLoanOut], to: .marks)
+            #expect(store.load(.marks, as: [PlayerID: SaleMark].self, otherwise: [:]).value == [alice: .toSell, bob: .toLoanOut])
+            let text = try String(contentsOf: dir.appendingPathComponent("marks.json"), encoding: .utf8)
+            #expect(text.contains(#""fmrte:1""#) && text.contains(#""toSell""#))
+        }
+    }
+
     @Test func aSecondUnreadableFileGetsTheNextNumber() throws {
         try withStore { store, dir in
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
