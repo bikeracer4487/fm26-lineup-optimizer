@@ -10,9 +10,14 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-12-fm27-native-app-design.md`, sections 8.7, 8.8, 9 and 10; and `docs/superpowers/specs/2026-11-13-fm27-app-visual-direction.md` for the look. The advisors plan's closing sections (`docs/superpowers/plans/2026-11-13-fm27-advisors.md`, "Carried into the advisor screens plan", "Known limits", "Questions for the owner") are this plan's starting list.
 
-## Decisions for you
+## Decisions, approved
 
-Each has my recommendation, which the plan below follows. Say if you want another.
+The owner approved this plan and all four recommendations on 13 November 2026 ("All other recommendations and your advisors screen plan are approved. Proceed."). The plan below follows them. The same day the owner answered two of the advisors plan's questions; Task 2 builds both answers:
+
+- "A player can only train in one position and role at a time."
+- Months left of 0: "for now assume it means no contract" (the owner will double check).
+
+The third question, what FMRTE pastes for youth contracts, waits until the owner has youth contracts to capture.
 
 1. **Where the screens go.** Recommended: four more pills in the top row, after Match Selection: **Elevens**, **Rest**, **Training**, **Removal**. Every advisor is one click away and always in view. By my measure of the current pills the nine should fit on one row at the default window width (Task 4 checks it in the pictures); narrower, they wrap as they do now. The other way: one **Advice** pill that opens a second row of tabs. It keeps the top row short but hides the advisors a level down.
 2. **First XI, Second XI and Depth are one screen** with three views (the design left this to you). Recommended, because they are one calculation for one tactic: the Elevens screen has a tactic menu and three tabs. The other way: three pills.
@@ -138,9 +143,11 @@ Decisions:
 
 - The elevens are solved once for the primary tactic and once for each other saved tactic, and handed to Depth, Removal and Training. Each public advisor function keeps working alone and gives the same answer as before.
 - Player Removal runs before Training, and Training is handed `advisedToLeave`.
+- **One retraining at a time** (the owner's answer): a player with an accepted retraining, in any position, is not a candidate for another. `Training.report` applies it, so it holds however Training is called. His accepted retraining still counts toward `needsBeingRetrained` as before.
+- **Months left of 0 means no contract** (the owner's answer, to be double checked): Player Removal treats a full-time player with 0 months left as out of contract: the "not on a full-time contract" points, costs of £0 and `release` at high or critical, with the reason "No contract: 0 months left". The parameter's source text records the owner's decision and its date.
 - The command-line `advise` calls `Advisors.report`.
 
-- [ ] **Step 1: Write the failing tests**: `theReportEqualsTheAdvisorsCalledOneByOne` (on `PlannerFixture`'s squad and on the real captures); `trainingNeverRecommendsAPlayerRemovalWouldMoveOn`; `twoSavedTacticsGiveNeedsFromBoth`; `inputOrderDoesNotMatter`; a bad parameter throws `PlanError.badParameters` once.
+- [ ] **Step 1: Write the failing tests**: `theReportEqualsTheAdvisorsCalledOneByOne` (on `PlannerFixture`'s squad and on the real captures); `trainingNeverRecommendsAPlayerRemovalWouldMoveOn`; `twoSavedTacticsGiveNeedsFromBoth`; `inputOrderDoesNotMatter`; a bad parameter throws `PlanError.badParameters` once; `aPlayerAlreadyRetrainingIsNotOfferedASecondPosition` (and is offered once his retraining is no longer in `accepted`); `zeroMonthsLeftIsNoContract` (0 months: the points, £0 and release; 1 month: the contract-ends rule as before; unknown: neither).
 - [ ] **Step 2: Run** `swift test --filter AdvisorsTests` — expect FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run** `swift test` — all PASS. Time `lineup-cli advise` on the captures before and after and put both in the report.
