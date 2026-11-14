@@ -329,15 +329,15 @@ public enum Training {
             case 1: "1 solid player available"
             default: "\(facts.cover) solid players available"
             }
-            let sentence = "Cover at \(facts.ipPosition.rawValue) is thin in \(facts.need.tactic) (\(available))"
+            let sentence = "Cover at \(PositionText.plain(facts.ipPosition)) is thin in \(facts.need.tactic) (\(available))"
             if !reasons.contains(sentence) { reasons.append(sentence) }
         }
         reasons.append("He would rate \(String(format: "%.1f", c.rating)) there once learnt, \(Display.percent(c.share)) of the first choice")
-        reasons.append("From \(c.from.rawValue): a \(c.difficulty.rawValue) change, about \(c.weeks) weeks at his age and Versatility")
+        reasons.append("From \(PositionText.plain(c.from)): a \(c.difficulty.rawValue) change, about \(c.weeks) weeks at his age and Versatility")
 
         var cautions = [
             "Timings are estimates from earlier versions of the game; none is published for FM27",
-            "His familiarity at \(c.from.rawValue) may fall while he learns a new position",
+            "His familiarity at \(PositionText.plain(c.from)) may fall while he learns a new position",
         ]
         if c.currentFamiliarity < parameters.depthCoverFamiliarity.value { cautions.append("He may never become natural there") }
         if c.versatility < parameters.learnabilityRules.value.lowVersatilityBelow {

@@ -523,8 +523,8 @@ import Testing
         #expect(r.recommendations.count == 1)
         let rec = try #require(r.recommendations.first)
         #expect(rec.needs == [RetrainingNeed(tactic: sample, slot: .D_L), RetrainingNeed(tactic: "Second Sample", slot: .D_L)])
-        #expect(rec.reasons.prefix(2) == ["Cover at D (L) is thin in Sample 4-2-3-1 (1 solid player available)",
-                                          "Cover at D (L) is thin in Second Sample (1 solid player available)"])
+        #expect(rec.reasons.prefix(2) == ["Cover at left back is thin in Sample 4-2-3-1 (1 solid player available)",
+                                          "Cover at left back is thin in Second Sample (1 solid player available)"])
         #expect(r.needsWithoutCandidates.isEmpty)
     }
 
@@ -578,13 +578,13 @@ import Testing
         #expect(abs(expected.rating - 144.2) < 0.05)
         #expect(expected.share >= 0.94 && expected.share < 0.95)
         #expect(rec.reasons == [
-            "Cover at D (L) is thin in Sample 4-2-3-1 (1 solid player available)",
+            "Cover at left back is thin in Sample 4-2-3-1 (1 solid player available)",
             "He would rate 144.2 there once learnt, 94% of the first choice",
-            "From WB (L): a fluid change, about 9 weeks at his age and Versatility",
+            "From left wing-back: a fluid change, about 9 weeks at his age and Versatility",
         ])
         #expect(rec.cautions == [
             "Timings are estimates from earlier versions of the game; none is published for FM27",
-            "His familiarity at WB (L) may fall while he learns a new position",
+            "His familiarity at left wing-back may fall while he learns a new position",
             "He may never become natural there",
             "Low Versatility: this may take 18 months or more",
         ])
@@ -595,7 +595,7 @@ import Testing
         let rec2 = try #require(try report(thinAtLeftBack([steadier])).recommendations.first)
         #expect(rec2.cautions == [
             "Timings are estimates from earlier versions of the game; none is published for FM27",
-            "His familiarity at WB (L) may fall while he learns a new position",
+            "His familiarity at left wing-back may fall while he learns a new position",
         ])
     }
 
@@ -605,7 +605,7 @@ import Testing
                                      familiarity: [.attackingMidCentral: 20, .striker: 12])
         let r = try report(try squad(without: [named(.ST_C, "first"), named(.ST_C, "second")]) + [striker])
         let rec = try #require(r.recommendations.first { $0.choice.player == id("Forward") })
-        #expect(rec.reasons.first == "Cover at ST (C) is thin in Sample 4-2-3-1 (no solid player available)")
+        #expect(rec.reasons.first == "Cover at striker is thin in Sample 4-2-3-1 (no solid player available)")
         // A slot is thin below three when the line is raised, so two solid players can be named.
         var three = EngineParameters.fm27
         three.depthThinBelow = Parameter(3, .derived, source: "test")

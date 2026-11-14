@@ -222,7 +222,7 @@ import Testing
         let p = Player.fixture(familiarity: [.defenderLeft: 12])
         let r = run(p, .low, retraining: retrain(p, .defenderLeft))
         #expect(slot(r, .D_L, .retraining)?.factor == 1.15)
-        #expect(slot(r, .D_L, .retraining)?.reason == "Retraining at D (L) (familiarity 12): favoured for match experience there (×1.15)")
+        #expect(slot(r, .D_L, .retraining)?.reason == "Retraining at left back (familiarity 12): favoured for match experience there (×1.15)")
         #expect(slot(r, .D_R, .retraining) == nil)
         #expect(slot(run(p, .sharpness, retraining: retrain(p, .defenderLeft)), .D_L, .retraining)?.factor == 1.15)
     }
@@ -255,13 +255,13 @@ import Testing
         let p = Player.fixture(familiarity: [.attackingMidLeft: 12, .midfielderLeft: 14])
         let both = retrain(p, .midfielderLeft) + retrain(p, .attackingMidLeft)
         let expected = [Adjustment(kind: .retraining, factor: 1.15,
-                                   reason: "Retraining at AM (L) (familiarity 12): favoured for match experience there (×1.15)")]
+                                   reason: "Retraining at left attacking midfield (familiarity 12): favoured for match experience there (×1.15)")]
         #expect(run(p, .low, retraining: both).bySlot[.AM_L] == expected)
         #expect(run(p, .low, retraining: both.reversed()).bySlot[.AM_L] == expected)
         // When only one of the two is still being learnt, that one counts.
         let learnt = Player.fixture(familiarity: [.attackingMidLeft: 18, .midfielderLeft: 14])
         #expect(run(learnt, .low, retraining: both).bySlot[.AM_L]?.map(\.reason)
-            == ["Retraining at M (L) (familiarity 14): favoured for match experience there (×1.15)"])
+            == ["Retraining at left midfield (familiarity 14): favoured for match experience there (×1.15)"])
     }
 
     @Test func aRetrainingNoSlotUsesGivesNothing() {

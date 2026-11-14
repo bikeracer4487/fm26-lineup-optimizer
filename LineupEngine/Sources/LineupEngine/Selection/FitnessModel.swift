@@ -267,6 +267,9 @@ public enum FitnessModel {
                              ("sharpnessBelow", importance.sharpnessBelow)] where !line.isFinite {
             found.append("importanceRules \(name) is \(line), not a finite number")
         }
+        if importance.sharpnessBelow.isFinite && !(0...1).contains(importance.sharpnessBelow) {
+            found.append("importanceRules sharpnessBelow is \(importance.sharpnessBelow), not between 0 and 1")
+        }
         for (name, days) in [("crowdedWindowDays", importance.crowdedWindowDays),
                              ("restedAfterDays", importance.restedAfterDays),
                              ("sharpnessMinDaysToNext", importance.sharpnessMinDaysToNext)] where days < 1 {

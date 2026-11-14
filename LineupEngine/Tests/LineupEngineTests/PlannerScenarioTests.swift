@@ -195,7 +195,7 @@ import Testing
         let low = try retrainingPlan(.low, familiarity: 12)
         let atLow = try #require(pick(low, .D_L))
         #expect(atLow.player == player.id)
-        #expect(atLow.reasons.contains { $0.hasPrefix("Retraining at D (L) (familiarity 12)") })
+        #expect(atLow.reasons.contains { $0.hasPrefix("Retraining at left back (familiarity 12)") })
 
         let medium = try retrainingPlan(.medium, familiarity: 12)
         #expect(pick(medium, .D_L)?.player == id(.D_L))
@@ -204,6 +204,6 @@ import Testing
         let later = try retrainingPlan(.medium, familiarity: 15)
         let atMedium = try #require(pick(later, .D_L))
         #expect(atMedium.player == player.id)
-        #expect(atMedium.reasons.contains { $0.hasPrefix("Retraining at D (L) (familiarity 15)") })
+        #expect(atMedium.reasons.contains { $0.hasPrefix("Retraining at left back (familiarity 15)") })
     }
 }

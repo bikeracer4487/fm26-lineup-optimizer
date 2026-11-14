@@ -147,7 +147,7 @@ public enum ImportanceRules {
                   familiarity >= from, familiarity < parameters.retrainingUntilFamiliarity.value else { continue }
             found.append((item.position, Adjustment(
                 kind: .retraining, factor: factor,
-                reason: "Retraining at \(item.position.rawValue) (familiarity \(familiarity)): favoured for match experience there (×\(Display.twoDecimals(factor)))")))
+                reason: "Retraining at \(PositionText.plain(item.position)) (familiarity \(familiarity)): favoured for match experience there (×\(Display.twoDecimals(factor)))")))
         }
         // Retraining at both of the slot's positions favours him once: the higher factor, then the lower position.
         let kept = found.min { a, b in

@@ -381,10 +381,10 @@ public enum Removal {
         mutating func addTier(_ tier: SquadTier?, first: Int, second: Int, neither: Int) -> Bool {
             switch tier {
             case .first(let slot)?:
-                add(first, "In the first eleven at \(slot.position.rawValue)")
+                add(first, "In the first eleven at \(PositionText.plain(slot.position))")
                 return true
             case .second(let slot)?:
-                add(second, "In the second eleven at \(slot.position.rawValue)")
+                add(second, "In the second eleven at \(PositionText.plain(slot.position))")
                 return true
             case .backup?, nil:
                 add(neither, "In neither eleven")
@@ -397,7 +397,7 @@ public enum Removal {
         /// most the line; the first of the two is checked first at each slot. Says whether it added them.
         mutating func addThinCover(_ player: PlayerID, tier: SquadTier?, squad: SquadFacts, points: Int) -> Bool {
             for slot in squad.depth {
-                let position = slot.slot.position.rawValue
+                let position = PositionText.plain(slot.slot.position)
                 if case .first(let home)? = tier, home == slot.slot, slot.isThin {
                     add(points, "First choice at \(position), where cover is thin")
                     return true

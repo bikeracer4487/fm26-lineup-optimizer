@@ -128,3 +128,24 @@ import Testing
         #expect(abs(factors.condition - 0.6) < tolerance)
     }
 }
+
+@Suite struct SharpnessBelowCheckTests {
+    @Test(arguments: [-0.1, 1.5])
+    func aSharpnessLineOutsideZeroToOneIsReported(_ line: Double) {
+        var parameters = EngineParameters.fm27
+        var rules = parameters.importanceRules.value
+        rules.sharpnessBelow = line
+        parameters.importanceRules = Parameter(rules, .derived, source: "test")
+        #expect(FitnessModel.problems(in: parameters)
+                == ["importanceRules sharpnessBelow is \(line), not between 0 and 1"])
+    }
+
+    @Test(arguments: [0.0, 0.6, 1.0])
+    func aSharpnessLineInsideZeroToOneIsNotReported(_ line: Double) {
+        var parameters = EngineParameters.fm27
+        var rules = parameters.importanceRules.value
+        rules.sharpnessBelow = line
+        parameters.importanceRules = Parameter(rules, .derived, source: "test")
+        #expect(FitnessModel.problems(in: parameters).isEmpty)
+    }
+}

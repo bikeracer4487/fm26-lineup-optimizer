@@ -129,9 +129,7 @@ enum Report {
 
     private static func depth(_ report: DepthReport, parameters: EngineParameters) -> [String] {
         var out = ["", "=== Depth ===\(mark(report.basis))"]
-        out.append("Cover counts players solid in the slot (familiarity \(parameters.depthSolidFamiliarity.value) or over in both phases), "
-                   + "not injured and not first choice elsewhere; fewer than \(parameters.depthThinBelow.value) is thin. "
-                   + "Those who count are marked cover.")
+        out.append(AdvisorText.whatCoverCounts(parameters) + " Those who count are marked cover.")
         for slot in report.slots {
             let drop = slot.dropToNextBest.map { "drop to next best \(fixed($0, 1))" } ?? "no next best"
             let options = slot.options.isEmpty ? "nobody" : slot.options.map { option(slot.slot, $0, parameters: parameters) }
@@ -164,12 +162,8 @@ enum Report {
         if advice.isEmpty { out.append("  nobody") }
         for one in advice {
             let limit = "limit \(one.limit)" + (one.limitNotes.isEmpty ? "" : " (\(one.limitNotes.joined(separator: ", ")))")
-            let days: String
-            switch one.level {
-            case .holiday, .rest: days = one.days.map { ", clear in about \($0) \($0 == 1 ? "day" : "days")" } ?? ", clear in more days than the estimate covers"
-            case .watch: days = ""
-            }
-            out.append("  \(pad(one.level.rawValue.uppercased(), 8)) \(pad(one.name, 22)) jadedness \(one.jadedness), \(limit), "
+            let days = AdvisorText.clear(in: one).map { ", " + $0.lowercasedFirst } ?? ""
+            out.append("  \(pad(AdvisorText.name(one.level).uppercased(), 8)) \(pad(one.name, 22)) jadedness \(one.jadedness), \(limit), "
                        + "condition \(Display.percent(one.condition)), \(one.consecutiveStarts) in a row\(days)\(mark(one.basis))")
             for reason in one.reasons { out.append("        - \(reason)") }
         }
@@ -206,11 +200,8 @@ enum Report {
             case .medium: medium += 1; continue
             case .keep: keep += 1; continue
             }
-            var cost = "release cost unknown"
-            if let release = one.releaseCost, let mutual = one.mutualCost {
-                cost = "release costs \(Display.pounds(release)), a mutual termination about \(Display.pounds(mutual))"
-            }
-            out.append("  \(pad(one.level.rawValue.uppercased(), 8)) \(pad(action(one.action), 9)) \(pad(one.name, 22)) "
+            let cost = AdvisorText.costs(of: one).lowercasedFirst
+            out.append("  \(pad(AdvisorText.name(one.level).uppercased(), 8)) \(pad(AdvisorText.name(one.action).lowercased(), 9)) \(pad(one.name, 22)) "
                        + "score \(one.score); \(cost)\(mark(one.basis))")
             for reason in one.reasons { out.append("        \(points(reason.points)) \(reason.text)") }
         }
@@ -218,7 +209,7 @@ enum Report {
         out.append("Loan review")
         if report.loans.isEmpty { out.append("  nobody on loan here") }
         for loan in report.loans {
-            out.append("  \(pad(verdict(loan.verdict), 16)) \(pad(loan.name, 22)) score \(loan.score)\(mark(loan.basis))")
+            out.append("  \(pad(AdvisorText.name(loan.verdict).lowercased(), 16)) \(pad(loan.name, 22)) score \(loan.score)\(mark(loan.basis))")
             for reason in loan.reasons { out.append("        \(points(reason.points)) \(reason.text)") }
         }
         return out
@@ -231,7 +222,7 @@ enum Report {
             out.append("  * differs from the importance set")
         }
         for (fixture, suggestion) in suggestions {
-            let about = [fixture.competition.map(competition), fixture.opponentStrength.map(strength)].compactMap { $0 }
+            let about = [fixture.competition.map { AdvisorText.name($0).lowercased() }, fixture.opponentStrength.map { AdvisorText.name($0).lowercased() }].compactMap { $0 }
             out.append("  \(fixture.date.iso)  v \(fixture.opponent)" + (about.isEmpty ? "" : " (\(about.joined(separator: ", ")))")
                        + ": set \(fixture.importance.rawValue), suggested \(suggestion.importance.rawValue)"
                        + (fixture.importance == suggestion.importance ? "" : "  *") + mark(suggestion.basis))
@@ -242,50 +233,7 @@ enum Report {
 
     /// How well backed a piece of advice is, as a note after it; nothing for FM27 evidence.
     private static func mark(_ basis: Evidence) -> String {
-        switch basis {
-        case .fm27Measured, .fm27Official, .fm27Observation: ""
-        case .carriedOverFM26: " (FM26-era numbers)"
-        case .derived: " (this tool's estimate)"
-        }
-    }
-
-    private static func action(_ action: RemovalAction) -> String {
-        switch action {
-        case .release: "release"
-        case .loan: "loan out"
-        case .terminate: "terminate"
-        case .sell: "sell"
-        case .monitor: "monitor"
-        case .keep: "keep"
-        }
-    }
-
-    private static func verdict(_ verdict: LoanVerdict) -> String {
-        switch verdict {
-        case .endEarly: "end early"
-        case .doNotExtend: "do not extend"
-        case .keepToEnd: "keep to the end"
-        case .makePermanent: "make permanent"
-        }
-    }
-
-    private static func competition(_ competition: Competition) -> String {
-        switch competition {
-        case .league: "league"
-        case .cup: "cup"
-        case .minorCup: "minor cup"
-        case .friendly: "friendly"
-        }
-    }
-
-    private static func strength(_ strength: OpponentStrength) -> String {
-        switch strength {
-        case .muchStronger: "much stronger"
-        case .stronger: "stronger"
-        case .similar: "similar"
-        case .weaker: "weaker"
-        case .muchWeaker: "much weaker"
-        }
+        AdvisorText.note(for: basis).map { " (\($0))" } ?? ""
     }
 
     private static func count(_ n: Int) -> String { n == 1 ? "1 player" : "\(n) players" }
@@ -415,4 +363,9 @@ private extension String {
         while s.hasSuffix(" ") { s.removeLast() }
         return s
     }
+}
+
+private extension String {
+    /// The sentence continued after a comma: its first letter lower case.
+    var lowercasedFirst: String { prefix(1).lowercased() + dropFirst() }
 }
