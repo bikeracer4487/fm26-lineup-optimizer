@@ -1,0 +1,471 @@
+import Foundation
+import Testing
+@testable import LineupEngine
+
+@Suite struct TrainingTests {
+    let tactic = try! PlannerFixture.tactic()
+    let catalog = try! RoleCatalog.fm27()
+    let profile = try! RatingProfile.standard()
+    let sample = "Sample 4-2-3-1"
+
+    func report(_ players: [Player], tactics: [Tactic]? = nil, ownClub: String? = "Oxford City",
+                accepted: [Retraining] = [], rejected: Set<RetrainingChoice> = [],
+                parameters: EngineParameters = .fm27) throws -> TrainingReport {
+        try Training.report(tactics: tactics ?? [tactic], players: players, ownClub: ownClub, accepted: accepted,
+                            rejected: rejected, catalog: catalog, profile: profile, parameters: parameters)
+    }
+
+    func named(_ slot: SlotID, _ tier: String) -> String { PlannerFixture.name(slot, tier) }
+
+    /// The planner's squad made slow to retrain (age 30, Versatility and Professionalism 5, no room to grow),
+    /// so that only the players a test adds are candidates.
+    func squad(without removed: Set<String> = []) throws -> [Player] {
+        try PlannerFixture.squad().filter { !removed.contains($0.name) }.map { p in
+            var p = p
+            p.age = 30
+            p.attributes[.versatility] = 5
+            p.attributes[.professionalism] = 5
+            p.potentialAbility = p.currentAbility
+            return p
+        }
+    }
+
+    /// The squad without its second-choice left back, so cover at left back is thin, plus `extra`.
+    func thinAtLeftBack(_ extra: [Player]) throws -> [Player] { try squad(without: [named(.D_L, "second")]) + extra }
+
+    /// A natural right back with familiarity `leftBack` at D (L), quick to retrain by default.
+    func rightBack(_ name: String = "Right Back", age: Int = 20, all: Int = 13, versatility: Int = 14,
+                   professionalism: Int = 12, leftBack: Int = 8, familiarity: [Position: Int] = [:],
+                   currentAbility: Int = 100, potentialAbility: Int = 120, club: String? = "Oxford City",
+                   isInjured: Bool = false) -> Player {
+        Player.fixture(name: name, age: age, all: all,
+                       attributes: [.versatility: versatility, .professionalism: professionalism],
+                       familiarity: [.defenderRight: 20, .defenderLeft: leftBack].merging(familiarity) { _, new in new },
+                       currentAbility: currentAbility, potentialAbility: potentialAbility, isInjured: isInjured, club: club)
+    }
+
+    func id(_ name: String) -> PlayerID { PlayerID(key: PlayerID.normalise(name)) }
+
+    func choices(_ r: TrainingReport) -> [RetrainingChoice] { r.recommendations.map(\.choice) }
+
+    func assignment(_ slot: SlotID) throws -> SlotAssignment {
+        try #require(try tactic.assignments(catalog: catalog).first { $0.slot == slot })
+    }
+
+    /// His rating in `slot` at familiarity 20 in both of its positions, over the slot's first choice's rating there.
+    func share(of player: Player, at slot: SlotID, firstChoice: Player) throws -> (rating: Double, share: Double) {
+        let engine = RatingEngine(profile: profile, parameters: .fm27, configuration: .fm27)
+        let a = try assignment(slot)
+        var learnt = player
+        learnt.familiarity[a.ipPosition] = 20
+        learnt.familiarity[a.oopPosition] = 20
+        let rating = try engine.rating(for: learnt, in: a).value
+        return (rating, rating / (try engine.rating(for: firstChoice, in: a).value))
+    }
+
+    func firstChoice(_ slot: SlotID, in players: [Player]) throws -> Player {
+        try #require(players.first { $0.name == named(slot, "first") })
+    }
+
+    // MARK: Needs and the basic recommendation
+
+    @Test func noThinSlotsGivesNoRecommendations() throws {
+        let r = try report(try squad() + [rightBack()])
+        #expect(r.recommendations.isEmpty)
+        #expect(r.needsWithoutCandidates.isEmpty)
+    }
+
+    @Test func aRightBackIsRecommendedForThinCoverAtLeftBack() throws {
+        let players = try thinAtLeftBack([rightBack()])
+        let depth = try Depth.report(tactic: tactic, players: players, ownClub: "Oxford City", catalog: catalog,
+                                     profile: profile, parameters: .fm27)
+        try #require(depth.thin == [.D_L])
+        let r = try report(players)
+        #expect(r.recommendations.count == 1)
+        let rec = try #require(r.recommendations.first)
+        #expect(rec.choice == RetrainingChoice(player: id("Right Back"), position: .defenderLeft))
+        #expect(rec.name == "Right Back" && rec.age == 20 && rec.currentFamiliarity == 8)
+        #expect(rec.needs == [RetrainingNeed(tactic: sample, slot: .D_L)])
+        #expect(rec.from == .defenderRight)
+        // D (R) to D (L) is not in the table; both are in the defensive group, so the default is structural.
+        #expect(rec.difficulty == .structural)
+        // The middle of 12 to 20 weeks, ×1.0 at age 20, ×1.0 at Versatility 14, no head start at familiarity 8.
+        #expect(rec.weeks == 16)
+        let expected = try share(of: rightBack(), at: .D_L, firstChoice: firstChoice(.D_L, in: players))
+        #expect(abs(rec.ratingIfLearnt - expected.rating) < 1e-9)
+        #expect(abs(rec.shareOfFirstChoice - expected.share) < 1e-9)
+        // 0.45 × 14/20 + 0.25 × 1.0 + 0.20 × 12/20 + 0.10 × 20/30
+        #expect(abs(rec.learnability - (0.45 * 0.7 + 0.25 * 1.0 + 0.20 * 0.6 + 0.10 * 20.0 / 30.0)) < 1e-9)
+        #expect(r.needsWithoutCandidates.isEmpty)
+    }
+
+    // MARK: Filters
+
+    @Test func aPlayerAlreadySolidInTheSlotIsNotACandidate() throws {
+        // Injured, so he is not cover and the slot stays thin, but he already knows the position.
+        let solid = try report(thinAtLeftBack([rightBack(leftBack: 15, isInjured: true)]))
+        #expect(solid.recommendations.isEmpty)
+        #expect(solid.needsWithoutCandidates == [RetrainingNeed(tactic: sample, slot: .D_L)])
+        let short = try report(thinAtLeftBack([rightBack(leftBack: 14, isInjured: true)]))
+        #expect(choices(short) == [RetrainingChoice(player: id("Right Back"), position: .defenderLeft)])
+    }
+
+    @Test func aFirstChoiceInAnotherThinSlotIsNotACandidate() throws {
+        // Without either natural right back he is first choice at D_R, which is then thin too.
+        let players = try squad(without: [named(.D_L, "second"), named(.D_R, "first"), named(.D_R, "second")]) + [rightBack()]
+        let r = try report(players)
+        #expect(r.recommendations.isEmpty)
+        #expect(r.needsWithoutCandidates.map(\.slot).sorted { $0.rawValue < $1.rawValue } == [.D_L, .D_R])
+        // With the second-choice right back kept, D_R is not thin and he is free to learn left back.
+        let free = try squad(without: [named(.D_L, "second"), named(.D_R, "first")]) + [rightBack()]
+        let elevens = try Elevens.report(tactic: tactic, players: free, ownClub: "Oxford City", catalog: catalog,
+                                         profile: profile, parameters: .fm27)
+        try #require(elevens.first.first { $0.slot == .D_R }?.player == id("Right Back"))
+        #expect(choices(try report(free)) == [RetrainingChoice(player: id("Right Back"), position: .defenderLeft)])
+    }
+
+    @Test func aPlayerBelowTheMinimumShareOfTheFirstChoiceIsNotACandidate() throws {
+        let weak = rightBack(all: 9), able = rightBack(all: 13)
+        let first = try firstChoice(.D_L, in: try squad())
+        try #require(try share(of: weak, at: .D_L, firstChoice: first).share < 0.8)
+        try #require(try share(of: able, at: .D_L, firstChoice: first).share >= 0.8)
+        #expect(try report(thinAtLeftBack([weak])).recommendations.isEmpty)
+        #expect(choices(try report(thinAtLeftBack([able]))) == [RetrainingChoice(player: id("Right Back"), position: .defenderLeft)])
+        // The line is the parameter, either side of his own share.
+        let s = try share(of: able, at: .D_L, firstChoice: first).share
+        var above = EngineParameters.fm27
+        above.retrainingMinimumShare = Parameter(s + 0.001, .derived, source: "test")
+        #expect(try report(thinAtLeftBack([able]), parameters: above).recommendations.isEmpty)
+        var below = EngineParameters.fm27
+        below.retrainingMinimumShare = Parameter(s - 0.001, .derived, source: "test")
+        #expect(try report(thinAtLeftBack([able]), parameters: below).recommendations.count == 1)
+    }
+
+    @Test func learnabilityBelowTheMinimumRulesHimOut() throws {
+        // Age 30 (0.05), Versatility 15, no room to grow: Professionalism 4 gives 0.39 and 6 gives 0.41.
+        func player(_ professionalism: Int) -> Player {
+            rightBack(age: 30, versatility: 15, professionalism: professionalism, currentAbility: 110, potentialAbility: 110)
+        }
+        #expect(abs(try Training.learnability(of: player(4), parameters: .fm27) - 0.39) < 1e-9)
+        #expect(abs(try Training.learnability(of: player(6), parameters: .fm27) - 0.41) < 1e-9)
+        #expect(try report(thinAtLeftBack([player(4)])).recommendations.isEmpty)
+        let r = try report(thinAtLeftBack([player(6)]))
+        #expect(choices(r) == [RetrainingChoice(player: id("Right Back"), position: .defenderLeft)])
+        #expect(abs(try #require(r.recommendations.first).learnability - 0.41) < 1e-9)
+    }
+
+    @Test func aLoanedInPlayerIsNotACandidate() throws {
+        #expect(try report(thinAtLeftBack([rightBack(club: "Elsewhere FC")])).recommendations.isEmpty)
+        #expect(try report(thinAtLeftBack([rightBack(club: "Oxford City")])).recommendations.count == 1)
+    }
+
+    @Test func aGoalkeeperIsNotACandidateForAnOutfieldSlot() throws {
+        #expect(try report(thinAtLeftBack([rightBack(familiarity: [.goalkeeper: 15])])).recommendations.isEmpty)
+        #expect(try report(thinAtLeftBack([rightBack(familiarity: [.goalkeeper: 14])])).recommendations.count == 1)
+    }
+
+    @Test func anInversionRulesHimOut() throws {
+        // A natural striker and nothing else: ST (C) to D (L) is an inversion.
+        let striker = Player.fixture(name: "Striker", age: 20, all: 13,
+                                     attributes: [.versatility: 14, .professionalism: 12],
+                                     familiarity: [.striker: 20])
+        #expect(try report(thinAtLeftBack([striker])).recommendations.isEmpty)
+        // The same striker who is also natural at WB (L) retrains from there instead: a fluid change.
+        var wide = striker
+        wide.familiarity[.wingBackLeft] = 18
+        let r = try report(thinAtLeftBack([wide]))
+        let rec = try #require(r.recommendations.first)
+        #expect(rec.choice == RetrainingChoice(player: id("Striker"), position: .defenderLeft))
+        #expect(rec.from == .wingBackLeft && rec.difficulty == .fluid)
+    }
+
+    // MARK: Learnability, the position to learn and the weeks
+
+    @Test func learnabilityFollowsTheWeights() throws {
+        // 0.45 × 14/20 + 0.25 × 1.0 (age 20) + 0.20 × 12/20 + 0.10 × 20/30
+        let young = rightBack(age: 20, versatility: 14, professionalism: 12, currentAbility: 100, potentialAbility: 120)
+        #expect(abs(try Training.learnability(of: young, parameters: .fm27) - 0.7516666666666667) < 1e-9)
+        // Versatility 9 counts 9/20 × 0.3; age 26 is 0.40; potential below current leaves no room to grow.
+        // 0.45 × 0.135 + 0.25 × 0.40 + 0.20 × 10/20 + 0.10 × 0
+        let older = rightBack(age: 26, versatility: 9, professionalism: 10, currentAbility: 120, potentialAbility: 100)
+        #expect(abs(try Training.learnability(of: older, parameters: .fm27) - 0.26075) < 1e-9)
+        // Room to grow is kept at 1 however large the gap.
+        let gap = rightBack(age: 20, versatility: 20, professionalism: 20, currentAbility: 60, potentialAbility: 200)
+        #expect(abs(try Training.learnability(of: gap, parameters: .fm27) - 1.0) < 1e-9)
+        // Each age band.
+        for (age, factor) in [(20, 1.0), (21, 0.95), (23, 0.95), (24, 0.70), (25, 0.70), (26, 0.40), (27, 0.40),
+                              (28, 0.15), (29, 0.15), (30, 0.05), (35, 0.05)] {
+            let p = rightBack(age: age, versatility: 10, professionalism: 10, currentAbility: 100, potentialAbility: 100)
+            #expect(abs(try Training.learnability(of: p, parameters: .fm27) - (0.45 * 0.5 + 0.25 * factor + 0.20 * 0.5)) < 1e-9,
+                    "age \(age)")
+        }
+    }
+
+    @Test func thePositionToLearnIsTheOutOfPossessionOneWhenOnlyThatIsShort() throws {
+        // AM_L plays AM (L) with the ball and M (L) without it.
+        let winger = Player.fixture(name: "Winger", age: 20, all: 13, attributes: [.versatility: 14, .professionalism: 12],
+                                    familiarity: [.attackingMidLeft: 15, .midfielderLeft: 9])
+        let r = try report(try squad(without: [named(.AM_L, "second")]) + [winger])
+        let rec = try #require(r.recommendations.first)
+        #expect(rec.choice == RetrainingChoice(player: id("Winger"), position: .midfielderLeft))
+        #expect(rec.currentFamiliarity == 9)
+        #expect(rec.needs == [RetrainingNeed(tactic: sample, slot: .AM_L)])
+        // Nothing at 18, so he retrains from his best position.
+        #expect(rec.from == .attackingMidLeft && rec.difficulty == .fluid)
+        #expect(rec.cautions.contains("Needed out of possession only: reports say out-of-possession familiarity was hard to train in FM26"))
+        // Short in possession too: he learns AM (L) and there is no such caution.
+        var both = winger
+        both.familiarity[.attackingMidLeft] = 12
+        let r2 = try report(try squad(without: [named(.AM_L, "second")]) + [both])
+        let rec2 = try #require(r2.recommendations.first)
+        #expect(rec2.choice.position == .attackingMidLeft)
+        #expect(!rec2.cautions.contains { $0.hasPrefix("Needed out of possession only") })
+    }
+
+    @Test func weeksFollowAgeVersatilityAndHeadStart() throws {
+        // Natural at WB (L) learning D (L): a fluid change, 4 to 8 weeks, middle 6.
+        func weeks(age: Int = 20, versatility: Int = 12, leftBack: Int = 5) throws -> Int {
+            let p = Player.fixture(name: "Wing Back", age: age, all: 13,
+                                   attributes: [.versatility: versatility, .professionalism: 12],
+                                   familiarity: [.wingBackLeft: 20, .defenderLeft: leftBack])
+            let rec = try #require(try report(thinAtLeftBack([p])).recommendations.first)
+            #expect(rec.difficulty == .fluid && rec.from == .wingBackLeft)
+            return rec.weeks
+        }
+        #expect(try weeks() == 6)
+        #expect(try weeks(age: 28) == 10)          // 6 × 1.6 = 9.6, rounded up
+        #expect(try weeks(age: 22) == 8)           // 6 × 1.3 = 7.8
+        #expect(try weeks(versatility: 16) == 4)   // 6 × 0.6 = 3.6, rounded up and at least 4
+        #expect(try weeks(versatility: 9) == 9)    // 6 × 1.5
+        #expect(try weeks(leftBack: 13) == 4)      // 6 × 0.5 = 3, at least 4
+        #expect(try weeks(age: 28, leftBack: 10) == 7) // 6 × 1.6 × 0.7 = 6.72
+    }
+
+    @Test func theTransitionTableIsTheBranchs() {
+        let transitions = EngineParameters.fm27.retrainingTransitions.value
+        #expect(transitions.pairs.count == 35)
+        #expect(transitions.difficulty(from: .defenderLeft, to: .wingBackLeft) == .fluid)
+        #expect(transitions.difficulty(from: .defensiveMidfielder, to: .defenderCentral) == .structural)
+        #expect(transitions.difficulty(from: .striker, to: .attackingMidRight) == .spatial)
+        #expect(transitions.difficulty(from: .striker, to: .defenderRight) == .inversion)
+        #expect(transitions.difficulty(from: .midfielderCentral, to: .goalkeeper) == .inversion)
+        // Defaults: both in the defensive group, or both in the attacking group, is structural; otherwise spatial.
+        #expect(transitions.difficulty(from: .defenderRight, to: .defenderLeft) == .structural)
+        #expect(transitions.difficulty(from: .attackingMidLeft, to: .striker) == .structural)
+        #expect(transitions.difficulty(from: .midfielderCentral, to: .defenderCentral) == .spatial)
+        #expect(transitions.difficulty(from: .attackingMidLeft, to: .defensiveMidfielder) == .spatial)
+        // Each class's count in the branch's table.
+        let counts = Dictionary(grouping: transitions.pairs.values, by: { $0 }).mapValues(\.count)
+        #expect(counts == [.fluid: 14, .structural: 10, .spatial: 6, .inversion: 5])
+    }
+
+    // MARK: Choosing
+
+    /// Thin at left back and at both centre-back slots, so a right back can be offered D (L) or D (C).
+    func thinAtTheBack(_ extra: [Player]) throws -> [Player] {
+        try squad(without: [named(.D_L, "second"), named(.D_CL, "second"), named(.D_CR, "second")]) + extra
+    }
+
+    @Test func onePlayerGetsOneRecommendation() throws {
+        let r = try report(thinAtTheBack([rightBack()]))
+        #expect(r.recommendations.count == 1)
+        let rec = try #require(r.recommendations.first)
+        #expect([Position.defenderLeft, .defenderCentral].contains(rec.choice.position))
+        // The needs he does not take are left for recruitment.
+        let covered = Set(rec.needs.map(\.slot))
+        #expect(Set(r.needsWithoutCandidates.map(\.slot)) == Set([SlotID.D_L, .D_CL, .D_CR]).subtracting(covered))
+    }
+
+    @Test func aRejectedPairIsSkippedAndAnotherPositionForHimIsStillOffered() throws {
+        let players = try thinAtTheBack([rightBack()])
+        let first = try #require(try report(players).recommendations.first).choice
+        let r = try report(players, rejected: [first])
+        let next = try #require(r.recommendations.first)
+        #expect(next.choice.player == first.player)
+        #expect(next.choice.position != first.position)
+        #expect([Position.defenderLeft, .defenderCentral].contains(next.choice.position))
+        // Rejecting both leaves nothing.
+        #expect(try report(players, rejected: [first, next.choice]).recommendations.isEmpty)
+    }
+
+    @Test func anAcceptedPairIsSkipped() throws {
+        let players = try thinAtLeftBack([rightBack()])
+        let accepted = Retraining(player: id("Right Back"), position: .defenderLeft, acceptedOn: Day(iso: "2026-11-01")!)
+        #expect(try report(players, accepted: [accepted]).recommendations.isEmpty)
+        // Accepting another position for him does not hide this one.
+        let elsewhere = Retraining(player: id("Right Back"), position: .defenderCentral, acceptedOn: Day(iso: "2026-11-01")!)
+        #expect(choices(try report(players, accepted: [elsewhere])) == [RetrainingChoice(player: id("Right Back"), position: .defenderLeft)])
+    }
+
+    @Test func aPositionGetsAtMostTwo() throws {
+        // Equal ratings; Versatility orders their learnability.
+        let backs = [rightBack("Back A", versatility: 14), rightBack("Back B", versatility: 13), rightBack("Back C", versatility: 12)]
+        let r = try report(thinAtLeftBack(backs))
+        #expect(choices(r) == [RetrainingChoice(player: id("Back A"), position: .defenderLeft),
+                               RetrainingChoice(player: id("Back B"), position: .defenderLeft)])
+        var three = EngineParameters.fm27
+        three.retrainingPerPosition = Parameter(3, .derived, source: "test")
+        #expect(try report(thinAtLeftBack(backs), parameters: three).recommendations.count == 3)
+    }
+
+    @Test func aPairCoveringTwoNeedsListsBoth() throws {
+        var other = tactic
+        other.name = "Second Sample"
+        let r = try report(thinAtLeftBack([rightBack()]), tactics: [tactic, other])
+        #expect(r.recommendations.count == 1)
+        let rec = try #require(r.recommendations.first)
+        #expect(rec.needs == [RetrainingNeed(tactic: sample, slot: .D_L), RetrainingNeed(tactic: "Second Sample", slot: .D_L)])
+        #expect(rec.reasons.prefix(2) == ["Cover at D (L) is thin in Sample 4-2-3-1 (1 solid player available)",
+                                          "Cover at D (L) is thin in Second Sample (1 solid player available)"])
+        #expect(r.needsWithoutCandidates.isEmpty)
+    }
+
+    @Test func recommendationsComeInTheOrderOfTheNeedsTheyCover() throws {
+        // ST_C has no solid player (cover 0) and comes before D_L (cover 1) in the depth report's order.
+        // The forward, slower to learn, has the smaller product, so only the need order puts him first.
+        let forward = Player.fixture(name: "Forward", age: 27, all: 13, attributes: [.versatility: 12, .professionalism: 12],
+                                     familiarity: [.attackingMidCentral: 20, .striker: 12],
+                                     currentAbility: 100, potentialAbility: 100)
+        let players = try squad(without: [named(.D_L, "second"), named(.ST_C, "first"), named(.ST_C, "second")])
+            + [rightBack(), forward]
+        let depth = try Depth.report(tactic: tactic, players: players, ownClub: "Oxford City", catalog: catalog,
+                                     profile: profile, parameters: .fm27)
+        let st = try #require(depth.thin.firstIndex(of: .ST_C)), dl = try #require(depth.thin.firstIndex(of: .D_L))
+        try #require(st < dl)
+        // Each is kept to one position, so the order of the needs is what is tested.
+        let pinned: Set<RetrainingChoice> = [RetrainingChoice(player: id("Forward"), position: .defenderLeft),
+                                             RetrainingChoice(player: id("Right Back"), position: .striker)]
+        let r = try report(players, rejected: pinned)
+        #expect(r.recommendations.map(\.choice) == [RetrainingChoice(player: id("Forward"), position: .striker),
+                                                    RetrainingChoice(player: id("Right Back"), position: .defenderLeft)])
+        let products = r.recommendations.map { $0.shareOfFirstChoice * $0.learnability }
+        #expect(products[0] < products[1])
+    }
+
+    @Test func aNeedNobodySuitsIsReportedForRecruitment() throws {
+        // Nobody can play up front and nobody in this squad is quick enough to learn it.
+        let r = try report(try squad(without: [named(.ST_C, "first"), named(.ST_C, "second")]))
+        #expect(r.recommendations.isEmpty)
+        #expect(r.needsWithoutCandidates.contains(RetrainingNeed(tactic: sample, slot: .ST_C)))
+        // A squad of one: every slot is thin; nobody suits any of them, and nothing crashes.
+        let keeper = try #require(try squad().first { $0.name == named(.GK, "first") })
+        let small = try report([keeper])
+        #expect(small.recommendations.isEmpty)
+        #expect(Set(small.needsWithoutCandidates.map(\.slot)) == Set(try tactic.assignments(catalog: catalog).map(\.slot)))
+        // No players at all.
+        let none = try report([])
+        #expect(none.recommendations.isEmpty && none.needsWithoutCandidates.count == 11)
+    }
+
+    // MARK: Words, basis, errors and order
+
+    @Test func reasonsAndCautionsReadAsWritten() throws {
+        // Natural at WB (L), familiarity 5 at D (L), age 20, Versatility 9: fluid, 6 × 1.5 = 9 weeks.
+        let p = Player.fixture(name: "Wing Back", age: 20, all: 13, attributes: [.versatility: 9, .professionalism: 20],
+                               familiarity: [.wingBackLeft: 20, .defenderLeft: 5], currentAbility: 100, potentialAbility: 140)
+        let players = try thinAtLeftBack([p])
+        let rec = try #require(try report(players).recommendations.first)
+        let expected = try share(of: p, at: .D_L, firstChoice: firstChoice(.D_L, in: players))
+        #expect(rec.reasons == [
+            "Cover at D (L) is thin in Sample 4-2-3-1 (1 solid player available)",
+            "He would rate \(String(format: "%.1f", expected.rating)) there once learnt, \(Display.percent(expected.share)) of the first choice",
+            "From WB (L): a fluid change, about 9 weeks at his age and Versatility",
+        ])
+        #expect(rec.cautions == [
+            "Timings are estimates from earlier versions of the game; none is published for FM27",
+            "His familiarity at WB (L) may fall while he learns a new position",
+            "He may never become natural there",
+            "Low Versatility: this may take 18 months or more",
+        ])
+        // At familiarity 10 and Versatility 10 the conditional cautions go.
+        var steadier = p
+        steadier.familiarity[.defenderLeft] = 10
+        steadier.attributes[.versatility] = 10
+        let rec2 = try #require(try report(thinAtLeftBack([steadier])).recommendations.first)
+        #expect(rec2.cautions == [
+            "Timings are estimates from earlier versions of the game; none is published for FM27",
+            "His familiarity at WB (L) may fall while he learns a new position",
+        ])
+    }
+
+    @Test func theCoverBracketCountsSolidPlayers() throws {
+        // ST_C with nobody: no solid player.
+        let striker = Player.fixture(name: "Forward", age: 20, all: 13, attributes: [.versatility: 14, .professionalism: 12],
+                                     familiarity: [.attackingMidCentral: 20, .striker: 12])
+        let r = try report(try squad(without: [named(.ST_C, "first"), named(.ST_C, "second")]) + [striker])
+        let rec = try #require(r.recommendations.first { $0.choice.player == id("Forward") })
+        #expect(rec.reasons.first == "Cover at ST (C) is thin in Sample 4-2-3-1 (no solid player available)")
+        // A slot is thin below three when the line is raised, so two solid players can be named.
+        var three = EngineParameters.fm27
+        three.depthThinBelow = Parameter(3, .derived, source: "test")
+        let r3 = try report(try squad() + [rightBack()], parameters: three)
+        let any = try #require(r3.recommendations.first)
+        let reason = try #require(any.reasons.first)
+        #expect(reason.hasPrefix("Cover at ") && reason.hasSuffix(" is thin in Sample 4-2-3-1 (2 solid players available)"))
+    }
+
+    @Test func theBasisIsTheWeakestEvidenceBehindTheAdvice() throws {
+        let players = try thinAtLeftBack([rightBack()])
+        #expect(try #require(try report(players).recommendations.first).basis == .derived)
+        var q = EngineParameters.fm27
+        func measured<V>(_ p: Parameter<V>) -> Parameter<V> { Parameter(p.value, .fm27Measured, source: "test") }
+        q.depthCoverFamiliarity = measured(q.depthCoverFamiliarity)
+        q.depthSolidFamiliarity = measured(q.depthSolidFamiliarity)
+        q.depthThinBelow = measured(q.depthThinBelow)
+        q.learnabilityRules = measured(q.learnabilityRules)
+        q.retrainingMinimumLearnability = measured(q.retrainingMinimumLearnability)
+        q.retrainingMinimumShare = measured(q.retrainingMinimumShare)
+        q.retrainingPerPosition = measured(q.retrainingPerPosition)
+        q.retrainingTransitions = measured(q.retrainingTransitions)
+        q.retrainingWeeks = measured(q.retrainingWeeks)
+        q.retrainingPace = Parameter(q.retrainingPace.value, .carriedOverFM26, source: "test")
+        #expect(try #require(try report(players, parameters: q).recommendations.first).basis == .carriedOverFM26)
+        q.retrainingPace = measured(q.retrainingPace)
+        q.retrainingTransitions = Parameter(q.retrainingTransitions.value, .fm27Official, source: "test")
+        #expect(try #require(try report(players, parameters: q).recommendations.first).basis == .fm27Official)
+        q.retrainingTransitions = measured(q.retrainingTransitions)
+        #expect(try #require(try report(players, parameters: q).recommendations.first).basis == .fm27Measured)
+        // A parameter the advice does not use leaves the basis alone.
+        q.retrainingStalledAfterWeeks = Parameter(6, .derived, source: "test")
+        #expect(try #require(try report(players, parameters: q).recommendations.first).basis == .fm27Measured)
+    }
+
+    @Test func aMissingVersatilityIsAnErrorThatNamesThePlayer() throws {
+        var p = rightBack()
+        p.attributes[.versatility] = nil
+        #expect(throws: RatingError.missingAttribute(player: "Right Back", attribute: .versatility)) {
+            try report(thinAtLeftBack([p]))
+        }
+        // With no thin slot he is never weighed up.
+        #expect(try report(try squad() + [p]).recommendations.isEmpty)
+    }
+
+    @Test func badParametersAreAnError() throws {
+        var q = EngineParameters.fm27
+        var weeks = q.retrainingWeeks.value
+        weeks.fluid = WeekRange(fewest: 8, most: 4)
+        q.retrainingWeeks = Parameter(weeks, .derived, source: "test")
+        #expect(throws: PlanError.self) { try report(thinAtLeftBack([rightBack()]), parameters: q) }
+    }
+
+    @Test func inputOrderDoesNotMatter() throws {
+        let backs = [rightBack("Back A", versatility: 14), rightBack("Back B", versatility: 13), rightBack("Back C", versatility: 12)]
+        let players = try thinAtTheBack(backs)
+        let forward = try report(players)
+        #expect(!forward.recommendations.isEmpty)
+        #expect(try report(players.reversed()) == forward)
+        var shuffled = players
+        var generator = SeededGenerator(seed: 11)
+        shuffled.shuffle(using: &generator)
+        #expect(try report(shuffled) == forward)
+    }
+}
+
+private struct SeededGenerator: RandomNumberGenerator {
+    var state: UInt64
+    init(seed: UInt64) { state = seed }
+    mutating func next() -> UInt64 {
+        state = state &* 6364136223846793005 &+ 1442695040888963407
+        return state
+    }
+}

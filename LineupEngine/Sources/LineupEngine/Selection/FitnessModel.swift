@@ -166,6 +166,27 @@ public enum FitnessModel {
         if estimateDays < 1 {
             found.append("restConditionEstimateDays is \(estimateDays), not 1 or more")
         }
+        // Learnability divides by these.
+        let learnability = parameters.learnabilityRules.value
+        for (name, divisor) in [("roomToGrowSpan", learnability.roomToGrowSpan), ("attributeMaximum", learnability.attributeMaximum)]
+            where !(divisor.isFinite && divisor > 0) {
+            found.append("learnabilityRules \(name) is \(divisor), not a finite number above 0")
+        }
+        // Retraining weeks are the middle of a range times these factors, rounded to a whole number.
+        let weeks = parameters.retrainingWeeks.value
+        for (name, range) in [("fluid", weeks.fluid), ("structural", weeks.structural), ("spatial", weeks.spatial)]
+            where !(range.fewest >= 0 && range.fewest <= range.most) {
+            found.append("retrainingWeeks for \(name) is \(range.fewest) to \(range.most), not a range of 0 or more weeks")
+        }
+        let pace = parameters.retrainingPace.value
+        var paceFactors = pace.ageSteps.map { ("age factor up to \($0.upTo)", $0.factor) }
+        paceFactors.append((pace.ageSteps.last.map { "age factor above \($0.upTo)" } ?? "age factor", pace.ageAbove))
+        paceFactors.append(("high Versatility factor", pace.highVersatilityFactor))
+        paceFactors.append(("low Versatility factor", pace.lowVersatilityFactor))
+        paceFactors += pace.headStartSteps.map { ("head start factor from familiarity \($0.minimum)", $0.factor) }
+        for (name, factor) in paceFactors where !usable(factor) {
+            found.append("retrainingPace \(name) is \(factor), \(notUsable)")
+        }
         return found
     }
 }

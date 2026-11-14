@@ -70,6 +70,140 @@ public struct RestLimitRules: Sendable, Equatable {
     }
 }
 
+/// One step of an age table: a player aged `upTo` or under, and above the step before, takes `factor`.
+public struct AgeFactorStep: Sendable, Equatable {
+    public let upTo: Int
+    public let factor: Double
+
+    public init(upTo: Int, factor: Double) {
+        self.upTo = upTo
+        self.factor = factor
+    }
+}
+
+/// How quickly a player is likely to learn a new position, from 0 to 1: a weighted sum of his Versatility, an age
+/// factor, his Professionalism and his room to grow. The weights add up to 1.
+public struct LearnabilityRules: Sendable, Equatable {
+    public var versatilityWeight: Double
+    public var ageWeight: Double
+    public var professionalismWeight: Double
+    public var roomToGrowWeight: Double
+    /// Versatility and Professionalism count as their value over this.
+    public var attributeMaximum: Double
+    /// Versatility below this counts at `lowVersatilityFactor` times its share.
+    public var lowVersatilityBelow: Int
+    public var lowVersatilityFactor: Double
+    /// Youngest first; the first step whose `upTo` is at least his age gives the age factor.
+    public var ageSteps: [AgeFactorStep]
+    /// The age factor above every step.
+    public var ageAbove: Double
+    /// Room to grow is potential ability minus current ability over this, kept within 0 to 1.
+    public var roomToGrowSpan: Double
+
+    public init(versatilityWeight: Double, ageWeight: Double, professionalismWeight: Double, roomToGrowWeight: Double,
+                attributeMaximum: Double, lowVersatilityBelow: Int, lowVersatilityFactor: Double,
+                ageSteps: [AgeFactorStep], ageAbove: Double, roomToGrowSpan: Double) {
+        self.versatilityWeight = versatilityWeight; self.ageWeight = ageWeight
+        self.professionalismWeight = professionalismWeight; self.roomToGrowWeight = roomToGrowWeight
+        self.attributeMaximum = attributeMaximum
+        self.lowVersatilityBelow = lowVersatilityBelow; self.lowVersatilityFactor = lowVersatilityFactor
+        self.ageSteps = ageSteps; self.ageAbove = ageAbove
+        self.roomToGrowSpan = roomToGrowSpan
+    }
+}
+
+/// A move from one position to another, as the retraining table keys it.
+public struct PositionTransition: Hashable, Sendable {
+    public let from: Position
+    public let to: Position
+
+    public init(from: Position, to: Position) {
+        self.from = from
+        self.to = to
+    }
+}
+
+/// How hard it is to retrain from one position to another, and which of a player's positions he retrains from.
+public struct RetrainingTransitions: Sendable, Equatable {
+    /// The classes the table names; a move it does not name takes the default below.
+    public var pairs: [PositionTransition: RetrainingDifficulty]
+    /// A move between two positions of the same group takes `sameGroupDifficulty`; any other unnamed move `otherDifficulty`.
+    public var defensiveGroup: Set<Position>
+    public var attackingGroup: Set<Position>
+    public var sameGroupDifficulty: RetrainingDifficulty
+    public var otherDifficulty: RetrainingDifficulty
+    /// A player retrains from one of his positions at this familiarity or over; with none, from his best.
+    public var fromFamiliarity: Int
+
+    public init(pairs: [PositionTransition: RetrainingDifficulty], defensiveGroup: Set<Position>, attackingGroup: Set<Position>,
+                sameGroupDifficulty: RetrainingDifficulty, otherDifficulty: RetrainingDifficulty, fromFamiliarity: Int) {
+        self.pairs = pairs
+        self.defensiveGroup = defensiveGroup; self.attackingGroup = attackingGroup
+        self.sameGroupDifficulty = sameGroupDifficulty; self.otherDifficulty = otherDifficulty
+        self.fromFamiliarity = fromFamiliarity
+    }
+
+    /// The table's class for the move, or the default for its groups.
+    public func difficulty(from: Position, to: Position) -> RetrainingDifficulty {
+        if let named = pairs[PositionTransition(from: from, to: to)] { return named }
+        let sameGroup = (defensiveGroup.contains(from) && defensiveGroup.contains(to))
+            || (attackingGroup.contains(from) && attackingGroup.contains(to))
+        return sameGroup ? sameGroupDifficulty : otherDifficulty
+    }
+}
+
+/// A span of weeks, `fewest` to `most`.
+public struct WeekRange: Sendable, Equatable {
+    public let fewest: Int
+    public let most: Int
+
+    public init(fewest: Int, most: Int) {
+        self.fewest = fewest
+        self.most = most
+    }
+
+    /// Halfway between the ends.
+    public var middle: Double { Double(fewest + most) / 2 }
+}
+
+/// How long each class of retraining takes. An inversion has no range: it is never recommended.
+public struct RetrainingWeeks: Sendable, Equatable {
+    public var fluid: WeekRange
+    public var structural: WeekRange
+    public var spatial: WeekRange
+
+    public init(fluid: WeekRange, structural: WeekRange, spatial: WeekRange) {
+        self.fluid = fluid; self.structural = structural; self.spatial = spatial
+    }
+}
+
+/// What makes one player's retraining quicker or slower than the middle of its class's range: his age, his
+/// Versatility and a head start from the familiarity he already has. The weeks are never fewer than `minimumWeeks`.
+public struct RetrainingPace: Sendable, Equatable {
+    /// Youngest first; the first step whose `upTo` is at least his age gives the factor.
+    public var ageSteps: [AgeFactorStep]
+    /// The age factor above every step.
+    public var ageAbove: Double
+    /// Versatility at `highVersatilityFrom` or over takes `highVersatilityFactor`; at `lowVersatilityUpTo` or under,
+    /// `lowVersatilityFactor`; between them, no change.
+    public var highVersatilityFrom: Int
+    public var highVersatilityFactor: Double
+    public var lowVersatilityUpTo: Int
+    public var lowVersatilityFactor: Double
+    /// Highest minimum first; the first step his familiarity at the new position reaches applies. Below every step, no change.
+    public var headStartSteps: [FamiliarityStep]
+    public var minimumWeeks: Int
+
+    public init(ageSteps: [AgeFactorStep], ageAbove: Double, highVersatilityFrom: Int, highVersatilityFactor: Double,
+                lowVersatilityUpTo: Int, lowVersatilityFactor: Double, headStartSteps: [FamiliarityStep], minimumWeeks: Int) {
+        self.ageSteps = ageSteps; self.ageAbove = ageAbove
+        self.highVersatilityFrom = highVersatilityFrom; self.highVersatilityFactor = highVersatilityFactor
+        self.lowVersatilityUpTo = lowVersatilityUpTo; self.lowVersatilityFactor = lowVersatilityFactor
+        self.headStartSteps = headStartSteps
+        self.minimumWeeks = minimumWeeks
+    }
+}
+
 /// Lets `EngineParameters.all` list every stored `Parameter` whatever its value type.
 protocol ParameterProtocol {
     var evidence: Evidence { get }
@@ -197,6 +331,22 @@ public struct EngineParameters: Sendable {
     public var holidayJadednessRecoveryPerDay: Parameter<Double>
     /// The most rest days the rest advice looks ahead for condition to reach the floor; beyond it the days are not known.
     public var restConditionEstimateDays: Parameter<Int>
+    /// How quickly a player is likely to learn a new position.
+    public var learnabilityRules: Parameter<LearnabilityRules>
+    /// A player below this learnability is not recommended for retraining.
+    public var retrainingMinimumLearnability: Parameter<Double>
+    /// A player is recommended only if, once natural, he would rate at least this share of the slot's first choice.
+    public var retrainingMinimumShare: Parameter<Double>
+    /// The most retraining recommendations for one position.
+    public var retrainingPerPosition: Parameter<Int>
+    /// The class of each move between positions, and the positions a player retrains from.
+    public var retrainingTransitions: Parameter<RetrainingTransitions>
+    /// The weeks each class of retraining takes.
+    public var retrainingWeeks: Parameter<RetrainingWeeks>
+    /// How age, Versatility and a head start change the weeks.
+    public var retrainingPace: Parameter<RetrainingPace>
+    /// A retraining that has gained nothing over at least this many weeks has stalled.
+    public var retrainingStalledAfterWeeks: Parameter<Int>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -369,8 +519,83 @@ public struct EngineParameters: Sendable {
                 50, .carriedOverFM26,
                 source: "docs/Research/jadedness-fatigue.md: rest sessions with a holiday recovered 152 in three days"),
             restConditionEstimateDays: Parameter(
-                14, .derived, source: "this design's choice: an estimate is given up to two weeks ahead"))
+                14, .derived, source: "this design's choice: an estimate is given up to two weeks ahead"),
+            learnabilityRules: Parameter(
+                LearnabilityRules(
+                    versatilityWeight: 0.45, ageWeight: 0.25, professionalismWeight: 0.20, roomToGrowWeight: 0.10,
+                    attributeMaximum: 20, lowVersatilityBelow: 10, lowVersatilityFactor: 0.3,
+                    ageSteps: [AgeFactorStep(upTo: 20, factor: 1.0), AgeFactorStep(upTo: 23, factor: 0.95),
+                               AgeFactorStep(upTo: 25, factor: 0.70), AgeFactorStep(upTo: 27, factor: 0.40),
+                               AgeFactorStep(upTo: 29, factor: 0.15)],
+                    ageAbove: 0.05, roomToGrowSpan: 30),
+                .carriedOverFM26,
+                source: "\(trainingAdvisorSource): the training score and calculate_age_factor_strategic's general age steps"),
+            retrainingMinimumLearnability: Parameter(
+                0.40, .derived,
+                source: "\(trainingAdvisorSource) asked for a training score above 0.6 or an age under 24; one line between them"),
+            retrainingMinimumShare: Parameter(
+                0.80, .carriedOverFM26,
+                source: "docs/Research/lineup-depth-strategy.md and docs/Research/player-rotation-guide.md: cover can be about 20% worse than the first choice"),
+            retrainingPerPosition: Parameter(
+                2, .carriedOverFM26, source: "\(trainingAdvisorSource): quotas of one or two per position"),
+            retrainingTransitions: Parameter(
+                RetrainingTransitions(
+                    pairs: transitions([
+                        // Fluid
+                        (.defenderLeft, .wingBackLeft, .fluid), (.defenderRight, .wingBackRight, .fluid),
+                        (.wingBackLeft, .defenderLeft, .fluid), (.wingBackRight, .defenderRight, .fluid),
+                        (.defensiveMidfielder, .midfielderCentral, .fluid), (.midfielderCentral, .defensiveMidfielder, .fluid),
+                        (.attackingMidLeft, .midfielderLeft, .fluid), (.attackingMidRight, .midfielderRight, .fluid),
+                        (.midfielderLeft, .attackingMidLeft, .fluid), (.midfielderRight, .attackingMidRight, .fluid),
+                        (.attackingMidCentral, .midfielderCentral, .fluid), (.midfielderCentral, .attackingMidCentral, .fluid),
+                        (.striker, .attackingMidCentral, .fluid), (.attackingMidCentral, .striker, .fluid),
+                        // Structural
+                        (.defensiveMidfielder, .defenderCentral, .structural), (.defenderCentral, .defensiveMidfielder, .structural),
+                        (.attackingMidCentral, .defensiveMidfielder, .structural), (.defensiveMidfielder, .attackingMidCentral, .structural),
+                        (.wingBackLeft, .midfielderLeft, .structural), (.wingBackRight, .midfielderRight, .structural),
+                        (.midfielderLeft, .wingBackLeft, .structural), (.midfielderRight, .wingBackRight, .structural),
+                        (.wingBackLeft, .attackingMidLeft, .structural), (.wingBackRight, .attackingMidRight, .structural),
+                        // Spatial
+                        (.attackingMidRight, .midfielderCentral, .spatial), (.attackingMidLeft, .midfielderCentral, .spatial),
+                        (.striker, .attackingMidRight, .spatial), (.striker, .attackingMidLeft, .spatial),
+                        (.defenderCentral, .striker, .spatial), (.striker, .defenderCentral, .spatial),
+                        // Inversion
+                        (.striker, .defenderRight, .inversion), (.striker, .defenderLeft, .inversion),
+                        (.goalkeeper, .defenderCentral, .inversion), (.defenderCentral, .goalkeeper, .inversion),
+                        (.midfielderCentral, .goalkeeper, .inversion),
+                    ]),
+                    defensiveGroup: [.goalkeeper, .defenderLeft, .defenderRight, .defenderCentral, .wingBackLeft, .wingBackRight,
+                                     .defensiveMidfielder],
+                    attackingGroup: [.striker, .attackingMidLeft, .attackingMidRight, .attackingMidCentral],
+                    sameGroupDifficulty: .structural, otherDifficulty: .spatial, fromFamiliarity: 18),
+                .carriedOverFM26,
+                source: "scoring_parameters.py POSITION_TRANSITIONS and get_retraining_difficulty (branch customizable-tactics); "
+                    + "retraining from a position at 18 or over is this design's choice"),
+            retrainingWeeks: Parameter(
+                RetrainingWeeks(fluid: WeekRange(fewest: 4, most: 8), structural: WeekRange(fewest: 12, most: 20),
+                                spatial: WeekRange(fewest: 24, most: 36)),
+                .carriedOverFM26,
+                source: "scoring_parameters.py RETRAINING_DIFFICULTY (branch customizable-tactics); an inversion is not recommended"),
+            retrainingPace: Parameter(
+                RetrainingPace(
+                    ageSteps: [AgeFactorStep(upTo: 21, factor: 1.0), AgeFactorStep(upTo: 26, factor: 1.3),
+                               AgeFactorStep(upTo: 31, factor: 1.6)],
+                    ageAbove: 1.9, highVersatilityFrom: 15, highVersatilityFactor: 0.6, lowVersatilityUpTo: 9,
+                    lowVersatilityFactor: 1.5,
+                    headStartSteps: [FamiliarityStep(minimum: 13, factor: 0.5), FamiliarityStep(minimum: 10, factor: 0.7)],
+                    minimumWeeks: 4),
+                .carriedOverFM26,
+                source: "ui/api/api_training_advisor.py (branch customizable-tactics): age plasticity 1.0, 0.7, 0.4 and 0.1 "
+                    + "taken as 2 − plasticity, and the head start; docs/Research/position-retraining-strategy.md: three to six "
+                    + "months with high Versatility, 18 months or never with low. The floor of 4 weeks is the fluid class's shortest"),
+            retrainingStalledAfterWeeks: Parameter(6, .derived, source: "this design's choice"))
     }()
+
+    private static let trainingAdvisorSource = "fm_training_advisor.py (branch customizable-tactics)"
+
+    private static func transitions(_ list: [(Position, Position, RetrainingDifficulty)]) -> [PositionTransition: RetrainingDifficulty] {
+        Dictionary(uniqueKeysWithValues: list.map { (PositionTransition(from: $0.0, to: $0.1), $0.2) })
+    }
 
     /// Every stored parameter, found by reflection so a new one cannot be left out.
     public var all: [(name: String, evidence: Evidence, source: String)] {

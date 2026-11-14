@@ -156,6 +156,109 @@ import Testing
         #expect(FitnessModel.problems(in: q).isEmpty)
     }
 
+    @Test func theTrainingParametersAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        let expected: [(String, Evidence, String)] = [
+            ("learnabilityRules", .carriedOverFM26, "fm_training_advisor.py"),
+            ("retrainingMinimumLearnability", .derived, "0.6"),
+            ("retrainingMinimumShare", .carriedOverFM26, "docs/Research/lineup-depth-strategy.md"),
+            ("retrainingPerPosition", .carriedOverFM26, "fm_training_advisor.py"),
+            ("retrainingTransitions", .carriedOverFM26, "POSITION_TRANSITIONS"),
+            ("retrainingWeeks", .carriedOverFM26, "RETRAINING_DIFFICULTY"),
+            ("retrainingPace", .carriedOverFM26, "ui/api/api_training_advisor.py"),
+            ("retrainingStalledAfterWeeks", .derived, "this design's choice"),
+        ]
+        for (name, evidence, cited) in expected {
+            #expect(listed[name]?.evidence == evidence, "\(name)")
+            #expect(listed[name]?.source.contains(cited) == true, "\(name) does not cite \(cited)")
+        }
+        let p = EngineParameters.fm27
+        let learn = p.learnabilityRules.value
+        #expect([learn.versatilityWeight, learn.ageWeight, learn.professionalismWeight, learn.roomToGrowWeight] == [0.45, 0.25, 0.20, 0.10])
+        #expect(learn.lowVersatilityBelow == 10 && learn.lowVersatilityFactor == 0.3)
+        #expect(learn.ageSteps == [AgeFactorStep(upTo: 20, factor: 1.0), AgeFactorStep(upTo: 23, factor: 0.95),
+                                   AgeFactorStep(upTo: 25, factor: 0.70), AgeFactorStep(upTo: 27, factor: 0.40),
+                                   AgeFactorStep(upTo: 29, factor: 0.15)])
+        #expect(learn.ageAbove == 0.05 && learn.roomToGrowSpan == 30 && learn.attributeMaximum == 20)
+        #expect(p.retrainingMinimumLearnability.value == 0.40)
+        #expect(p.retrainingMinimumShare.value == 0.80)
+        #expect(p.retrainingPerPosition.value == 2)
+        #expect(p.retrainingTransitions.value.fromFamiliarity == 18)
+        #expect(p.retrainingTransitions.value.sameGroupDifficulty == .structural)
+        #expect(p.retrainingTransitions.value.otherDifficulty == .spatial)
+        #expect(p.retrainingTransitions.value.defensiveGroup
+                == [.goalkeeper, .defenderLeft, .defenderCentral, .defenderRight, .wingBackLeft, .wingBackRight, .defensiveMidfielder])
+        #expect(p.retrainingTransitions.value.attackingGroup == [.attackingMidLeft, .attackingMidCentral, .attackingMidRight, .striker])
+        let weeks = p.retrainingWeeks.value
+        #expect(weeks.fluid == WeekRange(fewest: 4, most: 8))
+        #expect(weeks.structural == WeekRange(fewest: 12, most: 20))
+        #expect(weeks.spatial == WeekRange(fewest: 24, most: 36))
+        let pace = p.retrainingPace.value
+        #expect(pace.ageSteps == [AgeFactorStep(upTo: 21, factor: 1.0), AgeFactorStep(upTo: 26, factor: 1.3),
+                                  AgeFactorStep(upTo: 31, factor: 1.6)])
+        #expect(pace.ageAbove == 1.9)
+        #expect(pace.highVersatilityFrom == 15 && pace.highVersatilityFactor == 0.6)
+        #expect(pace.lowVersatilityUpTo == 9 && pace.lowVersatilityFactor == 1.5)
+        #expect(pace.headStartSteps == [FamiliarityStep(minimum: 13, factor: 0.5), FamiliarityStep(minimum: 10, factor: 0.7)])
+        #expect(pace.minimumWeeks == 4)
+        #expect(p.retrainingStalledAfterWeeks.value == 6)
+    }
+
+    @Test func anEmptyWeekRangeIsReported() {
+        var q = EngineParameters.fm27
+        var weeks = q.retrainingWeeks.value
+        weeks.structural = WeekRange(fewest: 20, most: 12)
+        q.retrainingWeeks = Parameter(weeks, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["retrainingWeeks for structural is 20 to 12, not a range of 0 or more weeks"])
+        weeks.structural = WeekRange(fewest: -1, most: 12)
+        q.retrainingWeeks = Parameter(weeks, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["retrainingWeeks for structural is -1 to 12, not a range of 0 or more weeks"])
+        // A range of one length is allowed.
+        weeks.structural = WeekRange(fewest: 12, most: 12)
+        q.retrainingWeeks = Parameter(weeks, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func anUnusablePaceFactorIsReported() {
+        var q = EngineParameters.fm27
+        var pace = q.retrainingPace.value
+        pace.ageAbove = .infinity
+        pace.lowVersatilityFactor = -1
+        pace.headStartSteps = [FamiliarityStep(minimum: 13, factor: .nan), FamiliarityStep(minimum: 10, factor: 0.7)]
+        q.retrainingPace = Parameter(pace, .derived, source: "test")
+        let found = FitnessModel.problems(in: q)
+        #expect(found.contains("retrainingPace age factor above 31 is inf, not a finite number of 0 or more"))
+        #expect(found.contains("retrainingPace low Versatility factor is -1.0, not a finite number of 0 or more"))
+        #expect(found.contains("retrainingPace head start factor from familiarity 13 is nan, not a finite number of 0 or more"))
+        #expect(found.count == 3)
+        var r = EngineParameters.fm27
+        var other = r.retrainingPace.value
+        other.ageSteps = [AgeFactorStep(upTo: 21, factor: -0.5)]
+        other.highVersatilityFactor = .nan
+        r.retrainingPace = Parameter(other, .derived, source: "test")
+        #expect(FitnessModel.problems(in: r) == ["retrainingPace age factor up to 21 is -0.5, not a finite number of 0 or more",
+                                                 "retrainingPace high Versatility factor is nan, not a finite number of 0 or more"])
+        // Zero is allowed: the minimum number of weeks still applies.
+        other.ageSteps = [AgeFactorStep(upTo: 21, factor: 0)]
+        other.highVersatilityFactor = 0.6
+        r.retrainingPace = Parameter(other, .derived, source: "test")
+        #expect(FitnessModel.problems(in: r).isEmpty)
+    }
+
+    @Test func learnabilityDivisorsMustBeAboveZero() {
+        var q = EngineParameters.fm27
+        var rules = q.learnabilityRules.value
+        rules.roomToGrowSpan = 0
+        rules.attributeMaximum = -20
+        q.learnabilityRules = Parameter(rules, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["learnabilityRules roomToGrowSpan is 0.0, not a finite number above 0",
+                                                 "learnabilityRules attributeMaximum is -20.0, not a finite number above 0"])
+        rules.roomToGrowSpan = 1
+        rules.attributeMaximum = 20
+        q.learnabilityRules = Parameter(rules, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
     @Test func restParameterProblemsAreReported() {
         var q = EngineParameters.fm27
         q.restWatchShare = Parameter(1.2, .derived, source: "test")
