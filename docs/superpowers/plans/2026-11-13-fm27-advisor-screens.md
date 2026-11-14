@@ -367,8 +367,34 @@ What changes:
 
 What is left of the rebuild: the clean-up plan (removing the Electron app, the Python and the `.bat` files, and deciding where the rewrite lives).
 
-Known limits of this plan, for the owner:
+## Changes made while building
+
+Decisions taken during the build that differ from, or add to, the tasks above. Each can be undone.
+
+- The nine pills do not fit beside the club's name and the date note at the default width, as this plan estimated. They sit on their own row underneath, and on two rows at 760 points wide. Every screen is about 45 points shorter for it.
+- The words for slots moved from the app into the engine unchanged, so there is one list.
+- The line between the engine and the app: anything that composes a sentence about advice is the engine's (`AdvisorText`, `PositionText`); plain labels, headings and statements about the plan may live in the app's Core.
+- Positions are in football words in every sentence the owner reads, not only the advisors': Match Selection's pick reasons and the engine's error sentences changed too. The command-line tool's own lines keep their codes.
+- The advice is worked out when it is first read after a change, not with every replan.
+- Training stops recommending for a slot once its cover plus the retrainings already under way toward it reaches the cover line; the slot is listed as being retrained for. A retrainee Player Removal advises moving on does not count, and his row says so.
+- The Training screen ignores a second accept, turn-down, stop or offer-again within half a second of the previous one finishing, and says what each accept or turn-down did in a notice. Without it, a double-click acted on the next card, which had moved under the cursor.
+- Depth's note says "Thin cover: …" and leaves the word "recruit" to Training, after the two screens gave opposite answers about left back.
+- Each Rest row says when the plan starts that player in its next fixture, and every advisor screen says which import day its advice rests on: Rest uses a player's own limit and the figures as imported, while the lineup uses one line for everyone and projects fitness forward, so the two can differ.
+- A fixture in the past shows no suggested importance.
+- The owner's two answers are built: a player with a retraining under way is never offered a second position, and a full-time contract with 0 months left is read as no contract.
+
+## Known limits and small faults left
 
 - The advice is only as current as the last import, like the plan.
 - The advisor screens are checked from drawn pictures and by building, not by anyone using them.
-- The questions at the end of the advisors plan (youth contract types, one retraining at a time, "months left 0") are still open; the screens show what the engine does today.
+- An import on a day the game's date has not been moved on from replaces that day's familiarity reading for a retraining, so a "started at" figure can be lost. Move the date on before importing.
+- A stalled retraining keeps other recommendations for its slot away until it is stopped.
+- A retrainee who is injured, has become first choice elsewhere, or is short in the slot's other position still counts toward the slot.
+- A deliberate second click on the Training screen within half a second is dropped with no sign.
+- The card "Learn left midfield" can cover a slot named "left attacking midfield": the position is the one the slot uses out of possession, and the card's caution says so.
+- The figure under a magnet is the rating on Elevens and the match-day value on Match Selection.
+- Depth's magnets keep the colours of their line of the pitch, so a well-covered attacking slot is a red magnet.
+- An accept or turn-down notice is drawn on the pink paper also used for an import's summary and warnings.
+- The injured mark sits over the top of a magnet's initials.
+- The "not on a full-time contract" rows in Player Removal rest on what FMRTE pasted; what it pastes for youth contracts is still to be seen.
+- A sentence for two players sharing an identity still shows the identity key.
