@@ -2,8 +2,9 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// One starter on the pitch: a magnet in his line's colour with his initials and marks, and beneath it on the board's
-/// white his surname and, for a planned lineup, his match-day value. The selected magnet has an ink ring.
+/// One starter on the pitch: a magnet in his line's colour with his initials, his marks on its rim, and beneath it on
+/// the board's white his surname and, for a planned lineup, his match-day value, each one line. Every token in a lineup
+/// is the same height, centred in its cell, so the magnets along a row line up. The selected magnet has an ink ring.
 struct PlayerToken: View {
     let token: TokenContent
     let isSelected: Bool
@@ -20,30 +21,12 @@ struct PlayerToken: View {
                                 .padding(-(Theme.Magnet.ringWidth + Theme.Magnet.ringGap))
                         }
                     }
-                    .overlay(alignment: .topLeading) {
-                        // Beside the magnet's top right, overlapping its edge a little.
-                        if !token.marks.isEmpty {
-                            HStack(spacing: Theme.Spacing.xxs) {
-                                ForEach(token.marks, id: \.self) { TokenMarkView(mark: $0) }
-                            }
-                            .fixedSize()
-                            .offset(x: Theme.Magnet.diameter - Theme.Pitch.markOffset.width,
-                                    y: Theme.Pitch.markOffset.height)
-                        }
-                    }
+                    .overlay(alignment: .top) { MarksOnRim(marks: token.marks) }
                     .padding(.top, Theme.Magnet.ringWidth)
-                Text(token.surname)
-                    .font(Theme.Typeface.display(Theme.Pitch.nameSize, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(Theme.Pitch.labelMinimumScale)
-                    .padding(.horizontal, Theme.Pitch.labelPadding)
-                    .background(Theme.Colour.board)
+                PitchLabel(text: token.surname, font: Theme.Typeface.display(Theme.Pitch.nameSize, weight: .bold))
                 if let value = token.value {
-                    Text(value)
-                        .font(Theme.Typeface.text(Theme.Pitch.valueSize, weight: .bold))
+                    PitchLabel(text: value, font: Theme.Typeface.text(Theme.Pitch.valueSize, weight: .bold))
                         .foregroundStyle(Theme.Colour.markerBlue)
-                        .padding(.horizontal, Theme.Pitch.labelPadding)
-                        .background(Theme.Colour.board)
                 }
             }
             .foregroundStyle(Theme.Colour.ink)
@@ -53,8 +36,41 @@ struct PlayerToken: View {
         .buttonStyle(.plain)
         .help(token.name)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(token.value.map { "\(token.name), \(token.slotText), \($0)" } ?? "\(token.name), \(token.slotText)")
+        .accessibilityLabel(token.spokenText)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// One line of words beneath a magnet, on the board's white so a pitch line does not run through it, no wider than
+/// its cell. It shrinks only if the words cannot fit the cell at their size.
+struct PitchLabel: View {
+    let text: String
+    let font: Font
+    var lines = 1
+
+    var body: some View {
+        Text(text)
+            .font(font)
+            .multilineTextAlignment(.center)
+            .lineLimit(lines, reservesSpace: true)
+            .minimumScaleFactor(Theme.Pitch.labelMinimumScale)
+            .padding(.horizontal, Theme.Pitch.labelPadding)
+            .background(Theme.Colour.board)
+    }
+}
+
+/// A magnet's marks, centred on its top rim so they stay within its cell, whichever column it is in.
+struct MarksOnRim: View {
+    let marks: [TokenMark]
+
+    var body: some View {
+        if !marks.isEmpty {
+            HStack(spacing: Theme.Spacing.xxs) {
+                ForEach(marks, id: \.self) { TokenMarkView(mark: $0) }
+            }
+            .fixedSize()
+            .alignmentGuide(.top) { $0[VerticalAlignment.center] }
+        }
     }
 }
 
@@ -93,13 +109,19 @@ struct TokenMarkView: View {
     }
 }
 
-/// A slot of the tactic nobody could be picked for: a dashed circle with its code.
+/// A slot of the tactic nobody could be picked for: a dashed circle with its code, in a token's place and height so it
+/// lines up with the magnets in its row.
 struct UnfilledSlotToken: View {
     let slot: SlotID
 
     var body: some View {
-        EmptyMagnet(letters: slot.displayName)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .help("Nobody could be picked for this slot")
+        VStack(spacing: Theme.Spacing.xxs) {
+            EmptyMagnet(letters: slot.displayName)
+                .padding(.top, Theme.Magnet.ringWidth)
+            PitchLabel(text: " ", font: Theme.Typeface.display(Theme.Pitch.nameSize, weight: .bold)).hidden()
+            PitchLabel(text: " ", font: Theme.Typeface.text(Theme.Pitch.valueSize, weight: .bold)).hidden()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .help("Nobody could be picked for this slot")
     }
 }

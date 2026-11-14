@@ -80,7 +80,8 @@ public struct PitchGrid<Token: View>: View {
     public var body: some View {
         let weights = PitchLayout.rowWeights(for: slots)
         GeometryReader { geometry in
-            let field = CGRect(origin: .zero, size: geometry.size)
+            // The outer columns come in from the touchlines, so words beneath a magnet never cross them.
+            let field = CGRect(origin: .zero, size: geometry.size).insetBy(dx: Theme.Pitch.sideInset, dy: 0)
             ZStack(alignment: .topLeading) {
                 BoardPitch()
                 ForEach(slots, id: \.self) { slot in

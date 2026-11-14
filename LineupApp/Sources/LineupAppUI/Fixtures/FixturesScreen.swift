@@ -3,31 +3,34 @@ import LineupEngine
 import SwiftUI
 
 /// The matches to plan for, in date order, as rows on the board with a small sticky note for each one's importance;
-/// the editor for adding or changing one is a card on the board above them.
+/// the editor for adding or changing one is a card on the board above them, its draft kept in the window's navigation
+/// so it survives a change of screen. The rows always fit the board: the opponent, tactic and state wrap to two lines,
+/// and when there is still no room, Edit and Delete go on a line of their own under each fixture.
 public struct FixturesScreen: View {
     let model: AppModel
-    @State private var editing: EditorRequest?
+    @Bindable var navigation: Navigation
     @State private var deleting: StoredFixture?
 
-    public init(model: AppModel) {
+    public init(model: AppModel, navigation: Navigation) {
         self.model = model
+        self.navigation = navigation
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             HStack(alignment: .center, spacing: Theme.Spacing.l) {
                 BoardHeading(Screen.fixtures.title, size: Theme.TypeSize.title)
-                if !model.fixtures.isEmpty && editing == nil {
+                if !model.fixtures.isEmpty && navigation.fixtureEditing == nil {
                     Button("Add fixture", action: add)
                         .buttonStyle(.primary)
                 }
             }
-            if let editing {
-                FixtureEditor(model: model, draft: editing.draft) { self.editing = nil }
+            if let editing = navigation.fixtureEditing {
+                FixtureEditor(model: model, draft: draftBinding(editing)) { navigation.fixtureEditing = nil }
                     .id(editing.id)
             }
             if model.fixtures.isEmpty {
-                if editing == nil {
+                if navigation.fixtureEditing == nil {
                     EmptyState("No fixtures yet. Add the next few matches to get a plan.",
                                action: "Add fixture", perform: add)
                 }
@@ -46,24 +49,22 @@ public struct FixturesScreen: View {
         }
     }
 
-    /// The table, scrolling sideways when the board is narrower than its columns.
+    /// The draft being edited, changed in the navigation.
+    private func draftBinding(_ editing: FixtureEditing) -> Binding<FixtureDraft> {
+        Binding(get: { navigation.fixtureEditing?.draft ?? editing.draft },
+                set: { navigation.fixtureEditing?.draft = $0 })
+    }
+
+    /// The table with Edit and Delete in a column of their own when it fits the board, else under each fixture.
     private var table: some View {
         ViewThatFits(in: .horizontal) {
-            rows
-            ScrollView(.horizontal) {
-                rows.frame(width: Self.leastWidth)
-            }
+            rows(actionsBeside: true)
+            rows(actionsBeside: false)
         }
         .frame(minHeight: Theme.Layout.tableMinimumHeight, maxHeight: .infinity, alignment: .top)
     }
 
-    /// The width every column needs.
-    static let leastWidth: CGFloat = {
-        typealias C = Theme.Column
-        return C.fixtureDate + C.opponentMinimum + C.importance + C.tacticMinimum + C.fixtureState + C.fixtureActions
-    }()
-
-    private var rows: some View {
+    private func rows(actionsBeside: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 0) {
                 heading("Date").frame(width: Theme.Column.fixtureDate, alignment: .leading)
@@ -71,20 +72,21 @@ public struct FixturesScreen: View {
                 heading("Importance").frame(width: Theme.Column.importance, alignment: .leading)
                 heading("Tactic").frame(minWidth: Theme.Column.tacticMinimum, maxWidth: .infinity, alignment: .leading)
                 heading("State").frame(width: Theme.Column.fixtureState, alignment: .leading)
-                Color.clear.frame(width: Theme.Column.fixtureActions, height: 0)
+                if actionsBeside {
+                    Color.clear.frame(width: Theme.Column.fixtureActions, height: 0)
+                }
             }
             .frame(height: Theme.Table.headingHeight)
             HeavyRule()
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(model.fixtures.enumerated()), id: \.element.id) { index, fixture in
-                        row(fixture, index: index)
+                        row(fixture, index: index, actionsBeside: actionsBeside)
                         FaintRule()
                     }
                 }
             }
         }
-        .frame(minWidth: Self.leastWidth)
     }
 
     private func heading(_ text: String) -> some View {
@@ -92,30 +94,46 @@ public struct FixturesScreen: View {
             .font(Theme.Typeface.text(Theme.TypeSize.caption, weight: .extraBold))
     }
 
-    private func row(_ fixture: StoredFixture, index: Int) -> some View {
-        HStack(spacing: 0) {
-            Text(DayText.short(fixture.date))
-                .font(Theme.Typeface.display(Theme.TypeSize.noteHeading))
-                .frame(width: Theme.Column.fixtureDate, alignment: .leading)
-            Text(fixture.opponent)
-                .lineLimit(1)
-                .help(fixture.opponent)
-                .frame(minWidth: Theme.Column.opponentMinimum, maxWidth: .infinity, alignment: .leading)
-            ImportanceNote(importance: fixture.importance, tilt: NoteTilt.degrees(at: index))
-                .frame(width: Theme.Column.importance, alignment: .leading)
-            Text(model.tacticText(for: fixture))
-                .lineLimit(1)
-                .frame(minWidth: Theme.Column.tacticMinimum, maxWidth: .infinity, alignment: .leading)
-            stateText(model.state(of: fixture))
-                .frame(width: Theme.Column.fixtureState, alignment: .leading)
-            HStack(spacing: Theme.Spacing.s) {
-                Button("Edit") { editing = EditorRequest(draft: model.fixtureDraft(for: fixture)) }
-                Button("Delete") { delete(fixture) }
+    private func row(_ fixture: StoredFixture, index: Int, actionsBeside: Bool) -> some View {
+        VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
+            HStack(spacing: 0) {
+                Text(DayText.short(fixture.date))
+                    .font(Theme.Typeface.display(Theme.TypeSize.noteHeading))
+                    .frame(width: Theme.Column.fixtureDate, alignment: .leading)
+                Text(fixture.opponent)
+                    .lineLimit(Theme.Table.wrappedLines)
+                    .help(fixture.opponent)
+                    .padding(.trailing, Theme.Spacing.s)
+                    .frame(minWidth: Theme.Column.opponentMinimum, maxWidth: .infinity, alignment: .leading)
+                ImportanceNote(importance: fixture.importance, tilt: NoteTilt.degrees(at: index))
+                    .frame(width: Theme.Column.importance, alignment: .leading)
+                Text(model.tacticText(for: fixture))
+                    .lineLimit(Theme.Table.wrappedLines)
+                    .padding(.trailing, Theme.Spacing.s)
+                    .frame(minWidth: Theme.Column.tacticMinimum, maxWidth: .infinity, alignment: .leading)
+                stateText(model.state(of: fixture))
+                    .lineLimit(Theme.Table.wrappedLines)
+                    .frame(width: Theme.Column.fixtureState, alignment: .leading)
+                if actionsBeside {
+                    actions(fixture)
+                        .frame(width: Theme.Column.fixtureActions, alignment: .trailing)
+                }
             }
-            .buttonStyle(.secondary)
-            .frame(width: Theme.Column.fixtureActions, alignment: .trailing)
+            if !actionsBeside {
+                actions(fixture)
+            }
         }
+        .padding(.vertical, Theme.Spacing.xs)
         .frame(minHeight: Theme.Table.rowHeight + Theme.Spacing.s)
+    }
+
+    private func actions(_ fixture: StoredFixture) -> some View {
+        HStack(spacing: Theme.Spacing.s) {
+            Button("Edit") { navigation.fixtureEditing = FixtureEditing(draft: model.fixtureDraft(for: fixture)) }
+            Button("Delete") { delete(fixture) }
+        }
+        .buttonStyle(.secondary)
+        .fixedSize()
     }
 
     private func stateText(_ state: FixtureState) -> some View {
@@ -137,7 +155,7 @@ public struct FixturesScreen: View {
     }
 
     private func add() {
-        editing = EditorRequest(draft: model.newFixtureDraft())
+        navigation.fixtureEditing = FixtureEditing(draft: model.newFixtureDraft())
     }
 
     private func delete(_ fixture: StoredFixture) {
@@ -164,8 +182,3 @@ struct ImportanceNote: View {
     }
 }
 
-/// One opening of the fixture editor.
-private struct EditorRequest: Identifiable {
-    let id = UUID()
-    let draft: FixtureDraft
-}

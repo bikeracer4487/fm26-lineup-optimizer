@@ -52,7 +52,7 @@ enum PlayerTable {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Sort by \(column.title.lowercased())")
+            .help(column.sortHelp)
             .accessibilityAddTraits(sort.column == column ? .isSelected : [])
         }
     }
@@ -112,7 +112,7 @@ struct PlayerRow: View {
                 .frame(width: Theme.Column.meter, alignment: .leading)
             MeterView(meter: row.sharpnessMeter, text: row.sharpnessText)
                 .frame(width: Theme.Column.meter, alignment: .leading)
-            Text(String(row.jadedness))
+            Text(row.jadednessText)
                 .foregroundStyle(Theme.Colour.mutedInk)
                 .frame(width: Theme.Column.jadedness, alignment: .trailing)
             HStack(spacing: Theme.Spacing.xs) {

@@ -101,6 +101,8 @@ public struct SquadRow: Identifiable, Equatable, Sendable {
     public let sharpness: Double
     public let sharpnessText: String
     public let jadedness: Int
+    /// Jadedness as written, with a true minus sign.
+    public let jadednessText: String
     public let statuses: [PlayerStatus]
     public let statusText: String
     public let isOut: Bool
@@ -126,6 +128,7 @@ public struct SquadRow: Identifiable, Equatable, Sendable {
         sharpness = player.sharpness
         sharpnessText = Self.percent(player.sharpness)
         jadedness = player.jadedness
+        jadednessText = BoardText.signed(player.jadedness)
         statuses = PlayerStatus.of(player, loan: loan)
         statusText = PlayerStatus.text(statuses)
         isOut = PlayerStatus.isOut(statuses)

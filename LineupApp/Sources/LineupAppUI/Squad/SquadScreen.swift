@@ -8,7 +8,6 @@ import SwiftUI
 public struct SquadScreen: View {
     let model: AppModel
     @Bindable var navigation: Navigation
-    @State private var sort = SquadSort()
     @State private var fitsTable = true
     @Environment(\.showScreen) private var showScreen
 
@@ -32,9 +31,9 @@ public struct SquadScreen: View {
                     LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                         top
                         Section {
-                            PlayerTable.Rows(rows: rows, sort: sort)
+                            PlayerTable.Rows(rows: rows, sort: navigation.squadSort)
                         } header: {
-                            PlayerTable.Headings(sort: $sort)
+                            PlayerTable.Headings(sort: $navigation.squadSort)
                         }
                     }
                 } else {
@@ -42,8 +41,8 @@ public struct SquadScreen: View {
                         top
                         ScrollView(.horizontal) {
                             VStack(alignment: .leading, spacing: 0) {
-                                PlayerTable.Headings(sort: $sort)
-                                PlayerTable.Rows(rows: rows, sort: sort)
+                                PlayerTable.Headings(sort: $navigation.squadSort)
+                                PlayerTable.Rows(rows: rows, sort: navigation.squadSort)
                             }
                             .frame(width: PlayerTable.leastWidth)
                         }

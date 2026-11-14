@@ -39,7 +39,7 @@ struct TacticEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             header
             inspector
                 .frame(minHeight: Theme.Layout.controlRowHeight)
@@ -181,8 +181,9 @@ struct TacticEditor: View {
 }
 
 /// A slot on the editor's pitch: when filled, a magnet in its line's colour with the slot's code on it and the role
-/// beneath on the board's white; when empty, a dashed circle with its code. The selected slot has an ink ring, and the
-/// slots it turns into or from a marker-blue one.
+/// beneath on the board's white; when empty, a dashed circle with its code. Both keep two lines for the role, so every
+/// slot is the same height, centred in its cell, and the magnets along a row line up. The selected slot has an ink
+/// ring, and the slots it turns into or from a marker-blue one.
 struct SlotToken: View {
     enum Look { case plain, selected, linked }
 
@@ -193,13 +194,14 @@ struct SlotToken: View {
 
     var body: some View {
         Button(action: action) {
-            Group {
-                if let role {
-                    filled(role)
-                } else {
-                    EmptyMagnet(letters: slot.displayName, diameter: Theme.Pitch.emptySlotDiameter)
-                }
+            VStack(spacing: Theme.Spacing.xxs) {
+                magnet
+                    .padding(.top, Theme.Magnet.ringWidth)
+                PitchLabel(text: role ?? " ", font: Theme.Typeface.text(Theme.Pitch.roleSize, weight: .semibold),
+                           lines: Theme.Pitch.roleNameLines)
+                    .opacity(role == nil ? 0 : 1)
             }
+            .foregroundStyle(Theme.Colour.ink)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
         }
@@ -208,9 +210,9 @@ struct SlotToken: View {
         .accessibilityAddTraits(look == .selected ? .isSelected : [])
     }
 
-    private func filled(_ role: String) -> some View {
-        let colours = Theme.Colour.magnet(PitchLine(slot))
-        return VStack(spacing: Theme.Spacing.xxs) {
+    @ViewBuilder private var magnet: some View {
+        if role != nil {
+            let colours = Theme.Colour.magnet(PitchLine(slot))
             Magnet(fill: colours.fill, text: colours.text, letters: slot.displayName,
                    diameter: Theme.Pitch.editorMagnetDiameter, font: Theme.Typeface.display(Theme.Pitch.slotCodeSize))
                 .overlay {
@@ -221,15 +223,8 @@ struct SlotToken: View {
                             .padding(-(Theme.Magnet.ringWidth + Theme.Magnet.ringGap))
                     }
                 }
-                .padding(.top, Theme.Magnet.ringWidth)
-            Text(role)
-                .font(Theme.Typeface.text(Theme.Pitch.roleSize, weight: .semibold))
-                .foregroundStyle(Theme.Colour.ink)
-                .multilineTextAlignment(.center)
-                .lineLimit(Theme.Pitch.roleNameLines)
-                .minimumScaleFactor(Theme.Pitch.labelMinimumScale)
-                .padding(.horizontal, Theme.Pitch.labelPadding)
-                .background(Theme.Colour.board)
+        } else {
+            EmptyMagnet(letters: slot.displayName, diameter: Theme.Pitch.editorMagnetDiameter)
         }
     }
 }

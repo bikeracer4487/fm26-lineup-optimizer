@@ -34,9 +34,9 @@ public enum FixtureState: Equatable, Sendable {
 
     public var text: String {
         switch self {
-        case .toPlay: "to play"
-        case .confirmed: "confirmed"
-        case .pastNotConfirmed: "past and not confirmed"
+        case .toPlay: "To play"
+        case .confirmed: "Confirmed"
+        case .pastNotConfirmed: "Past and not confirmed"
         }
     }
 }

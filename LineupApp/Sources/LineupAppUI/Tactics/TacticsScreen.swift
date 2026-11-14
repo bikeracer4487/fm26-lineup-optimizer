@@ -49,7 +49,7 @@ public struct TacticsScreen: View {
     }
 
     private var page: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             if model.tactics.isEmpty {
                 BoardHeading(Screen.tactics.title, size: Theme.TypeSize.title)
                 EmptyState("No tactics yet. Start from a 4-2-3-1 and change it to yours.",

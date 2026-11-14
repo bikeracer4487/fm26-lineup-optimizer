@@ -29,7 +29,13 @@ public struct MatchSelectionScreen: View {
     }
 
     /// The team sheet scrolls with the screen when it does not fit; the starts grid scrolls on its own.
-    private var scrolls: Bool { layout.scrolls && navigation.matchView == .teamSheet }
+    private var scrolls: Bool { pitchLayout.scrolls && navigation.matchView == .teamSheet }
+
+    /// The layout for the pitch: while the plan is stopped, the reason why takes the top of the screen, so the missed
+    /// fixtures below it scroll with their pitch sized by its width rather than squeezed into the height left.
+    private var pitchLayout: PageLayout {
+        layout == .filling && MatchPresentation.notReady(model.planState) != nil ? .scrolling : layout
+    }
 
     public var body: some View {
         Group {
@@ -44,11 +50,16 @@ public struct MatchSelectionScreen: View {
 
     private var page: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            if case .ready(let plans) = model.planState, !plans.isEmpty {
-                ready(plans)
-            } else if let notReady = MatchPresentation.notReady(model.planState) {
+            let shown = model.shownPlans
+            if let notReady = MatchPresentation.notReady(model.planState) {
                 BoardHeading(Screen.matchSelection.title, size: Theme.TypeSize.title)
                 NotReadyView(notReady: notReady)
+            }
+            // While the plan cannot be made, the missed fixtures are still shown, so a remembered eleven can be put
+            // right and confirmed.
+            if !shown.isEmpty {
+                ready(shown)
+            } else {
                 Spacer(minLength: 0)
             }
         }
@@ -66,7 +77,7 @@ public struct MatchSelectionScreen: View {
             header(plan)
             switch navigation.matchView {
             case .teamSheet:
-                FixtureBody(model: model, plan: plan, layout: layout, selection: $navigation.matchSelection) {
+                FixtureBody(model: model, plan: plan, layout: pitchLayout, selection: $navigation.matchSelection) {
                     navigation.matchFixture = $0
                 }
             case .starts:
@@ -91,7 +102,7 @@ public struct MatchSelectionScreen: View {
             }
             BoardTabs(choices: MatchView.allCases.map { ($0, $0.title) }, selection: $navigation.matchView)
         } trailing: {
-            ConfirmControl(model: model, plan: plan) {
+            ConfirmControl(model: model, plan: plan, stacked: layout == .stacked) {
                 if case .ready(let plans) = model.planState {
                     navigation.matchFixture = MatchPresentation.fixtureAfterConfirming(plan.id, in: plans)
                 }
@@ -105,24 +116,37 @@ public struct MatchSelectionScreen: View {
 struct ConfirmControl: View {
     let model: AppModel
     let plan: FixturePlan
+    /// On a narrow screen the line saying what confirming does goes under the button, at the left.
+    let stacked: Bool
     /// Called after the fixture is confirmed and the plan worked out again.
     let confirmed: () -> Void
 
     var body: some View {
         if model.canConfirm(plan.id) {
             let button = MatchPresentation.confirmButton(for: plan)
-            HStack(alignment: .center, spacing: Theme.Spacing.m) {
-                Text(button.explanation)
-                    .font(Theme.Typeface.text(Theme.TypeSize.small))
-                    .foregroundStyle(Theme.Colour.mutedInk)
-                    .multilineTextAlignment(.trailing)
-                    .frame(maxWidth: Theme.Match.confirmExplanationWidth, alignment: .trailing)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button(button.title) {
-                    model.confirm(plan.id)
-                    confirmed()
+            let confirm = Button(button.title) {
+                model.confirm(plan.id)
+                confirmed()
+            }
+            .buttonStyle(.main)
+            if stacked {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    confirm
+                    Text(button.explanation)
+                        .font(Theme.Typeface.text(Theme.TypeSize.small))
+                        .foregroundStyle(Theme.Colour.mutedInk)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .buttonStyle(.main)
+            } else {
+                HStack(alignment: .center, spacing: Theme.Spacing.m) {
+                    Text(button.explanation)
+                        .font(Theme.Typeface.text(Theme.TypeSize.small))
+                        .foregroundStyle(Theme.Colour.mutedInk)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: Theme.Match.confirmExplanationWidth, alignment: .trailing)
+                        .fixedSize(horizontal: false, vertical: true)
+                    confirm
+                }
             }
         } else if let why = model.whyNotConfirm(plan.id) {
             Text(why)

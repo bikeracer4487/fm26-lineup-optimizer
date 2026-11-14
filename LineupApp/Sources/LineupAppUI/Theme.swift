@@ -75,6 +75,15 @@ public enum Theme {
             }
         }
 
+        /// A factor's figure, by what it did to the value: green for raised, red for lowered, ink for unchanged.
+        public static func factor(_ direction: ReasonDirection) -> Color {
+            switch direction {
+            case .raised: greenText
+            case .lowered: redText
+            case .unchanged: ink
+            }
+        }
+
         /// A meter's lit blocks, by level.
         public static func meter(_ level: MeterLevel) -> Color {
             switch level {
@@ -379,6 +388,8 @@ public enum Theme {
         public static let rowRule: CGFloat = 1
         public static let rowHeight: CGFloat = 42
         public static let headingHeight: CGFloat = 34
+        /// The most lines a cell's words wrap to.
+        public static let wrappedLines = 2
         /// The space before a column that follows a number.
         public static let columnLead: CGFloat = 18
     }
@@ -460,13 +471,16 @@ public enum Theme {
         /// beneath its magnet.
         public static let editorAspectRatio: CGFloat = 1.15
         /// The editor's magnets, a little smaller than a team sheet's, as its pitches show all 24 slots.
-        public static let editorMagnetDiameter: CGFloat = 38
+        public static let editorMagnetDiameter: CGFloat = 36
         /// The least width a pitch keeps, so two side by side stay legible; its height follows from `aspectRatio`.
         public static let minimumWidth: CGFloat = 300
         /// The widest a pitch is drawn when the screen scrolls, so it is not taller than a window.
         public static let scrollingMaximumWidth: CGFloat = 480
         /// The space between neighbouring slots.
         public static let slotGap: CGFloat = 2
+        /// How far the outer columns sit in from the touchlines: past the line and a little more, so a label as wide
+        /// as its cell stays inside the pitch.
+        public static let sideInset: CGFloat = 6
         /// A row of the pitch with nobody in it takes this share of a full row's height.
         public static let emptyRowWeight: CGFloat = 0.3
 
@@ -485,20 +499,17 @@ public enum Theme {
         public static let valueSize: CGFloat = TypeSize.caption
         public static let roleSize: CGFloat = TypeSize.small
         /// The padding round words beneath a magnet, on the board's white.
-        public static let labelPadding: CGFloat = 4
-        /// How far a long surname or role may shrink to fit, before it is cut.
+        public static let labelPadding: CGFloat = 2
+        /// How far a surname or role may shrink when it cannot fit its cell at its size; at the sizes drawn, none does.
         public static let labelMinimumScale: CGFloat = 0.8
         /// The most lines a role name takes under its slot.
         public static let roleNameLines = 2
-        /// An empty slot of the tactic editor.
-        public static let emptySlotDiameter: CGFloat = 36
         /// The letters in an empty slot's circle may shrink this far to fit inside it.
         public static let emptySlotMinimumScale: CGFloat = 0.5
         /// The marks beside a magnet: a pin, a caution, a youth squad.
         public static let markSize: CGFloat = 11
         public static let youthMarkCornerRadius: CGFloat = 3
         public static let youthMarkPadding: CGFloat = 3
-        public static let markOffset = CGSize(width: 6, height: -4)
     }
 
     // MARK: Match Selection
@@ -511,8 +522,12 @@ public enum Theme {
         public static let pitchGap: CGFloat = 22
         /// A fixture's sticky note.
         public static let noteHeight: CGFloat = 76
-        public static let noteMinimumWidth: CGFloat = 128
-        public static let noteGap: CGFloat = 14
+        /// Five notes of this width fit the smallest window's board, their words wrapping.
+        public static let noteMinimumWidth: CGFloat = 118
+        /// The widest a note grows, so one or two fixtures are notes, not banners.
+        public static let noteMaximumWidth: CGFloat = 240
+        public static let noteGap: CGFloat = 10
+        public static let notePadding: CGFloat = 10
         /// Room above the notes for their magnets and their tilt.
         public static let notesTopPadding: CGFloat = 8
         /// The line beside the button that confirms a lineup, saying what confirming does.
@@ -523,7 +538,8 @@ public enum Theme {
         public static let ringPadding = CGSize(width: 18, height: 8)
         /// The plus or minus before a reason.
         public static let signDiameter: CGFloat = 20
-        public static let signLineWidth: CGFloat = 2
+        /// The dot before a reason that neither raised nor lowered the value.
+        public static let neutralDotDiameter: CGFloat = 6
         /// The four figures' cards.
         public static let figureGap: CGFloat = 10
         public static let figureLabelLines = 2
@@ -548,12 +564,13 @@ public enum Theme {
         public static let jadedness: CGFloat = 80
         public static let statusMinimum: CGFloat = 140
 
-        /// The fixtures table.
-        public static let fixtureDate: CGFloat = 120
-        public static let opponentMinimum: CGFloat = 160
-        public static let importance: CGFloat = 170
-        public static let tacticMinimum: CGFloat = 140
-        public static let fixtureState: CGFloat = 170
+        /// The fixtures table: with Edit and Delete beside the rest it needs 724 points, so on a board narrower than
+        /// that they go under each fixture and the rest fits down to the smallest window's 664.
+        public static let fixtureDate: CGFloat = 104
+        public static let opponentMinimum: CGFloat = 110
+        public static let importance: CGFloat = 146
+        public static let tacticMinimum: CGFloat = 110
+        public static let fixtureState: CGFloat = 104
         public static let fixtureActions: CGFloat = 150
     }
 }

@@ -408,11 +408,14 @@ import LineupEngine
         #expect(detail.figures == [
             PickFigure(label: "Rating", figure: MatchText.oneDecimal(pick.rating.value), factor: nil),
             PickFigure(label: "Projected condition", figure: MatchText.percent(onTheDay.condition),
-                       factor: MatchText.factor(pick.fitness.condition), lowers: pick.fitness.condition < 1),
+                       factor: MatchText.factor(pick.fitness.condition),
+                       direction: ReasonDirection(fitnessFactor: pick.fitness.condition)),
             PickFigure(label: "Projected sharpness", figure: MatchText.percent(onTheDay.sharpness),
-                       factor: MatchText.factor(pick.fitness.sharpness), lowers: pick.fitness.sharpness < 1),
-            PickFigure(label: "Projected jadedness", figure: "\(Int(onTheDay.jadedness.rounded()))",
-                       factor: MatchText.factor(pick.fitness.jadedness), lowers: pick.fitness.jadedness < 1),
+                       factor: MatchText.factor(pick.fitness.sharpness),
+                       direction: ReasonDirection(fitnessFactor: pick.fitness.sharpness)),
+            PickFigure(label: "Projected jadedness", figure: BoardText.signed(Int(onTheDay.jadedness.rounded())),
+                       factor: MatchText.factor(pick.fitness.jadedness),
+                       direction: ReasonDirection(fitnessFactor: pick.fitness.jadedness)),
             PickFigure(label: "Match-day value", figure: MatchText.oneDecimal(pick.value), factor: nil),
         ])
         #expect(model.pickDetail(at: .M_C, in: plan) == nil)

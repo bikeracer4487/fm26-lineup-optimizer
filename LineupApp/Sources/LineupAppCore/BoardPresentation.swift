@@ -60,6 +60,19 @@ public enum BoardText {
         return (String(first) + (main.first.map(String.init) ?? "")).uppercased()
     }
 
+    /// The minus sign negative numbers are written with: U+2212, the width of a plus, not a hyphen.
+    public static let minus = "\u{2212}"
+
+    /// A whole number, a negative one with a true minus sign: "−168".
+    public static func signed(_ value: Int) -> String {
+        signed(String(value))
+    }
+
+    /// A written number with its leading hyphen, if it has one, made a true minus sign.
+    public static func signed(_ number: String) -> String {
+        number.hasPrefix("-") ? minus + number.dropFirst() : number
+    }
+
     /// The notice for typefaces that could not be loaded; nil when every one was.
     public static func fontNotice(missing: [String]) -> String? {
         switch missing.count {
@@ -217,6 +230,9 @@ public enum SquadColumn: CaseIterable, Hashable, Sendable {
         case .status: "Status"
         }
     }
+
+    /// What clicking the heading does: "Sort by age".
+    public var sortHelp: String { "Sort by \(title.lowercased())" }
 
     func comparator(_ order: SortOrder) -> KeyPathComparator<SquadRow> {
         switch self {

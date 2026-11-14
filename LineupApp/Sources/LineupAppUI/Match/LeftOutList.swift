@@ -24,6 +24,7 @@ struct LeftOutList: View {
                         .font(Theme.Typeface.text())
                         .lineSpacing(Theme.Spacing.xxs)
                         .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel(row.spokenText)
                 }
             }
 

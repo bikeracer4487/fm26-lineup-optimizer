@@ -26,8 +26,8 @@ public enum MatchText {
     /// What a figure shows when it is not known.
     public static let noFigure = "—"
 
-    /// A rating or a value: "124.4", as the engine writes them in its reasons.
-    public static func oneDecimal(_ x: Double) -> String { String(format: "%.1f", x) }
+    /// A rating or a value: "124.4", as the engine writes them in its reasons, with a true minus sign when negative.
+    public static func oneDecimal(_ x: Double) -> String { BoardText.signed(String(format: "%.1f", x)) }
 
     /// A fitness factor: "×0.95", as the engine writes them in its reasons.
     public static func factor(_ x: Double) -> String { "×" + String(format: "%.2f", x) }
@@ -111,6 +111,11 @@ public struct TokenContent: Identifiable, Equatable, Sendable {
     /// His match-day value to one decimal place; nil for a confirmed lineup.
     public let value: String?
     public let marks: [TokenMark]
+
+    /// What the token says to assistive technology: "Evan Humphries, D L, 124.4", or without the value.
+    public var spokenText: String {
+        ([name, slotText] + [value].compactMap { $0 }).joined(separator: ", ")
+    }
 }
 
 // MARK: The selected pick
@@ -121,11 +126,11 @@ public struct PickFigure: Equatable, Sendable, Identifiable {
     public let label: String
     public let figure: String?
     public let factor: String?
-    /// Whether the factor lowers his value: below 1.
-    public let lowers: Bool
+    /// What the factor does to his value: below 1 lowers it, 1 leaves it; a figure with no factor leaves it.
+    public let direction: ReasonDirection
 
-    public init(label: String, figure: String?, factor: String?, lowers: Bool = false) {
-        self.label = label; self.figure = figure; self.factor = factor; self.lowers = lowers
+    public init(label: String, figure: String?, factor: String?, direction: ReasonDirection = .unchanged) {
+        self.label = label; self.figure = figure; self.factor = factor; self.direction = direction
     }
 }
 
@@ -142,6 +147,10 @@ public struct PickDetail: Equatable, Sendable {
     public let cards: [PickFigure]
     /// The match-day value to one decimal place.
     public let valueText: String
+    /// His slot and squad: "D L, First team".
+    public var positionLine: String { "\(slotText), \(squadText)" }
+    /// The value as said to assistive technology: "Match-day value 124.4".
+    public var valueLabel: String { "Match-day value \(valueText)" }
     /// The cards, then the match-day value.
     public var figures: [PickFigure] {
         cards + [PickFigure(label: "Match-day value", figure: valueText, factor: nil)]
@@ -176,6 +185,9 @@ public struct LeftOutRow: Identifiable, Equatable, Sendable {
     public let slotText: String
     /// The engine's reason, as written.
     public let reason: String
+
+    /// The row as said to assistive technology: "Dejan Tetek, DM R: <reason>".
+    public var spokenText: String { "\(name), \(slotText): \(reason)" }
 
     public static func rows(_ omissions: [Omission]) -> [LeftOutRow] {
         omissions.map { LeftOutRow(player: $0.player, name: $0.name, slotText: $0.slot.displayName, reason: $0.reason) }
@@ -560,11 +572,14 @@ extension AppModel {
             cards: [
                 PickFigure(label: "Rating", figure: MatchText.oneDecimal(pick.rating.value), factor: nil),
                 PickFigure(label: label("Condition"), figure: onTheDay.map { MatchText.percent($0.condition) } ?? MatchText.noFigure,
-                           factor: MatchText.factor(pick.fitness.condition), lowers: pick.fitness.condition < 1),
+                           factor: MatchText.factor(pick.fitness.condition),
+                           direction: ReasonDirection(fitnessFactor: pick.fitness.condition)),
                 PickFigure(label: label("Sharpness"), figure: onTheDay.map { MatchText.percent($0.sharpness) } ?? MatchText.noFigure,
-                           factor: MatchText.factor(pick.fitness.sharpness), lowers: pick.fitness.sharpness < 1),
-                PickFigure(label: label("Jadedness"), figure: onTheDay.map { "\(Int($0.jadedness.rounded()))" } ?? MatchText.noFigure,
-                           factor: MatchText.factor(pick.fitness.jadedness), lowers: pick.fitness.jadedness < 1),
+                           factor: MatchText.factor(pick.fitness.sharpness),
+                           direction: ReasonDirection(fitnessFactor: pick.fitness.sharpness)),
+                PickFigure(label: label("Jadedness"), figure: onTheDay.map { BoardText.signed(Int($0.jadedness.rounded())) } ?? MatchText.noFigure,
+                           factor: MatchText.factor(pick.fitness.jadedness),
+                           direction: ReasonDirection(fitnessFactor: pick.fitness.jadedness)),
             ],
             valueText: MatchText.oneDecimal(pick.value),
             cautions: PickDetail.cautions(pick.warnings, parameters: planParameters, projected: plan.fitnessIsProjected),

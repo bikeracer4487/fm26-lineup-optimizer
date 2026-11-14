@@ -299,8 +299,70 @@ import LineupEngine
                                                                adjustments: pick.adjustments))
             #expect(detail.cards.map(\.label).count == 4)
             #expect(detail.valueText == MatchText.oneDecimal(pick.value))
-            #expect(detail.cards[2].lowers == (pick.fitness.sharpness < 1))
-            #expect(!detail.cards[0].lowers)
+            #expect(detail.cards[2].direction == ReasonDirection(fitnessFactor: pick.fitness.sharpness))
+            #expect(detail.cards[0].direction == .unchanged)
+            #expect(detail.positionLine == "\(detail.slotText), \(detail.squadText)")
+            #expect(detail.valueLabel == "Match-day value \(detail.valueText)")
         }
+    }
+}
+
+@Suite struct BoardWordsFromCoreTests {
+    @Test func aFactorOfOneIsUnchangedNotGood() {
+        #expect(ReasonDirection(fitnessFactor: 1) == .unchanged)
+        let figure = PickFigure(label: "Condition", figure: "100%", factor: "×1.00", direction: .unchanged)
+        #expect(figure.direction == .unchanged)
+        #expect(PickFigure(label: "Rating", figure: "106.9", factor: nil).direction == .unchanged)
+    }
+
+    @Test func negativeNumbersHaveATrueMinusSign() {
+        #expect(BoardText.signed(-168) == "\u{2212}168")
+        #expect(BoardText.signed(0) == "0")
+        #expect(BoardText.signed(12) == "12")
+        #expect(MatchText.oneDecimal(-12) == "\u{2212}12.0")
+        #expect(MatchText.oneDecimal(124.44) == "124.4")
+    }
+
+    @Test func aTokenSaysWhoHeIsWhereAndHisValue() {
+        let planned = TokenContent(slot: .D_L, player: PlayerID(key: "a"), name: "Evan Humphries", surname: "Humphries",
+                                   initials: "EH", value: "124.4", marks: [])
+        #expect(planned.spokenText == "Evan Humphries, D L, 124.4")
+        let confirmed = TokenContent(slot: .GK, player: PlayerID(key: "b"), name: "Matty Taylor", surname: "Taylor",
+                                     initials: "MT", value: nil, marks: [])
+        #expect(confirmed.spokenText == "Matty Taylor, GK")
+    }
+
+    @Test func aLeftOutRowSaysWhoWhereAndWhy() {
+        let row = LeftOutRow(player: PlayerID(key: "a"), name: "Dejan Tetek", slotText: "DM R", reason: "Left out: injured")
+        #expect(row.spokenText == "Dejan Tetek, DM R: Left out: injured")
+    }
+
+    @Test func aColumnHeadingSaysWhatClickingItDoes() {
+        #expect(SquadColumn.age.sortHelp == "Sort by age")
+        #expect(SquadColumn.ability.sortHelp == "Sort by ability now and potential")
+    }
+
+    @Test func aSquadRowWritesJadednessWithATrueMinus() {
+        let player = Player(id: PlayerID(key: "p"), name: "Ann", squad: .firstTeam, age: 20, positionsText: "D C",
+                            currentAbility: 50, potentialAbility: 100, attributes: [:], familiarity: [.defenderCentral: 20],
+                            condition: 1, sharpness: 1, jadedness: -125, isInjured: false, isBanned: false, club: nil,
+                            loanedTo: nil, contractType: .fullTime, monthsLeft: 10, wagePerWeek: 1, askingPrice: nil,
+                            nationalities: [], extras: [:])
+        #expect(SquadRow(player, loan: .own).jadednessText == "\u{2212}125")
+    }
+}
+
+@MainActor @Suite struct NavigationHoldsWorkInProgressTests {
+    @Test func theSquadSortAndTheFixtureBeingEditedAreKeptInTheNavigation() {
+        let navigation = Navigation()
+        #expect(navigation.squadSort == SquadSort())
+        #expect(navigation.fixtureEditing == nil)
+        navigation.squadSort = SquadSort().choosing(.age)
+        var draft = FixtureDraft(date: Day(year: 2026, month: 11, day: 20)!)
+        draft.opponent = "Rovers"
+        navigation.fixtureEditing = FixtureEditing(draft: draft)
+        navigation.screen = .squad
+        #expect(navigation.squadSort == SquadSort(column: .age, ascending: true))
+        #expect(navigation.fixtureEditing?.draft.opponent == "Rovers")
     }
 }

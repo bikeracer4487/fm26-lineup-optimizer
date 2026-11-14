@@ -10,9 +10,9 @@ import LineupEngine
     }
 
     @Test func eachStateHasItsWords() {
-        #expect(FixtureState.toPlay.text == "to play")
-        #expect(FixtureState.confirmed.text == "confirmed")
-        #expect(FixtureState.pastNotConfirmed.text == "past and not confirmed")
+        #expect(FixtureState.toPlay.text == "To play")
+        #expect(FixtureState.confirmed.text == "Confirmed")
+        #expect(FixtureState.pastNotConfirmed.text == "Past and not confirmed")
     }
 }
 

@@ -54,7 +54,7 @@ public enum ScreenPictures {
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let name = "fixtures-editor-\(suffix).png"
             let editor = BoardFrame {
-                FixtureEditor(model: model, draft: draft) {}
+                FixtureEditor(model: model, draft: .constant(draft)) {}
             }
             .boardAppearance()
             let png = try draw(editor, size: Theme.Layout.fixtureEditorPicture, appearance: appearance, name: name)

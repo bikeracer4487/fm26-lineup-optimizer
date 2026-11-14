@@ -26,12 +26,14 @@ struct FixtureStrip: View {
                 Button { choose(cell.id) } label: {
                     FixtureNote(cell: cell, isChosen: cell.id == chosen, tilt: NoteTilt.degrees(at: index))
                         .frame(minWidth: Theme.Match.noteMinimumWidth,
-                               maxWidth: fillsWidth ? .infinity : Theme.Match.noteMinimumWidth)
+                               maxWidth: fillsWidth ? Theme.Match.noteMaximumWidth : Theme.Match.noteMinimumWidth)
                 }
                 .buttonStyle(.plain)
                 .help(cell.id == chosen ? "The match shown" : "Show this match")
             }
+            Spacer(minLength: 0)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .padding(.top, Theme.Match.notesTopPadding)
         .padding(.horizontal, Theme.Spacing.xs)
         .padding(.bottom, Theme.Spacing.xs)
@@ -46,33 +48,31 @@ struct FixtureNote: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.xs) {
-                Text(cell.dateText)
-                    .font(Theme.Typeface.display(Theme.TypeSize.noteHeading))
-                Spacer(minLength: 0)
-                switch cell.state {
-                case .planned:
-                    EmptyView()
-                case .confirmed:
-                    Image(systemName: "lock.fill")
-                        .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .bold))
-                        .accessibilityLabel(cell.stateText ?? "")
-                case .missed:
-                    Text(cell.stateText ?? "")
-                        .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .extraBold))
-                }
-            }
+            Text(cell.dateText)
+                .font(Theme.Typeface.display(Theme.TypeSize.noteHeading))
+                .lineLimit(1)
             Text(cell.opponentText)
                 .font(Theme.Typeface.text())
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
             Text(cell.importance.noteText)
                 .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .bold))
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
+            switch cell.state {
+            case .planned:
+                EmptyView()
+            case .confirmed:
+                Label(cell.stateText ?? "", systemImage: "lock.fill")
+                    .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .extraBold))
+            case .missed:
+                Text(cell.stateText ?? "")
+                    .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .extraBold))
+            }
         }
-        .padding(.horizontal, Theme.Sticky.horizontalPadding)
+        .padding(.horizontal, Theme.Match.notePadding)
         .padding(.top, Theme.Sticky.verticalPadding)
         .padding(.bottom, Theme.Sticky.verticalPadding + Theme.Sticky.footHeight)
-        .frame(maxWidth: .infinity, minHeight: Theme.Match.noteHeight, alignment: .topLeading)
+        // Every note takes the row's height, so a note whose words wrap is not taller than the others.
+        .frame(maxWidth: .infinity, minHeight: Theme.Match.noteHeight, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(isChosen ? Theme.Colour.markerBlue : Color.clear)

@@ -5,14 +5,9 @@ import SwiftUI
 /// The card on the board that adds a fixture or changes one: its date, opponent, importance and tactic.
 struct FixtureEditor: View {
     let model: AppModel
-    @State private var draft: FixtureDraft
+    /// Held in the window's navigation, so a change of screen does not lose it.
+    @Binding var draft: FixtureDraft
     let close: () -> Void
-
-    init(model: AppModel, draft: FixtureDraft, close: @escaping () -> Void) {
-        self.model = model
-        _draft = State(initialValue: draft)
-        self.close = close
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {

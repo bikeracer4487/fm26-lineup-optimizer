@@ -122,10 +122,13 @@ struct TodayNote: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-            Text("Today in the game")
-                .font(Theme.Typeface.text(Theme.TypeSize.small))
-            Text(DayText.shortWithYear(model.settings.currentDate))
-                .font(Theme.Typeface.display(Theme.TypeSize.noteHeading))
+            // The date on the same line as what it is, so the note is two lines high and the board keeps its height.
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
+                Text("Today in the game")
+                    .font(Theme.Typeface.text(Theme.TypeSize.small))
+                Text(DayText.shortWithYear(model.settings.currentDate))
+                    .font(Theme.Typeface.display(Theme.TypeSize.noteHeading))
+            }
             HStack(spacing: Theme.Spacing.m) {
                 Button("Day before") { model.moveToday(by: -1) }
                 Button("Day after") { model.moveToday(by: 1) }
@@ -139,7 +142,6 @@ struct TodayNote: View {
                     }
             }
             .buttonStyle(.onNote)
-            .padding(.top, Theme.Spacing.xxs)
         }
         .fixedSize()
         .padding(.horizontal, Theme.Sticky.horizontalPadding)

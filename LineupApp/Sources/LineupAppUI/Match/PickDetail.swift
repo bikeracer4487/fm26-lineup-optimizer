@@ -20,7 +20,7 @@ struct PickDetailView: View {
                     Text(detail.name)
                         .font(Theme.Typeface.display(Theme.TypeSize.title))
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("\(detail.slotText), \(detail.squadText)")
+                    Text(detail.positionLine)
                         .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
                         .foregroundStyle(Theme.Colour.mutedInk)
                     ForEach(detail.roles, id: \.self) { role in
@@ -31,7 +31,7 @@ struct PickDetailView: View {
                     }
                 }
                 Spacer(minLength: 0)
-                ValueRing(text: detail.valueText)
+                ValueRing(text: detail.valueText, label: detail.valueLabel)
             }
 
             figures
@@ -83,7 +83,7 @@ struct PickDetailView: View {
                         if let factor = card.factor {
                             Text(factor)
                                 .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .extraBold))
-                                .foregroundStyle(card.lowers ? Theme.Colour.redText : Theme.Colour.greenText)
+                                .foregroundStyle(Theme.Colour.factor(card.direction))
                                 .fixedSize()
                         }
                     }
@@ -122,6 +122,8 @@ struct PickDetailView: View {
 /// A figure that is the point of a panel, in marker blue inside a hand-drawn ring.
 struct ValueRing: View {
     let text: String
+    /// What it says to assistive technology.
+    let label: String
 
     var body: some View {
         Text(text)
@@ -135,12 +137,12 @@ struct ValueRing: View {
                     .strokeBorder(Theme.Colour.markerBlue, lineWidth: Theme.Match.ringLineWidth)
                     .rotationEffect(.degrees(Theme.Match.ringTilt))
             }
-            .accessibilityLabel("Match-day value \(text)")
+            .accessibilityLabel(label)
     }
 }
 
 /// One reason as the engine wrote it, after a green plus if it raised his value, a red minus if it lowered it, or a
-/// faint ring if it did neither.
+/// small ink dot if it did neither.
 struct ReasonLine: View {
     let reason: MarkedReason
 
@@ -174,7 +176,8 @@ struct ReasonLine: View {
                 .accessibilityLabel("Lowered his value")
         case .unchanged:
             Circle()
-                .strokeBorder(Theme.Colour.pillOutline, lineWidth: Theme.Match.signLineWidth)
+                .fill(Theme.Colour.ink)
+                .frame(width: Theme.Match.neutralDotDiameter, height: Theme.Match.neutralDotDiameter)
                 .frame(width: diameter, height: diameter)
                 .accessibilityHidden(true)
         }
