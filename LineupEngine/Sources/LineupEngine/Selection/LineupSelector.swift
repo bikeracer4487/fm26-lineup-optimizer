@@ -511,4 +511,19 @@ public enum Display {
     /// A whole percentage rounded down, so a value shown never reaches a threshold or 100% it has not reached.
     public static func percent(_ fraction: Double) -> String { "\(Int((fraction * 100 + displayNoise).rounded(.down)))%" }
     static func twoDecimals(_ x: Double) -> String { String(format: "%.2f", x) }
+
+    /// Whole pounds with a comma between each group of three digits, whatever the locale: "£1,250".
+    public static func pounds(_ amount: Int) -> String {
+        var digits = String(amount.magnitude)
+        var groups: [Substring] = []
+        while digits.count > 3 {
+            groups.insert(digits.suffix(3), at: 0)
+            digits.removeLast(3)
+        }
+        groups.insert(Substring(digits), at: 0)
+        return (amount < 0 ? "-" : "") + "£" + groups.joined(separator: ",")
+    }
+
+    /// A weekly wage: "£1,250 a week".
+    public static func perWeek(_ amount: Int) -> String { "\(pounds(amount)) a week" }
 }

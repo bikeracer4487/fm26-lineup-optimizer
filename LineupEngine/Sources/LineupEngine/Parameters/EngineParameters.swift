@@ -204,6 +204,195 @@ public struct RetrainingPace: Sendable, Equatable {
     }
 }
 
+/// The points the loan review gives a player on loan at the club. Its thresholds are the removal rules'.
+public struct LoanReviewRules: Sendable, Equatable {
+    public var weakestPoints: Int
+    public var firstElevenPoints: Int
+    public var secondElevenPoints: Int
+    public var neitherElevenPoints: Int
+    public var farBelowAveragePoints: Int
+    public var belowAveragePoints: Int
+    public var consistencyLowPoints: Int
+    public var importantMatchesPoints: Int
+    public var injuryPronenessPoints: Int
+    /// At this score or over the loan should end early.
+    public var endEarlyFrom: Int
+    /// At this score or over, and below `endEarlyFrom`, the loan should not be extended.
+    public var doNotExtendFrom: Int
+
+    public init(weakestPoints: Int, firstElevenPoints: Int, secondElevenPoints: Int, neitherElevenPoints: Int,
+                farBelowAveragePoints: Int, belowAveragePoints: Int, consistencyLowPoints: Int, importantMatchesPoints: Int,
+                injuryPronenessPoints: Int, endEarlyFrom: Int, doNotExtendFrom: Int) {
+        self.weakestPoints = weakestPoints
+        self.firstElevenPoints = firstElevenPoints; self.secondElevenPoints = secondElevenPoints
+        self.neitherElevenPoints = neitherElevenPoints
+        self.farBelowAveragePoints = farBelowAveragePoints; self.belowAveragePoints = belowAveragePoints
+        self.consistencyLowPoints = consistencyLowPoints; self.importantMatchesPoints = importantMatchesPoints
+        self.injuryPronenessPoints = injuryPronenessPoints
+        self.endEarlyFrom = endEarlyFrom; self.doNotExtendFrom = doNotExtendFrom
+    }
+}
+
+/// The points Player Removal gives a player of the club's own for each rule that applies, apart from the wage rules,
+/// and the loan review's. Of a pair of lines ("under 8 / exactly 8") only the stronger applies. "Room to grow" is
+/// potential ability minus current ability over current ability.
+public struct RemovalRules: Sendable, Equatable {
+    /// Any contract but a full-time one.
+    public var notFullTimePoints: Int
+    public var firstElevenPoints: Int
+    public var secondElevenPoints: Int
+    public var neitherElevenPoints: Int
+    /// This share of the players assessed, rounded down, with the lowest best slot ratings are the weakest.
+    public var weakestShare: Double
+    public var weakestPoints: Int
+    /// Current ability under this share of the squad average takes `farBelowAveragePoints`; under the average,
+    /// `belowAveragePoints`.
+    public var farBelowAverageShare: Double
+    public var farBelowAveragePoints: Int
+    public var belowAveragePoints: Int
+    /// From 1 month left up to `contractEndingSoonUpTo` takes `contractEndingSoonPoints`; from there up to
+    /// `contractEndingUpTo`, `contractEndingPoints`.
+    public var contractEndingSoonUpTo: Int
+    public var contractEndingSoonPoints: Int
+    public var contractEndingUpTo: Int
+    public var contractEndingPoints: Int
+    /// Consistency below `consistencyLowBelow` takes `consistencyLowPoints`; from there up to `consistencyFairUpTo`,
+    /// `consistencyFairPoints`.
+    public var consistencyLowBelow: Int
+    public var consistencyLowPoints: Int
+    public var consistencyFairUpTo: Int
+    public var consistencyFairPoints: Int
+    public var importantMatchesBelow: Int
+    public var importantMatchesPoints: Int
+    public var injuryPronenessAbove: Int
+    public var injuryPronenessPoints: Int
+    /// Professionalism below `professionalismLowBelow` takes `professionalismLowPoints`; from there up to
+    /// `professionalismFairUpTo`, `professionalismFairPoints`.
+    public var professionalismLowBelow: Int
+    public var professionalismLowPoints: Int
+    public var professionalismFairUpTo: Int
+    public var professionalismFairPoints: Int
+    public var ambitionBelow: Int
+    public var ambitionPoints: Int
+    public var controversyAbove: Int
+    public var controversyPoints: Int
+    public var temperamentBelow: Int
+    public var temperamentPoints: Int
+    /// A false prospect: aged `falseProspectUpToAge` or under, needing more than `falseProspectRateAbove` ability points
+    /// a year to reach his potential by `falseProspectTargetAge`, with Professionalism below `falseProspectProfessionalismBelow`.
+    public var falseProspectUpToAge: Int
+    public var falseProspectTargetAge: Int
+    public var falseProspectRateAbove: Double
+    public var falseProspectProfessionalismBelow: Int
+    public var falseProspectPoints: Int
+    /// Aged `stallingFromAge` to `stallingUpToAge`, current ability under the squad average, room to grow under
+    /// `stallingRoomBelow`.
+    public var stallingFromAge: Int
+    public var stallingUpToAge: Int
+    public var stallingRoomBelow: Double
+    public var stallingPoints: Int
+    /// A prospect: aged `prospectUpToAge` or under with room to grow of at least `strongProspectRoomFrom`
+    /// (`strongProspectPoints`) or at least `prospectRoomFrom` (`prospectPoints`).
+    public var prospectUpToAge: Int
+    public var strongProspectRoomFrom: Double
+    public var strongProspectPoints: Int
+    public var prospectRoomFrom: Double
+    public var prospectPoints: Int
+    /// A mentor: aged `mentorFromAge` or over with Professionalism `mentorProfessionalismFrom` or over; `mentorPoints`
+    /// with Determination `mentorDeterminationFrom` or over, `lesserMentorPoints` with less.
+    public var mentorFromAge: Int
+    public var mentorProfessionalismFrom: Int
+    public var mentorDeterminationFrom: Int
+    public var mentorPoints: Int
+    public var lesserMentorPoints: Int
+    /// Not a mentor, aged `noGrowthFromAge` or over with room to grow under `noGrowthRoomBelow`.
+    public var noGrowthFromAge: Int
+    public var noGrowthRoomBelow: Double
+    public var noGrowthPoints: Int
+    /// Not a mentor, aged `oldFromAge` or over.
+    public var oldFromAge: Int
+    public var oldPoints: Int
+    /// A critical player with this many months left or fewer may be released by mutual termination.
+    public var terminateWithinMonths: Int
+    public var loanReview: LoanReviewRules
+
+    public init(notFullTimePoints: Int, firstElevenPoints: Int, secondElevenPoints: Int, neitherElevenPoints: Int,
+                weakestShare: Double, weakestPoints: Int,
+                farBelowAverageShare: Double, farBelowAveragePoints: Int, belowAveragePoints: Int,
+                contractEndingSoonUpTo: Int, contractEndingSoonPoints: Int, contractEndingUpTo: Int, contractEndingPoints: Int,
+                consistencyLowBelow: Int, consistencyLowPoints: Int, consistencyFairUpTo: Int, consistencyFairPoints: Int,
+                importantMatchesBelow: Int, importantMatchesPoints: Int, injuryPronenessAbove: Int, injuryPronenessPoints: Int,
+                professionalismLowBelow: Int, professionalismLowPoints: Int,
+                professionalismFairUpTo: Int, professionalismFairPoints: Int,
+                ambitionBelow: Int, ambitionPoints: Int, controversyAbove: Int, controversyPoints: Int,
+                temperamentBelow: Int, temperamentPoints: Int,
+                falseProspectUpToAge: Int, falseProspectTargetAge: Int, falseProspectRateAbove: Double,
+                falseProspectProfessionalismBelow: Int, falseProspectPoints: Int,
+                stallingFromAge: Int, stallingUpToAge: Int, stallingRoomBelow: Double, stallingPoints: Int,
+                prospectUpToAge: Int, strongProspectRoomFrom: Double, strongProspectPoints: Int,
+                prospectRoomFrom: Double, prospectPoints: Int,
+                mentorFromAge: Int, mentorProfessionalismFrom: Int, mentorDeterminationFrom: Int,
+                mentorPoints: Int, lesserMentorPoints: Int,
+                noGrowthFromAge: Int, noGrowthRoomBelow: Double, noGrowthPoints: Int, oldFromAge: Int, oldPoints: Int,
+                terminateWithinMonths: Int, loanReview: LoanReviewRules) {
+        self.notFullTimePoints = notFullTimePoints
+        self.firstElevenPoints = firstElevenPoints; self.secondElevenPoints = secondElevenPoints
+        self.neitherElevenPoints = neitherElevenPoints
+        self.weakestShare = weakestShare; self.weakestPoints = weakestPoints
+        self.farBelowAverageShare = farBelowAverageShare; self.farBelowAveragePoints = farBelowAveragePoints
+        self.belowAveragePoints = belowAveragePoints
+        self.contractEndingSoonUpTo = contractEndingSoonUpTo; self.contractEndingSoonPoints = contractEndingSoonPoints
+        self.contractEndingUpTo = contractEndingUpTo; self.contractEndingPoints = contractEndingPoints
+        self.consistencyLowBelow = consistencyLowBelow; self.consistencyLowPoints = consistencyLowPoints
+        self.consistencyFairUpTo = consistencyFairUpTo; self.consistencyFairPoints = consistencyFairPoints
+        self.importantMatchesBelow = importantMatchesBelow; self.importantMatchesPoints = importantMatchesPoints
+        self.injuryPronenessAbove = injuryPronenessAbove; self.injuryPronenessPoints = injuryPronenessPoints
+        self.professionalismLowBelow = professionalismLowBelow; self.professionalismLowPoints = professionalismLowPoints
+        self.professionalismFairUpTo = professionalismFairUpTo; self.professionalismFairPoints = professionalismFairPoints
+        self.ambitionBelow = ambitionBelow; self.ambitionPoints = ambitionPoints
+        self.controversyAbove = controversyAbove; self.controversyPoints = controversyPoints
+        self.temperamentBelow = temperamentBelow; self.temperamentPoints = temperamentPoints
+        self.falseProspectUpToAge = falseProspectUpToAge; self.falseProspectTargetAge = falseProspectTargetAge
+        self.falseProspectRateAbove = falseProspectRateAbove
+        self.falseProspectProfessionalismBelow = falseProspectProfessionalismBelow; self.falseProspectPoints = falseProspectPoints
+        self.stallingFromAge = stallingFromAge; self.stallingUpToAge = stallingUpToAge
+        self.stallingRoomBelow = stallingRoomBelow; self.stallingPoints = stallingPoints
+        self.prospectUpToAge = prospectUpToAge
+        self.strongProspectRoomFrom = strongProspectRoomFrom; self.strongProspectPoints = strongProspectPoints
+        self.prospectRoomFrom = prospectRoomFrom; self.prospectPoints = prospectPoints
+        self.mentorFromAge = mentorFromAge; self.mentorProfessionalismFrom = mentorProfessionalismFrom
+        self.mentorDeterminationFrom = mentorDeterminationFrom
+        self.mentorPoints = mentorPoints; self.lesserMentorPoints = lesserMentorPoints
+        self.noGrowthFromAge = noGrowthFromAge; self.noGrowthRoomBelow = noGrowthRoomBelow; self.noGrowthPoints = noGrowthPoints
+        self.oldFromAge = oldFromAge; self.oldPoints = oldPoints
+        self.terminateWithinMonths = terminateWithinMonths
+        self.loanReview = loanReview
+    }
+}
+
+/// Wage rules for a player of the club's own who is in neither eleven: a wage above `highMultiple` times the squad's
+/// median takes `highPoints`; above the median, `abovePoints`. A median of 0 applies neither.
+public struct RemovalWageRules: Sendable, Equatable {
+    public var highMultiple: Double
+    public var highPoints: Int
+    public var abovePoints: Int
+
+    public init(highMultiple: Double, highPoints: Int, abovePoints: Int) {
+        self.highMultiple = highMultiple; self.highPoints = highPoints; self.abovePoints = abovePoints
+    }
+}
+
+/// The scores at and above which a removal advice is critical, high or medium; below `medium` it is keep.
+public struct RemovalLevels: Sendable, Equatable {
+    public var critical: Int
+    public var high: Int
+    public var medium: Int
+
+    public init(critical: Int, high: Int, medium: Int) {
+        self.critical = critical; self.high = high; self.medium = medium
+    }
+}
+
 /// Lets `EngineParameters.all` list every stored `Parameter` whatever its value type.
 protocol ParameterProtocol {
     var evidence: Evidence { get }
@@ -347,6 +536,14 @@ public struct EngineParameters: Sendable {
     public var retrainingPace: Parameter<RetrainingPace>
     /// A retraining that has gained nothing over at least this many weeks has stalled.
     public var retrainingStalledAfterWeeks: Parameter<Int>
+    /// The points Player Removal and the loan review give for each rule, apart from the wage rules.
+    public var removalRules: Parameter<RemovalRules>
+    /// The points Player Removal gives for a high wage outside both elevens.
+    public var removalWageRules: Parameter<RemovalWageRules>
+    /// A mutual termination's cost as a share of the wages left on the contract.
+    public var mutualTerminationShare: Parameter<Double>
+    /// The scores that make a removal advice critical, high or medium.
+    public var removalLevels: Parameter<RemovalLevels>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -588,8 +785,47 @@ public struct EngineParameters: Sendable {
                 source: "ui/api/api_training_advisor.py (branch customizable-tactics): age plasticity 1.0, 0.7, 0.4 and 0.1 "
                     + "taken as 2 − plasticity, and the head start; docs/Research/position-retraining-strategy.md: three to six "
                     + "months with high Versatility, 18 months or never with low. The floor of 4 weeks is the fluid class's shortest"),
-            retrainingStalledAfterWeeks: Parameter(6, .derived, source: "this design's choice"))
+            retrainingStalledAfterWeeks: Parameter(6, .derived, source: "this design's choice"),
+            removalRules: Parameter(
+                RemovalRules(
+                    notFullTimePoints: 50, firstElevenPoints: -40, secondElevenPoints: -20, neitherElevenPoints: 15,
+                    weakestShare: 0.30, weakestPoints: 30,
+                    farBelowAverageShare: 0.85, farBelowAveragePoints: 25, belowAveragePoints: 10,
+                    contractEndingSoonUpTo: 6, contractEndingSoonPoints: 25, contractEndingUpTo: 12, contractEndingPoints: 15,
+                    consistencyLowBelow: 8, consistencyLowPoints: 25, consistencyFairUpTo: 8, consistencyFairPoints: 15,
+                    importantMatchesBelow: 8, importantMatchesPoints: 20, injuryPronenessAbove: 14, injuryPronenessPoints: 25,
+                    professionalismLowBelow: 8, professionalismLowPoints: 25,
+                    professionalismFairUpTo: 9, professionalismFairPoints: 15,
+                    ambitionBelow: 6, ambitionPoints: 25, controversyAbove: 16, controversyPoints: 25,
+                    temperamentBelow: 8, temperamentPoints: 15,
+                    falseProspectUpToAge: 20, falseProspectTargetAge: 24, falseProspectRateAbove: 15,
+                    falseProspectProfessionalismBelow: 14, falseProspectPoints: 35,
+                    stallingFromAge: 23, stallingUpToAge: 24, stallingRoomBelow: 0.10, stallingPoints: 20,
+                    prospectUpToAge: 21, strongProspectRoomFrom: 0.30, strongProspectPoints: -30,
+                    prospectRoomFrom: 0.15, prospectPoints: -15,
+                    mentorFromAge: 30, mentorProfessionalismFrom: 16, mentorDeterminationFrom: 15,
+                    mentorPoints: -40, lesserMentorPoints: -20,
+                    noGrowthFromAge: 30, noGrowthRoomBelow: 0.05, noGrowthPoints: 10, oldFromAge: 32, oldPoints: 5,
+                    terminateWithinMonths: 12,
+                    loanReview: LoanReviewRules(
+                        weakestPoints: 30, firstElevenPoints: -30, secondElevenPoints: -15, neitherElevenPoints: 20,
+                        farBelowAveragePoints: 25, belowAveragePoints: 10, consistencyLowPoints: 20, importantMatchesPoints: 15,
+                        injuryPronenessPoints: 25, endEarlyFrom: 50, doNotExtendFrom: 25)),
+                .carriedOverFM26, source: removalSource),
+            removalWageRules: Parameter(
+                RemovalWageRules(highMultiple: 1.5, highPoints: 35, abovePoints: 20),
+                .derived,
+                source: "\(removalSource) compared wages with fixed amounts, which depend on the currency unit; "
+                    + "here a wage is compared with the squad's median"),
+            mutualTerminationShare: Parameter(
+                0.55, .carriedOverFM26,
+                source: "docs/Research/player-management-and-sales.md: a mutual termination often costs 50% to 60% of the remaining contract; "
+                    + "\(removalSource) used 0.55"),
+            removalLevels: Parameter(
+                RemovalLevels(critical: 80, high: 50, medium: 30), .carriedOverFM26, source: removalSource))
     }()
+
+    private static let removalSource = "ui/api/api_player_removal.py (branch customizable-tactics)"
 
     private static let trainingAdvisorSource = "fm_training_advisor.py (branch customizable-tactics)"
 

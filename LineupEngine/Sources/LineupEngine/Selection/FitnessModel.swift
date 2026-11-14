@@ -187,6 +187,21 @@ public enum FitnessModel {
         for (name, factor) in paceFactors where !usable(factor) {
             found.append("retrainingPace \(name) is \(factor), \(notUsable)")
         }
+        // Player Removal counts this share of the players assessed, rounded down, as the weakest.
+        let removal = parameters.removalRules.value
+        if !(removal.weakestShare >= 0 && removal.weakestShare <= 1) {
+            found.append("removalRules weakestShare is \(removal.weakestShare), not between 0 and 1")
+        }
+        // The growth a false prospect needs divides by the years left before the target age.
+        if !(removal.falseProspectUpToAge < removal.falseProspectTargetAge) {
+            found.append("removalRules falseProspectUpToAge (\(removal.falseProspectUpToAge)) is not below "
+                + "falseProspectTargetAge (\(removal.falseProspectTargetAge))")
+        }
+        // A mutual termination's cost is this share of the release cost, rounded to whole pounds.
+        let mutualShare = parameters.mutualTerminationShare.value
+        if !(mutualShare >= 0 && mutualShare <= 1) {
+            found.append("mutualTerminationShare is \(mutualShare), not between 0 and 1")
+        }
         return found
     }
 }

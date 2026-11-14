@@ -275,4 +275,78 @@ import Testing
         r.restWatchShare = Parameter(1, .derived, source: "test")
         #expect(FitnessModel.problems(in: r).isEmpty)
     }
+
+    @Test func theRemovalParametersAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        let expected: [(String, Evidence, String)] = [
+            ("removalRules", .carriedOverFM26, "ui/api/api_player_removal.py"),
+            ("removalWageRules", .derived, "median"),
+            ("mutualTerminationShare", .carriedOverFM26, "docs/Research/player-management-and-sales.md"),
+            ("removalLevels", .carriedOverFM26, "ui/api/api_player_removal.py"),
+        ]
+        for (name, evidence, cited) in expected {
+            #expect(listed[name]?.evidence == evidence, "\(name)")
+            #expect(listed[name]?.source.contains(cited) == true, "\(name) does not cite \(cited)")
+        }
+        let p = EngineParameters.fm27
+        let r = p.removalRules.value
+        #expect(r.notFullTimePoints == 50)
+        #expect([r.firstElevenPoints, r.secondElevenPoints, r.neitherElevenPoints] == [-40, -20, 15])
+        #expect(r.weakestShare == 0.30 && r.weakestPoints == 30)
+        #expect(r.farBelowAverageShare == 0.85 && r.farBelowAveragePoints == 25 && r.belowAveragePoints == 10)
+        #expect(r.contractEndingSoonUpTo == 6 && r.contractEndingSoonPoints == 25)
+        #expect(r.contractEndingUpTo == 12 && r.contractEndingPoints == 15)
+        #expect(r.consistencyLowBelow == 8 && r.consistencyLowPoints == 25 && r.consistencyFairUpTo == 8 && r.consistencyFairPoints == 15)
+        #expect(r.importantMatchesBelow == 8 && r.importantMatchesPoints == 20)
+        #expect(r.injuryPronenessAbove == 14 && r.injuryPronenessPoints == 25)
+        #expect(r.professionalismLowBelow == 8 && r.professionalismLowPoints == 25)
+        #expect(r.professionalismFairUpTo == 9 && r.professionalismFairPoints == 15)
+        #expect(r.ambitionBelow == 6 && r.ambitionPoints == 25)
+        #expect(r.controversyAbove == 16 && r.controversyPoints == 25)
+        #expect(r.temperamentBelow == 8 && r.temperamentPoints == 15)
+        #expect(r.falseProspectUpToAge == 20 && r.falseProspectTargetAge == 24 && r.falseProspectRateAbove == 15)
+        #expect(r.falseProspectProfessionalismBelow == 14 && r.falseProspectPoints == 35)
+        #expect(r.stallingFromAge == 23 && r.stallingUpToAge == 24 && r.stallingRoomBelow == 0.10 && r.stallingPoints == 20)
+        #expect(r.prospectUpToAge == 21)
+        #expect(r.strongProspectRoomFrom == 0.30 && r.strongProspectPoints == -30)
+        #expect(r.prospectRoomFrom == 0.15 && r.prospectPoints == -15)
+        #expect(r.mentorFromAge == 30 && r.mentorProfessionalismFrom == 16 && r.mentorDeterminationFrom == 15)
+        #expect(r.mentorPoints == -40 && r.lesserMentorPoints == -20)
+        #expect(r.noGrowthFromAge == 30 && r.noGrowthRoomBelow == 0.05 && r.noGrowthPoints == 10)
+        #expect(r.oldFromAge == 32 && r.oldPoints == 5)
+        #expect(r.terminateWithinMonths == 12)
+        let l = r.loanReview
+        #expect(l.weakestPoints == 30)
+        #expect([l.firstElevenPoints, l.secondElevenPoints, l.neitherElevenPoints] == [-30, -15, 20])
+        #expect(l.farBelowAveragePoints == 25 && l.belowAveragePoints == 10)
+        #expect(l.consistencyLowPoints == 20 && l.importantMatchesPoints == 15 && l.injuryPronenessPoints == 25)
+        #expect(l.endEarlyFrom == 50 && l.doNotExtendFrom == 25)
+        let w = p.removalWageRules.value
+        #expect(w.highMultiple == 1.5 && w.highPoints == 35 && w.abovePoints == 20)
+        #expect(p.mutualTerminationShare.value == 0.55)
+        let levels = p.removalLevels.value
+        #expect(levels.critical == 80 && levels.high == 50 && levels.medium == 30)
+    }
+
+    @Test func removalParameterProblemsAreReported() {
+        var q = EngineParameters.fm27
+        var rules = q.removalRules.value
+        rules.weakestShare = -0.1
+        rules.falseProspectUpToAge = 24
+        q.removalRules = Parameter(rules, .derived, source: "test")
+        q.mutualTerminationShare = Parameter(.nan, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == [
+            "removalRules weakestShare is -0.1, not between 0 and 1",
+            "removalRules falseProspectUpToAge (24) is not below falseProspectTargetAge (24)",
+            "mutualTerminationShare is nan, not between 0 and 1",
+        ])
+        // The ends of the ranges are allowed, and a false prospect's age may be one below the target age.
+        rules.weakestShare = 1
+        rules.falseProspectUpToAge = 23
+        q.removalRules = Parameter(rules, .derived, source: "test")
+        q.mutualTerminationShare = Parameter(0, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+        q.mutualTerminationShare = Parameter(1.1, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["mutualTerminationShare is 1.1, not between 0 and 1"])
+    }
 }
