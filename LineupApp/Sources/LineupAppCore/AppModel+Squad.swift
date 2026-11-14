@@ -50,6 +50,7 @@ extension AppModel {
             for index in history.indices { history[index].awaitingImport.remove(target) }
             save(.history)
         }
+        recordFamiliarity(after: target, on: date)
         replan()
 
         let onLoan = (state.book.current[target] ?? []).filter { player in

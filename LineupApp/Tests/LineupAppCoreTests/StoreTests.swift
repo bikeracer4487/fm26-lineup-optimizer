@@ -23,7 +23,8 @@ import LineupEngine
     private var fixture: StoredFixture {
         StoredFixture(id: FixtureID("f1"), date: day, opponent: "Rovers", importance: .high,
                       tacticID: tacticID, overrides: [.GK: alice], rejected: [bob],
-                      lastPlanned: PlannedEleven(starters: [.GK: bob], names: [bob: "Bob"], tacticName: "Test"))
+                      lastPlanned: PlannedEleven(starters: [.GK: bob], names: [bob: "Bob"], tacticName: "Test"),
+                      competition: .minorCup, opponentStrength: .muchWeaker)
     }
     private var record: ConfirmedRecord {
         ConfirmedRecord(lineup: ConfirmedLineup(fixture: FixtureID("f1"), date: day, starters: [.GK: alice]),
@@ -123,7 +124,7 @@ import LineupEngine
         }
     }
 
-    @Test func aFixturesFileWithoutRememberedElevensLoadsWithNone() throws {
+    @Test func aFixturesFileWithoutRememberedElevensOrACompetitionLoadsWithNone() throws {
         try withStore { store, dir in
             let saved = #"""
             {"version": 1, "value": [{"id": "f1", "date": "2026-11-13", "opponent": "Rovers", "importance": "high",
@@ -136,6 +137,8 @@ import LineupEngine
             var expected = fixture
             expected.tacticID = nil
             expected.lastPlanned = nil
+            expected.competition = nil
+            expected.opponentStrength = nil
             #expect(loaded.value == [expected])
         }
     }
@@ -272,6 +275,7 @@ import LineupEngine
             let squad = store.load(.squad, as: SquadState.self, otherwise: SquadState())
             #expect(squad.notice == nil)
             #expect(squad.value == SquadState())
+            #expect(store.load(.training, as: TrainingState.self, otherwise: TrainingState()).notice == nil)
         }
     }
 

@@ -21,6 +21,7 @@ import LineupEngine
         #expect(a.fixtures == b.fixtures, sourceLocation: sourceLocation)
         #expect(a.history == b.history, sourceLocation: sourceLocation)
         #expect(a.settings == b.settings, sourceLocation: sourceLocation)
+        #expect(a.training == b.training, sourceLocation: sourceLocation)
     }
 
     // MARK: Loading
@@ -419,6 +420,29 @@ import LineupEngine
         #expect(t.model.fixtures.map(\.id) == [middle, late, early])
     }
 
+    @Test func aFixtureKeepsItsCompetitionAndOpponentStrengthThroughADraft() throws {
+        let t = try TestModel()
+        let fresh = t.model.newFixtureDraft()
+        #expect(fresh.competition == nil && fresh.opponentStrength == nil)
+
+        var draft = fresh
+        draft.opponent = "Rovers"
+        draft.competition = .cup
+        draft.opponentStrength = .stronger
+        let id = try #require(t.model.save(draft))
+        var saved = try #require(t.model.fixtures.first { $0.id == id })
+        #expect(saved.competition == .cup && saved.opponentStrength == .stronger)
+
+        var edit = t.model.fixtureDraft(for: saved)
+        #expect(edit.competition == .cup && edit.opponentStrength == .stronger)
+        edit.competition = .league
+        edit.opponentStrength = nil
+        t.model.save(edit)
+        saved = try #require(t.model.fixtures.first { $0.id == id })
+        #expect(saved.competition == .league && saved.opponentStrength == nil)
+        #expect(t.reopened().fixtures == t.model.fixtures)
+    }
+
     @Test func fixturesOnOneDayAreOrderedById() throws {
         let t = try TestModel()
         let a = t.model.addFixture(date: day("2026-11-14"), opponent: "A", importance: .low)
@@ -477,6 +501,10 @@ import LineupEngine
         settings.conditionFloor = 80
         model.update(settings); check("update settings")
         model.deleteFixture(fixture); check("delete fixture")
+        let choice = RetrainingChoice(player: model.players[0].id, position: .goalkeeper)
+        model.accept(choice); check("accept a retraining")
+        model.reject(RetrainingChoice(player: model.players[1].id, position: .striker)); check("reject a retraining")
+        model.stopRetraining(choice); check("stop a retraining")
     }
 
     @Test func aSaveThatFailsIsNoticed() throws {

@@ -34,17 +34,23 @@ public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
     public var rejected: Set<PlayerID>
     /// The eleven last planned for it; nil until it has been planned.
     public var lastPlanned: PlannedEleven?
+    /// The kind of competition; nil until the owner says.
+    public var competition: Competition?
+    /// How strong the opponent is compared with the club; nil until the owner says.
+    public var opponentStrength: OpponentStrength?
 
     public init(
         id: FixtureID, date: Day, opponent: String, importance: Importance, tacticID: UUID? = nil,
-        overrides: [SlotID: PlayerID] = [:], rejected: Set<PlayerID> = [], lastPlanned: PlannedEleven? = nil
+        overrides: [SlotID: PlayerID] = [:], rejected: Set<PlayerID> = [], lastPlanned: PlannedEleven? = nil,
+        competition: Competition? = nil, opponentStrength: OpponentStrength? = nil
     ) {
         self.id = id; self.date = date; self.opponent = opponent; self.importance = importance
         self.tacticID = tacticID; self.overrides = overrides; self.rejected = rejected; self.lastPlanned = lastPlanned
+        self.competition = competition; self.opponentStrength = opponentStrength
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, date, opponent, importance, tacticID, overrides, rejected, lastPlanned
+        case id, date, opponent, importance, tacticID, overrides, rejected, lastPlanned, competition, opponentStrength
     }
 
     public init(from decoder: any Decoder) throws {
@@ -58,6 +64,9 @@ public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
         rejected = Set(try c.decode([PlayerID].self, forKey: .rejected))
         // A fixture saved before elevens were remembered has none.
         lastPlanned = try c.decodeIfPresent(PlannedEleven.self, forKey: .lastPlanned)
+        // A fixture saved before competitions were kept has neither.
+        competition = try c.decodeIfPresent(Competition.self, forKey: .competition)
+        opponentStrength = try c.decodeIfPresent(OpponentStrength.self, forKey: .opponentStrength)
     }
 
     /// `rejected` is written as an array in key order, because a set has no fixed order of its own.
@@ -71,6 +80,8 @@ public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
         try c.encode(overrides, forKey: .overrides)
         try c.encode(rejected.sorted { $0.key < $1.key }, forKey: .rejected)
         try c.encodeIfPresent(lastPlanned, forKey: .lastPlanned)
+        try c.encodeIfPresent(competition, forKey: .competition)
+        try c.encodeIfPresent(opponentStrength, forKey: .opponentStrength)
     }
 }
 
@@ -137,5 +148,82 @@ public struct SquadState: Equatable, Codable, Sendable {
     public init() {
         self.book = SquadBook()
         self.importedOn = [:]
+    }
+}
+
+/// The position retrainings the owner has accepted or turned down, and how each accepted one is going.
+public struct TrainingState: Equatable, Codable, Sendable {
+    /// In `order`; the model keeps at most one per player, since a player learns one position at a time.
+    public var accepted: [Retraining]
+    public var rejected: Set<RetrainingChoice>
+    /// For each accepted retraining, the player's familiarity at the position, one a day, in day order.
+    public var observations: [RetrainingChoice: [FamiliarityObservation]]
+    /// Each player's name as it was when a retraining of his was last accepted or turned down.
+    public var names: [PlayerID: String]
+
+    public init(accepted: [Retraining] = [], rejected: Set<RetrainingChoice> = [],
+                observations: [RetrainingChoice: [FamiliarityObservation]] = [:], names: [PlayerID: String] = [:]) {
+        self.accepted = accepted; self.rejected = rejected; self.observations = observations; self.names = names
+    }
+
+    /// By the player's key, then by the position's place in `Position.allCases`.
+    static func order(_ a: RetrainingChoice, _ b: RetrainingChoice) -> Bool {
+        (a.player.key, place(a.position)) < (b.player.key, place(b.position))
+    }
+
+    private static func place(_ position: Position) -> Int {
+        Position.allCases.firstIndex(of: position) ?? Position.allCases.count
+    }
+
+    static func choice(_ retraining: Retraining) -> RetrainingChoice {
+        RetrainingChoice(player: retraining.player, position: retraining.position)
+    }
+
+    /// Records the familiarity for an accepted pair on the day: a second one that day replaces the first, and none is
+    /// recorded before the day the pair was accepted or for a pair that is not accepted.
+    mutating func record(_ familiarity: Int, for choice: RetrainingChoice, on day: Day) {
+        guard let retraining = accepted.first(where: { Self.choice($0) == choice }), day >= retraining.acceptedOn else {
+            return
+        }
+        var list = observations[choice, default: []].filter { $0.day != day }
+        list.append(FamiliarityObservation(day: day, familiarity: familiarity))
+        list.sort { $0.day < $1.day }
+        observations[choice] = list
+    }
+
+    /// Keeps a name only for a player in an accepted or rejected pair.
+    mutating func forgetUnusedNames() {
+        let held = Set(accepted.map(\.player)).union(rejected.map(\.player))
+        names = names.filter { held.contains($0.key) }
+    }
+
+    /// One pair's observations, as saved.
+    private struct Observed: Codable {
+        var choice: RetrainingChoice
+        var observations: [FamiliarityObservation]
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case accepted, rejected, observations, names
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        accepted = try c.decode([Retraining].self, forKey: .accepted).sorted { Self.order(Self.choice($0), Self.choice($1)) }
+        rejected = Set(try c.decode([RetrainingChoice].self, forKey: .rejected))
+        let observed = try c.decode([Observed].self, forKey: .observations)
+        observations = Dictionary(observed.map { ($0.choice, $0.observations) }, uniquingKeysWith: { first, _ in first })
+        names = try c.decode([PlayerID: String].self, forKey: .names)
+    }
+
+    /// Every list is written in `order`, because neither a set nor a dictionary keyed by pairs has a fixed order.
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(accepted.sorted { Self.order(Self.choice($0), Self.choice($1)) }, forKey: .accepted)
+        try c.encode(rejected.sorted(by: Self.order), forKey: .rejected)
+        let observed = observations.sorted { Self.order($0.key, $1.key) }
+            .map { Observed(choice: $0.key, observations: $0.value) }
+        try c.encode(observed, forKey: .observations)
+        try c.encode(names, forKey: .names)
     }
 }

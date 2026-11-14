@@ -54,6 +54,10 @@ public struct FixtureDraft: Equatable, Sendable {
     public var importance: Importance
     /// Nil: the primary tactic.
     public var tacticID: UUID?
+    /// Nil until the owner says.
+    public var competition: Competition?
+    /// Nil until the owner says.
+    public var opponentStrength: OpponentStrength?
     /// The other saved fixtures' opponents by day, the first in date order where a day has several: a club plays one
     /// match a day. The model fills it in.
     public var otherMatches: [Day: String] = [:]
@@ -61,11 +65,13 @@ public struct FixtureDraft: Equatable, Sendable {
     /// A new fixture of medium importance on the primary tactic.
     public init(date: Day) {
         self.id = nil; self.date = date; self.opponent = ""; self.importance = .medium; self.tacticID = nil
+        self.competition = nil; self.opponentStrength = nil
     }
 
     public init(_ fixture: StoredFixture) {
         self.id = fixture.id; self.date = fixture.date; self.opponent = fixture.opponent
         self.importance = fixture.importance; self.tacticID = fixture.tacticID
+        self.competition = fixture.competition; self.opponentStrength = fixture.opponentStrength
     }
 
     public var isNew: Bool { id == nil }
@@ -169,7 +175,8 @@ extension AppModel {
         guard let id = draft.id else {
             let id = FixtureID(UUID().uuidString)
             fixtures.append(StoredFixture(id: id, date: draft.date, opponent: opponent, importance: draft.importance,
-                                          tacticID: draft.tacticID))
+                                          tacticID: draft.tacticID, competition: draft.competition,
+                                          opponentStrength: draft.opponentStrength))
             fixtures.sort(by: Self.dateOrder)
             save(.fixtures)
             replan()
@@ -180,6 +187,8 @@ extension AppModel {
         fixture.opponent = opponent
         fixture.importance = draft.importance
         fixture.tacticID = draft.tacticID
+        fixture.competition = draft.competition
+        fixture.opponentStrength = draft.opponentStrength
         update(fixture)
         return id
     }

@@ -1207,4 +1207,55 @@ import LineupEngine
         #expect(cleared == PickSelection(fixture: id, slot: .D_L, player: now))
         #expect(try MatchPresentation.selectedSlot(cleared, in: #require(plan(model, id))) == .D_L)
     }
+
+    // MARK: What the advisors keep
+
+    @Test func anAcceptedRetrainingIsHandedToThePlannerAndItsReasonShowsInThePlan() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 1, t)
+        var fixture = model.fixtures[0]
+        fixture.importance = .low
+        model.update(fixture)
+        let id = fixture.id
+        let tactic = try #require(model.primaryTactic).tactic
+        let parameters = EngineParameters.fm27
+        let range = parameters.retrainingFromFamiliarity.value..<parameters.retrainingUntilFamiliarity.value
+        // A player who can play, fixed in a slot whose in-possession position he knows well enough to be favoured there.
+        var found: (slot: SlotID, player: PlayerID, position: Position)?
+        search: for assignment in try tactic.assignments(catalog: model.catalog) {
+            for candidate in model.candidates(for: assignment.slot, in: id) where candidate.unavailable == nil {
+                let player = try #require(model.squad.book.allPlayers.first { $0.id == candidate.player })
+                if let familiarity = player.familiarity[assignment.ipPosition], range.contains(familiarity) {
+                    found = (assignment.slot, candidate.player, assignment.ipPosition)
+                    break search
+                }
+            }
+        }
+        let (slot, player, position) = try #require(found)
+        model.setOverride(player, at: slot, in: id)
+        func reasons() -> [String] { pick(at: slot, plan(model, id))?.reasons ?? [] }
+        #expect(pick(at: slot, plan(model, id))?.player == player)
+        #expect(!reasons().contains { $0.hasPrefix("Retraining at") })
+
+        model.accept(RetrainingChoice(player: player, position: position))
+        #expect(model.retrainingForPlan == model.training.accepted)
+        #expect(reasons().contains { $0.hasPrefix("Retraining at \(PositionText.plain(position))") })
+
+        model.stopRetraining(RetrainingChoice(player: player, position: position))
+        #expect(model.retrainingForPlan.isEmpty)
+        #expect(!reasons().contains { $0.hasPrefix("Retraining at") })
+    }
+
+    @Test func thePlannerIsHandedEachFixturesCompetitionAndOpponentStrength() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 1, t)
+        #expect(try #require(model.fixtureForPlanner(model.fixtures[0])).competition == nil)
+        var fixture = model.fixtures[0]
+        fixture.competition = .cup
+        fixture.opponentStrength = .weaker
+        model.update(fixture)
+        let handed = try #require(model.fixtureForPlanner(model.fixtures[0]))
+        #expect(handed.competition == .cup)
+        #expect(handed.opponentStrength == .weaker)
+    }
 }

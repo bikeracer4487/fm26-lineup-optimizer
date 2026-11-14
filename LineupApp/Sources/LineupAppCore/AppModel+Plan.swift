@@ -255,12 +255,9 @@ extension AppModel {
 
         let parameters = planParameters
         let request = PlanRequest(
-            fixtures: withinReach.map { fixture in
-                Fixture(id: fixture.id, date: fixture.date, opponent: fixture.opponent, importance: fixture.importance,
-                        tactic: tactic(for: fixture)!.tactic, overrides: fixture.overrides, rejected: fixture.rejected)
-            },
+            fixtures: withinReach.compactMap(fixtureForPlanner),   // every one has a tactic: checked above
             players: players, ownClub: ownClub, asOf: asOf, confirmed: history.map(\.lineup),
-            played: countedSinceImport(players).map(\.lineup), retraining: [], settings: settings.plan)
+            played: countedSinceImport(players).map(\.lineup), retraining: retrainingForPlan, settings: settings.plan)
         let plan: Plan
         do {
             plan = try Planner(catalog: catalog, profile: profile, parameters: parameters).plan(request)
@@ -296,6 +293,15 @@ extension AppModel {
                                ignoredOverrides: ignored)
         }
         return .ready(result)
+    }
+
+    /// The saved fixture as the planner is handed it, with its tactic resolved; nil when it has no tactic to use.
+    func fixtureForPlanner(_ fixture: StoredFixture) -> Fixture? {
+        tactic(for: fixture).map { stored in
+            Fixture(id: fixture.id, date: fixture.date, opponent: fixture.opponent, importance: fixture.importance,
+                    tactic: stored.tactic, overrides: fixture.overrides, rejected: fixture.rejected,
+                    competition: fixture.competition, opponentStrength: fixture.opponentStrength)
+        }
     }
 
     /// A fixture before the plan's starting day with no confirmed lineup, with its remembered eleven if it has one.

@@ -73,6 +73,9 @@ public struct AppEnvironment: Sendable {
     /// Unsaved changes to saved tactics, by tactic id, kept in their own file until saved or reverted. Changed only
     /// through `changeDrafts`, which saves them.
     private(set) var tacticDrafts: [UUID: TacticDraft] = [:]
+    /// The retrainings accepted and turned down, and how the accepted ones are going. Changed only through
+    /// `changeTraining`, which saves it and replans.
+    public private(set) var training: TrainingState
     public let catalog: RoleCatalog
     /// The rating profile the plan is made with: the engine's standard one.
     let profile: RatingProfile
@@ -107,11 +110,13 @@ public struct AppEnvironment: Sendable {
         let history = store.load(.history, as: [ConfirmedRecord].self, otherwise: [])
         let squad = store.load(.squad, as: SquadState.self, otherwise: SquadState())
         let drafts = store.load(.drafts, as: [StoredTactic].self, otherwise: [])
+        let training = store.load(.training, as: TrainingState.self, otherwise: TrainingState())
         self.settings = settings.value
         self.tactics = tactics.value
         self.fixtures = fixtures.value.sorted(by: Self.dateOrder)
         self.history = history.value
         self.squad = squad.value
+        self.training = training.value
         // A draft is kept only for a saved tactic it differs from. When the tactics file could not be read and was left
         // where it is, its tactics are still on disk, so every draft is kept for them.
         let saved = Dictionary(tactics.value.map { ($0.id, $0.tactic) }, uniquingKeysWith: { first, _ in first })
@@ -120,7 +125,8 @@ public struct AppEnvironment: Sendable {
             ? drafts.value
             : drafts.value.filter { saved[$0.id] != nil && saved[$0.id] != $0.tactic }
         self.tacticDrafts = Dictionary(kept.map { ($0.id, TacticDraft($0.tactic)) }, uniquingKeysWith: { first, _ in first })
-        self.notices = [settings.notice, tactics.notice, fixtures.notice, history.notice, squad.notice, drafts.notice]
+        self.notices = [settings.notice, tactics.notice, fixtures.notice, history.notice, squad.notice, drafts.notice,
+                        training.notice]
             .compactMap { $0 }.map(Notice.init(text:))
         self.lastImport = nil
         self.planState = .needsSquad
@@ -129,7 +135,8 @@ public struct AppEnvironment: Sendable {
         let replaced: [(StoreFile, Bool)] = [(.settings, settings.replaceOnDisk), (.tactics, tactics.replaceOnDisk),
                                             (.fixtures, fixtures.replaceOnDisk), (.history, history.replaceOnDisk),
                                             (.squad, squad.replaceOnDisk),
-                                            (.drafts, drafts.replaceOnDisk || kept.count != drafts.value.count)]
+                                            (.drafts, drafts.replaceOnDisk || kept.count != drafts.value.count),
+                                            (.training, training.replaceOnDisk)]
         for (file, replace) in replaced where replace { save(file) }
         replan()
     }
@@ -159,6 +166,7 @@ public struct AppEnvironment: Sendable {
             case .history: try store.save(history, to: .history)
             case .squad: try store.save(squad, to: .squad)
             case .drafts: try store.save(savedDrafts, to: .drafts)
+            case .training: try store.save(training, to: .training)
             }
             return true
         } catch {
@@ -175,7 +183,7 @@ public struct AppEnvironment: Sendable {
     }
 
     /// Works the plan out again from the saved state. Every action that changes the squad, the saved tactics, the
-    /// fixtures, the history or the settings calls this after saving.
+    /// fixtures, the history, the settings or the retrainings calls this after saving.
     func replan() {
         timesPlanned += 1
         planState = rememberingElevens(workedOutPlan())
@@ -201,6 +209,19 @@ public struct AppEnvironment: Sendable {
         guard drafts != tacticDrafts else { return }
         tacticDrafts = drafts
         save(.drafts)
+    }
+
+    /// Applies `change` to the retrainings and, if it changed anything, keeps the accepted ones in their fixed order,
+    /// drops names no pair needs, saves them and replans unless `replanning` is false.
+    func changeTraining(replanning: Bool = true, _ change: (inout TrainingState) -> Void) {
+        var state = training
+        change(&state)
+        state.accepted.sort { TrainingState.order(TrainingState.choice($0), TrainingState.choice($1)) }
+        state.forgetUnusedNames()
+        guard state != training else { return }
+        training = state
+        save(.training)
+        if replanning { replan() }
     }
 
     func notice(_ text: String) {
