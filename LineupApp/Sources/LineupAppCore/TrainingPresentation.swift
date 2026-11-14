@@ -1,8 +1,8 @@
 import Foundation
 import LineupEngine
 
-/// One recommended retraining as its card shows it: who, what to learn, what it covers and how long it takes, in the
-/// engine's words, with the engine's reasons and cautions.
+/// One recommended retraining as its card shows it: who, what to learn and what it covers, in the engine's words,
+/// with the engine's reasons (how long it takes among them) and cautions.
 public struct RecommendationCard: Identifiable, Equatable, Sendable {
     public var id: RetrainingChoice { choice }
     public let choice: RetrainingChoice
@@ -15,8 +15,6 @@ public struct RecommendationCard: Identifiable, Equatable, Sendable {
     public let coversText: String?
     /// His familiarity at the position now, beside `TrainingPresentation.familiarityLabel`.
     public let familiarityText: String
-    /// The engine's words: "About 21 weeks: a structural change from right back".
-    public let timeText: String
     /// The engine's reasons, as written, each with the green plus.
     public let reasons: [MarkedReason]
     /// The engine's cautions, as written.
@@ -27,7 +25,7 @@ public struct RecommendationCard: Identifiable, Equatable, Sendable {
     /// The card as said to assistive technology.
     public var spokenText: String {
         let parts: [String?] = [name, ageText, headline, coversText,
-                                "\(TrainingPresentation.familiarityLabel) \(familiarityText)", timeText]
+                                "\(TrainingPresentation.familiarityLabel) \(familiarityText)"]
         return (parts.compactMap { $0 } + reasons.map(\.text) + cautions.map { "Caution: \($0)" }
                 + [spokenNote].compactMap { $0 }).joined(separator: ", ")
     }
@@ -41,7 +39,6 @@ public struct RecommendationCard: Identifiable, Equatable, Sendable {
         headline = AdvisorText.learn(recommendation.choice.position)
         coversText = AdvisorText.covers(recommendation.needs)
         familiarityText = String(recommendation.currentFamiliarity)
-        timeText = AdvisorText.timeToLearn(recommendation)
         reasons = recommendation.reasons.map { MarkedReason(text: $0, direction: .raised) }
         cautions = recommendation.cautions
         spokenNote = AdvisorText.note(for: recommendation.basis)
@@ -119,13 +116,20 @@ public struct RetrainingRow: Identifiable, Equatable, Sendable {
     }
 }
 
-/// A retraining the owner turned down.
+/// A retraining the owner turned down; a player no longer in any squad is shown as such.
 public struct TurnedDownRow: Identifiable, Equatable, Sendable {
     public var id: RetrainingChoice { choice }
     public let choice: RetrainingChoice
     public let name: String
     /// The engine's words: "Learn left back".
     public let positionText: String
+    /// "No longer in the squad" when he is in no squad; nil otherwise.
+    public let departedStamp: StatusStamp?
+
+    /// The row as said to assistive technology.
+    public var spokenText: String {
+        [name, positionText, departedStamp?.text].compactMap { $0 }.joined(separator: ", ")
+    }
 }
 
 /// One of the Training screen's four parts, in the order the screen shows them.
@@ -196,11 +200,12 @@ public enum TrainingPresentation {
         }
     }
 
-    /// A row for each turned-down pair, in the saved order, named as `underWay` names them.
+    /// A row for each turned-down pair, in the saved order, named and marked as `underWay` names and marks them.
     public static func turnedDown(_ state: TrainingState, inSquads names: [PlayerID: String]) -> [TurnedDownRow] {
         state.rejected.sorted(by: TrainingState.order).map { choice in
             TurnedDownRow(choice: choice, name: name(of: choice.player, inSquads: names, saved: state.names),
-                          positionText: AdvisorText.learn(choice.position))
+                          positionText: AdvisorText.learn(choice.position),
+                          departedStamp: names[choice.player] == nil ? departed : nil)
         }
     }
 

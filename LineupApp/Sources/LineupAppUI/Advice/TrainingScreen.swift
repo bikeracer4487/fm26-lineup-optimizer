@@ -155,8 +155,10 @@ private struct UnderWayRow: View {
     private var progress: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             if let stamp = row.departedStamp {
+                // The row's spoken text already says it.
                 StampView(stamp: stamp)
                     .padding(.top, Theme.Spacing.xs)
+                    .accessibilityHidden(true)
             }
             if let track = row.track {
                 RetrainingTrackView(track: track)
@@ -178,19 +180,26 @@ private struct UnderWayRow: View {
     }
 }
 
-/// One pair turned down: his name, what he was offered, and Offer again.
+/// One pair turned down: his name, what he was offered, that he has left when he has, and Offer again.
 private struct TurnedDownRowView: View {
     let row: TurnedDownRow
     let offerAgain: () -> Void
 
     var body: some View {
         WrappingRow(alignment: .center, spacing: Theme.Spacing.xl) {
-            RowName(name: row.name)
-                .frame(width: Theme.Training.nameWidth, alignment: .leading)
-            Text(row.positionText)
-                .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
-                .foregroundStyle(Theme.Colour.ink)
-                .fixedSize()
+            HStack(alignment: .center, spacing: Theme.Spacing.xl) {
+                RowName(name: row.name)
+                    .frame(width: Theme.Training.nameWidth, alignment: .leading)
+                Text(row.positionText)
+                    .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
+                    .foregroundStyle(Theme.Colour.ink)
+                    .fixedSize()
+                if let stamp = row.departedStamp {
+                    StampView(stamp: stamp)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(row.spokenText)
         } trailing: {
             Button(TrainingPresentation.offerAgainTitle, action: offerAgain)
                 .buttonStyle(.secondary)

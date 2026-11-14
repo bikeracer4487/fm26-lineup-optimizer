@@ -2,7 +2,7 @@ import Foundation
 import Synchronization
 import LineupEngine
 
-/// An environment whose clipboard and FMRTE settings file are set by code, for the sample data and the tests.
+/// An environment whose clipboard, FMRTE settings file and clock are set by code, for the sample data and the tests.
 final class ScriptedInput: Sendable {
     enum Config: Sendable {
         case data(Data)
@@ -14,6 +14,8 @@ final class ScriptedInput: Sendable {
     private struct State {
         var clipboard: String?
         var config: Config
+        var uptime: TimeInterval = 0
+        var tick: TimeInterval = 1
     }
 
     let today: Day
@@ -34,6 +36,19 @@ final class ScriptedInput: Sendable {
         set { state.withLock { $0.config = newValue } }
     }
 
+    /// What the clock reads next.
+    var uptime: TimeInterval {
+        get { state.withLock { $0.uptime } }
+        set { state.withLock { $0.uptime = newValue } }
+    }
+
+    /// How far the clock moves on after each reading: a second by default, so actions made one after another are
+    /// never taken for a double-click; 0 to hold it where a test sets it.
+    var tick: TimeInterval {
+        get { state.withLock { $0.tick } }
+        set { state.withLock { $0.tick = newValue } }
+    }
+
     var environment: AppEnvironment {
         AppEnvironment(
             today: { [today] in today },
@@ -43,6 +58,12 @@ final class ScriptedInput: Sendable {
                 case .data(let data): return data
                 case .readFile(let otherwise): return try Data(contentsOf: URL(fileURLWithPath: path ?? otherwise))
                 case .failure(let error): throw error
+                }
+            },
+            now: {
+                self.state.withLock { state in
+                    defer { state.uptime += state.tick }
+                    return state.uptime
                 }
             })
     }
@@ -247,7 +268,7 @@ public enum SampleData {
     /// The sample model with its accepted retraining six weeks under way, accepted on 2 October and read at an import
     /// every two weeks since, his familiarity rising a point each time (short of solid) and the squad's copy showing the
     /// latest; the second recommendation made before it was accepted, turned down; and a second retraining, of the
-    /// player with the longest name, who has since left the squads.
+    /// player with the longest name, accepted, and another position of his turned down, before he left the squads.
     @MainActor public static func modelWithRetrainingUnderWay(repositoryRoot: URL) throws -> AppModel {
         let model = try build(repositoryRoot: repositoryRoot).model
         guard let accepted = model.training.accepted.first,
@@ -263,11 +284,16 @@ public enum SampleData {
         model.reject(open.training.recommendations[1].choice)
         model.accept(choice)
 
-        guard let leaver = model.players.filter({ $0.id != accepted.player }).max(by: { $0.name.count < $1.name.count }),
-              let position = Position.allCases.min(by: { (leaver.familiarity[$0] ?? 0) < (leaver.familiarity[$1] ?? 0) }) else {
+        let leastFamiliarFirst = { (player: Player) in
+            Position.allCases.sorted { (player.familiarity[$0] ?? 0, Position.allCases.firstIndex(of: $0) ?? 0)
+                < (player.familiarity[$1] ?? 0, Position.allCases.firstIndex(of: $1) ?? 0) }
+        }
+        guard let leaver = model.players.filter({ $0.id != accepted.player }).max(by: { $0.name.count < $1.name.count }) else {
             throw SampleDataError(description: "The sample model has no second player to retrain.")
         }
-        model.accept(RetrainingChoice(player: leaver.id, position: position))
+        let positions = leastFamiliarFirst(leaver)
+        model.accept(RetrainingChoice(player: leaver.id, position: positions[0]))
+        model.reject(RetrainingChoice(player: leaver.id, position: positions[1]))
 
         let solid = model.planParameters.depthSolidFamiliarity.value
         let readings = (0..<4).map { step in
@@ -413,6 +439,8 @@ public enum SampleData {
             throw SampleDataError(description: "The sample's advice recommends no retraining to accept: \(model.adviceState)")
         }
         model.accept(recommended.choice)
+        // The notice saying what was accepted is not a problem with the sample; notices are not saved in any case.
+        for notice in model.notices where notice.id == model.trainingNotice { model.dismiss(notice) }
 
         // These matches have no saved fixture, so they cannot be confirmed: the history is saved directly, and the
         // models made from these files load it.

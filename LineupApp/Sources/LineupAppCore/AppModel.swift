@@ -40,20 +40,24 @@ public enum ImportOutcome: Equatable, Sendable {
     case failed(Squad, reason: String)
 }
 
-/// What the model reads from outside its files: the date, the clipboard and FMRTE's settings file.
+/// What the model reads from outside its files: the date, the clipboard, FMRTE's settings file and a clock.
 /// Not called "Environment", which SwiftUI already uses.
 public struct AppEnvironment: Sendable {
     public var today: @Sendable () -> Day
     public var clipboard: @Sendable () -> String?
     /// The contents of FMRTE's settings file at the path, or at its usual place when the path is nil.
     public var fmrteConfig: @Sendable (_ path: String?) throws -> Data
+    /// Seconds on a clock that only moves forward, whatever the Mac's date and time are set to, for timing one action
+    /// against the one before.
+    public var now: @Sendable () -> TimeInterval
 
     public init(
         today: @escaping @Sendable () -> Day,
         clipboard: @escaping @Sendable () -> String?,
-        fmrteConfig: @escaping @Sendable (_ path: String?) throws -> Data
+        fmrteConfig: @escaping @Sendable (_ path: String?) throws -> Data,
+        now: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) {
-        self.today = today; self.clipboard = clipboard; self.fmrteConfig = fmrteConfig
+        self.today = today; self.clipboard = clipboard; self.fmrteConfig = fmrteConfig; self.now = now
     }
 }
 
@@ -82,6 +86,10 @@ public struct AppEnvironment: Sendable {
 
     /// The notice showing for each file that could not be saved, so a file that keeps failing is noticed once.
     @ObservationIgnored private var saveFailureNotices: [StoreFile: Notice.ID] = [:]
+    /// The notice saying what the last accepting or turning down did, so the next replaces it.
+    @ObservationIgnored var trainingNotice: Notice.ID?
+    /// When the last training action arrived, on `environment.now`'s clock; nil before the first.
+    @ObservationIgnored var lastTrainingAction: TimeInterval?
 
     /// The advice since the last replan; nil until it is first read after one (see `adviceState`).
     @ObservationIgnored var adviceCache: AdviceCache?

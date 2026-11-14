@@ -47,8 +47,6 @@ import Testing
         #expect(card.headline == AdvisorText.learn(.defenderLeft))
         #expect(card.coversText == "Covers left back in Sample 4-2-3-1 and left centre-back in Another")
         #expect(card.familiarityText == "7")
-        #expect(card.timeText == "About 21 weeks: a structural change from right back")
-        #expect(card.timeText == AdvisorText.timeToLearn(given))
         #expect(card.noteText == "(FM26-era numbers)")
     }
 
@@ -75,7 +73,7 @@ import Testing
         let given = recommendation(alice, name: "Alice Archer", reasons: ["One reason"], cautions: ["One caution"])
         let card = try #require(TrainingPresentation.cards(report([given])).first)
         #expect(card.spokenText == "Alice Archer, Age 22, Learn left back, Covers left back in Sample 4-2-3-1, "
-                + "Familiarity now 9, About 21 weeks: a structural change from right back, One reason, Caution: One caution, "
+                + "Familiarity now 9, One reason, Caution: One caution, "
                 + "FM26-era numbers")
     }
 
@@ -211,6 +209,10 @@ import Testing
         #expect(rows.map(\.id) == [RetrainingChoice(player: alice, position: .goalkeeper),
                                    RetrainingChoice(player: alice, position: .defenderLeft),
                                    RetrainingChoice(player: bob, position: .goalkeeper)])
+        // Bob is in no squad: his row says so, as a row under way does.
+        #expect(rows.map(\.departedStamp) == [nil, nil, StatusStamp(text: "No longer in the squad", isOut: true)])
+        #expect(rows.map(\.spokenText) == ["Alice Archer, Learn goalkeeper", "Alice Archer, Learn left back",
+                                           "Bob Baker, Learn goalkeeper, No longer in the squad"])
     }
 
     // MARK: The parts

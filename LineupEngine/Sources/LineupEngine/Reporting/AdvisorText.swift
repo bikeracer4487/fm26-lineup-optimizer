@@ -200,13 +200,14 @@ public enum AdvisorText {
         list(needs).map { "Already being retrained for: \($0)" }
     }
 
-    /// "About 21 weeks: a structural change from right back".
-    public static func timeToLearn(_ recommendation: RetrainingRecommendation) -> String {
-        let weeks = recommendation.weeks
-        let change = name(recommendation.difficulty).lowercased()
-        let article = change.first.map { "aeiou".contains($0) } == true ? "an" : "a"
-        return "About \(weeks) \(weeks == 1 ? "week" : "weeks"): \(article) \(change) change from "
-            + PositionText.plain(recommendation.from)
+    /// What accepting a retraining did: "Keegan Bloom is now learning left back. Set it up in the game as well."
+    public static func nowLearning(name: String, position: Position) -> String {
+        "\(name) is now learning \(PositionText.plain(position)). Set it up in the game as well."
+    }
+
+    /// What turning a retraining down did: "Ewan Clark will not be offered left back again."
+    public static func notOfferedAgain(name: String, position: Position) -> String {
+        "\(name) will not be offered \(PositionText.plain(position)) again."
     }
 
     /// "left back in X, goalkeeper in Y and striker in Z", each need named once in the order given; nil for none.

@@ -274,6 +274,105 @@ import LineupEngine
         model.stopRetraining(choice); replanned("stop again", false)
     }
 
+    // MARK: A second click
+
+    /// The first two first-team players by name and the positions they are least familiar with.
+    private func twoLearners(_ model: AppModel) throws -> (RetrainingChoice, RetrainingChoice) {
+        let players = model.players.filter { $0.squad == .firstTeam }
+        try #require(players.count >= 2)
+        return (try leastFamiliar(players[0]), try leastFamiliar(players[1]))
+    }
+
+    @Test func aTrainingActionWithinTheIntervalOfThePreviousOneIsIgnored() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let (first, second) = try twoLearners(t.model)
+        t.input.tick = 0
+        t.input.uptime = 1_000
+        t.model.accept(first)
+        #expect(t.model.training.accepted.map(\.player) == [first.player])
+        // The second click of a double-click lands on the next player: ignored, whatever the action.
+        t.input.uptime += AppModel.trainingActionInterval / 2
+        t.model.accept(second)
+        t.model.reject(second)
+        t.model.stopRetraining(first)
+        #expect(t.model.training.accepted.map(\.player) == [first.player])
+        #expect(t.model.training.rejected.isEmpty)
+    }
+
+    @Test func aTrainingActionAfterTheIntervalGoesAhead() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let (first, second) = try twoLearners(t.model)
+        t.input.tick = 0
+        t.input.uptime = 1_000
+        t.model.accept(first)
+        t.input.uptime += AppModel.trainingActionInterval
+        t.model.accept(second)
+        #expect(Set(t.model.training.accepted.map(\.player)) == [first.player, second.player])
+        t.input.uptime += AppModel.trainingActionInterval + 1
+        t.model.reject(second)
+        #expect(t.model.training.rejected == [second])
+    }
+
+    @Test func theFirstTrainingActionIsNeverIgnored() throws {
+        // A model whose clock reads 0 on its first training action, as a monotonic clock may soon after starting.
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let choice = try learner(t.model)
+        t.input.tick = 0
+        t.input.uptime = 0
+        t.model.reject(choice)
+        #expect(t.model.training.rejected == [choice])
+        #expect(AppModel.trainingActionInterval == 0.5)
+    }
+
+    // MARK: What the owner is told
+
+    @Test func acceptingAndTurningDownSayWhatHappenedInTheEnginesWords() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let (first, second) = try twoLearners(t.model)
+        let names = Dictionary(t.model.players.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+        let before = t.model.notices
+        t.model.accept(first)
+        let accepted = AdvisorText.nowLearning(name: try #require(names[first.player]), position: first.position)
+        #expect(t.model.notices.map(\.text) == before.map(\.text) + [accepted])
+        // A new training notice replaces the previous one.
+        t.model.reject(second)
+        let turnedDown = AdvisorText.notOfferedAgain(name: try #require(names[second.player]), position: second.position)
+        #expect(t.model.notices.map(\.text) == before.map(\.text) + [turnedDown])
+        // A notice about something else stays; the next training notice still replaces only its own.
+        t.model.addNotice("Something else")
+        t.model.accept(second)
+        #expect(t.model.notices.map(\.text) == before.map(\.text) + ["Something else",
+            AdvisorText.nowLearning(name: try #require(names[second.player]), position: second.position)])
+        // Dismissed, it is gone, and the next one is shown again.
+        let showing = try #require(t.model.notices.last)
+        t.model.dismiss(showing)
+        #expect(!t.model.notices.contains(showing))
+        t.model.reject(first)
+        #expect(t.model.notices.last?.text
+                == AdvisorText.notOfferedAgain(name: try #require(names[first.player]), position: first.position))
+    }
+
+    @Test func anIgnoredOrEmptyTrainingActionSaysNothing() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let (first, second) = try twoLearners(t.model)
+        t.model.accept(RetrainingChoice(player: PlayerID.fmrte(999_999), position: .goalkeeper))
+        #expect(t.model.notices.isEmpty)
+        t.input.tick = 0
+        t.input.uptime = 1_000
+        t.model.accept(first)
+        t.model.accept(second)
+        #expect(t.model.notices.count == 1)
+        // Stopping and offering again change nothing the owner has to act on in the game: no notice.
+        t.input.uptime += 1
+        t.model.stopRetraining(first)
+        #expect(t.model.notices.count == 1)
+    }
+
     // MARK: Observations at each import
 
     @Test func anImportOnTheSameDayReplacesThatDaysObservation() throws {

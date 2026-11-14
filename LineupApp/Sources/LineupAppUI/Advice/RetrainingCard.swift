@@ -1,8 +1,8 @@
 import LineupAppCore
 import SwiftUI
 
-/// One recommended retraining on a card: his name and age, what to learn, what it covers, his familiarity now, how
-/// long it takes, his reasons with a green plus, his cautions, the evidence note, and the buttons to accept it or turn
+/// One recommended retraining on a card: his name and age, what to learn, what it covers, his familiarity now, his
+/// reasons with a green plus (how long it takes among them), his cautions, the evidence note, and the buttons to accept it or turn
 /// it down beside the words, or under them when the card is narrow.
 struct RetrainingCard: View {
     let card: RecommendationCard
@@ -54,9 +54,6 @@ struct RetrainingCard: View {
                     Text(card.familiarityText)
                         .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
                 }
-                Text(card.timeText)
-                    .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .semibold))
-                    .fixedSize(horizontal: false, vertical: true)
             }
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                 // Keyed by place, so two identical sentences are both shown.

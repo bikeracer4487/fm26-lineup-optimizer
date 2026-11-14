@@ -191,15 +191,6 @@ import Testing
 
     // MARK: Retraining
 
-    func recommendation(position: Position = .defenderLeft, from: Position = .defenderRight,
-                        difficulty: RetrainingDifficulty = .structural, weeks: Int = 21,
-                        needs: [RetrainingNeed] = [RetrainingNeed(tactic: "Sample 4-2-3-1", slot: .D_L)]) -> RetrainingRecommendation {
-        RetrainingRecommendation(
-            choice: RetrainingChoice(player: PlayerID(key: "p"), position: position), name: "P", age: 22,
-            currentFamiliarity: 9, needs: needs, ratingIfLearnt: 100, shareOfFirstChoice: 0.9, learnability: 0.6,
-            from: from, difficulty: difficulty, weeks: weeks, reasons: [], cautions: [], basis: .derived)
-    }
-
     @Test func learnAndLearningNameThePositionInWords() {
         #expect(AdvisorText.learn(.defenderLeft) == "Learn left back")
         #expect(AdvisorText.learn(.defensiveMidfielder) == "Learn defensive midfield")
@@ -240,15 +231,15 @@ import Testing
                 == "Already being retrained for: left back in Sample 4-2-3-1 and goalkeeper in Another")
     }
 
-    @Test func timeToLearnGivesTheWeeksTheChangeAndWhereFrom() {
-        #expect(AdvisorText.timeToLearn(recommendation())
-                == "About 21 weeks: a structural change from right back")
-        #expect(AdvisorText.timeToLearn(recommendation(from: .wingBackLeft, difficulty: .fluid, weeks: 1))
-                == "About 1 week: a fluid change from left wing-back")
-        #expect(AdvisorText.timeToLearn(recommendation(from: .midfielderCentral, difficulty: .spatial, weeks: 40))
-                == "About 40 weeks: a spatial change from central midfield")
-        #expect(AdvisorText.timeToLearn(recommendation(from: .defenderRight, difficulty: .inversion, weeks: 60))
-                == "About 60 weeks: an inversion change from right back")
+    @Test func whatAcceptingAndTurningDownSay() {
+        #expect(AdvisorText.nowLearning(name: "Keegan Bloom", position: .defenderLeft)
+                == "Keegan Bloom is now learning left back. Set it up in the game as well.")
+        #expect(AdvisorText.nowLearning(name: "Alice Archer", position: .goalkeeper)
+                == "Alice Archer is now learning goalkeeper. Set it up in the game as well.")
+        #expect(AdvisorText.notOfferedAgain(name: "Ewan Clark", position: .defenderLeft)
+                == "Ewan Clark will not be offered left back again.")
+        #expect(AdvisorText.notOfferedAgain(name: "Ewan Clark", position: .midfielderLeft)
+                == "Ewan Clark will not be offered left midfield again.")
     }
 
     @Test func aRealRecommendationsWordsHaveNoCodes() throws {
@@ -263,9 +254,8 @@ import Testing
         let recommendation = try #require(report.recommendations.first { $0.name == "Right Back" })
         #expect(AdvisorText.learn(recommendation.choice.position) == "Learn left back")
         #expect(AdvisorText.covers(recommendation.needs) == "Covers left back in Sample 4-2-3-1")
-        #expect(AdvisorText.timeToLearn(recommendation) == "About 16 weeks: a structural change from right back")
-        for sentence in [AdvisorText.learn(recommendation.choice.position), AdvisorText.covers(recommendation.needs) ?? "",
-                         AdvisorText.timeToLearn(recommendation)] + recommendation.needs.map(AdvisorText.need) {
+        for sentence in [AdvisorText.learn(recommendation.choice.position), AdvisorText.covers(recommendation.needs) ?? ""]
+            + recommendation.needs.map(AdvisorText.need) {
             for code in ["(", "_", "D L", "D_L"] {
                 #expect(!sentence.contains(code), "\(sentence)")
             }
