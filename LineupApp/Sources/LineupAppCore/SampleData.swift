@@ -17,6 +17,7 @@ final class ScriptedInput: Sendable {
         var config: Config
         var uptime: TimeInterval = 0
         var tick: TimeInterval = 1
+        var readings: [TimeInterval] = []
     }
 
     let today: Day
@@ -53,6 +54,13 @@ final class ScriptedInput: Sendable {
         set { state.withLock { $0.tick = newValue } }
     }
 
+    /// The clock's next readings, in order, taken before it reads `uptime` again: so a test can have an action start at
+    /// one time and finish at a later one.
+    var readings: [TimeInterval] {
+        get { state.withLock { $0.readings } }
+        set { state.withLock { $0.readings = newValue } }
+    }
+
     var environment: AppEnvironment {
         AppEnvironment(
             today: { [today] in today },
@@ -67,6 +75,7 @@ final class ScriptedInput: Sendable {
             now: {
                 if self.usesRealClock { return ProcessInfo.processInfo.systemUptime }
                 return self.state.withLock { state in
+                    if !state.readings.isEmpty { return state.readings.removeFirst() }
                     defer { state.uptime += state.tick }
                     return state.uptime
                 }

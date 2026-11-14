@@ -78,7 +78,7 @@ public enum ImportanceAdvisor {
         }
 
         let level: Importance = score >= rules.highFrom ? .high : score >= rules.mediumFrom ? .medium : .low
-        reasons.append("Score \(try wholeNumber(score)): \(level.rawValue)")
+        reasons.append("Score \(try wholeNumber(score)): \(AdvisorText.name(level))")
 
         var importance = level
         if score < rules.sharpnessBelowScore {

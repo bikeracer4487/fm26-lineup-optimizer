@@ -93,7 +93,7 @@ import Testing
         let s = try suggest(fixture(competition: nil, opponent: nil))
         #expect(s.importance == .medium)
         #expect(s.score == 50)
-        #expect(s.reasons == ["No competition set: 50", "Score 50: medium"])
+        #expect(s.reasons == ["No competition set: 50", "Score 50: Medium"])
     }
 
     // MARK: Levels at their lines
@@ -102,7 +102,7 @@ import Testing
         let at85 = try suggest(fixture(), parameters: rules { $0.leagueBase = 85 })
         #expect(at85.score == 85)
         #expect(at85.importance == .high)
-        #expect(at85.reasons.last == "Score 85: high")
+        #expect(at85.reasons.last == "Score 85: High")
         #expect(try suggest(fixture(), parameters: rules { $0.leagueBase = 84.9 }).importance == .medium)
     }
 
@@ -232,7 +232,7 @@ import Testing
         #expect(s.importance == .sharpness)
         #expect(s.score == 10)
         #expect(s.reasons.last == "3 of the first eleven are under 70% sharpness, and the next match is 5 days later")
-        #expect(s.reasons.dropLast().last == "Score 10: low")
+        #expect(s.reasons.dropLast().last == "Score 10: Low")
         let none = try suggest(f, sharpness: [0.5, 0.6, 0.69])
         #expect(none.importance == .sharpness)
         #expect(none.reasons.last == "3 of the first eleven are under 70% sharpness, and no match follows")
@@ -278,14 +278,14 @@ import Testing
         let s = try suggest(fixture(opponent: .stronger), among: [fixture("next", daysFromToday: 2, opponent: .muchStronger)],
                             confirmed: [confirmed("p1", daysFromToday: -2), confirmed("p2", daysFromToday: -5)])
         #expect(s.reasons == ["League match: 80", "Stronger opponent (×1.1)", "A bigger match follows in 2 days (×0.6)",
-                              "Third match in 7 days (×0.8)", "Score 42: low"])
+                              "Third match in 7 days (×0.8)", "Score 42: Low"])
         let rested = try suggest(fixture(opponent: .stronger), confirmed: [confirmed("p1", daysFromToday: -8)])
         #expect(rested.reasons == ["League match: 80", "Stronger opponent (×1.1)", "A week or more since the last match (×1.1)",
-                                   "Score 97: high"])
+                                   "Score 97: High"])
         let one = try suggest(fixture(competition: .cup, opponent: .weaker), among: [fixture("next", daysFromToday: 1, competition: .cup)])
-        #expect(one.reasons == ["Cup match: 60", "Weaker opponent (×0.8)", "Score 48: low"])
+        #expect(one.reasons == ["Cup match: 60", "Weaker opponent (×0.8)", "Score 48: Low"])
         let bigger = try suggest(fixture(competition: .friendly, opponent: .muchWeaker), among: [fixture("next", daysFromToday: 1)])
-        #expect(bigger.reasons == ["Friendly: 10", "Much weaker opponent (×0.6)", "A bigger match follows in 1 day (×0.6)", "Score 4: low"])
+        #expect(bigger.reasons == ["Friendly: 10", "Much weaker opponent (×0.6)", "A bigger match follows in 1 day (×0.6)", "Score 4: Low"])
     }
 
     @Test func matchCountsReadByHowManyCameBefore() throws {

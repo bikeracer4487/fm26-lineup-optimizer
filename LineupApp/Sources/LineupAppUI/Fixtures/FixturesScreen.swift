@@ -214,6 +214,7 @@ private struct SuggestionLine: View {
         }
         .buttonStyle(.plain)
         .help(SuggestionNote.clickHelp(shown))
+        .accessibilityHint(SuggestionNote.clickHelp(shown))
     }
 }
 

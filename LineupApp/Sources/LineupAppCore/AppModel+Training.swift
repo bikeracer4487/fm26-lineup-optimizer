@@ -2,9 +2,11 @@ import Foundation
 import LineupEngine
 
 extension AppModel {
-    /// How soon after one training action another is ignored. Accepting or turning down a recommendation removes its
-    /// card at once and the model replans before the click is over, so the next card's buttons move up under the
-    /// pointer: without this, the second click of a double-click would accept or turn down the next player.
+    /// How soon after one training action has finished another is ignored. Accepting or turning down a recommendation
+    /// removes its card at once and the model replans before the click is over, so the next card's buttons move up under
+    /// the pointer: without this, the second click of a double-click would accept or turn down the next player. The
+    /// interval runs from the end of the last action, after its replan, so a click that waited while a slow replan ran
+    /// is ignored too.
     public static let trainingActionInterval: TimeInterval = 0.5
 
     /// Accepts the retraining, dated with the game's current date, with the player's familiarity at the position in the
@@ -13,23 +15,25 @@ extension AppModel {
     /// accepted keeps its date and observations and only clears a rejection. A notice says what was accepted. Nothing
     /// happens for a player in no squad, or within `trainingActionInterval` of the last training action.
     public func accept(_ choice: RetrainingChoice) {
-        guard mayTakeTrainingAction(),
-              let player = squad.book.allPlayers.first(where: { $0.id == choice.player }) else { return }
-        tellTraining(AdvisorText.nowLearning(name: player.name, position: choice.position))
-        guard !training.accepted.contains(where: { TrainingState.choice($0) == choice }) else {
-            return changeTraining { $0.rejected.remove(choice) }
-        }
-        let today = settings.currentDate
-        changeTraining { state in
-            for replaced in state.accepted where replaced.player == choice.player {
-                state.observations[TrainingState.choice(replaced)] = nil
+        trainingAction {
+            guard let player = squad.book.allPlayers.first(where: { $0.id == choice.player }) else { return }
+            tellTraining(AdvisorText.nowLearning(name: player.name, position: choice.position))
+            guard !training.accepted.contains(where: { TrainingState.choice($0) == choice }) else {
+                changeTraining { $0.rejected.remove(choice) }
+                return
             }
-            state.accepted.removeAll { $0.player == choice.player }
-            state.accepted.append(Retraining(player: choice.player, position: choice.position, acceptedOn: today))
-            state.rejected.remove(choice)
-            state.names[choice.player] = player.name
-            if let familiarity = player.familiarity[choice.position] {
-                state.record(familiarity, for: choice, on: today)
+            let today = settings.currentDate
+            changeTraining { state in
+                for replaced in state.accepted where replaced.player == choice.player {
+                    state.observations[TrainingState.choice(replaced)] = nil
+                }
+                state.accepted.removeAll { $0.player == choice.player }
+                state.accepted.append(Retraining(player: choice.player, position: choice.position, acceptedOn: today))
+                state.rejected.remove(choice)
+                state.names[choice.player] = player.name
+                if let familiarity = player.familiarity[choice.position] {
+                    state.record(familiarity, for: choice, on: today)
+                }
             }
         }
     }
@@ -37,41 +41,45 @@ extension AppModel {
     /// Turns the retraining down, leaving any acceptance of it alone. A notice says what was turned down. Nothing
     /// happens for a player in no squad, or within `trainingActionInterval` of the last training action.
     public func reject(_ choice: RetrainingChoice) {
-        guard mayTakeTrainingAction(),
-              let player = squad.book.allPlayers.first(where: { $0.id == choice.player }) else { return }
-        tellTraining(AdvisorText.notOfferedAgain(name: player.name, position: choice.position))
-        changeTraining { state in
-            state.rejected.insert(choice)
-            state.names[choice.player] = player.name
+        trainingAction {
+            guard let player = squad.book.allPlayers.first(where: { $0.id == choice.player }) else { return }
+            tellTraining(AdvisorText.notOfferedAgain(name: player.name, position: choice.position))
+            changeTraining { state in
+                state.rejected.insert(choice)
+                state.names[choice.player] = player.name
+            }
         }
     }
 
     /// Forgets the acceptance and its observations, and takes away the notice an accepting or turning down showed, which
     /// may no longer hold; nothing within `trainingActionInterval` of the last training action.
     public func stopRetraining(_ choice: RetrainingChoice) {
-        guard mayTakeTrainingAction() else { return }
-        clearTrainingNotice()
-        changeTraining { state in
-            state.accepted.removeAll { TrainingState.choice($0) == choice }
-            state.observations[choice] = nil
+        trainingAction {
+            clearTrainingNotice()
+            changeTraining { state in
+                state.accepted.removeAll { TrainingState.choice($0) == choice }
+                state.observations[choice] = nil
+            }
         }
     }
 
     /// Undoes `reject`, and takes away the notice an accepting or turning down showed, which may no longer hold; nothing
     /// within `trainingActionInterval` of the last training action.
     public func allowAgain(_ choice: RetrainingChoice) {
-        guard mayTakeTrainingAction() else { return }
-        clearTrainingNotice()
-        changeTraining { $0.rejected.remove(choice) }
+        trainingAction {
+            clearTrainingNotice()
+            changeTraining { $0.rejected.remove(choice) }
+        }
     }
 
-    /// Whether a training action arriving now goes ahead: the first always does, a later one only once
-    /// `trainingActionInterval` has passed since the last that went ahead, whose time this then records.
-    private func mayTakeTrainingAction() -> Bool {
-        let now = environment.now()
-        if let last = lastTrainingAction, now - last < Self.trainingActionInterval { return false }
-        lastTrainingAction = now
-        return true
+    /// Runs `action` unless it arrives within `trainingActionInterval` of the end of the last training action that ran:
+    /// the first always runs. Once it has finished, replan and notices included, the clock is read again and that time
+    /// recorded as the last action's end.
+    private func trainingAction(_ action: () -> Void) {
+        let start = environment.now()
+        if let last = lastTrainingAction, start - last < Self.trainingActionInterval { return }
+        action()
+        lastTrainingAction = environment.now()
     }
 
     /// Shows `text` as a notice in place of the last one an accepting or turning down showed.

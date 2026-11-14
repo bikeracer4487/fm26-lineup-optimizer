@@ -365,6 +365,20 @@ import Testing
         #expect(model.suggestions[saved.id] == before)
     }
 
+    @Test func aDraftsSuggestionLeavesAConfirmedFixtureOutOfThoseStillToPlay() throws {
+        let model = try SampleData.modelAfterConfirmingFirst(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let confirmed = try #require(model.fixtures.first)
+        #expect(model.state(of: confirmed) == .confirmed)
+        let saved = model.fixtures[1]
+        var draft = model.fixtureDraft(for: saved)
+        draft.competition = .cup
+        let toPlay = model.fixtures.filter { $0.id != confirmed.id && $0.id != saved.id }
+        let expected = try engineSuggestion(model, for: try engineFixture(model, draft, id: saved.id), among: toPlay)
+        #expect(model.suggestion(for: draft) == expected)
+        #expect(model.history.map(\.lineup).contains { $0.fixture == confirmed.id })
+    }
+
     @Test func aDraftWithNothingSetIsSuggestedFromTheScheduleAlone() throws {
         let model = try sample()
         defer { try? FileManager.default.removeItem(at: model.store.directory) }
@@ -436,14 +450,14 @@ import Testing
     // MARK: How the suggestion is shown
 
     private func suggestion(_ importance: Importance, basis: Evidence = .derived) -> ImportanceSuggestion {
-        ImportanceSuggestion(importance: importance, score: 7, reasons: ["League match: 6", "Score 7: high"], basis: basis)
+        ImportanceSuggestion(importance: importance, score: 7, reasons: ["League match: 6", "Score 7: High"], basis: basis)
     }
 
     @Test func theSuggestionSaysWhatItIsWithItsReasonsAndEvidenceNote() {
         let note = SuggestionNote(suggestion(.high), chosen: .medium)
         #expect(note.text == "Suggested: High")
         #expect(note.text == AdvisorText.suggested(suggestion(.high)))
-        #expect(note.reasons == ["League match: 6", "Score 7: high"])
+        #expect(note.reasons == ["League match: 6", "Score 7: High"])
         #expect(note.noteText == "(this tool's estimate)")
         #expect(note.importance == .high)
         #expect(SuggestionNote(suggestion(.high, basis: .carriedOverFM26), chosen: .high).noteText == "(FM26-era numbers)")

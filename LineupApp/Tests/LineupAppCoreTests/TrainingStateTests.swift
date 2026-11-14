@@ -315,6 +315,51 @@ import LineupEngine
         #expect(t.model.training.rejected == [second])
     }
 
+    @Test func theIntervalRunsFromTheEndOfTheLastActionNotItsStart() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let (first, second) = try twoLearners(t.model)
+        t.input.tick = 0
+        // The accept starts at 1000.2 and, replanning, finishes 0.8 s later at 1001. (Times whose differences are exact.)
+        t.input.readings = [1_000.2, 1_001]
+        t.model.accept(first)
+        #expect(t.model.training.accepted.map(\.player) == [first.player])
+        // A click queued during the replan arrives 0.2 s after it finished: ignored.
+        t.input.uptime = 1_001.2
+        t.model.accept(second)
+        t.model.reject(second)
+        #expect(t.model.training.accepted.map(\.player) == [first.player])
+        #expect(t.model.training.rejected.isEmpty)
+        // Half a second after the end, the next action goes ahead.
+        t.input.uptime = 1_001.5
+        t.model.reject(second)
+        #expect(t.model.training.rejected == [second])
+    }
+
+    @Test func eachKindOfTrainingActionIsTimedFromItsEnd() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let (first, second) = try twoLearners(t.model)
+        t.input.tick = 0
+        // Turning down, 0.8 s long; offering again 0.2 s after it is ignored, 0.5 s after it goes ahead.
+        t.input.readings = [1_000.2, 1_001]
+        t.model.reject(second)
+        t.input.uptime = 1_001.2
+        t.model.allowAgain(second)
+        #expect(t.model.training.rejected == [second])
+        // Accepting, 0.8 s long, starting 0.7 s after the turning down ended; stopping 0.2 s after it is ignored, 0.5 s
+        // after it goes ahead.
+        t.input.readings = [1_001.7, 1_002.5]
+        t.model.accept(first)
+        #expect(t.model.training.accepted.map(\.player) == [first.player])
+        t.input.uptime = 1_002.7
+        t.model.stopRetraining(first)
+        #expect(t.model.training.accepted.map(\.player) == [first.player])
+        t.input.uptime = 1_003
+        t.model.stopRetraining(first)
+        #expect(t.model.training.accepted.isEmpty)
+    }
+
     @Test func allowingAgainWithinTheIntervalIsIgnored() throws {
         let t = try TestModel()
         try t.importFirstTeam()

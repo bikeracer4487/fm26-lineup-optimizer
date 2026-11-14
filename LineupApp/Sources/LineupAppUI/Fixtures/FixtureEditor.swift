@@ -52,14 +52,19 @@ struct FixtureEditor: View {
                         .padding(.top, Theme.Spacing.xs)
                     }
                 }
-                GridRow {
+                // Aligned at the top rather than by text baseline, which with the suggestion under the tabs leaves extra
+                // room above the row; the label is as tall as a tab, so its word sits level with the tabs' words.
+                GridRow(alignment: .top) {
                     label("Importance")
-                    VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                        .frame(height: Theme.Tab.height)
+                    VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                         BoardTabs(choices: Importance.allCases.map { ($0, $0.displayName) }, selection: $draft.importance)
                         if let suggestion = model.suggestionNote(for: draft) {
                             SuggestionBlock(note: suggestion) { draft.take(suggestion) }
                         }
                     }
+                    // The column's whole width, so the reasons are measured at the width they are drawn at.
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 GridRow {
                     label("Tactic")
