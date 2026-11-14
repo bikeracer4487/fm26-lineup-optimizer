@@ -297,6 +297,90 @@ import Testing
         #expect(choices(try report(players, accepted: [elsewhere])) == [RetrainingChoice(player: id("Right Back"), position: .defenderLeft)])
     }
 
+    // MARK: Needs already being retrained
+
+    let acceptedOn = Day(iso: "2026-11-01")!
+    var leftBackNeed: RetrainingNeed { RetrainingNeed(tactic: sample, slot: .D_L) }
+
+    @Test func aNeedAnAcceptedRetrainingCoversIsNotForRecruitment() throws {
+        let players = try thinAtLeftBack([rightBack()])
+        let accepted = Retraining(player: id("Right Back"), position: .defenderLeft, acceptedOn: acceptedOn)
+        let r = try report(players, accepted: [accepted])
+        #expect(r.recommendations.isEmpty)
+        #expect(r.needsBeingRetrained == [leftBackNeed])
+        #expect(r.needsWithoutCandidates.isEmpty)
+        // With nothing accepted he is recommended, and the need is in neither list.
+        let open = try report(players)
+        #expect(choices(open) == [RetrainingChoice(player: id("Right Back"), position: .defenderLeft)])
+        #expect(open.needsBeingRetrained.isEmpty && open.needsWithoutCandidates.isEmpty)
+    }
+
+    @Test func aRetrainingThatDoesNotFitTheNeedDoesNotCount() throws {
+        let players = try thinAtLeftBack([rightBack()])
+        let rejectLeft: Set<RetrainingChoice> = [RetrainingChoice(player: id("Right Back"), position: .defenderLeft)]
+        // Accepted at another position.
+        let centre = Retraining(player: id("Right Back"), position: .defenderCentral, acceptedOn: acceptedOn)
+        let other = try report(players, accepted: [centre], rejected: rejectLeft)
+        #expect(other.needsBeingRetrained.isEmpty && other.needsWithoutCandidates == [leftBackNeed])
+        // Accepted for a player already solid there (injured, so the slot is still thin).
+        let solid = try report(thinAtLeftBack([rightBack(leftBack: 15, isInjured: true)]),
+                               accepted: [Retraining(player: id("Right Back"), position: .defenderLeft, acceptedOn: acceptedOn)])
+        #expect(solid.needsBeingRetrained.isEmpty && solid.needsWithoutCandidates == [leftBackNeed])
+        // Accepted for a player out on loan.
+        var away = rightBack()
+        away.loanedTo = "Elsewhere FC"
+        let loaned = try report(thinAtLeftBack([away]),
+                                accepted: [Retraining(player: id("Right Back"), position: .defenderLeft, acceptedOn: acceptedOn)])
+        #expect(loaned.needsBeingRetrained.isEmpty && loaned.needsWithoutCandidates == [leftBackNeed])
+        // Accepted for a player who is not in the squad.
+        let gone = try report(try thinAtLeftBack([]),
+                              accepted: [Retraining(player: id("Right Back"), position: .defenderLeft, acceptedOn: acceptedOn)])
+        #expect(gone.needsBeingRetrained.isEmpty && gone.needsWithoutCandidates == [leftBackNeed])
+    }
+
+    @Test func anOutOfPossessionRetrainingCountsWhereHeIsShortOutOfPossession() throws {
+        // AM_L plays AM (L) with the ball and M (L) without; he is solid at AM (L) and short at M (L).
+        let winger = Player.fixture(name: "Winger", age: 20, all: 13, attributes: [.versatility: 14, .professionalism: 12],
+                                    familiarity: [.attackingMidLeft: 15, .midfielderLeft: 9])
+        let players = try squad(without: [named(.AM_L, "second")]) + [winger]
+        let need = RetrainingNeed(tactic: sample, slot: .AM_L)
+        let short = try report(players, accepted: [Retraining(player: id("Winger"), position: .midfielderLeft, acceptedOn: acceptedOn)])
+        #expect(short.needsBeingRetrained == [need])
+        // Accepting the position he already knows does not cover the need; he is still offered M (L).
+        let known = try report(players, accepted: [Retraining(player: id("Winger"), position: .attackingMidLeft, acceptedOn: acceptedOn)])
+        #expect(known.needsBeingRetrained.isEmpty)
+        #expect(choices(known) == [RetrainingChoice(player: id("Winger"), position: .midfielderLeft)])
+    }
+
+    @Test func aNeedBeingRetrainedCanStillGetAnotherRecommendation() throws {
+        let players = try thinAtLeftBack([rightBack("Back A", versatility: 14), rightBack("Back B", versatility: 13)])
+        let r = try report(players, accepted: [Retraining(player: id("Back A"), position: .defenderLeft, acceptedOn: acceptedOn)])
+        #expect(choices(r) == [RetrainingChoice(player: id("Back B"), position: .defenderLeft)])
+        #expect(r.needsBeingRetrained.isEmpty && r.needsWithoutCandidates.isEmpty)
+    }
+
+    @Test func aPlayerWhoseBestPositionIsFullIsOfferedHisNextBest() throws {
+        // The centre-backs' first choices are stronger, so for every back D (L) has the larger share.
+        let players = try thinAtTheBack([rightBack("Back A", versatility: 14), rightBack("Back B", versatility: 13),
+                                         rightBack("Back C", versatility: 12)]).map { p -> Player in
+            guard p.name == named(.D_CL, "first") || p.name == named(.D_CR, "first") else { return p }
+            var strong = p
+            for attribute in Attribute.allCases where attribute != .versatility && attribute != .professionalism {
+                strong.attributes[attribute] = 16
+            }
+            return strong
+        }
+        let back = rightBack("Back C", versatility: 12)
+        let atLeft = try share(of: back, at: .D_L, firstChoice: firstChoice(.D_L, in: players)).share
+        let atCentre = try share(of: back, at: .D_CL, firstChoice: firstChoice(.D_CL, in: players)).share
+        try #require(atLeft > atCentre && atCentre >= 0.8)
+        let r = try report(players)
+        #expect(Set(choices(r)) == [RetrainingChoice(player: id("Back A"), position: .defenderLeft),
+                                    RetrainingChoice(player: id("Back B"), position: .defenderLeft),
+                                    RetrainingChoice(player: id("Back C"), position: .defenderCentral)])
+        #expect(r.needsWithoutCandidates.isEmpty)
+    }
+
     @Test func aPositionGetsAtMostTwo() throws {
         // Equal ratings; Versatility orders their learnability.
         let backs = [rightBack("Back A", versatility: 14), rightBack("Back B", versatility: 13), rightBack("Back C", versatility: 12)]

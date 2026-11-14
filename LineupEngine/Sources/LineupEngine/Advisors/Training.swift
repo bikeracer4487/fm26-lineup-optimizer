@@ -55,8 +55,11 @@ public struct RetrainingRecommendation: Equatable, Sendable {
 public struct TrainingReport: Equatable, Sendable {
     /// Most needed first.
     public let recommendations: [RetrainingRecommendation]
-    /// Thin slots no recommendation covers: places to recruit. Most in need first.
+    /// Thin slots no recommendation covers and no accepted retraining covers: places to recruit. Most in need first.
     public let needsWithoutCandidates: [RetrainingNeed]
+    /// Thin slots no recommendation covers that a player of the club's own is already being retrained for: an accepted
+    /// retraining at the slot's in-possession or out-of-possession position where he is not yet solid. Most in need first.
+    public let needsBeingRetrained: [RetrainingNeed]
 }
 
 public enum Training {
@@ -82,6 +85,19 @@ public enum Training {
         var needs: [NeedFacts] = []
         var pairs: [RetrainingChoice: Pair] = [:]
         var learnabilities: [PlayerID: Double] = [:]
+        let byID = Dictionary(sorted.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let solidFrom = parameters.depthSolidFamiliarity.value
+
+        /// An accepted retraining of one of the club's own players at a position of the slot where he is not yet solid.
+        func isBeingRetrained(_ assignment: SlotAssignment) throws -> Bool {
+            for retraining in accepted {
+                guard let player = byID[retraining.player], case .own = LoanStatus.of(player, ownClub: ownClub) else { continue }
+                for position in [assignment.ipPosition, assignment.oopPosition] where retraining.position == position {
+                    if try familiarity(player, position) < solidFrom { return true }
+                }
+            }
+            return false
+        }
 
         for tactic in tactics {
             let depth = try Depth.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
@@ -98,7 +114,8 @@ public enum Training {
                 guard let assignment = assignments[slot], let slotDepth = slots[slot] else { continue }
                 let index = needs.count
                 needs.append(NeedFacts(need: RetrainingNeed(tactic: tactic.name, slot: slot), ipPosition: assignment.ipPosition,
-                                       oopPosition: assignment.oopPosition, cover: slotDepth.cover))
+                                       oopPosition: assignment.oopPosition, cover: slotDepth.cover,
+                                       isBeingRetrained: try isBeingRetrained(assignment)))
                 // Without a first choice there is nothing to measure a candidate against.
                 guard let first = firstChoice[slot], first.rating.value > 0 else { continue }
                 for player in sorted {
@@ -127,8 +144,10 @@ public enum Training {
         ])!
         let recommendations = chosen.map { recommendation($0, needs: needs, basis: basis, parameters: parameters) }
         let covered = Set(chosen.flatMap(\.needs))
-        let uncovered = needs.indices.filter { !covered.contains($0) }.map { needs[$0].need }
-        return TrainingReport(recommendations: recommendations, needsWithoutCandidates: uncovered)
+        let uncovered = needs.indices.filter { !covered.contains($0) }.map { needs[$0] }
+        return TrainingReport(recommendations: recommendations,
+                              needsWithoutCandidates: uncovered.filter { !$0.isBeingRetrained }.map(\.need),
+                              needsBeingRetrained: uncovered.filter(\.isBeingRetrained).map(\.need))
     }
 
     /// From 0 to 1: how quickly he is likely to learn a new position. Throws `RatingError.missingAttribute` without
@@ -154,6 +173,7 @@ public enum Training {
         let ipPosition: Position
         let oopPosition: Position
         let cover: Int
+        let isBeingRetrained: Bool
     }
 
     /// A player who suits one thin slot.
@@ -268,28 +288,21 @@ public enum Training {
 
     // MARK: Choosing and wording
 
-    /// Each player's best pair, then at most `perPosition` for each position, the highest product first; returned in
-    /// the order of the first need each covers, then the product, highest first, then key.
+    /// Every pair, highest product first (then key, then position order), taken while its player has no recommendation
+    /// and its position has fewer than `perPosition`; so a player whose best position is full is offered his next best.
+    /// Returned in the order of the first need each covers, then the product, highest first, then key.
     private static func choose(_ pairs: [Pair], perPosition: Int) -> [Pair] {
         let positionIndex = Dictionary(uniqueKeysWithValues: Position.allCases.enumerated().map { ($1, $0) })
-        // A player's ties go to his most needed pair, then the earlier position.
-        let ordered = pairs.sorted { a, b in
+        let byProduct = pairs.sorted { a, b in
+            if a.candidate.product != b.candidate.product { return a.candidate.product > b.candidate.product }
             if a.choice.player.key != b.choice.player.key { return a.choice.player.key < b.choice.player.key }
-            if a.needs[0] != b.needs[0] { return a.needs[0] < b.needs[0] }
             return positionIndex[a.choice.position]! < positionIndex[b.choice.position]!
         }
-        var best: [PlayerID: Pair] = [:]
-        for pair in ordered {
-            if let current = best[pair.choice.player], !(pair.candidate.product > current.candidate.product) { continue }
-            best[pair.choice.player] = pair
-        }
-        let byProduct = best.values.sorted { a, b in
-            if a.candidate.product != b.candidate.product { return a.candidate.product > b.candidate.product }
-            return a.choice.player.key < b.choice.player.key
-        }
+        var placed: Set<PlayerID> = []
         var taken: [Position: Int] = [:]
         var kept: [Pair] = []
-        for pair in byProduct where taken[pair.choice.position, default: 0] < perPosition {
+        for pair in byProduct where !placed.contains(pair.choice.player) && taken[pair.choice.position, default: 0] < perPosition {
+            placed.insert(pair.choice.player)
             taken[pair.choice.position, default: 0] += 1
             kept.append(pair)
         }
