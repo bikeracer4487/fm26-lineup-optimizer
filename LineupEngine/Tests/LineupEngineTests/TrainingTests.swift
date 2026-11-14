@@ -164,6 +164,27 @@ import Testing
         #expect(try report(thinAtLeftBack([rightBack(familiarity: [.goalkeeper: 14])])).recommendations.count == 1)
     }
 
+    @Test func anOutfieldPlayerIsNotACandidateForTheGoalkeepersSlot() throws {
+        // Without a second goalkeeper, cover in goal is thin.
+        let players = try squad(without: [named(.GK, "second")])
+        let goal = RetrainingNeed(tactic: sample, slot: .GK)
+        let assignment = try assignment(.GK)
+        try #require(assignment.ipPosition == .goalkeeper && assignment.oopPosition == .goalkeeper)
+        // GK 14 is below solid, so he is an outfield player: not offered the goalkeeper's slot, though he is quick to learn
+        // and offered left back when that is thin.
+        let outfield = rightBack(familiarity: [.goalkeeper: 14])
+        let r = try report(players + [outfield])
+        #expect(r.recommendations.isEmpty)
+        #expect(r.needsWithoutCandidates == [goal])
+        let left = try report(try squad(without: [named(.GK, "second"), named(.D_L, "second")]) + [outfield])
+        #expect(choices(left) == [RetrainingChoice(player: id("Right Back"), position: .defenderLeft)])
+        // At GK 15 he is a goalkeeper, but then he is already solid in both of the slot's phases, so still not a
+        // candidate (injured, so the slot stays thin): the goalkeeper's slot always goes to recruitment.
+        let keeper = rightBack(familiarity: [.goalkeeper: 15], isInjured: true)
+        let k = try report(players + [keeper])
+        #expect(k.recommendations.isEmpty && k.needsWithoutCandidates == [goal])
+    }
+
     @Test func anInversionRulesHimOut() throws {
         // A natural striker and nothing else: ST (C) to D (L) is an inversion.
         let striker = Player.fixture(name: "Striker", age: 20, all: 13,
@@ -352,6 +373,26 @@ import Testing
         #expect(choices(known) == [RetrainingChoice(player: id("Winger"), position: .midfielderLeft)])
     }
 
+    @Test func needsBeingRetrainedComeInTacticOrderThenNeed() throws {
+        // Left back and both centre-back slots are thin; one back is being retrained at each position.
+        var other = tactic
+        other.name = "Second Sample"
+        let players = try thinAtTheBack([rightBack("Back A"), rightBack("Back B")])
+        let accepted = [Retraining(player: id("Back B"), position: .defenderCentral, acceptedOn: acceptedOn),
+                        Retraining(player: id("Back A"), position: .defenderLeft, acceptedOn: acceptedOn)]
+        let depth = try Depth.report(tactic: tactic, players: players, ownClub: "Oxford City", catalog: catalog,
+                                     profile: profile, parameters: .fm27)
+        let thin = depth.thin.filter { [.D_L, .D_CL, .D_CR].contains($0) }
+        try #require(thin.count == 3)
+        let r = try report(players, tactics: [other, tactic], accepted: accepted,
+                           rejected: [RetrainingChoice(player: id("Back A"), position: .defenderCentral),
+                                      RetrainingChoice(player: id("Back B"), position: .defenderLeft)])
+        #expect(r.recommendations.isEmpty)
+        #expect(r.needsBeingRetrained == thin.map { RetrainingNeed(tactic: "Second Sample", slot: $0) }
+                + thin.map { RetrainingNeed(tactic: sample, slot: $0) })
+        #expect(r.needsWithoutCandidates.isEmpty)
+    }
+
     @Test func aNeedBeingRetrainedCanStillGetAnotherRecommendation() throws {
         let players = try thinAtLeftBack([rightBack("Back A", versatility: 14), rightBack("Back B", versatility: 13)])
         let r = try report(players, accepted: [Retraining(player: id("Back A"), position: .defenderLeft, acceptedOn: acceptedOn)])
@@ -449,10 +490,13 @@ import Testing
                                familiarity: [.wingBackLeft: 20, .defenderLeft: 5], currentAbility: 100, potentialAbility: 140)
         let players = try thinAtLeftBack([p])
         let rec = try #require(try report(players).recommendations.first)
+        // The figures typed out below match an independent rating of him with familiarity 20 at D (L).
         let expected = try share(of: p, at: .D_L, firstChoice: firstChoice(.D_L, in: players))
+        #expect(abs(expected.rating - 144.2) < 0.05)
+        #expect(expected.share >= 0.94 && expected.share < 0.95)
         #expect(rec.reasons == [
             "Cover at D (L) is thin in Sample 4-2-3-1 (1 solid player available)",
-            "He would rate \(String(format: "%.1f", expected.rating)) there once learnt, \(Display.percent(expected.share)) of the first choice",
+            "He would rate 144.2 there once learnt, 94% of the first choice",
             "From WB (L): a fluid change, about 9 weeks at his age and Versatility",
         ])
         #expect(rec.cautions == [

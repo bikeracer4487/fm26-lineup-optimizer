@@ -114,7 +114,7 @@ public enum Training {
                 guard let assignment = assignments[slot], let slotDepth = slots[slot] else { continue }
                 let index = needs.count
                 needs.append(NeedFacts(need: RetrainingNeed(tactic: tactic.name, slot: slot), ipPosition: assignment.ipPosition,
-                                       oopPosition: assignment.oopPosition, cover: slotDepth.cover,
+                                       cover: slotDepth.cover,
                                        isBeingRetrained: try isBeingRetrained(assignment)))
                 // Without a first choice there is nothing to measure a candidate against.
                 guard let first = firstChoice[slot], first.rating.value > 0 else { continue }
@@ -171,7 +171,6 @@ public enum Training {
     private struct NeedFacts {
         let need: RetrainingNeed
         let ipPosition: Position
-        let oopPosition: Position
         let cover: Int
         let isBeingRetrained: Bool
     }
@@ -205,6 +204,7 @@ public enum Training {
                                   learnabilities: inout [PlayerID: Double], parameters: EngineParameters) throws -> Candidate? {
         guard case .own = LoanStatus.of(player, ownClub: ownClub) else { return nil }
         let solidFrom = parameters.depthSolidFamiliarity.value
+        // A goalkeeper is a player who is solid in goal, by the same line Depth uses for solid cover.
         let isGoalkeeper = try familiarity(player, .goalkeeper) >= solidFrom
         guard isGoalkeeper == (assignment.ipPosition == .goalkeeper) else { return nil }
         let ip = try familiarity(player, assignment.ipPosition)

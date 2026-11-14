@@ -245,6 +245,64 @@ import Testing
         #expect(FitnessModel.problems(in: r).isEmpty)
     }
 
+    @Test func ageStepsOutOfOrderAreReported() {
+        var q = EngineParameters.fm27
+        var rules = q.learnabilityRules.value
+        rules.ageSteps = [AgeFactorStep(upTo: 23, factor: 0.95), AgeFactorStep(upTo: 20, factor: 1.0)]
+        q.learnabilityRules = Parameter(rules, .derived, source: "test")
+        var pace = q.retrainingPace.value
+        pace.ageSteps = [AgeFactorStep(upTo: 21, factor: 1.0), AgeFactorStep(upTo: 21, factor: 1.3)]
+        q.retrainingPace = Parameter(pace, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["learnabilityRules ageSteps upTo values are not strictly increasing",
+                                                 "retrainingPace ageSteps upTo values are not strictly increasing"])
+        rules.ageSteps = [AgeFactorStep(upTo: 20, factor: 1.0), AgeFactorStep(upTo: 23, factor: 0.95)]
+        q.learnabilityRules = Parameter(rules, .derived, source: "test")
+        pace.ageSteps = [AgeFactorStep(upTo: 21, factor: 1.0), AgeFactorStep(upTo: 22, factor: 1.3)]
+        q.retrainingPace = Parameter(pace, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func headStartStepsOutOfOrderAreReported() {
+        var q = EngineParameters.fm27
+        var pace = q.retrainingPace.value
+        pace.headStartSteps = [FamiliarityStep(minimum: 10, factor: 0.7), FamiliarityStep(minimum: 13, factor: 0.5)]
+        q.retrainingPace = Parameter(pace, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["retrainingPace headStartSteps minimum values are not strictly decreasing"])
+        pace.headStartSteps = [FamiliarityStep(minimum: 13, factor: 0.5)]
+        q.retrainingPace = Parameter(pace, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func aNegativeLearnabilityWeightIsReported() {
+        var q = EngineParameters.fm27
+        var rules = q.learnabilityRules.value
+        rules.ageWeight = -0.25
+        q.learnabilityRules = Parameter(rules, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["learnabilityRules ageWeight is -0.25, not a finite number of 0 or more"])
+        rules.ageWeight = 0
+        q.learnabilityRules = Parameter(rules, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func noRetrainingPlacesPerPositionIsReported() {
+        var q = EngineParameters.fm27
+        q.retrainingPerPosition = Parameter(0, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["retrainingPerPosition is 0, not 1 or more"])
+        q.retrainingPerPosition = Parameter(1, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func retrainingLinesThatAreNotNumbersAreReported() {
+        var q = EngineParameters.fm27
+        q.retrainingMinimumShare = Parameter(.nan, .derived, source: "test")
+        q.retrainingMinimumLearnability = Parameter(.infinity, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["retrainingMinimumShare is nan, not a finite number",
+                                                 "retrainingMinimumLearnability is inf, not a finite number"])
+        q.retrainingMinimumShare = Parameter(1.5, .derived, source: "test")
+        q.retrainingMinimumLearnability = Parameter(0, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
     @Test func learnabilityDivisorsMustBeAboveZero() {
         var q = EngineParameters.fm27
         var rules = q.learnabilityRules.value

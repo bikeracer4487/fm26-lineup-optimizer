@@ -187,6 +187,29 @@ public enum FitnessModel {
         for (name, factor) in paceFactors where !usable(factor) {
             found.append("retrainingPace \(name) is \(factor), \(notUsable)")
         }
+        // Age steps are read youngest first and head-start steps highest first: the first that fits applies.
+        for (name, steps) in [("learnabilityRules", learnability.ageSteps), ("retrainingPace", pace.ageSteps)]
+            where !zip(steps, steps.dropFirst()).allSatisfy({ $0.upTo < $1.upTo }) {
+            found.append("\(name) ageSteps upTo values are not strictly increasing")
+        }
+        if !zip(pace.headStartSteps, pace.headStartSteps.dropFirst()).allSatisfy({ $0.minimum > $1.minimum }) {
+            found.append("retrainingPace headStartSteps minimum values are not strictly decreasing")
+        }
+        // Learnability is a weighted sum that should stay within 0 to 1.
+        for (name, weight) in [("versatilityWeight", learnability.versatilityWeight), ("ageWeight", learnability.ageWeight),
+                               ("professionalismWeight", learnability.professionalismWeight),
+                               ("roomToGrowWeight", learnability.roomToGrowWeight)] where !usable(weight) {
+            found.append("learnabilityRules \(name) is \(weight), \(notUsable)")
+        }
+        let perPosition = parameters.retrainingPerPosition.value
+        if perPosition < 1 {
+            found.append("retrainingPerPosition is \(perPosition), not 1 or more")
+        }
+        for (name, line) in [("retrainingMinimumShare", parameters.retrainingMinimumShare.value),
+                             ("retrainingMinimumLearnability", parameters.retrainingMinimumLearnability.value)]
+            where !line.isFinite {
+            found.append("\(name) is \(line), not a finite number")
+        }
         // Player Removal counts this share of the players assessed, rounded down, as the weakest.
         let removal = parameters.removalRules.value
         if !(removal.weakestShare >= 0 && removal.weakestShare <= 1) {
