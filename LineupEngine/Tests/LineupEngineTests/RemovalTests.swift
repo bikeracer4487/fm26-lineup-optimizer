@@ -72,6 +72,8 @@ import Testing
 
     let weakest = "Among the weakest 30% of the squad for this tactic"
 
+    func named(_ slot: SlotID, _ tier: String) -> String { PlannerFixture.name(slot, tier) }
+
     // MARK: Contract type
 
     @Test func aContractThatIsNotFullTimeAddsFifty() throws {
@@ -100,24 +102,80 @@ import Testing
 
     // MARK: The weakest
 
+    /// Each player's best share: the highest, over the slots with a first choice rated above 0, of his rating there over
+    /// the first choice's; nil with none.
+    func bestShares(_ players: [Player]) throws -> [PlayerID: Double?] {
+        let tiers = try Elevens.report(tactic: tactic, players: players, ownClub: "Oxford City", catalog: catalog,
+                                       profile: profile, parameters: parameters).tiers
+        var shares: [PlayerID: Double?] = [:]
+        for player in players {
+            var best: Double?
+            for (slot, first) in tiers.first {
+                guard let firstRating = tiers.ratings[first]?[slot], firstRating > 0,
+                      let rating = tiers.ratings[player.id]?[slot] else { continue }
+                best = max(best ?? -.infinity, rating / firstRating)
+            }
+            shares[player.id] = best
+        }
+        return shares
+    }
+
     @Test func theWeakestThirtyPercentOfEveryoneAssessedAddThirty() throws {
         // 23 assessed: 30% of 23 is 6.9, so 6.
         let players = try squad([target()])
         let r = try report(players)
         let flagged = r.advice.filter { $0.reasons.contains(reason(weakest, 30)) }
         #expect(flagged.count == 6)
-        // They are the six lowest best slot ratings, then key.
-        let ratings = try Elevens.report(tactic: tactic, players: players, ownClub: "Oxford City", catalog: catalog,
-                                         profile: profile, parameters: parameters).tiers.ratings
-        let lowest = players.map(\.id)
-            .sorted { a, b in
-                let ra = ratings[a]!.values.max()!, rb = ratings[b]!.values.max()!
-                return ra != rb ? ra < rb : a.key < b.key
-            }
-            .prefix(6)
-        #expect(Set(flagged.map(\.player)) == Set(lowest))
         #expect(flagged.contains { $0.player == target().id })
         #expect(!flagged.contains { $0.player == PlannerFixture.id(.D_L, "first") })
+    }
+
+    @Test func theWeakestAreRankedByShareOfTheFirstChoice() throws {
+        // Weaker goalkeepers: their ratings are the lowest in the squad, but the second's is close to the first's.
+        let players = try squad([target()]).map { p -> Player in
+            var p = p
+            let level = p.id == PlannerFixture.id(.GK, "first") ? 9 : p.id == PlannerFixture.id(.GK, "second") ? 8 : nil
+            if let level { for attribute in Attribute.allCases { p.attributes[attribute] = level } }
+            return p
+        }
+        let shares = try bestShares(players)
+        let byShare = players.map(\.id).sorted { a, b in
+            let sa = shares[a]!!, sb = shares[b]!!
+            return sa != sb ? sa < sb : a.key < b.key
+        }.prefix(6)
+        // Ranked by raw best rating instead, the six would differ.
+        let ratings = try Elevens.report(tactic: tactic, players: players, ownClub: "Oxford City", catalog: catalog,
+                                         profile: profile, parameters: parameters).tiers.ratings
+        let byRating = players.map(\.id).sorted { a, b in
+            let ra = ratings[a]!.values.max()!, rb = ratings[b]!.values.max()!
+            return ra != rb ? ra < rb : a.key < b.key
+        }.prefix(6)
+        try #require(Set(byShare) != Set(byRating))
+        let flagged = try report(players).advice.filter { $0.reasons.contains(reason(weakest, 30)) }
+        #expect(Set(flagged.map(\.player)) == Set(byShare))
+        // Every first choice has a share of 1, so none is among the weakest here.
+        #expect(flagged.allSatisfy { !$0.player.key.hasSuffix("first") })
+        #expect(!flagged.contains { $0.player == PlannerFixture.id(.GK, "first") })
+    }
+
+    @Test func aFirstChoiceGoalkeeperIsNotAmongTheWeakest() throws {
+        // The only goalkeeper, weak enough that his best rating is the lowest in the squad; first choice, his share is 1.
+        let keeper = PlannerFixture.id(.GK, "first")
+        let players = try PlannerFixture.squad().filter { $0.name != named(.GK, "second") }.map { p -> Player in
+            guard p.id == keeper else { return p }
+            var p = p
+            for attribute in Attribute.allCases { p.attributes[attribute] = 8 }
+            return p
+        }
+        let ratings = try Elevens.report(tactic: tactic, players: players, ownClub: "Oxford City", catalog: catalog,
+                                         profile: profile, parameters: parameters).tiers.ratings
+        let best = ratings.mapValues { $0.values.max()! }
+        try #require(best.filter { $0.key != keeper }.values.allSatisfy { $0 > best[keeper]! })
+        let shares = try bestShares(players)
+        #expect(abs(shares[keeper]!! - 1) < 1e-9)
+        let a = try advice(keeper, in: players)
+        #expect(a.tier == .first(.GK))
+        #expect(!a.reasons.contains(reason(weakest, 30)))
     }
 
     @Test func theWeakestShareIsRoundedDown() throws {
@@ -137,6 +195,75 @@ import Testing
         let loanFlagged = r.loans.filter { $0.reasons.contains(reason(weakest, 30)) }.count
         #expect(loanFlagged == 1)
         #expect(ownFlagged + loanFlagged == 7)
+    }
+
+    // MARK: Thin cover
+
+    @Test func aFirstChoiceAtAThinSlotTakesThirtyOff() throws {
+        // Without a second goalkeeper, cover in goal is thin.
+        let players = try PlannerFixture.squad().filter { $0.name != named(.GK, "second") }
+        let a = try advice(PlannerFixture.id(.GK, "first"), in: players)
+        #expect(a.reasons.prefix(2) == [reason("In the first eleven at GK", -40),
+                                         reason("First choice at GK, where cover is thin", -30)])
+        #expect(a.basis == .derived)
+        #expect(a.score == a.reasons.map(\.points).reduce(0, +))
+    }
+
+    @Test func aSecondChoiceAtAThinSlotTakesThirtyOff() throws {
+        // An injured second-choice left back still holds his tier, but he does not count as cover, so left back is thin.
+        let id = PlannerFixture.id(.D_L, "second")
+        let players = try squad(changing: id) { $0.isInjured = true }
+        let second = try advice(id, in: players)
+        #expect(second.reasons.prefix(2) == [reason("In the second eleven at D (L)", -20),
+                                              reason("Second choice at D (L), where cover is thin", -30)])
+        #expect(second.basis == .derived)
+        let first = try advice(PlannerFixture.id(.D_L, "first"), in: players)
+        #expect(first.reasons.prefix(2) == [reason("In the first eleven at D (L)", -40),
+                                             reason("First choice at D (L), where cover is thin", -30)])
+        // The rule comes straight after the elevens row, after the contract row.
+        let contract = try advice(PlannerFixture.id(.D_L, "first"), in: players.map { p -> Player in
+            var p = p; if p.id == PlannerFixture.id(.D_L, "first") { p.contractType = .outOfContract }; return p
+        })
+        #expect(contract.reasons.prefix(3) == [reason("Not on a full-time contract", 50),
+                                               reason("In the first eleven at D (L)", -40),
+                                               reason("First choice at D (L), where cover is thin", -30)])
+    }
+
+    @Test func noThinCoverRuleWhereTheSlotIsNotThin() throws {
+        let players = try squad()
+        for id in [PlannerFixture.id(.GK, "first"), PlannerFixture.id(.D_L, "second")] {
+            let a = try advice(id, in: players)
+            #expect(reasons(a.reasons, "First choice").isEmpty && reasons(a.reasons, "Second choice").isEmpty, "\(id.key)")
+            #expect(a.basis == .carriedOverFM26)
+        }
+        // Where goal is thin, a player in neither eleven gets nothing for it.
+        let thin = try PlannerFixture.squad().filter { $0.name != named(.GK, "second") } + [target(), target("Other")]
+        let neither = try report(thin).advice.filter { $0.tier == .backup }
+        try #require(!neither.isEmpty)
+        for a in neither {
+            #expect(reasons(a.reasons, "First choice").isEmpty && reasons(a.reasons, "Second choice").isEmpty, "\(a.name)")
+        }
+    }
+
+    @Test func aLoaneeWhoIsFirstChoiceAtAThinSlotTakesThirtyOff() throws {
+        let first = PlannerFixture.id(.D_L, "first"), second = PlannerFixture.id(.D_L, "second")
+        let players = try PlannerFixture.squad().map { p -> Player in
+            var p = p
+            if p.id == first { p.club = "Other FC"; p.loanedTo = "Oxford City" }
+            if p.id == second { p.isInjured = true }
+            return p
+        }
+        let review = try #require(try report(players).loans.first { $0.player == first })
+        #expect(review.reasons == [reason("In the first eleven at D (L)", -30),
+                                   reason("First choice at D (L), where cover is thin", -30)])
+        #expect(review.score == -60)
+        #expect(review.basis == .derived)
+        // Where cover is not thin, nothing is added and the basis is the removal rules'.
+        let plain = try #require(try report(try squad(changing: first) { p in
+            p.club = "Other FC"; p.loanedTo = "Oxford City"
+        }).loans.first)
+        #expect(plain.reasons == [reason("In the first eleven at D (L)", -30)])
+        #expect(plain.basis == .carriedOverFM26)
     }
 
     // MARK: Ability

@@ -30,7 +30,7 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        loan review; with --fixtures, a suggested importance beside each fixture's own.
        --fixtures is a JSON array of {"id", "date", "opponent", "importance", "overrides"?: {"<slot>": "<player key>"},
        "rejected"?: ["<player key>"], "competition"?: "league|cup|minorCup|friendly",
-       "opponentStrength"?: "muchStronger|stronger|similar|weaker|muchWeaker"}. Only advise reads competition and
+       "opponentStrength"?: "muchStronger|stronger|similar|weaker|muchWeaker"}. plan ignores competition and
        opponentStrength. --history is a JSON array of confirmed lineups:
        {"fixture", "date", "starters": {"<slot>": "<player key>"}}. Dates are YYYY-MM-DD. A player's key is "fmrte:<Id>"
        when the paste has FMRTE's Id column, otherwise his name in lower case.

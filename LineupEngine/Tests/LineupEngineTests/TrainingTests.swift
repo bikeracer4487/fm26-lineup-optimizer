@@ -116,12 +116,78 @@ import Testing
         let r = try report(players)
         #expect(r.recommendations.isEmpty)
         #expect(r.needsWithoutCandidates.map(\.slot).sorted { $0.rawValue < $1.rawValue } == [.D_L, .D_R])
-        // With the second-choice right back kept, D_R is not thin and he is free to learn left back.
-        let free = try squad(without: [named(.D_L, "second"), named(.D_R, "first")]) + [rightBack()]
-        let elevens = try Elevens.report(tactic: tactic, players: free, ownClub: "Oxford City", catalog: catalog,
+    }
+
+    @Test func aFirstChoiceElsewhereIsNeverACandidate() throws {
+        // With the second-choice right back kept, D_R is not thin, but he is still its first choice: retrained, he
+        // would not count as cover at left back, so he is not offered it.
+        let firstAtRight = try squad(without: [named(.D_L, "second"), named(.D_R, "first")]) + [rightBack()]
+        let elevens = try Elevens.report(tactic: tactic, players: firstAtRight, ownClub: "Oxford City", catalog: catalog,
                                          profile: profile, parameters: .fm27)
         try #require(elevens.first.first { $0.slot == .D_R }?.player == id("Right Back"))
-        #expect(choices(try report(free)) == [RetrainingChoice(player: id("Right Back"), position: .defenderLeft)])
+        let depth = try Depth.report(tactic: tactic, players: firstAtRight, ownClub: "Oxford City", catalog: catalog,
+                                     profile: profile, parameters: .fm27)
+        try #require(depth.thin == [.D_L])
+        let r = try report(firstAtRight)
+        #expect(r.recommendations.isEmpty)
+        #expect(r.needsWithoutCandidates == [RetrainingNeed(tactic: sample, slot: .D_L)])
+        // Behind the first-choice right back he is second choice there, and free to learn left back.
+        let second = try thinAtLeftBack([rightBack()])
+        let secondElevens = try Elevens.report(tactic: tactic, players: second, ownClub: "Oxford City", catalog: catalog,
+                                               profile: profile, parameters: .fm27)
+        try #require(!secondElevens.first.contains { $0.player == id("Right Back") })
+        #expect(choices(try report(second)) == [RetrainingChoice(player: id("Right Back"), position: .defenderLeft)])
+    }
+
+    @Test func aPlayerShortInBothPhasesIsNotACandidate() throws {
+        // AM_L plays AM (L) with the ball and M (L) without it. Without a second choice there, cover is thin.
+        func winger(attackingMid: Int, midfield: Int) -> Player {
+            Player.fixture(name: "Winger", age: 20, all: 13, attributes: [.versatility: 14, .professionalism: 12],
+                           familiarity: [.attackingMidLeft: attackingMid, .midfielderLeft: midfield])
+        }
+        let need = RetrainingNeed(tactic: sample, slot: .AM_L)
+        // Short at both: learning one would still leave him short at the other.
+        let both = try report(try squad(without: [named(.AM_L, "second")]) + [winger(attackingMid: 14, midfield: 9)])
+        #expect(both.recommendations.isEmpty)
+        #expect(both.needsWithoutCandidates == [need])
+        // His neighbour, solid with the ball, is offered the position he is short in.
+        let neighbour = try report(try squad(without: [named(.AM_L, "second")]) + [winger(attackingMid: 15, midfield: 9)])
+        #expect(choices(neighbour) == [RetrainingChoice(player: id("Winger"), position: .midfielderLeft)])
+        // And the other way round.
+        let other = try report(try squad(without: [named(.AM_L, "second")]) + [winger(attackingMid: 9, midfield: 15)])
+        #expect(choices(other) == [RetrainingChoice(player: id("Winger"), position: .attackingMidLeft)])
+    }
+
+    @Test func theFirstChoiceOfTheThinSlotCanLearnThePositionHeIsShortIn() throws {
+        // The first-choice AM_L is short at M (L), so he is not solid cover and the slot, without a second choice, is
+        // thin. He is quick to learn; learning M (L) makes him count.
+        let first = named(.AM_L, "first")
+        let players = try squad(without: [named(.AM_L, "second")]).map { p -> Player in
+            guard p.name == first else { return p }
+            var p = p
+            p.age = 20
+            p.attributes[.versatility] = 14
+            p.attributes[.professionalism] = 12
+            p.potentialAbility = p.currentAbility + 20
+            p.familiarity[.midfielderLeft] = 12
+            return p
+        }
+        let elevens = try Elevens.report(tactic: tactic, players: players, ownClub: "Oxford City", catalog: catalog,
+                                         profile: profile, parameters: .fm27)
+        try #require(elevens.first.first { $0.slot == .AM_L }?.player == id(first))
+        let r = try report(players)
+        let rec = try #require(r.recommendations.first)
+        #expect(choices(r) == [RetrainingChoice(player: id(first), position: .midfielderLeft)])
+        #expect(rec.needs == [RetrainingNeed(tactic: sample, slot: .AM_L)])
+        #expect(rec.currentFamiliarity == 12)
+        // Short at both of the slot's positions, he is not offered either.
+        let both = players.map { p -> Player in
+            guard p.name == first else { return p }
+            var p = p
+            p.familiarity[.attackingMidLeft] = 14
+            return p
+        }
+        #expect(try report(both).recommendations.isEmpty)
     }
 
     @Test func aPlayerBelowTheMinimumShareOfTheFirstChoiceIsNotACandidate() throws {
@@ -234,10 +300,11 @@ import Testing
         // Nothing at 18, so he retrains from his best position.
         #expect(rec.from == .attackingMidLeft && rec.difficulty == .fluid)
         #expect(rec.cautions.contains("Needed out of possession only: reports say out-of-possession familiarity was hard to train in FM26"))
-        // Short in possession too: he learns AM (L) and there is no such caution.
-        var both = winger
-        both.familiarity[.attackingMidLeft] = 12
-        let r2 = try report(try squad(without: [named(.AM_L, "second")]) + [both])
+        // Short in possession and solid out of it: he learns AM (L) and there is no such caution.
+        var inPossession = winger
+        inPossession.familiarity[.attackingMidLeft] = 12
+        inPossession.familiarity[.midfielderLeft] = 15
+        let r2 = try report(try squad(without: [named(.AM_L, "second")]) + [inPossession])
         let rec2 = try #require(r2.recommendations.first)
         #expect(rec2.choice.position == .attackingMidLeft)
         #expect(!rec2.cautions.contains { $0.hasPrefix("Needed out of possession only") })

@@ -104,9 +104,8 @@ public enum Training {
                                          profile: profile, parameters: parameters)
             let firstEleven = try Elevens.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
                                                  profile: profile, parameters: parameters).first
-            let thin = Set(depth.thin)
             let firstChoice = Dictionary(uniqueKeysWithValues: firstEleven.map { ($0.slot, $0) })
-            let firstInThinSlot = Dictionary(uniqueKeysWithValues: firstEleven.filter { thin.contains($0.slot) }.map { ($0.player, $0.slot) })
+            let firstAt = Dictionary(uniqueKeysWithValues: firstEleven.map { ($0.player, $0.slot) })
             let assignments = Dictionary(uniqueKeysWithValues: try tactic.assignments(catalog: catalog).map { ($0.slot, $0) })
             let slots = Dictionary(uniqueKeysWithValues: depth.slots.map { ($0.slot, $0) })
 
@@ -120,7 +119,7 @@ public enum Training {
                 guard let first = firstChoice[slot], first.rating.value > 0 else { continue }
                 for player in sorted {
                     guard let candidate = try candidate(player, for: assignment, firstRating: first.rating.value,
-                                                        firstInThinSlot: firstInThinSlot, ownClub: ownClub, engine: engine,
+                                                        firstAt: firstAt, ownClub: ownClub, engine: engine,
                                                         learnabilities: &learnabilities, parameters: parameters)
                     else { continue }
                     let choice = RetrainingChoice(player: player.id, position: candidate.position)
@@ -198,9 +197,11 @@ public enum Training {
         let candidate: Candidate
     }
 
-    /// Nil when he does not suit the slot; the filters run cheapest first.
+    /// Nil when he does not suit the slot; the filters run cheapest first. A first choice at another slot is never a
+    /// candidate: Depth would not count him as cover here. He must already be solid at the slot's other position, so that
+    /// learning one position makes him solid in both phases.
     private static func candidate(_ player: Player, for assignment: SlotAssignment, firstRating: Double,
-                                  firstInThinSlot: [PlayerID: SlotID], ownClub: String?, engine: RatingEngine,
+                                  firstAt: [PlayerID: SlotID], ownClub: String?, engine: RatingEngine,
                                   learnabilities: inout [PlayerID: Double], parameters: EngineParameters) throws -> Candidate? {
         guard case .own = LoanStatus.of(player, ownClub: ownClub) else { return nil }
         let solidFrom = parameters.depthSolidFamiliarity.value
@@ -210,7 +211,9 @@ public enum Training {
         let ip = try familiarity(player, assignment.ipPosition)
         let oop = try familiarity(player, assignment.oopPosition)
         guard ip < solidFrom || oop < solidFrom else { return nil }
-        if let home = firstInThinSlot[player.id], home != assignment.slot { return nil }
+        // With both positions the same, one familiarity covers both phases; otherwise exactly one may be short.
+        guard assignment.ipPosition == assignment.oopPosition || ip >= solidFrom || oop >= solidFrom else { return nil }
+        if let home = firstAt[player.id], home != assignment.slot { return nil }
 
         var learnt = player
         learnt.familiarity[assignment.ipPosition] = naturalFamiliarity

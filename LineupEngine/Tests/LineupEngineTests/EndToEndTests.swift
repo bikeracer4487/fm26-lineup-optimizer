@@ -280,6 +280,10 @@ import Testing
         #expect(depth.thin.contains(.GK))
         #expect(keeper.onLoan.map(\.name).contains("Max Treml"))
         #expect(keeper.options.contains { $0.name == "Jonny Maxted" && $0.unavailable == .injured })
+        // The two U21 centre-backs a day short of the condition floor still count as cover.
+        for slot in [SlotID.D_CL, .D_CR] {
+            #expect(depth.slots.first { $0.slot == slot }?.isThin == false, "\(slot.rawValue)")
+        }
 
         // Rest: nobody out on loan.
         let rest = try Rest.advice(players: players, ownClub: ownClub, history: StartHistory(history), asOf: asOf,
@@ -297,9 +301,22 @@ import Testing
             #expect(recommended.contains(slot) || training.needsBeingRetrained.contains(need)
                     || training.needsWithoutCandidates.contains(need), "\(slot.rawValue)")
         }
+        // Nobody recommended is first choice at another slot, and each is solid at the slot's other position.
+        let firstAt = Dictionary(uniqueKeysWithValues: elevens.tiers.first.map { ($0.value, $0.key) })
+        let assignments = Dictionary(uniqueKeysWithValues: try tactic.assignments(catalog: catalog).map { ($0.slot, $0) })
+        let byID = Dictionary(uniqueKeysWithValues: players.map { ($0.id, $0) })
         for recommendation in training.recommendations {
             #expect(!recommendation.reasons.isEmpty && !recommendation.cautions.isEmpty, "\(recommendation.name)")
             #expect(own.contains(recommendation.choice.player), "\(recommendation.name)")
+            let player = try #require(byID[recommendation.choice.player])
+            for need in recommendation.needs {
+                if let home = firstAt[player.id] { #expect(home == need.slot, "\(recommendation.name)") }
+                let assignment = try #require(assignments[need.slot])
+                for other in [assignment.ipPosition, assignment.oopPosition] where other != recommendation.choice.position {
+                    #expect(try #require(player.familiarity[other]) >= parameters.depthSolidFamiliarity.value,
+                            "\(recommendation.name) at \(other.rawValue)")
+                }
+            }
         }
 
         // Player Removal: nobody out on loan; every piece of advice has a reason, and its score is their sum.
@@ -310,6 +327,10 @@ import Testing
             #expect(!advice.reasons.isEmpty, "\(advice.name)")
             #expect(advice.score == advice.reasons.map(\.points).reduce(0, +), "\(advice.name)")
         }
+        // The first-choice goalkeeper, with nobody behind him, is not told to go.
+        let goalkeeper = try #require(elevens.tiers.first[.GK])
+        let keeperAdvice = try #require(removal.advice.first { $0.player == goalkeeper })
+        #expect(keeperAdvice.level == .keep || keeperAdvice.level == .medium, "\(keeperAdvice.name): \(keeperAdvice.level)")
 
         // The importance suggestion: every fixture gets one, with reasons.
         let entries = try JSONDecoder().decode([FixtureEntry].self,
@@ -327,6 +348,9 @@ import Testing
             let suggestion = ImportanceAdvisor.suggest(for: fixture, among: fixtures, confirmed: history, players: players,
                                                        tiers: tiers, parameters: parameters)
             #expect(!suggestion.reasons.isEmpty, "\(fixture.id.raw)")
+            // A league match against a much stronger side, with only one match in the six days before it.
+            if fixture.date == Day(iso: "2026-11-21") { #expect(suggestion.importance == .high, "\(suggestion.reasons)") }
         }
+        #expect(fixtures.contains { $0.date == Day(iso: "2026-11-21") })
     }
 }

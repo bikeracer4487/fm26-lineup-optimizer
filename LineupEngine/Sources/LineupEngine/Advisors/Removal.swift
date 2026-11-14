@@ -73,13 +73,16 @@ public enum Removal {
     /// get neither, and injured players are assessed. The squad average ability and the median wage are over the club's
     /// own players. Throws `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, what
     /// `Elevens.report` throws, and `RatingError.missingAttribute` for an assessed player without Consistency, Important
-    /// Matches, Injury Proneness, Professionalism, Ambition, Controversy, Temperament or Determination.
+    /// Matches, Injury Proneness, Professionalism, Ambition, Controversy, Temperament or Determination. Throws what
+    /// `Depth.report` throws.
     public static func report(tactic: Tactic, players: [Player], ownClub: String?, catalog: RoleCatalog,
                               profile: RatingProfile, parameters: EngineParameters) throws -> RemovalReport {
         let problems = FitnessModel.problems(in: parameters)
         guard problems.isEmpty else { throw PlanError.badParameters(problems) }
         let tiers = try Elevens.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
                                        profile: profile, parameters: parameters).tiers
+        let thin = Set(try Depth.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                        profile: profile, parameters: parameters).thin)
 
         // Sorting by key makes every list, and the first error, independent of input order.
         var own: [Player] = []
@@ -98,7 +101,7 @@ public enum Removal {
             averageAbility: own.isEmpty ? nil : Double(own.map(\.currentAbility).reduce(0, +)) / Double(own.count),
             medianWage: median(own.map(\.wagePerWeek)),
             weakest: weakest(own + loanedIn, tiers: tiers, share: parameters.removalRules.value.weakestShare),
-            tiers: tiers)
+            tiers: tiers, thin: thin)
 
         var advice: [RemovalAdvice] = []
         var wagesAtStake = 0
@@ -135,6 +138,9 @@ public enum Removal {
         let tier = squad.tiers.tier(of: player.id)
         let inEither = reasons.addTier(tier, first: rules.firstElevenPoints, second: rules.secondElevenPoints,
                                        neither: rules.neitherElevenPoints)
+        if reasons.addThinCover(tier, thin: squad.thin, points: parameters.removalThinCoverPoints.value) {
+            evidence.append(parameters.removalThinCoverPoints.evidence)
+        }
         if squad.weakest.contains(player.id) { reasons.add(rules.weakestPoints, weakestReason(rules)) }
         reasons.addAbility(player, squad: squad, share: rules.farBelowAverageShare,
                            farBelow: rules.farBelowAveragePoints, below: rules.belowAveragePoints)
@@ -271,8 +277,13 @@ public enum Removal {
         let loan = rules.loanReview
         var reasons = Reasons()
         if squad.weakest.contains(player.id) { reasons.add(loan.weakestPoints, weakestReason(rules)) }
-        let inEither = reasons.addTier(squad.tiers.tier(of: player.id), first: loan.firstElevenPoints,
+        let tier = squad.tiers.tier(of: player.id)
+        let inEither = reasons.addTier(tier, first: loan.firstElevenPoints,
                                        second: loan.secondElevenPoints, neither: loan.neitherElevenPoints)
+        var evidence = [parameters.removalRules.evidence]
+        if reasons.addThinCover(tier, thin: squad.thin, points: parameters.removalThinCoverPoints.value) {
+            evidence.append(parameters.removalThinCoverPoints.evidence)
+        }
         reasons.addAbility(player, squad: squad, share: rules.farBelowAverageShare,
                            farBelow: loan.farBelowAveragePoints, below: loan.belowAveragePoints)
         if traits.consistency < rules.consistencyLowBelow {
@@ -291,7 +302,7 @@ public enum Removal {
             : score >= loan.doNotExtendFrom ? .doNotExtend
             : atLeastAverage && inEither ? .makePermanent : .keepToEnd
         return LoanReview(player: player.id, name: player.name, verdict: verdict, score: score, reasons: reasons.list,
-                          basis: Evidence.weakest([parameters.removalRules.evidence])!)
+                          basis: Evidence.weakest(evidence)!)
     }
 
     // MARK: Shared
@@ -329,6 +340,8 @@ public enum Removal {
         let medianWage: Double?
         let weakest: Set<PlayerID>
         let tiers: SquadTiers
+        /// The slots where Depth finds cover thin.
+        let thin: Set<SlotID>
     }
 
     private struct Reasons {
@@ -352,6 +365,20 @@ public enum Removal {
             }
         }
 
+        /// Adds the points for being first or second choice at a slot where cover is thin, and says whether it did.
+        mutating func addThinCover(_ tier: SquadTier?, thin: Set<SlotID>, points: Int) -> Bool {
+            switch tier {
+            case .first(let slot)? where thin.contains(slot):
+                add(points, "First choice at \(slot.position.rawValue), where cover is thin")
+                return true
+            case .second(let slot)? where thin.contains(slot):
+                add(points, "Second choice at \(slot.position.rawValue), where cover is thin")
+                return true
+            case .first?, .second?, .backup?, nil:
+                return false
+            }
+        }
+
         /// Of the two ability lines only the stronger applies; neither does without a squad average.
         mutating func addAbility(_ player: Player, squad: SquadFacts, share: Double, farBelow: Int, below: Int) {
             guard let average = squad.averageAbility else { return }
@@ -363,13 +390,26 @@ public enum Removal {
         }
     }
 
-    /// The players whose best slot rating is among the lowest `share` of `pool`, rounded down; ties go by key.
+    /// The players whose best share is among the lowest `share` of `pool`, rounded down; ties go by key. A player's best
+    /// share is the highest, over the tactic's slots, of his rating there over the slot's first choice's: a slot with no
+    /// first choice, or one rated 0 or less, is skipped, and a player with no share at all ranks lowest. Measuring against
+    /// the first choice keeps a goalkeeper, whose ratings are on a lower scale than outfield players', comparable.
     private static func weakest(_ pool: [Player], tiers: SquadTiers, share: Double) -> Set<PlayerID> {
-        // Every assessed player is rated (the tiers rate everyone not out on loan); one who was not would count as weakest.
-        let best = Dictionary(uniqueKeysWithValues: pool.map { ($0.id, tiers.ratings[$0.id]?.values.max()) })
+        var firstRatings: [(slot: SlotID, rating: Double)] = []
+        for slot in SlotID.allCases {
+            guard let first = tiers.first[slot], let rating = tiers.ratings[first]?[slot], rating > 0 else { continue }
+            firstRatings.append((slot, rating))
+        }
+        var best: [PlayerID: Double] = [:]
+        for player in pool {
+            for (slot, firstRating) in firstRatings {
+                guard let rating = tiers.ratings[player.id]?[slot] else { continue }
+                best[player.id] = max(best[player.id] ?? -.infinity, rating / firstRating)
+            }
+        }
         let ordered = pool.map(\.id).sorted { a, b in
-            switch (best[a]!, best[b]!) {
-            case let (ra?, rb?) where ra != rb: return ra < rb
+            switch (best[a], best[b]) {
+            case let (sa?, sb?) where sa != sb: return sa < sb
             case (nil, _?): return true
             case (_?, nil): return false
             default: return a.key < b.key

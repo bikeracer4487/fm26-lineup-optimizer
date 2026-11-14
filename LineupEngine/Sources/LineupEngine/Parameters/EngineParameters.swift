@@ -421,7 +421,8 @@ public struct ImportanceSuggestionRules: Sendable, Equatable {
     public var biggerMatchFrom: Double
     /// Tightest first; only the first step that applies is used.
     public var biggerMatchSteps: [BiggerMatchStep]
-    /// This many matches or more in the `crowdedWindowDays` days before the fixture take `crowdedFactor`.
+    /// This many matches or more before the fixture, within a window of `crowdedWindowDays` days that ends on the match
+    /// day (so from `crowdedWindowDays − 1` days before up to the day before), take `crowdedFactor`.
     public var crowdedWindowDays: Int
     public var crowdedMatches: Int
     public var crowdedFactor: Double
@@ -572,7 +573,7 @@ public struct EngineParameters: Sendable {
     public var depthCoverFamiliarity: Parameter<Int>
     /// The least familiarity, in both phases, at which an option counts as solid cover.
     public var depthSolidFamiliarity: Parameter<Int>
-    /// A slot with fewer solid, available options than this is thin.
+    /// A slot with fewer solid options who are not injured (and not first choice elsewhere) than this is thin.
     public var depthThinBelow: Parameter<Int>
     /// How a player's own jadedness limit, for rest advice, differs from the standard `jadedThreshold`.
     public var restLimitRules: Parameter<RestLimitRules>
@@ -608,6 +609,8 @@ public struct EngineParameters: Sendable {
     public var mutualTerminationShare: Parameter<Double>
     /// The scores that make a removal advice critical, high or medium.
     public var removalLevels: Parameter<RemovalLevels>
+    /// The points Player Removal and the loan review give a first or second choice at a slot where Depth finds cover thin.
+    public var removalThinCoverPoints: Parameter<Int>
     /// The numbers behind a fixture's suggested importance.
     public var importanceRules: Parameter<ImportanceSuggestionRules>
 
@@ -889,6 +892,9 @@ public struct EngineParameters: Sendable {
                     + "\(removalSource) used 0.55"),
             removalLevels: Parameter(
                 RemovalLevels(critical: 80, high: 50, medium: 30), .carriedOverFM26, source: removalSource),
+            removalThinCoverPoints: Parameter(
+                -30, .derived,
+                source: "this design's choice after the advisors were run on the real squad: Player Removal told the only goalkeeper to leave"),
             importanceRules: Parameter(
                 ImportanceSuggestionRules(
                     leagueBase: 80, cupBase: 60, minorCupBase: 30, friendlyBase: 10, unsetBase: 50,

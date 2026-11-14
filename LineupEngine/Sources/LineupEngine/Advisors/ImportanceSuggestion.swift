@@ -43,8 +43,9 @@ public enum ImportanceAdvisor {
             }
         }
 
-        // Matches already played or planned in the window before this one; one match counts once.
-        let windowStart = fixture.date.adding(days: -rules.crowdedWindowDays)
+        // Matches already played or planned in the window before this one; one match counts once. The window is the
+        // match day and the days before it, `crowdedWindowDays` in all.
+        let windowStart = fixture.date.adding(days: -(rules.crowdedWindowDays - 1))
         var inWindow = Set<String>()
         for lineup in confirmed where lineup.fixture != fixture.id && lineup.date >= windowStart && lineup.date < fixture.date {
             inWindow.insert(lineup.fixture.raw)

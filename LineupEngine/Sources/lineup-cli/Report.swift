@@ -130,9 +130,9 @@ enum Report {
     private static func depth(_ report: DepthReport, parameters: EngineParameters) -> [String] {
         var out = ["", "=== Depth ===\(mark(report.basis))"]
         out.append("Cover counts players solid in the slot (familiarity \(parameters.depthSolidFamiliarity.value) or over in both phases), "
-                   + "available today and not first choice elsewhere; fewer than \(parameters.depthThinBelow.value) is thin.")
+                   + "not injured and not first choice elsewhere; fewer than \(parameters.depthThinBelow.value) is thin.")
         for slot in report.slots {
-            let drop = slot.dropToSecond.map { "drop to second \(fixed($0, 1))" } ?? "no second choice"
+            let drop = slot.dropToNextBest.map { "drop to next best \(fixed($0, 1))" } ?? "no next best"
             let options = slot.options.isEmpty ? "nobody" : slot.options.map { option(slot.slot, $0, parameters: parameters) }
                 .joined(separator: ", ")
             let loans = slot.onLoan.isEmpty ? "" : "; out on loan: "
@@ -225,6 +225,9 @@ enum Report {
     private static func importance(_ suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]) -> [String] {
         var out = ["", "=== Importance ==="]
         if suggestions.isEmpty { out.append("  no fixtures") }
+        if suggestions.contains(where: { $0.fixture.importance != $0.suggestion.importance }) {
+            out.append("* differs from the importance set")
+        }
         for (fixture, suggestion) in suggestions {
             let about = [fixture.competition.map(competition), fixture.opponentStrength.map(strength)].compactMap { $0 }
             out.append("  \(fixture.date.iso)  v \(fixture.opponent)" + (about.isEmpty ? "" : " (\(about.joined(separator: ", ")))")

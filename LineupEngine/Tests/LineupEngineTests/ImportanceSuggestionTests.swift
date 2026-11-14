@@ -111,8 +111,19 @@ import Testing
     }
 
     @Test func aThirdMatchInSevenDaysReducesTheScore() {
+        // Six and three days before: with the match day, three matches in seven days.
         let s = suggest(fixture(), among: [fixture("p1", daysFromToday: -3)], confirmed: [confirmed("p2", daysFromToday: -6)])
         #expect(abs(s.score - 64) < 1e-9)
+        #expect(s.reasons.contains("Third match in 7 days (×0.8)"))
+    }
+
+    @Test func aMatchSevenDaysBeforeIsOutsideTheWindow() {
+        // Seven days before is the eighth day counting the match day.
+        let s = suggest(fixture(), among: [fixture("p1", daysFromToday: -3)], confirmed: [confirmed("p2", daysFromToday: -7)])
+        #expect(s.score == 80)
+        #expect(!s.reasons.contains { $0.contains("in 7 days") })
+        let planned = suggest(fixture(), among: [fixture("p1", daysFromToday: -3), fixture("p2", daysFromToday: -7)])
+        #expect(planned.score == 80)
     }
 
     @Test func twoMatchesInSevenDaysAreNeeded() {

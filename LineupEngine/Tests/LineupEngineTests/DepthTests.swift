@@ -74,7 +74,7 @@ import Testing
         #expect(r.thin.contains(.AM_C))
     }
 
-    @Test func aBannedOrTiredSecondChoiceIsListedAsUnavailable() throws {
+    @Test func aBannedOrTiredSecondChoiceIsListedAsUnavailableButStillCounts() throws {
         let banned = named(.GK, "second"), tired = named(.AM_C, "second")
         let r = try report(squad {
             if $0.name == banned { $0.isBanned = true }
@@ -84,7 +84,35 @@ import Testing
         #expect(gk.unavailable == .banned)
         let am = try #require(try depth(r, .AM_C).options.first { $0.player == PlannerFixture.id(.AM_C, "second") })
         #expect(am.unavailable == .belowConditionFloor(0.3))
-        #expect(try depth(r, .GK).isThin && depth(r, .AM_C).isThin)
+        #expect(try !depth(r, .GK).isThin && !depth(r, .AM_C).isThin)
+        #expect(r.thin.isEmpty)
+    }
+
+    /// The AM_C second choice changed by `change`, and the AM_C slot.
+    func secondAtAttackingMid(_ change: (inout Player) -> Void) throws -> (option: DepthOption, slot: SlotDepth) {
+        let name = named(.AM_C, "second")
+        let r = try report(squad { if $0.name == name { change(&$0) } })
+        let am = try depth(r, .AM_C)
+        let option = try #require(am.options.first { $0.player == PlannerFixture.id(.AM_C, "second") })
+        return (option, am)
+    }
+
+    @Test func aSecondChoiceShortOfConditionStillCounts() throws {
+        let short = try secondAtAttackingMid { $0.condition = 0.80 }
+        #expect(short.option.unavailable == .belowConditionFloor(0.80))
+        #expect(short.slot.cover == 2 && !short.slot.isThin)
+    }
+
+    @Test func aJadedSecondChoiceStillCounts() throws {
+        let jaded = try secondAtAttackingMid { $0.jadedness = 401 }
+        #expect(jaded.option.unavailable == .jaded(401))
+        #expect(jaded.slot.cover == 2 && !jaded.slot.isThin)
+    }
+
+    @Test func aBannedSecondChoiceStillCounts() throws {
+        let banned = try secondAtAttackingMid { $0.isBanned = true }
+        #expect(banned.option.unavailable == .banned)
+        #expect(banned.slot.cover == 2 && !banned.slot.isThin)
     }
 
     @Test func aSecondChoiceAtFamiliarity14IsNotSolid() throws {
@@ -144,7 +172,7 @@ import Testing
         #expect(am.cover == 1 && am.isThin)
     }
 
-    @Test func dropToSecondIsTheGapBetweenTheTiers() throws {
+    @Test func dropToNextBestIsTheGapToTheBestOtherOption() throws {
         let all = try PlannerFixture.squad()
         let firsts = all.filter { $0.name.hasSuffix("first") }
         let seconds = all.filter { $0.name.hasSuffix("second") }.prefix(4)
@@ -153,16 +181,57 @@ import Testing
                                            catalog: catalog, profile: profile, parameters: .fm27, ignoringInjuries: true)
         var withDrop = 0, without = 0
         for slot in r.slots {
-            if let second = tiers.second[slot.slot], let first = tiers.first[slot.slot] {
-                let gap = try #require(tiers.ratings[first]?[slot.slot]) - #require(tiers.ratings[second]?[slot.slot])
-                #expect(abs(try #require(slot.dropToSecond) - gap) < 1e-9)
+            let first = try #require(tiers.first[slot.slot])
+            let others = slot.options.filter { $0.player != first }
+            if let best = others.map(\.rating).max() {
+                let gap = try #require(tiers.ratings[first]?[slot.slot]) - best
+                #expect(abs(try #require(slot.dropToNextBest) - gap) < 1e-9)
                 withDrop += 1
             } else {
-                #expect(slot.dropToSecond == nil)
+                #expect(slot.dropToNextBest == nil)
                 without += 1
             }
         }
-        #expect(withDrop == 4 && without == 7)
+        // GK and D_L have their second choices; the centre-backs, and the two defensive midfielders, are options at
+        // each other's slots; nobody else can cover AM_L, AM_C, AM_R or ST_C.
+        #expect(withDrop == 6 && without == 5)
+    }
+
+    @Test func theDropIsToTheBestOtherOption() throws {
+        // Without a second left back, a spare player familiar nowhere fills left back in the second eleven, while the
+        // first-choice right back, competent at left back, is an option there.
+        let spare = Player.fixture(name: "Spare", all: 10)
+        let rightBack = named(.D_R, "first")
+        let players = try squad({ if $0.name == rightBack { $0.familiarity[.defenderLeft] = 15 } },
+                                without: [named(.D_L, "second")]) + [spare]
+        let tiers = try SquadTiers.compute(tactic: tactic, players: players, ownClub: "Oxford City",
+                                           catalog: catalog, profile: profile, parameters: .fm27, ignoringInjuries: true)
+        try #require(tiers.second[.D_L] == spare.id)
+        try #require(tiers.first[.D_L] == PlannerFixture.id(.D_L, "first"))
+        let r = try report(players)
+        let left = try depth(r, .D_L)
+        #expect(!left.options.contains { $0.player == spare.id })
+        let first = try #require(tiers.ratings[PlannerFixture.id(.D_L, "first")]?[.D_L])
+        let next = try #require(tiers.ratings[PlannerFixture.id(.D_R, "first")]?[.D_L])
+        let byTheSecondEleven = try #require(tiers.ratings[spare.id]?[.D_L])
+        #expect(abs(try #require(left.dropToNextBest) - (first - next)) < 1e-9)
+        #expect(abs(try #require(left.dropToNextBest) - (first - byTheSecondEleven)) > 1)
+    }
+
+    @Test func theDropIsNilWithNoOtherOption() throws {
+        // The second striker is out on loan: he is not an option, and nobody else can play up front.
+        let away = named(.ST_C, "second")
+        let r = try report(squad { if $0.name == away { $0.loanedTo = "Elsewhere FC" } })
+        let st = try depth(r, .ST_C)
+        #expect(st.options.map(\.player) == [PlannerFixture.id(.ST_C, "first")])
+        #expect(st.onLoan.count == 1)
+        #expect(st.dropToNextBest == nil)
+        // Ten players for eleven slots: nobody is first choice up front, so there is no drop either.
+        let ten = try PlannerFixture.squad().filter { $0.name.hasSuffix("first") && !$0.name.hasPrefix("ST_C") }
+        let tiers = try SquadTiers.compute(tactic: tactic, players: ten, ownClub: "Oxford City", catalog: catalog,
+                                           profile: profile, parameters: .fm27, ignoringInjuries: true)
+        try #require(tiers.first[.ST_C] == nil)
+        #expect(try depth(report(ten), .ST_C).dropToNextBest == nil)
     }
 
     @Test func thinSlotsAreOrderedByNeed() throws {
@@ -181,7 +250,7 @@ import Testing
         let r = try report(players)
         let am = try depth(r, .AM_C), gk = try depth(r, .GK)
         #expect(am.cover == 1 && gk.cover == 1)
-        #expect(try #require(am.dropToSecond) > #require(gk.dropToSecond))
+        #expect(try #require(am.dropToNextBest) > #require(gk.dropToNextBest))
         // Without a striker, a wide player is moved up front, which also thins his old slot.
         #expect(r.thin.first == .ST_C)
         let a = try #require(r.thin.firstIndex(of: .AM_C)), g = try #require(r.thin.firstIndex(of: .GK))
@@ -189,10 +258,16 @@ import Testing
     }
 
     @Test func slotsTiedOnCoverAndDropGoInSlotOrder() throws {
-        // Eleven first choices and nobody else: every slot has exactly one fit option and no second choice.
+        // Eleven first choices and nobody else: every slot has cover 1. The two centre-backs, and the two defensive
+        // midfielders, are equal options at each other's slots (a drop of 0); every other slot has no other option.
         let r = try report(PlannerFixture.squad().filter { $0.name.hasSuffix("first") })
-        #expect(r.slots.allSatisfy { $0.cover == 1 && $0.dropToSecond == nil })
-        #expect(r.thin == (try tactic.assignments(catalog: catalog)).map(\.slot))
+        #expect(r.slots.allSatisfy { $0.cover == 1 })
+        let order = (try tactic.assignments(catalog: catalog)).map(\.slot)
+        let paired: Set<SlotID> = [.D_CL, .D_CR, .DM_L, .DM_R]
+        for slot in r.slots {
+            #expect(slot.dropToNextBest == (paired.contains(slot.slot) ? 0 : nil), "\(slot.slot.rawValue)")
+        }
+        #expect(r.thin == order.filter { !paired.contains($0) } + order.filter { paired.contains($0) })
     }
 
     @Test func aSlotWithoutASecondChoiceRanksAheadOfOneWithAnyDrop() throws {
@@ -205,8 +280,8 @@ import Testing
         let r = try report(firsts + seconds)
         let st = try depth(r, .ST_C), am = try depth(r, .AM_C)
         #expect(st.cover == 1 && am.cover == 1)
-        try #require(st.dropToSecond == nil)
-        _ = try #require(am.dropToSecond)
+        try #require(st.dropToNextBest == nil)
+        _ = try #require(am.dropToNextBest)
         // AM_C comes first in slot order, so only the rule puts ST_C ahead of it.
         let a = try #require(r.thin.firstIndex(of: .ST_C)), b = try #require(r.thin.firstIndex(of: .AM_C))
         #expect(a < b)

@@ -341,6 +341,7 @@ import Testing
             ("removalWageRules", .derived, "median"),
             ("mutualTerminationShare", .carriedOverFM26, "docs/Research/player-management-and-sales.md"),
             ("removalLevels", .carriedOverFM26, "ui/api/api_player_removal.py"),
+            ("removalThinCoverPoints", .derived, "Player Removal told the only goalkeeper to leave"),
         ]
         for (name, evidence, cited) in expected {
             #expect(listed[name]?.evidence == evidence, "\(name)")
@@ -384,6 +385,7 @@ import Testing
         #expect(p.mutualTerminationShare.value == 0.55)
         let levels = p.removalLevels.value
         #expect(levels.critical == 80 && levels.high == 50 && levels.medium == 30)
+        #expect(p.removalThinCoverPoints.value == -30)
     }
 
     @Test func removalParameterProblemsAreReported() {
