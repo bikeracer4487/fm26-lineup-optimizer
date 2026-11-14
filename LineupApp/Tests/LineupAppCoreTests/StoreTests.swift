@@ -375,6 +375,28 @@ import LineupEngine
         }
     }
 
+    @Test func aMissingMentoringFileIsNotNoticedBesideOthers() throws {
+        try withStore { store, _ in
+            try store.save(settings, to: .settings)
+            let loaded = store.load(.mentoring, as: MentoringState.self, otherwise: MentoringState())
+            #expect(loaded.value == MentoringState())
+            #expect(loaded.notice == nil)
+            #expect(loaded.replaceOnDisk)
+        }
+    }
+
+    @Test func anUnreadableMentoringFileIsKeptAsideWithANotice() throws {
+        try withStore { store, dir in
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data(#"{"version": 1, "value": "wrong"}"#.utf8).write(to: dir.appendingPathComponent("mentoring.json"))
+            let loaded = store.load(.mentoring, as: MentoringState.self, otherwise: MentoringState())
+            #expect(loaded.value == MentoringState())
+            #expect(try #require(loaded.notice).hasPrefix("Your mentoring groups and hierarchy could not be read"))
+            #expect(try #require(loaded.notice).contains("the list starts empty"))
+            expectKeptAside(dir, original: "mentoring.json", kept: "mentoring.unreadable-1.json")
+        }
+    }
+
     @Test func aSecondUnreadableFileGetsTheNextNumber() throws {
         try withStore { store, dir in
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

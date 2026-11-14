@@ -51,6 +51,7 @@ extension AppModel {
             save(.history)
         }
         recordFamiliarity(after: target, on: date)
+        recordPersonality(after: target, on: date)
         dropSpentMarks(imported: target)
         replan()
 

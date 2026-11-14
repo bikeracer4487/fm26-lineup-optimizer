@@ -76,7 +76,7 @@ extension AppModel {
     /// the first always runs. Once it has finished, replan and notices included, the advice is worked out again (it is
     /// otherwise worked out when the screen next reads it), then the clock is read again and that time recorded as the
     /// last action's end, so the interval covers the whole recalculation.
-    private func trainingAction(_ action: () -> Void) {
+    func trainingAction(_ action: () -> Void) {
         let start = environment.now()
         if let last = lastTrainingAction, start - last < Self.trainingActionInterval { return }
         action()
@@ -85,7 +85,7 @@ extension AppModel {
     }
 
     /// Shows `text` as a notice in place of the last one an accepting or turning down showed.
-    private func tellTraining(_ text: String) {
+    func tellTraining(_ text: String) {
         clearTrainingNotice()
         let notice = Notice(text: text)
         notices.append(notice)

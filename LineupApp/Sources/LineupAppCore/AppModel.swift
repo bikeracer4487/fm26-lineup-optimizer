@@ -83,6 +83,9 @@ public struct AppEnvironment: Sendable {
     /// The players the owner has marked to sell or to loan out. Changed only through `setMark(_:for:)` and
     /// `dropSpentMarks()`.
     public internal(set) var marks: [PlayerID: SaleMark]
+    /// The hierarchy, the mentoring groups and the personality readings. Changed only through `changeMentoring`, which
+    /// saves it; the plan does not use it, so it does not replan.
+    public private(set) var mentoring: MentoringState
     /// For a marked player in no squad, the squads imported since he was last seen. His mark goes only once every squad
     /// held has been imported without him: squads are imported one at a time, so a player moved between two is in
     /// neither for a moment. Not saved: after a restart the count starts again, which only keeps a mark longer.
@@ -102,6 +105,9 @@ public struct AppEnvironment: Sendable {
     @ObservationIgnored var adviceCache: AdviceCache?
     /// Changed by every replan, so whatever read the advice is drawn again once there is new advice to work out.
     private(set) var adviceGeneration = 0
+    /// Changed by every change to the mentoring state, as `adviceGeneration` is by a replan, so the mentoring advice
+    /// is worked out again when next read.
+    private(set) var mentoringGeneration = 0
 
     /// How many times the plan has been worked out, so tests can tell when a change did not replan.
     @ObservationIgnored var timesPlanned = 0
@@ -135,6 +141,7 @@ public struct AppEnvironment: Sendable {
         let drafts = store.load(.drafts, as: [StoredTactic].self, otherwise: [])
         let training = store.load(.training, as: TrainingState.self, otherwise: TrainingState())
         let marks = store.load(.marks, as: [PlayerID: SaleMark].self, otherwise: [:])
+        let mentoring = store.load(.mentoring, as: MentoringState.self, otherwise: MentoringState())
         self.settings = settings.value
         self.tactics = tactics.value
         self.fixtures = fixtures.value.sorted(by: Self.dateOrder)
@@ -142,6 +149,7 @@ public struct AppEnvironment: Sendable {
         self.squad = squad.value
         self.training = training.value
         self.marks = marks.value
+        self.mentoring = mentoring.value
         // A draft is kept only for a saved tactic it differs from. When the tactics file could not be read and was left
         // where it is, its tactics are still on disk, so every draft is kept for them.
         let saved = Dictionary(tactics.value.map { ($0.id, $0.tactic) }, uniquingKeysWith: { first, _ in first })
@@ -151,7 +159,7 @@ public struct AppEnvironment: Sendable {
             : drafts.value.filter { saved[$0.id] != nil && saved[$0.id] != $0.tactic }
         self.tacticDrafts = Dictionary(kept.map { ($0.id, TacticDraft($0.tactic)) }, uniquingKeysWith: { first, _ in first })
         self.notices = [settings.notice, tactics.notice, fixtures.notice, history.notice, squad.notice, drafts.notice,
-                        training.notice, marks.notice]
+                        training.notice, marks.notice, mentoring.notice]
             .compactMap { $0 }.map(Notice.init(text:))
         self.lastImport = nil
         self.planState = .needsSquad
@@ -161,8 +169,14 @@ public struct AppEnvironment: Sendable {
                                             (.fixtures, fixtures.replaceOnDisk), (.history, history.replaceOnDisk),
                                             (.squad, squad.replaceOnDisk),
                                             (.drafts, drafts.replaceOnDisk || kept.count != drafts.value.count),
-                                            (.training, training.replaceOnDisk), (.marks, marks.replaceOnDisk)]
+                                            (.training, training.replaceOnDisk), (.marks, marks.replaceOnDisk), (.mentoring, mentoring.replaceOnDisk)]
         for (file, replace) in replaced where replace { save(file) }
+        // A state saved before personality was read at each import has no reading: start from the squads held.
+        if self.mentoring.readings.isEmpty {
+            for (squad, day) in self.squad.importedOn.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+                recordPersonality(after: squad, on: day)
+            }
+        }
         replan()
     }
 
@@ -193,6 +207,7 @@ public struct AppEnvironment: Sendable {
             case .drafts: try store.save(savedDrafts, to: .drafts)
             case .training: try store.save(training, to: .training)
             case .marks: try store.save(marks, to: .marks)
+            case .mentoring: try store.save(mentoring, to: .mentoring)
             }
             return true
         } catch {
@@ -251,6 +266,18 @@ public struct AppEnvironment: Sendable {
         training = state
         save(.training)
         if replanning { replan() }
+    }
+
+    /// Applies `change` to the mentoring state and, if it changed anything, keeps the groups in order, saves it and
+    /// tells the advice to be worked out again. Does not replan: the plan does not use mentoring.
+    func changeMentoring(_ change: (inout MentoringState) -> Void) {
+        var state = mentoring
+        change(&state)
+        state.groups.sort(by: MentoringState.order)
+        guard state != mentoring else { return }
+        mentoring = state
+        save(.mentoring)
+        mentoringGeneration &+= 1
     }
 
     func notice(_ text: String) {

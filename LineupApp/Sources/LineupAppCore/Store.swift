@@ -9,6 +9,8 @@ public enum StoreFile: String, CaseIterable, Sendable {
     case training
     /// The players the owner has marked to sell or to loan out.
     case marks
+    /// The hierarchy, the mentoring groups recorded, and a personality reading of each player at every import.
+    case mentoring
 
     /// How a notice refers to the file, in the owner's words.
     var description: String {
@@ -21,6 +23,7 @@ public enum StoreFile: String, CaseIterable, Sendable {
         case .drafts: "your unsaved tactic changes"
         case .training: "your retraining choices"
         case .marks: "your sale and loan marks"
+        case .mentoring: "your mentoring groups and hierarchy"
         }
     }
 
@@ -35,6 +38,7 @@ public enum StoreFile: String, CaseIterable, Sendable {
         case .drafts: "the tactics start with no unsaved changes"
         case .training: "the list starts empty"
         case .marks: "the list starts empty"
+        case .mentoring: "the list starts empty"
         }
     }
 
@@ -48,16 +52,17 @@ public enum StoreFile: String, CaseIterable, Sendable {
         case .drafts: "unsaved tactic changes"
         case .training: "retraining choices"
         case .marks: "sale and loan marks"
+        case .mentoring: "mentoring groups"
         }
     }
 
     /// Whether the file not being there beside the others is worth a notice. Without the drafts file there are simply
-    /// no unsaved changes, without the training file no retraining choices, and without the marks file nobody marked,
+    /// no unsaved changes, without the training file no retraining choices, and without the marks file nobody marked, without the mentoring file nothing is recorded,
     /// as for an app saved before the file existed.
     var isNoticedWhenMissing: Bool {
         switch self {
         case .settings, .tactics, .fixtures, .history, .squad: true
-        case .drafts, .training, .marks: false
+        case .drafts, .training, .marks, .mentoring: false
         }
     }
 }

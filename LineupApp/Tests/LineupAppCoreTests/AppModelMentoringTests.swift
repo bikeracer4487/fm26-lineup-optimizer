@@ -1,0 +1,279 @@
+import Foundation
+import Testing
+import LineupEngine
+@testable import LineupAppCore
+
+@MainActor @Suite struct AppModelMentoringTests {
+    private let today = TestModel.today
+
+    private func both() throws -> TestModel {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        try t.importU21()
+        return t
+    }
+
+    private func ids(_ model: AppModel, _ squad: Squad) -> [PlayerID] {
+        (model.squad.book.current[squad] ?? []).map(\.id)
+    }
+
+    /// The engine's first suggested group for the squad, from the model's players.
+    private func suggestion(_ model: AppModel, _ squad: Squad) throws -> SuggestedGroup {
+        let request = MentoringRequest(
+            squad: squad, players: model.squad.book.allPlayers, ownClub: model.ownClub, dynamics: [:],
+            dynamicsUpdatedOn: nil, groups: [], readings: [:], names: [:], leaving: [], asOf: model.settings.currentDate)
+        return try #require(try Mentoring.report(request, parameters: .fm27).suggestions.first)
+    }
+
+    private func members(_ group: SuggestedGroup) -> [PlayerID] { [group.lead] + group.members.map(\.player) }
+
+    private func live(_ model: AppModel) -> [MentoringGroup] { model.mentoring.groups.filter(\.isLive) }
+
+    // MARK: Readings
+
+    @Test func anImportTakesAReadingForEveryPlayer() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let squad = ids(t.model, .firstTeam)
+        #expect(!squad.isEmpty)
+        for id in squad { #expect(t.model.mentoring.readings[id]?.map(\.day) == [today]) }
+        #expect(t.reopened().mentoring == t.model.mentoring)
+    }
+
+    @Test func twoImportsOnOneDayLeaveOneReadingEach() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        try t.importFirstTeam()
+        for id in ids(t.model, .firstTeam) { #expect(t.model.mentoring.readings[id]?.count == 1) }
+    }
+
+    @Test func aStateFromBeforeThisPlanStartsWithReadingsFromTheSquadsHeld() throws {
+        let t = try both()
+        try FileManager.default.removeItem(at: t.directory.appendingPathComponent("mentoring.json"))
+        let reopened = t.reopened()
+        for squad in [Squad.firstTeam, .u21] {
+            for id in ids(reopened, squad) { #expect(reopened.mentoring.readings[id]?.map(\.day) == [today]) }
+        }
+        #expect(reopened.notices.isEmpty)
+        #expect(t.reopened().mentoring == reopened.mentoring)
+    }
+
+    // MARK: Hierarchy
+
+    @Test func settingTheHierarchyStampsTheDayAndKeepsOtherSquads() throws {
+        let t = try both()
+        let first = ids(t.model, .firstTeam)[0], young = ids(t.model, .u21)[0]
+        t.model.setDynamics([young: PlayerDynamics(standing: .influential, socialGroup: .core)], for: .u21)
+        t.model.setDynamics([first: PlayerDynamics(standing: .teamLeader, socialGroup: .core)], for: .firstTeam)
+        #expect(t.model.mentoring.dynamics[young]?.standing == .influential)
+        #expect(t.model.mentoring.dynamics[first]?.standing == .teamLeader)
+        #expect(t.model.mentoring.dynamicsUpdatedOn == [.firstTeam: today, .u21: today])
+        t.model.setDynamics([:], for: .firstTeam)
+        #expect(t.model.mentoring.dynamics[first] == nil)
+        #expect(t.model.mentoring.dynamics[young]?.standing == .influential)
+        #expect(t.reopened().mentoring == t.model.mentoring)
+    }
+
+    @Test func savingTheSameHierarchyAgainStampsTheNewDay() throws {
+        let t = try both()
+        t.model.setDynamics([:], for: .firstTeam)
+        var settings = t.model.settings
+        settings.currentDate = today.adding(days: 5)
+        t.model.update(settings)
+        t.model.setDynamics([:], for: .firstTeam)
+        #expect(t.model.mentoring.dynamicsUpdatedOn[.firstTeam] == today.adding(days: 5))
+    }
+
+    @Test func anEntryOfOthersWithNoGroupIsNotKept() throws {
+        let t = try both()
+        let ids = ids(t.model, .firstTeam)
+        t.model.setDynamics([ids[0]: PlayerDynamics(), ids[1]: PlayerDynamics(standing: .others, socialGroup: .core),
+                             ids[2]: PlayerDynamics(standing: .influential)], for: .firstTeam)
+        #expect(t.model.mentoring.dynamics[ids[0]] == nil)
+        #expect(t.model.mentoring.dynamics[ids[1]] != nil)
+        #expect(t.model.mentoring.dynamics[ids[2]] != nil)
+    }
+
+    // MARK: Groups
+
+    @Test func recordingASuggestionMakesAGroupFromToday() throws {
+        let t = try both()
+        let group = try suggestion(t.model, .firstTeam)
+        t.model.recordGroup(group, in: .firstTeam)
+        let recorded = try #require(live(t.model).first)
+        #expect(live(t.model).count == 1)
+        #expect(recorded.squad == .firstTeam)
+        #expect(recorded.startedOn == today)
+        #expect(Set(recorded.members.map(\.player)) == Set(members(group)))
+        #expect(recorded.members.allSatisfy { $0.joinedOn == today && $0.leftOn == nil })
+        for member in members(group) { #expect(t.model.mentoring.names[member] != nil) }
+        let names = [group.leadName] + group.members.map(\.name)
+        #expect(t.model.notices.contains { $0.text == AdvisorText.recorded(names: names) })
+        #expect(t.reopened().mentoring.groups == t.model.mentoring.groups)
+    }
+
+    @Test func aSecondClickWithinHalfASecondIsDropped() throws {
+        let t = try both()
+        let group = try suggestion(t.model, .firstTeam)
+        t.input.tick = 0
+        t.input.uptime = 1_000
+        t.model.recordGroup(group, in: .firstTeam)
+        let other = Array(ids(t.model, .u21).prefix(3))
+        t.input.uptime += AppModel.trainingActionInterval / 2
+        t.model.saveGroup(MentoringGroupDraft(squad: .u21, members: other))
+        t.model.endGroup(live(t.model)[0].id)
+        #expect(live(t.model).count == 1)
+        #expect(live(t.model)[0].endedOn == nil)
+    }
+
+    @Test func recordingItAgainDoesNothingWhileAMemberIsInALiveGroup() throws {
+        let t = try both()
+        let group = try suggestion(t.model, .firstTeam)
+        t.model.recordGroup(group, in: .firstTeam)
+        t.model.recordGroup(group, in: .firstTeam)
+        #expect(t.model.mentoring.groups.count == 1)
+    }
+
+    @Test func aGroupNeedsExactlyThree() throws {
+        let t = try both()
+        let squad = ids(t.model, .firstTeam)
+        let two = MentoringGroupDraft(squad: .firstTeam, members: Array(squad[0..<2]))
+        let four = MentoringGroupDraft(squad: .firstTeam, members: Array(squad[0..<4]))
+        let three = MentoringGroupDraft(squad: .firstTeam, members: Array(squad[0..<3]))
+        #expect(t.model.mentoringProblem(of: two) != nil)
+        #expect(t.model.mentoringProblem(of: four) != nil)
+        #expect(t.model.mentoringProblem(of: three) == nil)
+        t.model.saveGroup(two); t.model.saveGroup(four)
+        #expect(t.model.mentoring.groups.isEmpty)
+        t.model.saveGroup(three)
+        #expect(live(t.model).count == 1)
+        #expect(live(t.model)[0].startedOn == today)
+    }
+
+    @Test func theSameMemberTwiceIsNotThree() throws {
+        let t = try both()
+        let squad = ids(t.model, .firstTeam)
+        #expect(t.model.mentoringProblem(of: MentoringGroupDraft(squad: .firstTeam, members: [squad[0], squad[0], squad[1]])) != nil)
+    }
+
+    @Test func everyMemberMustBeACurrentPlayerOfTheSquad() throws {
+        let t = try both()
+        let first = ids(t.model, .firstTeam), young = ids(t.model, .u21)
+        #expect(t.model.mentoringProblem(of: MentoringGroupDraft(squad: .firstTeam, members: [first[0], first[1], young[0]])) != nil)
+        #expect(t.model.mentoringProblem(of: MentoringGroupDraft(squad: .firstTeam, members: [first[0], first[1], .fmrte(999_999)])) != nil)
+    }
+
+    @Test func aPlayerInAnotherLiveGroupCannotBeAdded() throws {
+        let t = try both()
+        let squad = ids(t.model, .firstTeam)
+        t.model.saveGroup(MentoringGroupDraft(squad: .firstTeam, members: Array(squad[0..<3])))
+        let overlapping = MentoringGroupDraft(squad: .firstTeam, members: [squad[2], squad[3], squad[4]])
+        #expect(t.model.mentoringProblem(of: overlapping) != nil)
+        t.model.saveGroup(overlapping)
+        #expect(t.model.mentoring.groups.count == 1)
+        // Once that group has ended its members are free.
+        t.input.uptime += 10
+        t.model.endGroup(t.model.mentoring.groups[0].id)
+        #expect(t.model.mentoringProblem(of: overlapping) == nil)
+    }
+
+    @Test func aPlayerOutOnLoanCannotBeInAGroup() throws {
+        let t = try TestModel()
+        var settings = t.model.settings
+        settings.clubName = "Oxford City"
+        t.model.update(settings)
+        // Cell 96 of a row is the club the player is loaned to.
+        var rows = try Captures.firstTeam.split(whereSeparator: \.isNewline)
+            .map { $0.split(separator: "\t", omittingEmptySubsequences: false).map(String.init) }
+        rows[0][96] = "\"Rovers\""
+        t.importSquad(.firstTeam, paste: rows.map { $0.joined(separator: "\t") }.joined(separator: "\n") + "\n",
+                      grids: try Captures.firstTeamGrids)
+        let squad = t.model.squad.book.current[.firstTeam] ?? []
+        let away = try #require(squad.first { player in
+            if case .loanedOut = t.model.squad.book.loanStatus(of: player, override: "Oxford City") { return true }
+            return false
+        })
+        let others = squad.filter { $0.id != away.id }.prefix(2).map(\.id)
+        #expect(t.model.mentoringProblem(of: MentoringGroupDraft(squad: .firstTeam, members: others + [away.id])) == AppModel.MentoringProblemLabel.onLoan)
+        #expect(t.model.mentoringProblem(of: MentoringGroupDraft(squad: .firstTeam, members: others + [squad.last!.id])) == nil)
+    }
+
+    @Test func swappingAMemberKeepsTheOthersStart() throws {
+        let t = try both()
+        let squad = ids(t.model, .firstTeam)
+        t.model.saveGroup(MentoringGroupDraft(squad: .firstTeam, members: Array(squad[0..<3])))
+        var settings = t.model.settings
+        settings.currentDate = today.adding(days: 10)
+        t.model.update(settings)
+        var draft = MentoringGroupDraft(editing: live(t.model)[0])
+        #expect(!draft.isNew)
+        draft.members = [squad[0], squad[1], squad[3]]
+        t.model.saveGroup(draft)
+        let group = try #require(t.model.mentoring.groups.first)
+        #expect(t.model.mentoring.groups.count == 1)
+        #expect(group.startedOn == today)
+        func member(_ id: PlayerID) -> MentoringMember? { group.members.first { $0.player == id } }
+        #expect(member(squad[0])?.joinedOn == today && member(squad[0])?.leftOn == nil)
+        #expect(member(squad[1])?.joinedOn == today && member(squad[1])?.leftOn == nil)
+        #expect(member(squad[2])?.leftOn == today.adding(days: 10))
+        #expect(member(squad[3])?.joinedOn == today.adding(days: 10) && member(squad[3])?.leftOn == nil)
+        #expect(Set(group.current.map(\.player)) == [squad[0], squad[1], squad[3]])
+        #expect(t.model.mentoring.names[squad[3]] != nil)
+    }
+
+    @Test func aDraftWithTheSameThreeMembersChangesNothing() throws {
+        let t = try both()
+        let squad = ids(t.model, .firstTeam)
+        t.model.saveGroup(MentoringGroupDraft(squad: .firstTeam, members: Array(squad[0..<3])))
+        let before = t.model.mentoring
+        t.model.saveGroup(MentoringGroupDraft(editing: live(t.model)[0]))
+        #expect(t.model.mentoring == before)
+    }
+
+    @Test func endingAGroupKeepsItWithItsEndDay() throws {
+        let t = try both()
+        let squad = ids(t.model, .firstTeam)
+        t.model.saveGroup(MentoringGroupDraft(squad: .firstTeam, members: Array(squad[0..<3])))
+        var settings = t.model.settings
+        settings.currentDate = today.adding(days: 20)
+        t.model.update(settings)
+        t.model.endGroup(t.model.mentoring.groups[0].id)
+        #expect(t.model.mentoring.groups.count == 1)
+        #expect(t.model.mentoring.groups[0].endedOn == today.adding(days: 20))
+        #expect(t.reopened().mentoring.groups == t.model.mentoring.groups)
+    }
+
+    @Test func aMemberWhoLeavesTheSquadStaysInTheGroup() throws {
+        let t = try both()
+        let group = try suggestion(t.model, .firstTeam)
+        t.model.recordGroup(group, in: .firstTeam)
+        let gone = group.members[0]
+        // The first team imported again without him.
+        let rows = try Captures.firstTeam.split(whereSeparator: \.isNewline).map(String.init)
+        let kept = rows.filter { !$0.contains("\t\(gone.name)\t") && !$0.contains("\"\(gone.name)\"") }
+        #expect(kept.count < rows.count)
+        t.importSquad(.firstTeam, paste: kept.joined(separator: "\n") + "\n", grids: try Captures.firstTeamGrids)
+        #expect(!t.model.players.contains { $0.id == gone.player })
+        let recorded = try #require(live(t.model).first)
+        #expect(recorded.current.map(\.player).contains(gone.player))
+        #expect(t.model.mentoring.names[gone.player] == gone.name)
+        #expect(t.reopened().mentoring.names[gone.player] == gone.name)
+    }
+
+    @Test func changingMentoringDoesNotReplan() throws {
+        let t = try both()
+        let planned = t.model.timesPlanned
+        let squad = ids(t.model, .firstTeam)
+        t.model.setDynamics([squad[0]: PlayerDynamics(standing: .teamLeader)], for: .firstTeam)
+        t.model.saveGroup(MentoringGroupDraft(squad: .firstTeam, members: Array(squad[0..<3])))
+        t.model.endGroup(t.model.mentoring.groups[0].id)
+        #expect(t.model.timesPlanned == planned)
+    }
+
+    @Test func everyChangeBumpsTheGeneration() throws {
+        let t = try both()
+        let before = t.model.mentoringGeneration
+        t.model.setDynamics([ids(t.model, .firstTeam)[0]: PlayerDynamics(standing: .teamLeader)], for: .firstTeam)
+        #expect(t.model.mentoringGeneration > before)
+    }
+}
