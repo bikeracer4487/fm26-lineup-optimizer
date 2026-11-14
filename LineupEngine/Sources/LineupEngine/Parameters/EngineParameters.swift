@@ -24,33 +24,33 @@ public struct ConsecutiveStartStep: Sendable, Equatable {
 /// band applies), changed by Natural Fitness, Stamina and Injury Proneness, then kept within `lowest` to `highest`.
 public struct RestLimitRules: Sendable, Equatable {
     /// At this age and over the base is `oldestBase`.
-    public let oldestFromAge: Int
-    public let oldestBase: Int
+    public var oldestFromAge: Int
+    public var oldestBase: Int
     /// From this age up to `oldestFromAge` the base is `olderBase`.
-    public let olderFromAge: Int
-    public let olderBase: Int
+    public var olderFromAge: Int
+    public var olderBase: Int
     /// Under this age the base is `youngBase`.
-    public let youngUnderAge: Int
-    public let youngBase: Int
+    public var youngUnderAge: Int
+    public var youngBase: Int
     /// Natural Fitness below `naturalFitnessBelow` changes the limit by `naturalFitnessLowChange`;
     /// at `naturalFitnessFrom` or over, by `naturalFitnessHighChange`.
-    public let naturalFitnessBelow: Int
-    public let naturalFitnessLowChange: Int
-    public let naturalFitnessFrom: Int
-    public let naturalFitnessHighChange: Int
+    public var naturalFitnessBelow: Int
+    public var naturalFitnessLowChange: Int
+    public var naturalFitnessFrom: Int
+    public var naturalFitnessHighChange: Int
     /// Stamina below `staminaBelow` changes the limit by `staminaLowChange`; at `staminaFrom` or over, by `staminaHighChange`.
-    public let staminaBelow: Int
-    public let staminaLowChange: Int
-    public let staminaFrom: Int
-    public let staminaHighChange: Int
+    public var staminaBelow: Int
+    public var staminaLowChange: Int
+    public var staminaFrom: Int
+    public var staminaHighChange: Int
     /// Injury Proneness at `injuryPronenessFrom` or over changes the limit by `injuryPronenessHighChange`;
     /// at `injuryPronenessUpTo` or under, by `injuryPronenessLowChange`.
-    public let injuryPronenessFrom: Int
-    public let injuryPronenessHighChange: Int
-    public let injuryPronenessUpTo: Int
-    public let injuryPronenessLowChange: Int
-    public let lowest: Int
-    public let highest: Int
+    public var injuryPronenessFrom: Int
+    public var injuryPronenessHighChange: Int
+    public var injuryPronenessUpTo: Int
+    public var injuryPronenessLowChange: Int
+    public var lowest: Int
+    public var highest: Int
 
     public init(oldestFromAge: Int, oldestBase: Int, olderFromAge: Int, olderBase: Int, youngUnderAge: Int, youngBase: Int,
                 naturalFitnessBelow: Int, naturalFitnessLowChange: Int, naturalFitnessFrom: Int, naturalFitnessHighChange: Int,
@@ -195,6 +195,8 @@ public struct EngineParameters: Sendable {
     public var holidayMargin: Parameter<Int>
     /// Jadedness lost per day on holiday.
     public var holidayJadednessRecoveryPerDay: Parameter<Double>
+    /// The most rest days the rest advice looks ahead for condition to reach the floor; beyond it the days are not known.
+    public var restConditionEstimateDays: Parameter<Int>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -365,7 +367,9 @@ public struct EngineParameters: Sendable {
                 source: "docs/Research/physical-condition-claude.md: warnings at 400 to 500, the rest icon near 600"),
             holidayJadednessRecoveryPerDay: Parameter(
                 50, .carriedOverFM26,
-                source: "docs/Research/jadedness-fatigue.md: rest sessions with a holiday recovered 152 in three days"))
+                source: "docs/Research/jadedness-fatigue.md: rest sessions with a holiday recovered 152 in three days"),
+            restConditionEstimateDays: Parameter(
+                14, .derived, source: "this design's choice: an estimate is given up to two weeks ahead"))
     }()
 
     /// Every stored parameter, found by reflection so a new one cannot be left out.

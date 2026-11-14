@@ -119,6 +119,34 @@ import Testing
         #expect(try one(p, history: starts(p, daysFromAsOf: [2, -1], slot: .D_L)) == nil)
     }
 
+    @Test func theRunMustReachTheDayAfterWithinTheWindow() throws {
+        // The window is 4 days measured from the day after asOf, so the newest start must be on or after asOf − 3.
+        #expect(parameters.consecutiveStartWindowDays.value == 4)
+        let p = Player.fixture(jadedness: -500)
+        let a = try #require(try one(p, history: starts(p, daysFromAsOf: [-3, -6], slot: .D_L)))
+        #expect(a.level == .watch)
+        #expect(a.reasons == ["Has started the last 2 matches in quick succession"])
+        #expect(try one(p, history: starts(p, daysFromAsOf: [-4, -7], slot: .D_L)) == nil)
+    }
+
+    @Test func aRunIsACauseWheneverThePlannerWouldAdjustForIt() throws {
+        let p = Player.fixture(jadedness: -500)
+        let history = starts(p, daysFromAsOf: [0, -3], slot: .D_L)
+        func withFullBackFactor(_ factor: Double) -> EngineParameters {
+            var q = parameters
+            var steps = q.consecutiveStartSteps.value
+            steps[.defenderLeft] = [ConsecutiveStartStep(starts: 2, factor: factor)]
+            q.consecutiveStartSteps = Parameter(steps, .derived, source: "test")
+            return q
+        }
+        // A factor above 1 is still an adjustment the planner makes for the run.
+        let above = try #require(try one(p, history: history, parameters: withFullBackFactor(1.1)))
+        #expect(above.level == .watch)
+        #expect(above.reasons == ["Has started the last 2 matches in quick succession"])
+        // A factor of exactly 1 is no adjustment, so no watch.
+        #expect(try one(p, history: history, parameters: withFullBackFactor(1.0)) == nil)
+    }
+
     @Test func aRunWithNoFactorIsNotACauseButIsCounted() throws {
         let p = Player.fixture(jadedness: 330)
         let a = try #require(try one(p, history: starts(p, daysFromAsOf: [0, -3], slot: .D_CL)))
@@ -176,6 +204,10 @@ import Testing
         let slow = try #require(try one(Player.fixture(condition: 0.75 - 15 * 0.015625), parameters: flatRecovery))
         #expect(slow.level == .rest)
         #expect(slow.days == nil)
+        // The horizon is restConditionEstimateDays.
+        var longer = flatRecovery
+        longer.restConditionEstimateDays = Parameter(15, .derived, source: "test")
+        #expect(try one(Player.fixture(condition: 0.75 - 15 * 0.015625), parameters: longer)?.days == 15)
     }
 
     @Test func whenBothApplyTheLargerCounts() throws {

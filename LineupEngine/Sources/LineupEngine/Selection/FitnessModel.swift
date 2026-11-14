@@ -150,6 +150,22 @@ public enum FitnessModel {
             where !(rate.isFinite && rate > 0) {
             found.append("\(name) is \(rate), not a finite number above 0")
         }
+        let margin = parameters.holidayMargin.value
+        if margin < 0 {
+            found.append("holidayMargin is \(margin), not 0 or more")
+        }
+        let limits = parameters.restLimitRules.value
+        if limits.lowest > limits.highest {
+            found.append("restLimitRules lowest (\(limits.lowest)) is above its highest (\(limits.highest))")
+        }
+        // The age bands are tried oldest first, so an older band that starts at or above the oldest is never reached.
+        if !(limits.olderFromAge < limits.oldestFromAge) {
+            found.append("restLimitRules olderFromAge (\(limits.olderFromAge)) is not below oldestFromAge (\(limits.oldestFromAge))")
+        }
+        let estimateDays = parameters.restConditionEstimateDays.value
+        if estimateDays < 1 {
+            found.append("restConditionEstimateDays is \(estimateDays), not 1 or more")
+        }
         return found
     }
 }

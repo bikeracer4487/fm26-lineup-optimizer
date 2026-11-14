@@ -102,7 +102,8 @@ import Testing
     @Test func theRestParametersAreListedWithEvidenceAndSource() {
         let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
         let expected: [(String, Evidence)] = [("restLimitRules", .carriedOverFM26), ("restWatchShare", .carriedOverFM26),
-                                              ("holidayMargin", .derived), ("holidayJadednessRecoveryPerDay", .carriedOverFM26)]
+                                              ("holidayMargin", .derived), ("holidayJadednessRecoveryPerDay", .carriedOverFM26),
+                                              ("restConditionEstimateDays", .derived)]
         for (name, evidence) in expected {
             #expect(listed[name]?.evidence == evidence, "\(name)")
             #expect(!(listed[name]?.source.isEmpty ?? true), "\(name) has no source")
@@ -113,6 +114,46 @@ import Testing
         #expect(p.holidayJadednessRecoveryPerDay.value == 50)
         #expect(p.restLimitRules.source.contains("_get_adjusted_fatigue_threshold"))
         #expect(p.restLimitRules.value.lowest == 200 && p.restLimitRules.value.highest == 550)
+        #expect(p.restConditionEstimateDays.value == 14)
+        #expect(p.restConditionEstimateDays.source == "this design's choice: an estimate is given up to two weeks ahead")
+    }
+
+    @Test func aNegativeHolidayMarginIsReported() {
+        var q = EngineParameters.fm27
+        q.holidayMargin = Parameter(-1, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["holidayMargin is -1, not 0 or more"])
+        q.holidayMargin = Parameter(0, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func restLimitBoundsTheWrongWayRoundAreReported() {
+        var q = EngineParameters.fm27
+        var rules = q.restLimitRules.value
+        rules.lowest = 600
+        q.restLimitRules = Parameter(rules, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["restLimitRules lowest (600) is above its highest (550)"])
+        rules.lowest = 550
+        q.restLimitRules = Parameter(rules, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func restLimitAgeBandsOutOfOrderAreReported() {
+        var q = EngineParameters.fm27
+        var rules = q.restLimitRules.value
+        rules.olderFromAge = 32
+        q.restLimitRules = Parameter(rules, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["restLimitRules olderFromAge (32) is not below oldestFromAge (32)"])
+        rules.olderFromAge = 31
+        q.restLimitRules = Parameter(rules, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func aConditionEstimateOfNoDaysIsReported() {
+        var q = EngineParameters.fm27
+        q.restConditionEstimateDays = Parameter(0, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["restConditionEstimateDays is 0, not 1 or more"])
+        q.restConditionEstimateDays = Parameter(1, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
     }
 
     @Test func restParameterProblemsAreReported() {

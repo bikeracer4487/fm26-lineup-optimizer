@@ -22,8 +22,6 @@ public struct RestAdvice: Equatable, Sendable {
 }
 
 public enum Rest {
-    /// The furthest ahead, in days, the condition estimate looks; beyond it the days are not known.
-    private static let longestConditionEstimate = 14
     /// Absorbs binary floating-point error before a day count is rounded up, so an exact division is not a day more.
     private static let roundingNoise = 1e-9
 
@@ -67,7 +65,7 @@ public enum Rest {
         let overLimit = jadedness > limit
         let lowCondition = player.condition < floor
         let closeToLimit = Double(jadedness) > watchLine
-        let runTells = (run.factor ?? 1) < 1
+        let runTells = run.factor != nil
 
         let level: RestLevel
         if needsHoliday {
@@ -169,11 +167,11 @@ public enum Rest {
         Int(((Double(jadedness) - line) / perDay - roundingNoise).rounded(.up))
     }
 
-    /// Rest days until his projected condition reaches the floor; nil beyond the longest estimate.
+    /// Rest days until his projected condition reaches the floor; nil beyond `restConditionEstimateDays`.
     private static func daysToFloor(_ player: Player, intensity: TrainingIntensity,
                                     parameters: EngineParameters) throws -> Int? {
         var fitness = ProjectedFitness(player)
-        for day in 1...longestConditionEstimate {
+        for day in 1...parameters.restConditionEstimateDays.value {
             fitness = try FitnessProjection.afterDays(1, fitness, player: player, intensity: intensity, parameters: parameters)
             if fitness.condition >= parameters.conditionFloor.value { return day }
         }
