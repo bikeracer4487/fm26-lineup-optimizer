@@ -9,10 +9,10 @@ import Testing
     let sample = "Sample 4-2-3-1"
 
     func report(_ players: [Player], tactics: [Tactic]? = nil, ownClub: String? = "Oxford City",
-                accepted: [Retraining] = [], rejected: Set<RetrainingChoice> = [],
+                accepted: [Retraining] = [], rejected: Set<RetrainingChoice> = [], leaving: Set<PlayerID> = [],
                 parameters: EngineParameters = .fm27) throws -> TrainingReport {
         try Training.report(tactics: tactics ?? [tactic], players: players, ownClub: ownClub, accepted: accepted,
-                            rejected: rejected, catalog: catalog, profile: profile, parameters: parameters)
+                            rejected: rejected, leaving: leaving, catalog: catalog, profile: profile, parameters: parameters)
     }
 
     func named(_ slot: SlotID, _ tier: String) -> String { PlannerFixture.name(slot, tier) }
@@ -498,6 +498,22 @@ import Testing
         var three = EngineParameters.fm27
         three.retrainingPerPosition = Parameter(3, .derived, source: "test")
         #expect(try report(thinAtLeftBack(backs), parameters: three).recommendations.count == 3)
+    }
+
+    @Test func aPlayerAdvisedToLeaveIsNeverACandidate() throws {
+        // Back A is recommended until he is among the players leaving; then the place goes to Back C.
+        let backs = [rightBack("Back A", versatility: 14), rightBack("Back B", versatility: 13), rightBack("Back C", versatility: 12)]
+        let leaving = try report(thinAtLeftBack(backs), leaving: [id("Back A")])
+        #expect(choices(leaving) == [RetrainingChoice(player: id("Back B"), position: .defenderLeft),
+                                     RetrainingChoice(player: id("Back C"), position: .defenderLeft)])
+        // The only candidate leaving: the need is left for recruitment.
+        let players = try thinAtLeftBack([rightBack()])
+        #expect(try report(players).recommendations.map(\.choice.player) == [id("Right Back")])
+        let alone = try report(players, leaving: [id("Right Back")])
+        #expect(alone.recommendations.isEmpty)
+        #expect(alone.needsWithoutCandidates == [RetrainingNeed(tactic: sample, slot: .D_L)])
+        // Someone leaving who is no candidate changes nothing.
+        #expect(try report(players, leaving: [PlannerFixture.id(.GK, "first")]) == report(players))
     }
 
     @Test func aPairCoveringTwoNeedsListsBoth() throws {

@@ -88,11 +88,28 @@ import Testing
     // MARK: Schedule
 
     @Test func aBiggerMatchSoonAfterReducesTheScore() {
+        // The next match is a league match against a stronger side: 88, bigger than this one's 80.
         for (days, expected) in [(2, 48.0), (3, 56), (4, 72), (5, 80)] {
-            let s = suggest(fixture(), among: [fixture("next", daysFromToday: days)])
+            let s = suggest(fixture(), among: [fixture("next", daysFromToday: days, opponent: .stronger)])
             #expect(abs(s.score - expected) < 1e-9, "\(days) days")
         }
-        #expect(suggest(fixture(), among: [fixture("next", daysFromToday: 2)]).importance == .low)
+        #expect(suggest(fixture(), among: [fixture("next", daysFromToday: 2, opponent: .stronger)]).importance == .low)
+    }
+
+    @Test func theNextMatchMustBeBiggerThanThisOne() {
+        // 96 then 80 three days later: the next match reaches the line but is smaller.
+        let big = suggest(fixture(opponent: .muchStronger), among: [fixture("next", daysFromToday: 3)])
+        #expect(abs(big.score - 96) < 1e-9)
+        #expect(big.importance == .high)
+        #expect(!big.reasons.contains { $0.hasPrefix("A bigger match follows") })
+        // 80 then 80 two days later: the same size is not bigger.
+        let same = suggest(fixture(), among: [fixture("next", daysFromToday: 2)])
+        #expect(same.score == 80)
+        #expect(!same.reasons.contains { $0.hasPrefix("A bigger match follows") })
+        // 80 then 88 two days later.
+        let bigger = suggest(fixture(), among: [fixture("next", daysFromToday: 2, opponent: .stronger)])
+        #expect(abs(bigger.score - 48) < 1e-9)
+        #expect(bigger.reasons.contains("A bigger match follows in 2 days (×0.6)"))
     }
 
     @Test func aLesserMatchFollowingDoesNotReduceTheScore() {
@@ -103,7 +120,7 @@ import Testing
     }
 
     @Test func theNextFixtureIsTheEarliestAfterThisOneAndThisOneIsIgnored() {
-        let early = fixture("a", daysFromToday: 3)
+        let early = fixture("a", daysFromToday: 3, opponent: .stronger)
         let late = fixture("b", daysFromToday: 2, competition: .friendly)
         // The earlier of the two (2 days) is a friendly, so nothing applies, although the other would.
         #expect(suggest(fixture(), among: [early, late]).score == 80)
@@ -146,7 +163,8 @@ import Testing
     }
 
     @Test func noRiseWhenAReductionApplies() {
-        let s = suggest(fixture(), among: [fixture("next", daysFromToday: 3)], confirmed: [confirmed("p1", daysFromToday: -9)])
+        let s = suggest(fixture(), among: [fixture("next", daysFromToday: 3, opponent: .stronger)],
+                        confirmed: [confirmed("p1", daysFromToday: -9)])
         #expect(abs(s.score - 56) < 1e-9)
         #expect(!s.reasons.contains { $0.contains("A week or more") })
     }
@@ -191,7 +209,7 @@ import Testing
     // MARK: Reasons and order
 
     @Test func reasonsReadAsWritten() {
-        let s = suggest(fixture(opponent: .stronger), among: [fixture("next", daysFromToday: 2)],
+        let s = suggest(fixture(opponent: .stronger), among: [fixture("next", daysFromToday: 2, opponent: .muchStronger)],
                         confirmed: [confirmed("p1", daysFromToday: -2), confirmed("p2", daysFromToday: -5)])
         #expect(s.reasons == ["League match: 80", "Stronger opponent (×1.1)", "A bigger match follows in 2 days (×0.6)",
                               "Third match in 7 days (×0.8)", "Score 42: low"])

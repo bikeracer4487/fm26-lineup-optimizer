@@ -76,12 +76,34 @@ import Testing
 
     // MARK: Contract type
 
-    @Test func aContractThatIsNotFullTimeAddsFifty() throws {
-        for type in [ContractType.outOfContract, .other("Non-Contract")] {
-            let a = try advice(target { $0.contractType = type })
-            #expect(a.reasons.first == reason("Not on a full-time contract", 50), "\(type)")
-        }
+    @Test func aPlayerOutOfContractAddsFifty() throws {
+        let a = try advice(target { $0.contractType = .outOfContract })
+        #expect(a.reasons.first == reason("Not on a full-time contract", 50))
         #expect(reasons(try advice(target()).reasons, "Not on").isEmpty)
+        #expect(reasons(try advice(target()).reasons, "Contract type").isEmpty)
+    }
+
+    @Test func aContractTypeTheToolDoesNotReadGivesNoPointsAndNoCost() throws {
+        // +15 in neither eleven, +30 among the weakest, +15 for 12 months, +25 for Controversy 17: 85, critical.
+        // Read as not full time it would have been 135, released at no cost.
+        let youth = target(attributes: [.controversy: 17]) { $0.contractType = .other("Youth") }
+        let a = try advice(youth)
+        #expect(a.reasons.first == reason("Contract type Youth is not one this tool reads: no release cost is given", 0))
+        #expect(reasons(a.reasons, "Not on").isEmpty)
+        #expect(a.score == 85 && a.level == .critical)
+        #expect(a.releaseCost == nil && a.mutualCost == nil)
+        // Not released by the first step; with the costs unknown he is never terminated, so he is sold.
+        #expect(a.action == .sell)
+        // A prospect is loaned out.
+        let prospect = try advice(target(age: 19, attributes: [.controversy: 17, .temperament: 7], potentialAbility: 134) {
+            $0.contractType = .other("Youth")
+        })
+        #expect(prospect.level == .high && prospect.action == .loan)
+        #expect(prospect.releaseCost == nil && prospect.mutualCost == nil)
+        // A full-time contract is unchanged: costs from the wage and months left.
+        let full = try advice(target(attributes: [.controversy: 17]))
+        #expect(full.score == 85 && full.action == .terminate)
+        #expect(full.releaseCost == 26_000 && full.mutualCost == 14_300)
     }
 
     // MARK: The elevens
@@ -525,7 +547,7 @@ import Testing
 
     @Test func reasonsComeInTheOrderOfTheTable() throws {
         let t = target(age: 33, attributes: [.consistency: 7, .temperament: 7], potentialAbility: 100) {
-            $0.contractType = .other("Non-Contract"); $0.monthsLeft = 3; $0.wagePerWeek = 900
+            $0.contractType = .outOfContract; $0.monthsLeft = 3; $0.wagePerWeek = 900
         }
         let a = try advice(t)
         #expect(a.reasons == [
@@ -560,12 +582,12 @@ import Testing
 
     // MARK: Actions
 
-    @Test func aPlayerNotOnAFullTimeContractAtHighIsReleasedAtNoCost() throws {
+    @Test func aPlayerOutOfContractAtHighIsReleasedAtNoCost() throws {
         // A centre-back, where cover is above the line, so the thin-cover rule does not apply.
         let id = PlannerFixture.id(.D_CL, "first")
         // −40 in the first eleven, +50, +15 for 12 months, +25 for Controversy 17.
         let a = try advice(id, in: try squad(changing: id) { p in
-            p.contractType = .other("Non-Contract"); p.attributes[.controversy] = 17
+            p.contractType = .outOfContract; p.attributes[.controversy] = 17
         })
         #expect(a.score == 50 && a.level == .high)
         #expect(a.action == .release)
@@ -689,6 +711,55 @@ import Testing
         let a = try #require(r.advice.first { $0.player == target().id })
         #expect(reasons(a.reasons, "Paid") == [reason("Paid £700 a week, against a median of £400, and in neither eleven", 35)])
         #expect(reasons(a.reasons, "Current ability").isEmpty)
+    }
+
+    /// Thirty U21 players of current ability 40 on £50 a week.
+    var youthSquad: [Player] {
+        (0..<30).map { i in
+            var p = Player.fixture(name: "Youth \(i)", squad: .u21, currentAbility: 40)
+            p.wagePerWeek = 50
+            return p
+        }
+    }
+
+    @Test func theMedianWageAndAverageAreTheFirstTeams() throws {
+        // Over all 53 own players the median would be £50 and the average about 66.
+        let players = try squad([target(), target("Weaker", currentAbility: 90, potentialAbility: 200)]) + youthSquad
+        let r = try report(players)
+        let average = try #require(r.squadAverageAbility)
+        let firstTeamAverage = Double(23 * 100 + 90) / 24
+        #expect(abs(average - firstTeamAverage) < 1e-9)
+        // The target is paid the first team's median, £500: no wage points.
+        let a = try #require(r.advice.first { $0.player == target().id })
+        #expect(reasons(a.reasons, "Paid").isEmpty)
+        // A first-team player below the first team's average is below the squad average.
+        let weaker = try #require(r.advice.first { $0.name == "Weaker" })
+        #expect(reasons(weaker.reasons, "Current ability") == [reason("Current ability 90 against a squad average of 100", 10)])
+        // Above the first team's median, the wage rule still applies.
+        let paid = try #require(try report(try squad([target { $0.wagePerWeek = 900 }]) + youthSquad)
+            .advice.first { $0.player == target().id })
+        #expect(reasons(paid.reasons, "Paid") == [reason("Paid £900 a week, against a median of £500, and in neither eleven", 35)])
+    }
+
+    @Test func withNoFirstTeamPlayerNeitherWageNorAverageApplies() throws {
+        let players = (try squad([target { $0.wagePerWeek = 900 }]) + youthSquad).map { p -> Player in
+            var p = p; p.squad = .u21; return p
+        }
+        let r = try report(players)
+        #expect(r.squadAverageAbility == nil)
+        #expect(r.advice.count == 53)
+        for a in r.advice {
+            #expect(reasons(a.reasons, "Paid").isEmpty, "\(a.name)")
+            #expect(reasons(a.reasons, "Current ability").isEmpty, "\(a.name)")
+            #expect(!a.reasons.contains { $0.text.hasSuffix("little room to grow") }, "\(a.name)")
+        }
+    }
+
+    @Test func aHighWageInTheSecondElevenAddsNothing() throws {
+        let id = PlannerFixture.id(.D_L, "second")
+        let a = try advice(id, in: try squad(changing: id) { $0.wagePerWeek = 2_000 })
+        #expect(a.tier == .second(.D_L))
+        #expect(reasons(a.reasons, "Paid").isEmpty)
     }
 
     @Test func noOwnPlayersMeansNoAverage() throws {
@@ -822,6 +893,27 @@ import Testing
         }
         #expect(r.weeklyWagesAtStake == 1_700)
         #expect(r.advice.count == 25)
+    }
+
+    @Test func thePlayersAdvisedToLeaveAreTheCriticalAndHighOnes() throws {
+        // Alpha critical (terminate), Bravo high (sell), Charlie medium, Delta a high prospect (loan), Echo critical and
+        // out of contract (release); everyone else keep.
+        let players = try squad([
+            target("Alpha") { $0.wagePerWeek = 1_000 },
+            target("Bravo") { $0.wagePerWeek = 700; $0.monthsLeft = nil },
+            target("Charlie") { $0.wagePerWeek = 300; $0.monthsLeft = nil },
+            target("Delta", age: 19, attributes: [.controversy: 17], potentialAbility: 134),
+            target("Echo") { $0.contractType = .outOfContract },
+        ])
+        let r = try report(players)
+        let byName = Dictionary(uniqueKeysWithValues: r.advice.map { ($0.name, $0) })
+        #expect(byName["Alpha"]?.action == .terminate && byName["Bravo"]?.action == .sell)
+        #expect(byName["Delta"]?.action == .loan && byName["Echo"]?.action == .release)
+        #expect(byName["Charlie"]?.level == .medium)
+        #expect(r.advisedToLeave == Set(["Alpha", "Bravo", "Delta", "Echo"].map { target($0).id }))
+        #expect(r.advice.filter { $0.level == .keep || $0.level == .medium }.allSatisfy { !r.advisedToLeave.contains($0.player) })
+        // Nobody to move on: an empty set.
+        #expect(try report(try squad()).advisedToLeave.isEmpty)
     }
 
     @Test func loansAreOrderedByScore() throws {

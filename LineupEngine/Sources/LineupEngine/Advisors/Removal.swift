@@ -31,9 +31,10 @@ public struct RemovalAdvice: Equatable, Sendable {
     public let isProspect: Bool
     public let isFalseProspect: Bool
     public let isMentor: Bool
-    /// Wages left on the contract, in pounds: nil when months left is unknown, 0 for a player not on a full-time contract.
+    /// Wages left on the contract, in pounds: 0 for a player out of contract; nil when months left is unknown, or for a
+    /// contract type this tool does not read.
     public let releaseCost: Int?
-    /// The likely cost of a mutual termination, in pounds; nil and 0 as `releaseCost`.
+    /// The likely cost of a mutual termination, in pounds; 0 and nil as `releaseCost`.
     public let mutualCost: Int?
     /// The weakest evidence among the parameters behind this advice.
     public let basis: Evidence
@@ -59,8 +60,11 @@ public struct RemovalReport: Equatable, Sendable {
     public let loans: [LoanReview]
     /// The weekly wages of the critical and high players.
     public let weeklyWagesAtStake: Int
-    /// Mean current ability of the club's own players; nil when there are none.
+    /// Mean current ability of the club's own first-team players; nil when there are none.
     public let squadAverageAbility: Double?
+    /// The players the owner is advised to move on: critical or high, to be released, loaned out, terminated or sold.
+    /// The caller passes them to `Training.report` as `leaving`, so nobody is retrained who is advised to go.
+    public var advisedToLeave: Set<PlayerID>
 }
 
 public enum Removal {
@@ -71,7 +75,8 @@ public enum Removal {
 
     /// Advice for every player of the club's own and a review of every player on loan at the club; players out on loan
     /// get neither, and injured players are assessed. The squad average ability and the median wage are over the club's
-    /// own players. Throws `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, what
+    /// own first-team players, so a large youth squad on low wages does not move them; with no first-team player, the
+    /// rules that need them do not apply. Throws `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, what
     /// `Elevens.report` throws, and `RatingError.missingAttribute` for an assessed player without Consistency, Important
     /// Matches, Injury Proneness, Professionalism, Ambition, Controversy, Temperament or Determination. Throws what
     /// `Depth.report` throws.
@@ -97,19 +102,29 @@ public enum Removal {
             traits[player.id] = try Traits(player)
         }
 
+        let firstTeam = own.filter { $0.squad == .firstTeam }
         let squad = SquadFacts(
-            averageAbility: own.isEmpty ? nil : Double(own.map(\.currentAbility).reduce(0, +)) / Double(own.count),
-            medianWage: median(own.map(\.wagePerWeek)),
+            averageAbility: firstTeam.isEmpty ? nil
+                : Double(firstTeam.map(\.currentAbility).reduce(0, +)) / Double(firstTeam.count),
+            medianWage: median(firstTeam.map(\.wagePerWeek)),
             weakest: weakest(own + loanedIn, tiers: tiers, share: parameters.removalRules.value.weakestShare),
             tiers: tiers, depth: depth, thinBelow: parameters.depthThinBelow.value)
 
         var advice: [RemovalAdvice] = []
         var wagesAtStake = 0
+        var leaving: Set<PlayerID> = []
         for player in own {
             let one = Self.advice(for: player, traits: traits[player.id]!, squad: squad, parameters: parameters)
             switch one.level {
             case .critical, .high: wagesAtStake += player.wagePerWeek
             case .medium, .keep: break
+            }
+            switch (one.level, one.action) {
+            case (.critical, .release), (.critical, .loan), (.critical, .terminate), (.critical, .sell),
+                 (.high, .release), (.high, .loan), (.high, .terminate), (.high, .sell):
+                leaving.insert(player.id)
+            case (.critical, .monitor), (.critical, .keep), (.high, .monitor), (.high, .keep), (.medium, _), (.keep, _):
+                break
             }
             advice.append(one)
         }
@@ -118,7 +133,7 @@ public enum Removal {
         return RemovalReport(
             advice: advice.sorted { $0.score != $1.score ? $0.score > $1.score : $0.player.key < $1.player.key },
             loans: loans.sorted { $0.score != $1.score ? $0.score > $1.score : $0.player.key < $1.player.key },
-            weeklyWagesAtStake: wagesAtStake, squadAverageAbility: squad.averageAbility)
+            weeklyWagesAtStake: wagesAtStake, squadAverageAbility: squad.averageAbility, advisedToLeave: leaving)
     }
 
     // MARK: Players of the club's own
@@ -129,11 +144,20 @@ public enum Removal {
         var reasons = Reasons()
         var evidence = [parameters.removalRules.evidence, parameters.removalLevels.evidence]
 
-        let notFullTime = switch player.contractType {
-        case .fullTime: false
-        case .outOfContract, .other: true
+        // Only a player out of contract can go at no cost; a type this tool does not read (a youth or part-time
+        // contract, say) says nothing about the cost either way.
+        let outOfContract: Bool
+        let costsKnown: Bool
+        switch player.contractType {
+        case .fullTime:
+            (outOfContract, costsKnown) = (false, true)
+        case .outOfContract:
+            (outOfContract, costsKnown) = (true, true)
+            reasons.add(rules.notFullTimePoints, "Not on a full-time contract")
+        case .other(let type):
+            (outOfContract, costsKnown) = (false, false)
+            reasons.add(0, "Contract type \(type) is not one this tool reads: no release cost is given")
         }
-        if notFullTime { reasons.add(rules.notFullTimePoints, "Not on a full-time contract") }
 
         let tier = squad.tiers.tier(of: player.id)
         let inEither = reasons.addTier(tier, first: rules.firstElevenPoints, second: rules.secondElevenPoints,
@@ -236,9 +260,9 @@ public enum Removal {
 
         let releaseCost: Int?
         let mutualCost: Int?
-        if notFullTime {
+        if outOfContract {
             (releaseCost, mutualCost) = (0, 0)
-        } else if let months = player.monthsLeft {
+        } else if costsKnown, let months = player.monthsLeft {
             let release = Int((Double(player.wagePerWeek) * weeksPerYear / monthsPerYear * Double(months)).rounded())
             (releaseCost, mutualCost) = (release, Int((parameters.mutualTerminationShare.value * Double(release)).rounded()))
         } else {
@@ -251,7 +275,7 @@ public enum Removal {
         case .keep: action = .keep
         case .medium: action = .monitor
         case .high, .critical:
-            if notFullTime {
+            if outOfContract {
                 action = .release
             } else if isProspect && !isFalseProspect {
                 action = .loan
@@ -335,8 +359,9 @@ public enum Removal {
     }
 
     private struct SquadFacts {
+        /// Over the club's own first-team players; nil when there are none.
         let averageAbility: Double?
-        /// nil when the club has no players of its own.
+        /// Over the club's own first-team players; nil when there are none.
         let medianWage: Double?
         let weakest: Set<PlayerID>
         let tiers: SquadTiers

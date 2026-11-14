@@ -292,9 +292,17 @@ import Testing
         #expect(rest.allSatisfy { !$0.reasons.isEmpty })
 
         // Training: every thin slot is covered by a recommendation, already being retrained, or a need nobody suits;
-        // every recommendation is explained and names one of the club's own players.
+        // every recommendation is explained and names one of the club's own players, and none a player Player
+        // Removal advises moving on.
+        let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                         profile: profile, parameters: parameters)
         let training = try Training.report(tactics: [tactic], players: players, ownClub: ownClub, accepted: [], rejected: [],
-                                           catalog: catalog, profile: profile, parameters: parameters)
+                                           leaving: removal.advisedToLeave, catalog: catalog, profile: profile,
+                                           parameters: parameters)
+        #expect(!removal.advisedToLeave.isEmpty)
+        for recommendation in training.recommendations {
+            #expect(!removal.advisedToLeave.contains(recommendation.choice.player), "\(recommendation.name)")
+        }
         let recommended = Set(training.recommendations.flatMap(\.needs).map(\.slot))
         for slot in depth.thin {
             let need = RetrainingNeed(tactic: tactic.name, slot: slot)
@@ -320,8 +328,6 @@ import Testing
         }
 
         // Player Removal: nobody out on loan; every piece of advice has a reason, and its score is their sum.
-        let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
-                                         profile: profile, parameters: parameters)
         #expect(onLoan.isDisjoint(with: removal.advice.map(\.player) + removal.loans.map(\.player)))
         for advice in removal.advice {
             #expect(!advice.reasons.isEmpty, "\(advice.name)")

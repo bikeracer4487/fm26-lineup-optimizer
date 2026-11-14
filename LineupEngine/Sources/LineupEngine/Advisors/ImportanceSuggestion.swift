@@ -26,6 +26,7 @@ public enum ImportanceAdvisor {
         let opponent = opponentFactor(fixture.opponentStrength, rules: rules)
         score *= opponent.value
         if let reason = opponent.reason { reasons.append(reason) }
+        let ownSize = score
 
         // The next match after this one, earliest first, lowest id on a tie.
         let next = others.filter { $0.date > fixture.date }
@@ -35,7 +36,8 @@ public enum ImportanceAdvisor {
             let nextScore = baseScore(competition: next.competition, rules: rules).value
                 * opponentFactor(next.opponentStrength, rules: rules).value
             let gap = fixture.date.days(to: next.date)
-            if nextScore >= rules.biggerMatchFrom,
+            // The next match must reach the line and be bigger than this one, by base times opponent.
+            if nextScore >= rules.biggerMatchFrom, nextScore > ownSize,
                let step = rules.biggerMatchSteps.sorted(by: { $0.withinDays < $1.withinDays }).first(where: { gap <= $0.withinDays }) {
                 score *= step.factor
                 reduced = true

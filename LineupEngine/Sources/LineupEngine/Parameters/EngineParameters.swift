@@ -237,7 +237,7 @@ public struct LoanReviewRules: Sendable, Equatable {
 /// and the loan review's. Of a pair of lines ("under 8 / exactly 8") only the stronger applies. "Room to grow" is
 /// potential ability minus current ability over current ability.
 public struct RemovalRules: Sendable, Equatable {
-    /// Any contract but a full-time one.
+    /// A player out of contract. A contract type this tool does not read takes no points.
     public var notFullTimePoints: Int
     public var firstElevenPoints: Int
     public var secondElevenPoints: Int
@@ -417,7 +417,7 @@ public struct ImportanceSuggestionRules: Sendable, Equatable {
     public var weakerFactor: Double
     public var muchWeakerFactor: Double
     public var unsetOpponentFactor: Double
-    /// The next match is "bigger" when its base times its opponent factor is at least this.
+    /// The next match is "bigger" when its base times its opponent factor is at least this and greater than this one's.
     public var biggerMatchFrom: Double
     /// Tightest first; only the first step that applies is used.
     public var biggerMatchSteps: [BiggerMatchStep]

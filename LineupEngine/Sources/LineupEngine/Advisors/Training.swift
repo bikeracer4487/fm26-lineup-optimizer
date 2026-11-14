@@ -68,11 +68,13 @@ public enum Training {
     /// The game's highest familiarity: a natural.
     private static let naturalFamiliarity = 20
 
-    /// Who should learn a position to cover the thin slots of `tactics`. Throws `PlanError.badParameters` when
+    /// Who should learn a position to cover the thin slots of `tactics`. A player in `leaving`, whom the owner is advised
+    /// to move on, is never a candidate; the caller passes `RemovalReport.advisedToLeave` there, since Training does not
+    /// run Player Removal itself. Throws `PlanError.badParameters` when
     /// `FitnessModel.problems(in:)` finds problems, what `Depth.report` throws, `RatingError.missingAttribute` for a
     /// candidate without Versatility or Professionalism, and `RatingError.missingFamiliarity` for a missing position.
     public static func report(tactics: [Tactic], players: [Player], ownClub: String?,
-                              accepted: [Retraining], rejected: Set<RetrainingChoice>,
+                              accepted: [Retraining], rejected: Set<RetrainingChoice>, leaving: Set<PlayerID> = [],
                               catalog: RoleCatalog, profile: RatingProfile,
                               parameters: EngineParameters) throws -> TrainingReport {
         let problems = FitnessModel.problems(in: parameters)
@@ -117,7 +119,7 @@ public enum Training {
                                        isBeingRetrained: try isBeingRetrained(assignment)))
                 // Without a first choice there is nothing to measure a candidate against.
                 guard let first = firstChoice[slot], first.rating.value > 0 else { continue }
-                for player in sorted {
+                for player in sorted where !leaving.contains(player.id) {
                     guard let candidate = try candidate(player, for: assignment, firstRating: first.rating.value,
                                                         firstAt: firstAt, ownClub: ownClub, engine: engine,
                                                         learnabilities: &learnabilities, parameters: parameters)

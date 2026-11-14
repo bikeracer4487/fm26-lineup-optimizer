@@ -256,10 +256,12 @@ do {
                                      profile: profile, parameters: parameters)
         let rest = try Rest.advice(players: players, ownClub: ownClub, history: StartHistory(history), asOf: options.asOf!,
                                    intensity: options.settings.trainingIntensity, parameters: parameters)
-        let training = try Training.report(tactics: [tactic], players: players, ownClub: ownClub, accepted: [], rejected: [],
-                                           catalog: catalog, profile: profile, parameters: parameters)
+        // Removal first: nobody it advises moving on is put forward for retraining.
         let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
                                          profile: profile, parameters: parameters)
+        let training = try Training.report(tactics: [tactic], players: players, ownClub: ownClub, accepted: [], rejected: [],
+                                           leaving: removal.advisedToLeave, catalog: catalog, profile: profile,
+                                           parameters: parameters)
         var suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]?
         if let fixtures {
             // The planner's tiers: injured players left out, as they cannot play.

@@ -226,6 +226,70 @@ import Testing
         #expect(try one(Player.fixture(jadedness: 350))?.days == nil)
     }
 
+    // MARK: The lineup's jadedness line
+
+    /// A 25-year-old with a limit of 530: Natural Fitness 18, Stamina 18, Injury Proneness 5.
+    func hardy(jadedness: Int, condition: Double = 1) -> Player {
+        Player.fixture(attributes: [.naturalFitness: 18, .stamina: 18, .injuryProneness: 5], condition: condition,
+                       jadedness: jadedness)
+    }
+
+    @Test func aboveTheLineupsLineHeIsRestedWhateverHisLimit() throws {
+        try #require(try limit(hardy(jadedness: 410)).limit == 530)
+        let a = try #require(try one(hardy(jadedness: 410)))
+        #expect(a.level == .rest)
+        #expect(a.reasons == ["Jadedness 410 is above 400: the lineup leaves him out of all but high-importance matches"])
+        // Down to 400, the lower of his watch line (424) and the lineup's line: (410 − 400) / 20 rounds up to 1.
+        #expect(a.days == 1)
+        // At 450, down to 400 takes 3 days; down to his watch line would take 2.
+        #expect(try one(hardy(jadedness: 450))?.days == 3)
+    }
+
+    @Test func atTheLineupsLineHeIsNotListedForIt() throws {
+        #expect(try one(hardy(jadedness: 400)) == nil)
+    }
+
+    @Test func withTheStandardLimitTheLineIsNamedOnce() throws {
+        let a = try #require(try one(Player.fixture(jadedness: 410)))
+        #expect(a.reasons == ["Jadedness 410 is above his limit of 400: rest him from training and matches"])
+        #expect(a.days == 5)
+    }
+
+    @Test func belowTheLineupsLineHisOwnLimitDecides() throws {
+        // Aged 32, a limit of 300: (350 − 240) / 20 rounds up to 6.
+        let a = try #require(try one(Player.fixture(age: 32, jadedness: 350)))
+        #expect(a.level == .rest)
+        #expect(a.reasons == ["Jadedness 350 is above his limit of 300: rest him from training and matches"])
+        #expect(a.days == 6)
+    }
+
+    @Test func overBothLinesBothAreNamedAndTheLowerLineSetsTheDays() throws {
+        // A limit of 300, so his watch line (240) is lower than 400: (450 − 240) / 20 rounds up to 11.
+        let a = try #require(try one(Player.fixture(age: 32, condition: 0.78, jadedness: 450)))
+        #expect(a.reasons == ["Jadedness 450 is above his limit of 300: rest him from training and matches",
+                              "Jadedness 450 is above 400: the lineup leaves him out of all but high-importance matches",
+                              "Condition 78% is below the 85% floor"])
+        let b = try #require(try one(Player.fixture(age: 32, jadedness: 450)))
+        #expect(b.days == 11)
+        // The reason comes after the holiday reason and before the condition reason.
+        let holiday = try #require(try one(hardy(jadedness: 740, condition: 0.78)))
+        #expect(holiday.level == .holiday)
+        #expect(holiday.reasons == ["Jadedness 740 is more than 200 above his limit of 530: a holiday clears it fastest",
+                                    "Jadedness 740 is above 400: the lineup leaves him out of all but high-importance matches",
+                                    "Condition 78% is below the 85% floor"])
+        // A holiday too runs down to 400: (740 − 400) / 50 rounds up to 7.
+        #expect(try one(hardy(jadedness: 740))?.days == 7)
+    }
+
+    @Test func theLineIsJadedThreshold() throws {
+        var q = parameters
+        q.jadedThreshold = Parameter(420, .fm27Observation, source: "test")
+        // The standard limit moves with it: his becomes 550, and 421 is under his watch line of 440.
+        #expect(try one(hardy(jadedness: 410), parameters: q) == nil)
+        #expect(try one(hardy(jadedness: 421), parameters: q)?.reasons
+                == ["Jadedness 421 is above 420: the lineup leaves him out of all but high-importance matches"])
+    }
+
     // MARK: Reasons and basis
 
     @Test func reasonsComeOnePerCauseInOrder() throws {

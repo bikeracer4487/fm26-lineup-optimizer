@@ -14,7 +14,8 @@ public struct RestAdvice: Equatable, Sendable {
     public let condition: Double
     /// His run of starts in quick succession up to and including the advice day.
     public let consecutiveStarts: Int
-    /// Estimated days until he is clear; nil for watch, or when it cannot be told within the estimate's range.
+    /// Estimated days until he is clear: his jadedness under both his watch line and `jadedThreshold`, and his condition
+    /// at the floor. Nil for watch, or when it cannot be told within the estimate's range.
     public let days: Int?
     public let reasons: [String]
     /// The weakest evidence among the parameters behind this advice.
@@ -25,7 +26,8 @@ public enum Rest {
     /// Absorbs binary floating-point error before a day count is rounded up, so an exact division is not a day more.
     private static let roundingNoise = 1e-9
 
-    /// Players who need a holiday, rest or watching: most urgent first.
+    /// Players who need a holiday, rest or watching: most urgent first. A player above `jadedThreshold`, whom the lineup
+    /// leaves out of all but high-importance matches, needs at least rest whatever his own limit.
     /// Players out on loan and injured players are not looked at. Throws `PlanError.badParameters` when
     /// `FitnessModel.problems(in:)` finds problems, and `RatingError.missingAttribute` for a player without
     /// Natural Fitness, Stamina or Injury Proneness.
@@ -61,8 +63,12 @@ public enum Rest {
         let run = ImportanceRules.runOfStarts(of: player.id, before: asOf.adding(days: 1), importance: .medium,
                                               history: history, parameters: parameters)
 
+        // The lineup leaves out a player above this line at every importance but high, whatever his own limit.
+        let lineupLine = parameters.jadedThreshold.value
         let needsHoliday = jadedness > limit + holidayMargin
         let overLimit = jadedness > limit
+        let overLineupLine = jadedness > lineupLine
+        let tooJaded = overLimit || overLineupLine
         let lowCondition = player.condition < floor
         let closeToLimit = Double(jadedness) > watchLine
         let runTells = run.factor != nil
@@ -70,7 +76,7 @@ public enum Rest {
         let level: RestLevel
         if needsHoliday {
             level = .holiday
-        } else if overLimit || lowCondition {
+        } else if tooJaded || lowCondition {
             level = .rest
         } else if closeToLimit || runTells {
             level = .watch
@@ -83,14 +89,27 @@ public enum Rest {
         var days: Int?
         switch level {
         case .holiday, .rest:
-            var jadednessDays: Int?
             if needsHoliday {
                 reasons.append("Jadedness \(jadedness) is more than \(holidayMargin) above his limit of \(limit): a holiday clears it fastest")
                 evidence.append(parameters.holidayMargin.evidence)
-                jadednessDays = daysDown(from: jadedness, to: watchLine, perDay: parameters.holidayJadednessRecoveryPerDay.value)
             } else if overLimit {
                 reasons.append("Jadedness \(jadedness) is above his limit of \(limit): rest him from training and matches")
-                jadednessDays = daysDown(from: jadedness, to: watchLine, perDay: parameters.jadednessRecoveryPerDay.value)
+            }
+            // With his limit on the lineup's line, the reason above already names it.
+            if overLineupLine {
+                if limit != lineupLine {
+                    reasons.append("Jadedness \(jadedness) is above \(lineupLine): the lineup leaves him out of all but "
+                                   + "high-importance matches")
+                }
+                evidence.append(parameters.jadedThreshold.evidence)
+            }
+            var jadednessDays: Int?
+            if tooJaded {
+                // He is clear once under both his watch line and the lineup's line.
+                let line = min(watchLine, Double(lineupLine))
+                let perDay = needsHoliday ? parameters.holidayJadednessRecoveryPerDay.value
+                                          : parameters.jadednessRecoveryPerDay.value
+                jadednessDays = daysDown(from: jadedness, to: line, perDay: perDay)
             }
             var conditionDays: Int?
             if lowCondition {
@@ -98,7 +117,7 @@ public enum Rest {
                 evidence.append(parameters.conditionFloor.evidence)
                 conditionDays = try daysToFloor(player, intensity: intensity, parameters: parameters)
             }
-            switch (overLimit, lowCondition) {
+            switch (tooJaded, lowCondition) {
             case (true, true): days = jadednessDays.flatMap { j in conditionDays.map { max(j, $0) } }
             case (true, false): days = jadednessDays
             case (false, true): days = conditionDays
