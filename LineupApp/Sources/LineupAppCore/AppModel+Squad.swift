@@ -52,6 +52,7 @@ extension AppModel {
         }
         recordFamiliarity(after: target, on: date)
         recordPersonality(after: target, on: date)
+        dropHierarchy(ofPlayersMovedIn: change.movedIn)
         dropSpentMarks(imported: target)
         replan()
 

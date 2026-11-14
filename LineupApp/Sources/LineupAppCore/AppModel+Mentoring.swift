@@ -10,16 +10,16 @@ extension AppModel {
         static let inAnotherGroup = "A player already in another group cannot be added."
     }
 
-    /// Replaces the entries of the squad's current players with those given, keeping none that is `.others` with no
+    /// Replaces the entries of the squad's current players among those given, keeping none that is `.others` with no
     /// social group, and dates the squad's hierarchy with the game's current date even when nothing changed: saving is
-    /// the owner saying he has checked. Other squads' entries are left alone.
+    /// the owner saying he has checked. A player not handed back keeps his entry: the editor leaves out the players
+    /// out on loan. Other squads' entries are left alone.
     public func setDynamics(_ entries: [PlayerID: PlayerDynamics], for squad: Squad) {
         let current = Set((self.squad.book.current[squad] ?? []).map(\.id))
         let today = settings.currentDate
         changeMentoring { state in
-            for id in current { state.dynamics[id] = nil }
-            for (id, entry) in entries where current.contains(id) && !(entry.standing == .others && entry.socialGroup == nil) {
-                state.dynamics[id] = entry
+            for (id, entry) in entries where current.contains(id) {
+                state.dynamics[id] = entry.standing == .others && entry.socialGroup == nil ? nil : entry
             }
             state.dynamicsUpdatedOn[squad] = today
         }
@@ -107,6 +107,15 @@ extension AppModel {
     func recordPersonality(after squad: Squad, on day: Day) {
         let imported = self.squad.book.current[squad] ?? []
         changeMentoring { $0.record(imported, on: day) }
+    }
+
+    /// Drops the hierarchy entry of each player an import showed moving in from another squad: a level and a social
+    /// group belong to the squad they were entered for, so he is `.others` with no social group in his new squad until
+    /// the owner enters him there. Saves without replanning.
+    func dropHierarchy(ofPlayersMovedIn movedIn: [PlayerID]) {
+        changeMentoring { state in
+            for id in movedIn { state.dynamics[id] = nil }
+        }
     }
 
     // MARK: The advice
