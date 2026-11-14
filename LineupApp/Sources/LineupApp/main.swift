@@ -24,13 +24,15 @@
 //                                              first fixture, on it ("match-confirmed-…") and on the next
 //                                              ("match-after-confirm-…"); on a missed fixture with nothing
 //                                              remembered ("match-missed-…") and with its eleven remembered
-//                                              ("match-missed-eleven-…"); empty ("match-empty-…"); with two
+//                                              ("match-missed-eleven-…"), and so while two matches on one day
+//                                              stop the plan ("match-missed-stopped-…"); empty ("match-empty-…"); with two
 //                                              matches on one day ("match-failed-…"); and its candidate picker on
 //                                              its own for the first fixture's goalkeeper ("match-picker-…") and
 //                                              for the remembered eleven's goalkeeper ("match-remembered-picker-…").
 //                                              Every screen is drawn again in a narrow window, 800 by 700
-//                                              ("<screen>-narrow-…"), and Match Selection and Tactics in the
-//                                              smallest window ("match-small-…", "tactics-small-…"). Both
+//                                              ("<screen>-narrow-…"), and Match Selection, Tactics and Fixtures
+//                                              in the smallest window ("match-small-…", "tactics-small-…",
+//                                              "fixtures-small-…"). Both
 //                                              typefaces are drawn at each weight ("type-…").
 
 import AppKit
@@ -90,7 +92,7 @@ func fail(_ message: String) -> Never {
 /// Which state of the sample data to start from.
 enum SampleState {
     case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange, pastFixtures
-    case afterConfirmingFirst, choices, missedFixture, missedEleven, twoMatchesOnOneDay
+    case afterConfirmingFirst, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -108,6 +110,7 @@ enum SampleState {
         case .choices: return try SampleData.modelWithChoices(repositoryRoot: url)
         case .missedFixture: return try SampleData.modelWithMissedFixture(repositoryRoot: url)
         case .missedEleven: return try SampleData.modelWithMissedEleven(repositoryRoot: url)
+        case .missedElevenWhileStopped: return try SampleData.modelWithMissedElevenWhileThePlanIsStopped(repositoryRoot: url)
         case .twoMatchesOnOneDay: return try SampleData.modelWithTwoMatchesOnOneDay(repositoryRoot: url)
         }
     } catch {
@@ -141,6 +144,9 @@ let narrowWindow = CGSize(width: 800, height: 700)
     guard let unconfirmed = missedEleven.fixtures.first else { fail("The sample model has no fixtures.") }
     try ScreenPictures.write(model: missedEleven, to: directory, size: size, variant: "missed-eleven",
                              screens: [.matchSelection], matchStart: MatchStart(fixture: unconfirmed.id))
+    let stopped = sampleModel(root, .missedElevenWhileStopped)
+    try ScreenPictures.write(model: stopped, to: directory, size: size, variant: "missed-stopped",
+                             screens: [.matchSelection], matchStart: MatchStart(fixture: unconfirmed.id))
     try ScreenPictures.writeCandidatePicker(
         name: "match-remembered-picker", text: PickerText.remembered(.GK),
         rows: missedEleven.rememberedCandidateRows(for: .GK, in: unconfirmed.id), to: directory)
@@ -156,6 +162,8 @@ let narrowWindow = CGSize(width: 800, height: 700)
     // screens narrow, so the pills wrap.
     try ScreenPictures.write(model: sampleModel(root, .afterImport), to: directory, size: narrowWindow, variant: "narrow",
                              screens: [.squad, .fixtures, .settings])
+    try ScreenPictures.write(model: plain, to: directory, size: Theme.Layout.minimumWindow, variant: "small",
+                             screens: [.fixtures])
     for (variant, small) in [("narrow", narrowWindow), ("small", Theme.Layout.minimumWindow)] {
         try ScreenPictures.write(model: plain, to: directory, size: small, variant: variant,
                                  screens: [.matchSelection], matchStart: MatchStart(slot: .D_L))
