@@ -60,22 +60,31 @@ public enum ImportanceRules {
                            reason: "On loan here: marked down so the club's own players get the minutes (×\(Display.twoDecimals(factor)))")]
     }
 
-    /// The run of starts tires him wherever he plays next, so the factor applies in every slot. Each position he
-    /// played during the run gives the highest step the run has reached there; the lowest of those factors applies.
-    /// A position with no step reached, or missing from the table, gives none.
+    /// The run of starts tires him wherever he plays next, so the factor applies in every slot.
     private static func consecutiveStarts(_ player: Player, _ context: RuleContext,
                                           _ parameters: EngineParameters) -> [Adjustment] {
-        guard isLesser(context.importance) else { return [] }
-        let starts = context.history.consecutiveStarts(
-            of: player.id, before: context.date, windowDays: parameters.consecutiveStartWindowDays.value)
-        let played = context.history.recentSlots(of: player.id, before: context.date, limit: starts).map(\.position)
+        let run = runOfStarts(of: player.id, before: context.date, importance: context.importance,
+                              history: context.history, parameters: parameters)
+        guard let factor = run.factor else { return [] }
+        return [Adjustment(kind: .consecutiveStarts, factor: factor,
+                           reason: "Has started the last \(run.starts) matches in quick succession (×\(Display.twoDecimals(factor)))")]
+    }
+
+    /// His run of consecutive starts before `day`, and the factor the consecutive-starts rule gives it at `importance`:
+    /// nil when the rule gives none (a high-importance match, no step reached, or a factor of 1). Each position he
+    /// played during the run gives the highest step the run has reached there; the lowest of those factors applies.
+    /// A position with no step reached, or missing from the table, gives none.
+    static func runOfStarts(of player: PlayerID, before day: Day, importance: Importance, history: StartHistory,
+                            parameters: EngineParameters) -> (starts: Int, factor: Double?) {
+        let starts = history.consecutiveStarts(of: player, before: day, windowDays: parameters.consecutiveStartWindowDays.value)
+        guard isLesser(importance) else { return (starts, nil) }
+        let played = history.recentSlots(of: player, before: day, limit: starts).map(\.position)
         let factors = played.compactMap { position in
             parameters.consecutiveStartSteps.value[position]?
                 .filter { $0.starts <= starts }.max { $0.starts < $1.starts }?.factor
         }
-        guard let factor = factors.min(), factor != 1 else { return [] }
-        return [Adjustment(kind: .consecutiveStarts, factor: factor,
-                           reason: "Has started the last \(starts) matches in quick succession (×\(Display.twoDecimals(factor)))")]
+        guard let factor = factors.min(), factor != 1 else { return (starts, nil) }
+        return (starts, factor)
     }
 
     private static func needsSharpness(_ player: Player, _ context: RuleContext, _ parameters: EngineParameters) -> [Adjustment] {

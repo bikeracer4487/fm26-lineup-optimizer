@@ -98,4 +98,37 @@ import Testing
         #expect(EngineParameters.fm27.depthSolidFamiliarity.value == 15)
         #expect(EngineParameters.fm27.depthThinBelow.value == 2)
     }
+
+    @Test func theRestParametersAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        let expected: [(String, Evidence)] = [("restLimitRules", .carriedOverFM26), ("restWatchShare", .carriedOverFM26),
+                                              ("holidayMargin", .derived), ("holidayJadednessRecoveryPerDay", .carriedOverFM26)]
+        for (name, evidence) in expected {
+            #expect(listed[name]?.evidence == evidence, "\(name)")
+            #expect(!(listed[name]?.source.isEmpty ?? true), "\(name) has no source")
+        }
+        let p = EngineParameters.fm27
+        #expect(p.restWatchShare.value == 0.8)
+        #expect(p.holidayMargin.value == 200)
+        #expect(p.holidayJadednessRecoveryPerDay.value == 50)
+        #expect(p.restLimitRules.source.contains("_get_adjusted_fatigue_threshold"))
+        #expect(p.restLimitRules.value.lowest == 200 && p.restLimitRules.value.highest == 550)
+    }
+
+    @Test func restParameterProblemsAreReported() {
+        var q = EngineParameters.fm27
+        q.restWatchShare = Parameter(1.2, .derived, source: "test")
+        q.holidayJadednessRecoveryPerDay = Parameter(0, .derived, source: "test")
+        q.jadednessRecoveryPerDay = Parameter(-1, .derived, source: "test")
+        let found = FitnessModel.problems(in: q)
+        #expect(found.contains("restWatchShare is 1.2, not between 0 and 1"))
+        #expect(found.contains("holidayJadednessRecoveryPerDay is 0.0, not a finite number above 0"))
+        #expect(found.contains("jadednessRecoveryPerDay is -1.0, not a finite number above 0"))
+        var r = EngineParameters.fm27
+        r.restWatchShare = Parameter(-0.1, .derived, source: "test")
+        #expect(FitnessModel.problems(in: r) == ["restWatchShare is -0.1, not between 0 and 1"])
+        // The ends of the range are allowed.
+        r.restWatchShare = Parameter(1, .derived, source: "test")
+        #expect(FitnessModel.problems(in: r).isEmpty)
+    }
 }

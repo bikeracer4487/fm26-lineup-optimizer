@@ -139,6 +139,17 @@ public enum FitnessModel {
                 found.append("importanceWeights has no entry for \(importance.rawValue)")
             }
         }
+        // Rest advice draws its watch line at this share of a player's limit.
+        let watchShare = parameters.restWatchShare.value
+        if !(watchShare >= 0 && watchShare <= 1) {
+            found.append("restWatchShare is \(watchShare), not between 0 and 1")
+        }
+        // Rest advice divides by these to count days.
+        for (name, rate) in [("jadednessRecoveryPerDay", parameters.jadednessRecoveryPerDay.value),
+                             ("holidayJadednessRecoveryPerDay", parameters.holidayJadednessRecoveryPerDay.value)]
+            where !(rate.isFinite && rate > 0) {
+            found.append("\(name) is \(rate), not a finite number above 0")
+        }
         return found
     }
 }

@@ -20,6 +20,56 @@ public struct ConsecutiveStartStep: Sendable, Equatable {
     }
 }
 
+/// How a player's own jadedness limit is worked out: a base by age (the standard jadedness threshold when no age
+/// band applies), changed by Natural Fitness, Stamina and Injury Proneness, then kept within `lowest` to `highest`.
+public struct RestLimitRules: Sendable, Equatable {
+    /// At this age and over the base is `oldestBase`.
+    public let oldestFromAge: Int
+    public let oldestBase: Int
+    /// From this age up to `oldestFromAge` the base is `olderBase`.
+    public let olderFromAge: Int
+    public let olderBase: Int
+    /// Under this age the base is `youngBase`.
+    public let youngUnderAge: Int
+    public let youngBase: Int
+    /// Natural Fitness below `naturalFitnessBelow` changes the limit by `naturalFitnessLowChange`;
+    /// at `naturalFitnessFrom` or over, by `naturalFitnessHighChange`.
+    public let naturalFitnessBelow: Int
+    public let naturalFitnessLowChange: Int
+    public let naturalFitnessFrom: Int
+    public let naturalFitnessHighChange: Int
+    /// Stamina below `staminaBelow` changes the limit by `staminaLowChange`; at `staminaFrom` or over, by `staminaHighChange`.
+    public let staminaBelow: Int
+    public let staminaLowChange: Int
+    public let staminaFrom: Int
+    public let staminaHighChange: Int
+    /// Injury Proneness at `injuryPronenessFrom` or over changes the limit by `injuryPronenessHighChange`;
+    /// at `injuryPronenessUpTo` or under, by `injuryPronenessLowChange`.
+    public let injuryPronenessFrom: Int
+    public let injuryPronenessHighChange: Int
+    public let injuryPronenessUpTo: Int
+    public let injuryPronenessLowChange: Int
+    public let lowest: Int
+    public let highest: Int
+
+    public init(oldestFromAge: Int, oldestBase: Int, olderFromAge: Int, olderBase: Int, youngUnderAge: Int, youngBase: Int,
+                naturalFitnessBelow: Int, naturalFitnessLowChange: Int, naturalFitnessFrom: Int, naturalFitnessHighChange: Int,
+                staminaBelow: Int, staminaLowChange: Int, staminaFrom: Int, staminaHighChange: Int,
+                injuryPronenessFrom: Int, injuryPronenessHighChange: Int, injuryPronenessUpTo: Int, injuryPronenessLowChange: Int,
+                lowest: Int, highest: Int) {
+        self.oldestFromAge = oldestFromAge; self.oldestBase = oldestBase
+        self.olderFromAge = olderFromAge; self.olderBase = olderBase
+        self.youngUnderAge = youngUnderAge; self.youngBase = youngBase
+        self.naturalFitnessBelow = naturalFitnessBelow; self.naturalFitnessLowChange = naturalFitnessLowChange
+        self.naturalFitnessFrom = naturalFitnessFrom; self.naturalFitnessHighChange = naturalFitnessHighChange
+        self.staminaBelow = staminaBelow; self.staminaLowChange = staminaLowChange
+        self.staminaFrom = staminaFrom; self.staminaHighChange = staminaHighChange
+        self.injuryPronenessFrom = injuryPronenessFrom; self.injuryPronenessHighChange = injuryPronenessHighChange
+        self.injuryPronenessUpTo = injuryPronenessUpTo; self.injuryPronenessLowChange = injuryPronenessLowChange
+        self.lowest = lowest; self.highest = highest
+    }
+}
+
 /// Lets `EngineParameters.all` list every stored `Parameter` whatever its value type.
 protocol ParameterProtocol {
     var evidence: Evidence { get }
@@ -137,6 +187,14 @@ public struct EngineParameters: Sendable {
     public var depthSolidFamiliarity: Parameter<Int>
     /// A slot with fewer solid, available options than this is thin.
     public var depthThinBelow: Parameter<Int>
+    /// How a player's own jadedness limit, for rest advice, differs from the standard `jadedThreshold`.
+    public var restLimitRules: Parameter<RestLimitRules>
+    /// A player above this share of his jadedness limit is worth watching.
+    public var restWatchShare: Parameter<Double>
+    /// A player more than this far above his jadedness limit needs a holiday.
+    public var holidayMargin: Parameter<Int>
+    /// Jadedness lost per day on holiday.
+    public var holidayJadednessRecoveryPerDay: Parameter<Double>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -290,7 +348,24 @@ public struct EngineParameters: Sendable {
             depthSolidFamiliarity: Parameter(
                 15, .derived,
                 source: "design spec 8.7's starting rule; FM27 Match Lab Study 5 puts a cap of 15 at 0.26 points a game and a cap of 10 at 0.85 (docs/Research/fm27-tactical-effectiveness-and-roles.md)"),
-            depthThinBelow: Parameter(2, .derived, source: "design spec 8.7's starting rule: fewer than two is thin"))
+            depthThinBelow: Parameter(2, .derived, source: "design spec 8.7's starting rule: fewer than two is thin"),
+            restLimitRules: Parameter(
+                RestLimitRules(
+                    oldestFromAge: 32, oldestBase: 300, olderFromAge: 30, olderBase: 350, youngUnderAge: 19, youngBase: 350,
+                    naturalFitnessBelow: 10, naturalFitnessLowChange: -50, naturalFitnessFrom: 15, naturalFitnessHighChange: 50,
+                    staminaBelow: 10, staminaLowChange: -50, staminaFrom: 15, staminaHighChange: 30,
+                    injuryPronenessFrom: 15, injuryPronenessHighChange: -100, injuryPronenessUpTo: 8, injuryPronenessLowChange: 50,
+                    lowest: 200, highest: 550),
+                .carriedOverFM26,
+                source: "\(readySelectorSource) _get_adjusted_fatigue_threshold; no FM27 evidence beyond the 400 line"),
+            restWatchShare: Parameter(
+                0.8, .carriedOverFM26, source: "ui/api/api_rest_advisor.py (branch customizable-tactics): a warning at 80% of the limit"),
+            holidayMargin: Parameter(
+                200, .derived,
+                source: "docs/Research/physical-condition-claude.md: warnings at 400 to 500, the rest icon near 600"),
+            holidayJadednessRecoveryPerDay: Parameter(
+                50, .carriedOverFM26,
+                source: "docs/Research/jadedness-fatigue.md: rest sessions with a holiday recovered 152 in three days"))
     }()
 
     /// Every stored parameter, found by reflection so a new one cannot be left out.
