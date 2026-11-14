@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: money as FMRTE shows it
 
 Date: 14 November 2026
-Status: approved by the owner on 14 November 2026 ("Approved, build the wage period and currency change next")
+Status: approved by the owner on 14 November 2026 ("Approved, build the wage period and currency change next"). Built on 14 November 2026 (commits a97e73d and 81ee4cd) and reviewed; the limits left are at the end.
 
 ## Intent
 
@@ -57,3 +57,15 @@ The owner set FMRTE to show wages monthly and in US dollars, to match what the g
 - The types' names and where the style is handed to the advisors.
 - Whether the old `Display.pounds` and `Display.perWeek` are replaced or kept as the weekly-pounds case of the new ones.
 - The exact wording of the new sentences, in the plain style of the existing ones.
+
+## Known limits and small faults left
+
+Found by the review of the built change, and left for the owner to decide:
+
+- While squads are held in different currencies, Player Removal shows every figure with the symbol of the most recent import and compares wages across the currencies. The warning that says so is on the Squad screen only. It clears once every squad has been imported again in one currency. Showing each player's costs in his own squad's currency, or repeating the warning on Player Removal, would close it.
+- A squad imported before this change while FMRTE showed pounds by the month or the year has no currency recorded, counts as weekly pounds, and raises no warning; its wages stay wrong until it is imported again.
+- The period is read from FMRTE's settings file at the moment of the import, not from the paste. If FMRTE has not yet saved a changed setting, or the setting is changed after the rows were copied, the period is wrong, and only the import summary's line ("Wages are in $ a month, as FMRTE shows them.") shows it.
+- The warning sentence repeats a currency when two squads share one ("the U21s' are in £ and the U18s' are in £").
+- A release cost that falls exactly on a half can round either way by one unit; it is shown as "about".
+- Small things in the code: the weeks-to-months conversion is written in two places; one branch of the importer that cannot be reached would give the wrong sentence if it ever were; one comment still says "whole pounds"; a settings file whose `Wages` entry is empty gives an odd word in the sentence.
+- No picture shows an import summary in dollars.

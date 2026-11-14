@@ -723,6 +723,8 @@ Found in the final review of the whole branch and left:
 - "End group" asks for no confirmation and cannot be undone; adding the group again starts its measurement afresh.
 - If a player's identity changes (a paste without FMRTE's Id column and then one with it), his hierarchy entry, group membership and readings stay under the old identity. This does not arise while the grid has the Id column.
 - After going back to an earlier save, readings taken on the later dates stay the latest until the game's date passes them.
+- A member of a recorded group who has moved out of the group's squad is still read, in that group's card, with the level he had in his old squad; he is already marked as no longer in the squad.
+- With a lead present, the sentence "nobody but the lead has changed" can read as if the lead did change.
 - A player's level and social group belong to the squad they were entered for and are not used in another, so a player who moves squads must be entered again in his new squad. Nothing is deleted at an import: his old entry is kept, and is used again if he goes back. But saving his new squad's hierarchy for any reason replaces it, and removes it if he was left at Others there, so a player who goes back after that must be entered again in his old squad too. This is by intent: it is the first fix from the final review, above.
 
 Dealt with in Task 8 rather than left: the three points above under "Decided during the build", the group editor being unable to remove a departed member, and the stale-hierarchy line, which was drawn there for the first time.
