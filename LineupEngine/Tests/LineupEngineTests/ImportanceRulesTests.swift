@@ -242,6 +242,14 @@ import Testing
         #expect(every(run(p, .low, marks: [other.id: .toSell]), .shopWindow) == nil)
     }
 
+    @Test func aMarkedPlayerOnLoanHereIsNotFavoured() {
+        // A mark made before he became a loanee must not favour another club's player.
+        let loanee = Player.fixture(age: 28, currentAbility: 100, potentialAbility: 100, club: "Other FC")
+        #expect(every(run(loanee, .low, marks: [loanee.id: .toSell]), .shopWindow) == nil)
+        // With the club unknown nobody reads as a loanee, so the mark stands.
+        #expect(every(run(loanee, .low, marks: [loanee.id: .toSell], ownClub: nil), .shopWindow) != nil)
+    }
+
     @Test func aMarkedProspectGetsBothAndInKindOrder() {
         let p = Player.fixture(age: 19, currentAbility: 100, potentialAbility: 130)
         let kinds = run(p, .low, marks: [p.id: .toLoanOut]).everySlot.map(\.kind)

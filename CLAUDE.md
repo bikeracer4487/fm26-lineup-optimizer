@@ -84,7 +84,7 @@ The Mac app: a second Swift package beside the engine, depending on it by path (
 - `LineupAppUI`: the SwiftUI views and `Theme`. Views hold layout only.
 - `LineupApp`: the few lines that start the app.
 
-Besides Squad, Tactics, Fixtures, Match Selection and Settings, the app has the advisor screens: Elevens (First XI, Second XI and Depth, for any saved tactic), Rest, Training (accept or turn down a recommended retraining, and follow its progress at each import) and Player Removal (with the loans to the club; an opened row marks the player to sell or to loan out, and a mark is dropped at import once he has left every squad or, for a loan mark, once he is out on loan). Fixtures shows each fixture's suggested importance beside the one chosen.
+Besides Squad, Tactics, Fixtures, Match Selection and Settings, the app has the advisor screens: Elevens (First XI, Second XI and Depth, for any saved tactic), Rest, Training (accept or turn down a recommended retraining, and follow its progress at each import) and Player Removal (with the loans to the club; an opened row marks the player to sell or to loan out, and a mark is dropped once every squad held has been imported without him, once he is on loan here, or, for a loan mark, once he is out on loan). Fixtures shows each fixture's suggested importance beside the one chosen.
 
 Build and test it with:
 

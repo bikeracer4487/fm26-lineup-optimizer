@@ -51,7 +51,7 @@ extension AppModel {
             save(.history)
         }
         recordFamiliarity(after: target, on: date)
-        dropSpentMarks()
+        dropSpentMarks(imported: target)
         replan()
 
         let onLoan = (state.book.current[target] ?? []).filter { player in

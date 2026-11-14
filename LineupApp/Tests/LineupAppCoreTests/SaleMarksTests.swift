@@ -122,11 +122,14 @@ import LineupEngine
         let (t, low, _) = try ready()
         t.model.confirm(low)
         let confirmed = try #require(t.model.history.first { $0.lineup.fixture == low })
-        let starters = Set(confirmed.lineup.starters.values)
-        let outsider = try #require(t.model.players.first { !starters.contains($0.id) }).id
-        t.model.setMark(.toSell, for: outsider)
-        #expect(t.model.marks == [outsider: .toSell])
+        let starter = try #require(confirmed.lineup.starters.values.sorted { $0.key < $1.key }.first)
+        t.model.setMark(.toSell, for: starter)
+        #expect(t.model.marks == [starter: .toSell])
         #expect(t.model.history.first { $0.lineup.fixture == low } == confirmed)
+        guard case .ready(let plans) = t.model.planState, let plan = plans.first(where: { $0.id == low }) else {
+            Issue.record("expected a ready plan, got \(t.model.planState)"); return
+        }
+        #expect(plan.body == .confirmed(confirmed))
     }
 
     // MARK: Marks that are spent
@@ -153,5 +156,75 @@ import LineupEngine
                       grids: try Captures.firstTeamGrids)
         #expect(t.model.marks == [listed: .toSell])
         #expect(t.reopened().marks == [listed: .toSell])
+    }
+
+    // MARK: Marks that must not go too soon, or stay too long
+
+    /// The first team with its last two players moved to the U21s, so both squads are held.
+    private func twoSquads() throws -> (t: TestModel, rows: [[String]]) {
+        let (t, _, _) = try ready()
+        let rows = try rows()
+        t.importSquad(.u21, paste: paste(Array(rows.suffix(2))), grids: try Captures.firstTeamGrids)
+        #expect(t.model.squad.book.current[.u21]?.count == 2)
+        return (t, rows)
+    }
+
+    @Test func aMarkSurvivesAMoveBetweenSquadsImportedOneAfterTheOther() throws {
+        let (t, rows) = try twoSquads()
+        let moved = try player(onRow: 0, t.model)
+        t.model.setMark(.toSell, for: moved)
+        // He is dropped to the U21s in the game. The first team is imported first, so for a moment he is in no squad.
+        t.importSquad(.firstTeam, paste: paste(Array(rows[1..<(rows.count - 2)])), grids: try Captures.firstTeamGrids)
+        #expect(!t.model.players.contains { $0.id == moved })
+        #expect(t.model.marks == [moved: .toSell])
+        t.importSquad(.u21, paste: paste([rows[0]] + rows.suffix(2)), grids: try Captures.firstTeamGrids)
+        #expect(t.model.players.contains { $0.id == moved })
+        #expect(t.model.marks == [moved: .toSell])
+    }
+
+    @Test func aMarkGoesOnceEverySquadHasBeenImportedWithoutHim() throws {
+        let (t, rows) = try twoSquads()
+        let gone = try player(onRow: 0, t.model)
+        t.model.setMark(.toSell, for: gone)
+        t.importSquad(.firstTeam, paste: paste(Array(rows[1..<(rows.count - 2)])), grids: try Captures.firstTeamGrids)
+        #expect(t.model.marks == [gone: .toSell])
+        t.importSquad(.u21, paste: paste(Array(rows.suffix(2))), grids: try Captures.firstTeamGrids)
+        #expect(t.model.marks.isEmpty)
+        #expect(t.reopened().marks.isEmpty)
+    }
+
+    @Test func aMarkOnAPlayerInNoSquadCanStillBeTakenOff() throws {
+        let (t, rows) = try twoSquads()
+        let absent = try player(onRow: 0, t.model)
+        t.model.setMark(.toSell, for: absent)
+        t.importSquad(.firstTeam, paste: paste(Array(rows[1..<(rows.count - 2)])), grids: try Captures.firstTeamGrids)
+        #expect(t.model.marks == [absent: .toSell])
+        t.model.setMark(nil, for: absent)
+        #expect(t.model.marks.isEmpty)
+    }
+
+    @Test func aMarkGoesWhenThePlayerBecomesALoanee() throws {
+        let (t, _, _) = try ready()
+        let soldAndLoanedBack = try player(onRow: 0, t.model)
+        t.model.setMark(.toSell, for: soldAndLoanedBack)
+        t.importSquad(.firstTeam, paste: paste(loaned(try rows(), [0], to: "Oxford City")), grids: try Captures.firstTeamGrids)
+        #expect(t.model.marks.isEmpty)
+        #expect(t.reopened().marks.isEmpty)
+    }
+
+    @Test func changingTheClubNameDropsAMarkOnAPlayerItMakesALoanee() throws {
+        let (t, _, _) = try ready()
+        t.importSquad(.firstTeam, paste: paste(loaned(try rows(), [0], to: "Elsewhere Town")), grids: try Captures.firstTeamGrids)
+        let away = try player(onRow: 0, t.model)
+        let stays = try player(onRow: 1, t.model)
+        t.model.setMark(.toSell, for: away)
+        t.model.setMark(.toSell, for: stays)
+        #expect(t.model.marks == [away: .toSell, stays: .toSell])
+        // Named as the club he is loaned to, the same row reads as a loan here.
+        var settings = t.model.settings
+        settings.clubName = "Elsewhere Town"
+        t.model.update(settings)
+        #expect(t.model.marks == [stays: .toSell])
+        #expect(t.reopened().marks == [stays: .toSell])
     }
 }

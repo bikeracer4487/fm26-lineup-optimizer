@@ -139,6 +139,8 @@ public enum ImportanceRules {
         }
         let factor = parameters.shopWindowFactor.value
         guard let mark = context.marks[player.id], factor != 1 else { return [] }
+        // A mark made before he became a loanee must not favour another club's player.
+        if case .loanedIn = LoanStatus.of(player, ownClub: context.ownClub) { return [] }
         let words: String
         switch mark {
         case .toSell: words = "to sell"

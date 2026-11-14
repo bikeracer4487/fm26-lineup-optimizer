@@ -45,6 +45,8 @@ extension AppModel {
         let before = self.settings
         self.settings = settings
         save(.settings)
+        // The club's name decides who reads as on loan here, and a loanee holds no mark.
+        if before.clubOverride != settings.clubOverride { dropSpentMarks() }
         if before.plan != settings.plan || before.conditionFloor != settings.conditionFloor
             || before.clubOverride != settings.clubOverride || before.primaryTacticID != settings.primaryTacticID {
             replan()

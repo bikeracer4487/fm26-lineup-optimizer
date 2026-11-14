@@ -476,6 +476,10 @@ are made, so the next session does not have to rediscover it."
 - **The mark on a closed row is small muted text under the action**, and the control in an opened row is the app's own tabs ("No mark", "To sell", "To loan out").
 - **The app was not clicked through by hand.** Task 5's first step asked for that. The chain it would have shown is covered by `SaleMarksTests.theMarksReachThePlanner` on the captured squad (the reason appears on a low fixture's pick when the player is marked, is absent from the high fixture, and goes when the mark is cleared) and by the pictures.
 - **The app is installed after the final review**, not before it, so what is installed is what was reviewed.
+- **After the final review, two faults in how long a mark lives were put right.**
+  - A mark was dropped the moment its player was in no squad. A marked player demoted from the first team to the U21s is in neither between the two imports, so he lost his mark. A mark now goes only once every squad held has been imported without him.
+  - A marked player who became a loanee here (sold and loaned back, or the club's name changed in Settings) kept a mark that favoured him and that no screen could clear. Such a mark is now dropped at import and when the club's name changes, the engine's rule ignores a loanee, and taking a mark off works for anyone.
+- **The confirmed-lineup test was strengthened**: it marks a starter of the confirmed lineup and checks the fixture is still shown as confirmed, unchanged.
 
 ## Known limits and small faults left
 
@@ -485,6 +489,13 @@ are made, so the next session does not have to rediscover it."
 - A mark can only be made on Player Removal, which needs a usable primary tactic and a squad; with the advice unavailable there is nowhere to mark or unmark a player.
 - A player marked to sell who goes out on loan keeps his mark and is favoured again when he returns.
 - The marked pictures, like every picture, are the same file in light and dark; this was so before this plan.
+- If the squad file cannot be read and starts fresh, the first squad imported afterwards counts as every squad held, so marks on players of the other squads are dropped.
+- The count of squads imported without a marked player is not saved, so closing the app starts it again; this only keeps a mark longer.
+- A paste without FMRTE's Id column followed by one with it changes a player's key, and his mark is dropped with the old key.
+- Both marked rows in the pictures are open; a closed marked row is not pictured. "Release" with "To sell" under it can read as a second action.
+- Changing a mark works the advice out again although the advice does not use marks.
+- No test at the model's level shows an unreadable marks file giving its notice; the store's own test does.
+- The words "to sell" and "to loan out" are written in the planner's rule as well as in `AdvisorText`.
 
 ## For the owner
 

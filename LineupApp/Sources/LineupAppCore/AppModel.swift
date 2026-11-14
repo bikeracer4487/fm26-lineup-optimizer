@@ -83,6 +83,10 @@ public struct AppEnvironment: Sendable {
     /// The players the owner has marked to sell or to loan out. Changed only through `setMark(_:for:)` and
     /// `dropSpentMarks()`.
     public internal(set) var marks: [PlayerID: SaleMark]
+    /// For a marked player in no squad, the squads imported since he was last seen. His mark goes only once every squad
+    /// held has been imported without him: squads are imported one at a time, so a player moved between two is in
+    /// neither for a moment. Not saved: after a restart the count starts again, which only keeps a mark longer.
+    @ObservationIgnored var marksAbsentFrom: [PlayerID: Set<Squad>] = [:]
     public let catalog: RoleCatalog
     /// The rating profile the plan is made with: the engine's standard one.
     let profile: RatingProfile
