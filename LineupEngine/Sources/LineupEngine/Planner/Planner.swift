@@ -16,12 +16,16 @@ public struct PlanRequest: Sendable {
     /// should count towards runs of starts belongs in `confirmed` too.
     public var played: [ConfirmedLineup]
     public var retraining: [Retraining]
+    /// The players the owner has marked to sell or to loan out.
+    public var marks: [PlayerID: SaleMark]
     public var settings: PlanSettings
 
     public init(fixtures: [Fixture], players: [Player], ownClub: String?, asOf: Day, confirmed: [ConfirmedLineup],
-                played: [ConfirmedLineup] = [], retraining: [Retraining], settings: PlanSettings) {
+                played: [ConfirmedLineup] = [], retraining: [Retraining], marks: [PlayerID: SaleMark] = [:],
+                settings: PlanSettings) {
         self.fixtures = fixtures; self.players = players; self.ownClub = ownClub; self.asOf = asOf
-        self.confirmed = confirmed; self.played = played; self.retraining = retraining; self.settings = settings
+        self.confirmed = confirmed; self.played = played; self.retraining = retraining; self.marks = marks
+        self.settings = settings
     }
 }
 
@@ -131,7 +135,7 @@ public struct Planner: Sendable {
             }
             let context = RuleContext(importance: fixture.importance, date: fixture.date, assignments: assignments,
                                       ownClub: request.ownClub, history: history, tiers: tiersByFixture[index], retraining: retraining,
-                                      stability: settings.stability)
+                                      marks: request.marks, stability: settings.stability)
 
             var everySlot: [PlayerID: [Adjustment]] = [:]
             var bySlot: [PlayerID: [SlotID: [Adjustment]]] = [:]

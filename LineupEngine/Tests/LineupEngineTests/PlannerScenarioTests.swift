@@ -22,9 +22,9 @@ import Testing
     }
 
     func plan(_ fixtures: [Fixture], _ players: [Player], retraining: [Retraining] = [],
-              settings: PlanSettings = .standard) throws -> Plan {
+              settings: PlanSettings = .standard, marks: [PlayerID: SaleMark] = [:]) throws -> Plan {
         try planner.plan(PlanRequest(fixtures: fixtures, players: players, ownClub: "Oxford City", asOf: day0,
-                                     confirmed: [], retraining: retraining, settings: settings))
+                                     confirmed: [], retraining: retraining, marks: marks, settings: settings))
     }
 
     func id(_ slot: SlotID, _ tier: String = "first") -> PlayerID { PlannerFixture.id(slot, tier) }
@@ -174,6 +174,63 @@ import Testing
         #expect(striker.reason.hasPrefix("Left out: ST prospect is preferred: "))
         #expect(striker.reason.contains("Young player with room to grow: favoured for minutes (×1.10)"))
         #expect(pick(result.fixtures[2], .ST_C)?.player == id(.ST_C))
+    }
+
+    // MARK: - Marked to sell or loan out
+
+    /// A striker of 28 with no room to grow, so no other rule favours him, a little below the first-choice striker.
+    func nearStriker() -> Player {
+        Player.fixture(name: "ST near", age: 28, all: 14, attributes: [.finishing: 12, .composure: 12],
+                       familiarity: [.striker: 20], currentAbility: 100, potentialAbility: 100)
+    }
+
+    @Test func aMarkedPlayerWinsANearTieInALowFixture() throws {
+        // Between 97.2% and 100% of the first-choice striker: inside what ×1.03 can overturn.
+        var players = try PlannerFixture.squad(first: 14, second: 12)
+        let marked = nearStriker()
+        players.append(marked)
+        let gap = try rating(marked.id, at: .ST_C, in: players) / rating(id(.ST_C), at: .ST_C, in: players)
+        try #require(gap > 0.972 && gap < 1)
+
+        // One fixture on the day of the import, so fitness is level and only the mark separates the two.
+        let marks: [PlayerID: SaleMark] = [marked.id: .toSell]
+        let result = try plan([fixture("l", .low, day: 0)], players, settings: PlanSettings(savingPlayers: 0), marks: marks)
+        let low = try #require(pick(result.fixtures[0], .ST_C))
+        #expect(low.player == marked.id)
+        #expect(low.adjustments.map(\.kind).contains(.shopWindow))
+        let striker = try #require(result.fixtures[0].lineup.omissions.first { $0.player == id(.ST_C) })
+        #expect(striker.reason.contains("Marked to sell: favoured for minutes, an untested way to bring offers (×1.03)"))
+    }
+
+    @Test func aMarkedPlayerDoesNotWinTheNearTieInAMediumOrHighFixture() throws {
+        var players = try PlannerFixture.squad(first: 14, second: 12)
+        let marked = nearStriker()
+        players.append(marked)
+        for importance in [Importance.medium, .high] {
+            let result = try plan([fixture("f", importance, day: 0)], players, settings: PlanSettings(savingPlayers: 0),
+                                  marks: [marked.id: .toSell])
+            #expect(pick(result.fixtures[0], .ST_C)?.player == id(.ST_C))
+        }
+    }
+
+    @Test func withoutTheMarkTheNearTieGoesToTheBetterPlayer() throws {
+        var players = try PlannerFixture.squad(first: 14, second: 12)
+        players.append(nearStriker())
+        let result = try plan([fixture("l", .low, day: 0)], players, settings: PlanSettings(savingPlayers: 0))
+        #expect(pick(result.fixtures[0], .ST_C)?.player == id(.ST_C))
+    }
+
+    @Test func aMarkedPlayerWhoIsClearlyWorseDoesNotStart() throws {
+        // 5% below the first-choice striker (familiarity 15 against 20), as the prospect scenario's player is.
+        var players = try PlannerFixture.squad(first: 14, second: 12)
+        let marked = Player.fixture(name: "ST marked", age: 28, all: 14, familiarity: [.striker: 15],
+                                    currentAbility: 100, potentialAbility: 100)
+        players.append(marked)
+        let gap = try rating(marked.id, at: .ST_C, in: players) / rating(id(.ST_C), at: .ST_C, in: players)
+        try #require(gap < 0.97)
+        let result = try plan([fixture("l", .low, day: 0)], players, settings: PlanSettings(savingPlayers: 0),
+                              marks: [marked.id: .toLoanOut])
+        #expect(pick(result.fixtures[0], .ST_C)?.player == id(.ST_C))
     }
 
     // MARK: - Retraining
