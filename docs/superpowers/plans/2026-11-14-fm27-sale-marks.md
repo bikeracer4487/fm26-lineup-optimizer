@@ -464,3 +464,29 @@ git commit -m "Close the sale marks plan: record what changed and what is left
 CLAUDE.md now says the planner favours marked players and where marks
 are made, so the next session does not have to rediscover it."
 ```
+
+---
+
+## Changes made while building
+
+- **The factor is checked with the other factors.** `FitnessModel.problems(in:)` reports a `shopWindowFactor` that is negative or not finite. The plan did not list it; without it a bad number would stop the program inside `Adjustment` instead of being reported.
+- **The near-tie scenarios use one fixture on the day of the import.** The plan's scenario put a medium fixture four days before the low one. There the first-choice striker's tiredness alone gave the low fixture to the other player, so the test passed without the rule. With level fitness only the mark separates the two, and a separate test covers medium and high.
+- **The app's marks tests are their own suite**, `SaleMarksTests.swift`, with helpers that edit the captured paste (drop a row, set the club a player is loaned to).
+- **The marked-players pictures are drawn in `Sources/LineupApp/main.swift`**, where the other Player Removal variants are, not in `ScreenPictures.swift`.
+- **The mark on a closed row is small muted text under the action**, and the control in an opened row is the app's own tabs ("No mark", "To sell", "To loan out").
+- **The app was not clicked through by hand.** Task 5's first step asked for that. The chain it would have shown is covered by `SaleMarksTests.theMarksReachThePlanner` on the captured squad (the reason appears on a low fixture's pick when the player is marked, is absent from the high fixture, and goes when the mark is cleared) and by the pictures.
+- **The app is installed after the final review**, not before it, so what is installed is what was reviewed.
+
+## Known limits and small faults left
+
+- Whether playing a player brings offers is untested; the factor is this tool's estimate.
+- The app cannot see match ratings, so a marked player in poor form is still favoured.
+- A marked player can still be recommended for retraining.
+- A mark can only be made on Player Removal, which needs a usable primary tactic and a squad; with the advice unavailable there is nowhere to mark or unmark a player.
+- A player marked to sell who goes out on loan keeps his mark and is favoured again when he returns.
+- The marked pictures, like every picture, are the same file in light and dark; this was so before this plan.
+
+## For the owner
+
+- The test that would settle the factor is in `docs/Research/fm27-playing-time-and-transfer-interest.md` ("Cheapest test to settle it"): the same players started in one save and left out in another, counting offers.
+- The factor is one line, `shopWindowFactor` in `LineupEngine/Sources/LineupEngine/Parameters/EngineParameters.swift`. Setting it to 1 switches the rule off and leaves the marks in place.
