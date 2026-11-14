@@ -17,6 +17,9 @@ public struct DepthOption: Equatable, Sendable {
     public let tier: SquadTier?
     /// The other slots where he is first or second choice.
     public let alsoNeededAt: [SlotID]
+    /// He counts towards the slot's `cover`: solid, not injured and not first choice at another slot. Player Removal
+    /// protects real cover by the same rule.
+    public let countsAsCover: Bool
 }
 
 /// Who can cover one slot of the tactic, and whether the cover is thin.
@@ -35,6 +38,8 @@ public struct SlotDepth: Equatable, Sendable {
     /// The first choice's rating in this slot minus the highest rating among the slot's other options who could step
     /// in (not injured and not first choice at another slot); nil when the slot has no first choice or no such option.
     public let dropToNextBest: Double?
+    /// The option `dropToNextBest` is measured to; nil when it is.
+    public let nextBest: PlayerID?
 }
 
 public struct DepthReport: Equatable, Sendable {
@@ -59,17 +64,12 @@ public enum Depth {
         }
     }
 
-    /// Whether `option` could step in at `slot`: nothing stops him counting as cover, and he is not first choice at
+    /// Whether a player could step in at `slot`: nothing stops him counting as cover, and he is not first choice at
     /// another slot.
-    static func canStepIn(_ option: DepthOption, at slot: SlotID) -> Bool {
-        guard !stopsCover(option.unavailable) else { return false }
-        if case .first(let other) = option.tier, other != slot { return false }
+    static func canStepIn(unavailable: Exclusion?, tier: SquadTier?, at slot: SlotID) -> Bool {
+        guard !stopsCover(unavailable) else { return false }
+        if case .first(let other) = tier, other != slot { return false }
         return true
-    }
-
-    /// Whether `option` counts as cover at `slot`: solid there, and able to step in.
-    static func countsAsCover(_ option: DepthOption, at slot: SlotID) -> Bool {
-        option.isSolid && canStepIn(option, at: slot)
     }
 
     /// Throws what `Elevens.report` throws, and `RatingError` for a player with missing data.
@@ -106,13 +106,15 @@ public enum Depth {
                 case .first(let other), .second(let other): if other != assignment.slot { also = [other] }
                 case .backup, nil: break
                 }
+                let isSolid = ip >= solidFrom && oop >= solidFrom
+                let unavailable = RiskRules.exclusion(for: player, loan: loan, importance: .medium,
+                                                      isNextFixture: true, parameters: parameters)
                 let option = DepthOption(
                     player: player.id, name: player.name, squad: player.squad,
                     rating: try engine.rating(for: player, in: assignment).value,
-                    ipFamiliarity: ip, oopFamiliarity: oop, isSolid: ip >= solidFrom && oop >= solidFrom,
-                    unavailable: RiskRules.exclusion(for: player, loan: loan, importance: .medium,
-                                                     isNextFixture: true, parameters: parameters),
-                    tier: tier, alsoNeededAt: also)
+                    ipFamiliarity: ip, oopFamiliarity: oop, isSolid: isSolid, unavailable: unavailable,
+                    tier: tier, alsoNeededAt: also,
+                    countsAsCover: isSolid && canStepIn(unavailable: unavailable, tier: tier, at: assignment.slot))
                 if case .loanedOut = loan { onLoan.append(option) } else { options.append(option) }
             }
             func ranked(_ list: [DepthOption]) -> [DepthOption] {
@@ -121,16 +123,21 @@ public enum Depth {
             options = ranked(options)
             onLoan = ranked(onLoan)
 
-            let cover = options.filter { countsAsCover($0, at: assignment.slot) }.count
+            let cover = options.filter(\.countsAsCover).count
 
             var drop: Double?
+            var nextBest: PlayerID?
             if let first = tiers.first[assignment.slot], let firstRating = tiers.ratings[first]?[assignment.slot],
-               let next = options.first(where: { $0.player != first && canStepIn($0, at: assignment.slot) }) {
+               let next = options.first(where: {
+                   $0.player != first && canStepIn(unavailable: $0.unavailable, tier: $0.tier, at: assignment.slot)
+               }) {
                 drop = firstRating - next.rating
+                nextBest = next.player
             }
             slots.append(SlotDepth(slot: assignment.slot, ipPosition: assignment.ipPosition,
                                    oopPosition: assignment.oopPosition, options: options, onLoan: onLoan,
-                                   cover: cover, isThin: cover < parameters.depthThinBelow.value, dropToNextBest: drop))
+                                   cover: cover, isThin: cover < parameters.depthThinBelow.value, dropToNextBest: drop,
+                                   nextBest: nextBest))
         }
 
         // Ties fall back to the slot's index in `slots`, the tactic's slot order.

@@ -242,7 +242,8 @@ public struct RemovalRules: Sendable, Equatable {
     public var firstElevenPoints: Int
     public var secondElevenPoints: Int
     public var neitherElevenPoints: Int
-    /// This share of the players assessed, rounded down, with the lowest best slot ratings are the weakest.
+    /// This share of the players assessed, rounded down, are the weakest: ranked by their best share of a slot's
+    /// first-choice rating (their rating there over the first choice's), not by raw rating.
     public var weakestShare: Double
     public var weakestPoints: Int
     /// Current ability under this share of the squad average takes `farBelowAveragePoints`; under the average,
@@ -292,7 +293,9 @@ public struct RemovalRules: Sendable, Equatable {
     public var stallingRoomBelow: Double
     public var stallingPoints: Int
     /// A prospect: aged `prospectUpToAge` or under with room to grow of at least `strongProspectRoomFrom`
-    /// (`strongProspectPoints`) or at least `prospectRoomFrom` (`prospectPoints`).
+    /// (`strongProspectPoints`) or at least `prospectRoomFrom` (`prospectPoints`). Separate from the planner's
+    /// `EngineParameters.prospectMaxAge` and `prospectHeadroom` on purpose, because Removal has two steps of room to
+    /// grow where the planner has one; change them together.
     public var prospectUpToAge: Int
     public var strongProspectRoomFrom: Double
     public var strongProspectPoints: Int
@@ -540,9 +543,12 @@ public struct EngineParameters: Sendable {
     public var sharpnessNeedStrengthBuild: Parameter<Double>
     /// Factor on a first or second eleven player who is already fully sharp in a sharpness fixture.
     public var fullySharpFactor: Parameter<Double>
-    /// The oldest age counted as a prospect.
+    /// The oldest age counted as a prospect by the planner. Separate from Player Removal's prospect numbers
+    /// (`RemovalRules.prospectUpToAge`, `prospectRoomFrom`, `strongProspectRoomFrom`) on purpose, because Removal has two
+    /// steps of room to grow where the planner has one; change them together.
     public var prospectMaxAge: Parameter<Int>
-    /// A prospect's potential ability is at least this multiple of his current ability.
+    /// A prospect's potential ability is at least this multiple of his current ability. Change it together with
+    /// `RemovalRules.prospectRoomFrom`, as `prospectMaxAge` says.
     public var prospectHeadroom: Parameter<Double>
     /// Factor on a prospect's value in a lesser fixture.
     public var developmentFactor: Parameter<Double>
@@ -609,7 +615,8 @@ public struct EngineParameters: Sendable {
     public var mutualTerminationShare: Parameter<Double>
     /// The scores that make a removal advice critical, high or medium.
     public var removalLevels: Parameter<RemovalLevels>
-    /// The points Player Removal and the loan review give a first or second choice at a slot where Depth finds cover thin.
+    /// The points Player Removal and the loan review give, once per player, to the first choice of a slot where Depth
+    /// finds cover thin, or to a player who counts as cover at a slot whose cover is at most `depthThinBelow`.
     public var removalThinCoverPoints: Parameter<Int>
     /// The numbers behind a fixture's suggested importance.
     public var importanceRules: Parameter<ImportanceSuggestionRules>

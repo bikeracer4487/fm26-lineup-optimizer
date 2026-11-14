@@ -404,7 +404,7 @@ public enum Removal {
                 }
                 guard slot.cover <= squad.thinBelow,
                       let option = slot.options.first(where: { $0.player == player }),
-                      Depth.countsAsCover(option, at: slot.slot) else { continue }
+                      option.countsAsCover else { continue }
                 add(points, slot.isThin ? "Counts as cover at \(position), where cover is thin"
                                         : "Cover at \(position) would be thin without him")
                 return true

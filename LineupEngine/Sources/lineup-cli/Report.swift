@@ -130,7 +130,8 @@ enum Report {
     private static func depth(_ report: DepthReport, parameters: EngineParameters) -> [String] {
         var out = ["", "=== Depth ===\(mark(report.basis))"]
         out.append("Cover counts players solid in the slot (familiarity \(parameters.depthSolidFamiliarity.value) or over in both phases), "
-                   + "not injured and not first choice elsewhere; fewer than \(parameters.depthThinBelow.value) is thin.")
+                   + "not injured and not first choice elsewhere; fewer than \(parameters.depthThinBelow.value) is thin. "
+                   + "Those who count are marked cover.")
         for slot in report.slots {
             let drop = slot.dropToNextBest.map { "drop to next best \(fixed($0, 1))" } ?? "no next best"
             let options = slot.options.isEmpty ? "nobody" : slot.options.map { option(slot.slot, $0, parameters: parameters) }
@@ -143,9 +144,10 @@ enum Report {
         return out
     }
 
-    /// One option with his rating and, in brackets, what stops him counting as cover or what else he is.
+    /// One option with his rating and, in brackets, whether he counts as cover, what stops him or what else he is.
     private static func option(_ slot: SlotID, _ option: DepthOption, parameters: EngineParameters) -> String {
         var marks: [String] = []
+        if option.countsAsCover { marks.append("cover") }
         if option.squad != .firstTeam { marks.append(squadName(option.squad)) }
         if let unavailable = option.unavailable { marks.append(ErrorDescriptions.describe(unavailable, parameters: parameters)) }
         if !option.isSolid { marks.append("familiarity \(option.ipFamiliarity)/\(option.oopFamiliarity)") }
@@ -226,7 +228,7 @@ enum Report {
         var out = ["", "=== Importance ==="]
         if suggestions.isEmpty { out.append("  no fixtures") }
         if suggestions.contains(where: { $0.fixture.importance != $0.suggestion.importance }) {
-            out.append("* differs from the importance set")
+            out.append("  * differs from the importance set")
         }
         for (fixture, suggestion) in suggestions {
             let about = [fixture.competition.map(competition), fixture.opponentStrength.map(strength)].compactMap { $0 }

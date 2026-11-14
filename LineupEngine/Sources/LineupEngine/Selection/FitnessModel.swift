@@ -225,6 +225,53 @@ public enum FitnessModel {
         if !(mutualShare >= 0 && mutualShare <= 1) {
             found.append("mutualTerminationShare is \(mutualShare), not between 0 and 1")
         }
+        // The levels are tried highest first, so a lower level above a higher one is never reached.
+        let levels = parameters.removalLevels.value
+        if levels.critical < levels.high {
+            found.append("removalLevels critical (\(levels.critical)) is below high (\(levels.high))")
+        }
+        if levels.high < levels.medium {
+            found.append("removalLevels high (\(levels.high)) is below medium (\(levels.medium))")
+        }
+        // The higher wage line is a multiple of the median; the lower is the median itself.
+        let highMultiple = parameters.removalWageRules.value.highMultiple
+        if !(highMultiple.isFinite && highMultiple >= 1) {
+            found.append("removalWageRules highMultiple is \(highMultiple), not a finite number of 1 or more")
+        }
+        // The suggested importance multiplies a base by these factors and counts days back and ahead.
+        let importance = parameters.importanceRules.value
+        for (name, base) in [("leagueBase", importance.leagueBase), ("cupBase", importance.cupBase),
+                             ("minorCupBase", importance.minorCupBase), ("friendlyBase", importance.friendlyBase),
+                             ("unsetBase", importance.unsetBase)] where !base.isFinite {
+            found.append("importanceRules \(name) is \(base), not a finite number")
+        }
+        for (name, factor) in [("muchStrongerFactor", importance.muchStrongerFactor),
+                               ("strongerFactor", importance.strongerFactor), ("similarFactor", importance.similarFactor),
+                               ("weakerFactor", importance.weakerFactor), ("muchWeakerFactor", importance.muchWeakerFactor),
+                               ("unsetOpponentFactor", importance.unsetOpponentFactor),
+                               ("crowdedFactor", importance.crowdedFactor), ("restedFactor", importance.restedFactor)]
+            where !(factor.isFinite && factor > 0) {
+            found.append("importanceRules \(name) is \(factor), not a finite number above 0")
+        }
+        for step in importance.biggerMatchSteps {
+            if step.withinDays < 1 {
+                found.append("importanceRules biggerMatchSteps withinDays is \(step.withinDays), not 1 or more")
+            }
+            if !(step.factor.isFinite && step.factor > 0) {
+                found.append("importanceRules biggerMatchSteps factor within \(step.withinDays) days is \(step.factor), "
+                    + "not a finite number above 0")
+            }
+        }
+        for (name, line) in [("biggerMatchFrom", importance.biggerMatchFrom), ("highFrom", importance.highFrom),
+                             ("mediumFrom", importance.mediumFrom), ("sharpnessBelowScore", importance.sharpnessBelowScore),
+                             ("sharpnessBelow", importance.sharpnessBelow)] where !line.isFinite {
+            found.append("importanceRules \(name) is \(line), not a finite number")
+        }
+        for (name, days) in [("crowdedWindowDays", importance.crowdedWindowDays),
+                             ("restedAfterDays", importance.restedAfterDays),
+                             ("sharpnessMinDaysToNext", importance.sharpnessMinDaysToNext)] where days < 1 {
+            found.append("importanceRules \(name) is \(days), not 1 or more")
+        }
         return found
     }
 }

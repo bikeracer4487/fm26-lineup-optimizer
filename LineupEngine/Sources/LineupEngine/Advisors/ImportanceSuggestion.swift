@@ -12,15 +12,21 @@ public struct ImportanceSuggestion: Equatable, Sendable {
 public enum ImportanceAdvisor {
     /// The suggestion for `fixture`, given every fixture still to play (`fixture` itself may be among them), the
     /// confirmed lineups (for the dates of matches already played), the squad and its tiers for the fixture's tactic.
-    /// A first-eleven player missing from `players` is not counted as unsharp.
+    /// `tiers` are meant to be the planner's (`SquadTiers.compute`, injured players left out). An injured player is never
+    /// counted as unsharp, nor is a first-eleven player missing from `players`, so with tiers that keep injured players
+    /// the injured are still not counted (though the fit player who would stand in for one is not counted either).
+    /// Throws `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, or when a score is too large
+    /// to give as a whole number.
     public static func suggest(for fixture: Fixture, among fixtures: [Fixture], confirmed: [ConfirmedLineup],
                                players: [Player], tiers: SquadTiers,
-                               parameters: EngineParameters) -> ImportanceSuggestion {
+                               parameters: EngineParameters) throws -> ImportanceSuggestion {
+        let problems = FitnessModel.problems(in: parameters)
+        guard problems.isEmpty else { throw PlanError.badParameters(problems) }
         let rules = parameters.importanceRules.value
         let others = fixtures.filter { $0.id != fixture.id }
         var reasons: [String] = []
 
-        let base = baseScore(competition: fixture.competition, rules: rules)
+        let base = try baseScore(competition: fixture.competition, rules: rules)
         reasons.append(base.reason)
         var score = base.value
         let opponent = opponentFactor(fixture.opponentStrength, rules: rules)
@@ -33,7 +39,7 @@ public enum ImportanceAdvisor {
             .min { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }
         var reduced = false
         if let next {
-            let nextScore = baseScore(competition: next.competition, rules: rules).value
+            let nextScore = try baseScore(competition: next.competition, rules: rules).value
                 * opponentFactor(next.opponentStrength, rules: rules).value
             let gap = fixture.date.days(to: next.date)
             // The next match must reach the line and be bigger than this one, by base times opponent.
@@ -63,18 +69,25 @@ public enum ImportanceAdvisor {
         if !reduced, let last = earlier.filter({ $0 < fixture.date }).max(),
            last.days(to: fixture.date) >= rules.restedAfterDays {
             score *= rules.restedFactor
-            reasons.append("A week or more since the last match (×\(factorText(rules.restedFactor)))")
+            let since = switch rules.restedAfterDays {
+            case 7: "A week"
+            case 1: "1 day"
+            case let days: "\(days) days"
+            }
+            reasons.append("\(since) or more since the last match (×\(factorText(rules.restedFactor)))")
         }
 
         let level: Importance = score >= rules.highFrom ? .high : score >= rules.mediumFrom ? .medium : .low
-        reasons.append("Score \(Int(score.rounded())): \(level.rawValue)")
+        reasons.append("Score \(try wholeNumber(score)): \(level.rawValue)")
 
         var importance = level
         if score < rules.sharpnessBelowScore {
             let daysToNext = next.map { fixture.date.days(to: $0.date) }
             let late = daysToNext.map { $0 >= rules.sharpnessMinDaysToNext } ?? true
             let byID = Dictionary(players.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-            let unsharp = tiers.first.values.filter { id in byID[id].map { $0.sharpness < rules.sharpnessBelow } ?? false }.count
+            let unsharp = tiers.first.values.filter { id in
+                byID[id].map { !$0.isInjured && $0.sharpness < rules.sharpnessBelow } ?? false
+            }.count
             if late, unsharp >= rules.sharpnessMinPlayers {
                 importance = .sharpness
                 let when = daysToNext.map { "the next match is \($0) day\($0 == 1 ? "" : "s") later" } ?? "no match follows"
@@ -86,7 +99,7 @@ public enum ImportanceAdvisor {
                                     basis: Evidence.weakest([parameters.importanceRules.evidence])!)
     }
 
-    private static func baseScore(competition: Competition?, rules: ImportanceSuggestionRules) -> (value: Double, reason: String) {
+    private static func baseScore(competition: Competition?, rules: ImportanceSuggestionRules) throws -> (value: Double, reason: String) {
         let (value, name): (Double, String)
         switch competition {
         case .league: (value, name) = (rules.leagueBase, "League match")
@@ -95,7 +108,17 @@ public enum ImportanceAdvisor {
         case .friendly: (value, name) = (rules.friendlyBase, "Friendly")
         case nil: (value, name) = (rules.unsetBase, "No competition set")
         }
-        return (value, "\(name): \(Int(value.rounded()))")
+        return (value, "\(name): \(try wholeNumber(value))")
+    }
+
+    /// `x` rounded to a whole number. A finite base times finite factors can still overflow or exceed what `Int` holds,
+    /// which would stop the program; that is a parameter problem instead.
+    private static func wholeNumber(_ x: Double) throws -> Int {
+        let rounded = x.rounded()
+        guard rounded.isFinite, rounded > Double(Int.min), rounded < Double(Int.max) else {
+            throw PlanError.badParameters(["the suggested importance's score comes to \(x), too large to give as a whole number"])
+        }
+        return Int(rounded)
     }
 
     private static func opponentFactor(_ strength: OpponentStrength?, rules: ImportanceSuggestionRules) -> (value: Double, reason: String?) {

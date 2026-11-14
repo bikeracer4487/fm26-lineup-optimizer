@@ -410,6 +410,62 @@ import Testing
         #expect(FitnessModel.problems(in: q) == ["mutualTerminationShare is 1.1, not between 0 and 1"])
     }
 
+    @Test func removalLevelsOutOfOrderAreReported() {
+        var q = EngineParameters.fm27
+        q.removalLevels = Parameter(RemovalLevels(critical: 40, high: 50, medium: 60), .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["removalLevels critical (40) is below high (50)",
+                                                 "removalLevels high (50) is below medium (60)"])
+        // Equal levels are allowed.
+        q.removalLevels = Parameter(RemovalLevels(critical: 50, high: 50, medium: 50), .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func aWageMultipleBelowTheMedianOrNotFiniteIsReported() {
+        var q = EngineParameters.fm27
+        q.removalWageRules = Parameter(RemovalWageRules(highMultiple: 0.9, highPoints: 35, abovePoints: 20), .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["removalWageRules highMultiple is 0.9, not a finite number of 1 or more"])
+        q.removalWageRules = Parameter(RemovalWageRules(highMultiple: .infinity, highPoints: 35, abovePoints: 20), .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["removalWageRules highMultiple is inf, not a finite number of 1 or more"])
+        // A multiple of exactly 1, the median itself, is allowed.
+        q.removalWageRules = Parameter(RemovalWageRules(highMultiple: 1, highPoints: 35, abovePoints: 20), .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func importanceRuleProblemsAreReported() {
+        var q = EngineParameters.fm27
+        var r = q.importanceRules.value
+        r.cupBase = .infinity
+        r.weakerFactor = -0.8
+        r.crowdedFactor = 0
+        r.biggerMatchSteps = [BiggerMatchStep(withinDays: 0, factor: 0.6), BiggerMatchStep(withinDays: 3, factor: .nan)]
+        r.highFrom = .nan
+        r.sharpnessBelow = .infinity
+        r.restedAfterDays = 0
+        r.sharpnessMinDaysToNext = 0
+        q.importanceRules = Parameter(r, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == [
+            "importanceRules cupBase is inf, not a finite number",
+            "importanceRules weakerFactor is -0.8, not a finite number above 0",
+            "importanceRules crowdedFactor is 0.0, not a finite number above 0",
+            "importanceRules biggerMatchSteps withinDays is 0, not 1 or more",
+            "importanceRules biggerMatchSteps factor within 3 days is nan, not a finite number above 0",
+            "importanceRules highFrom is nan, not a finite number",
+            "importanceRules sharpnessBelow is inf, not a finite number",
+            "importanceRules restedAfterDays is 0, not 1 or more",
+            "importanceRules sharpnessMinDaysToNext is 0, not 1 or more",
+        ])
+        // At the edges: a base of 0 or less, a factor just above 0, counts and windows of 1.
+        var edges = EngineParameters.fm27.importanceRules.value
+        edges.friendlyBase = -10
+        edges.muchWeakerFactor = 0.01
+        edges.biggerMatchSteps = [BiggerMatchStep(withinDays: 1, factor: 0.01)]
+        edges.crowdedWindowDays = 1
+        edges.restedAfterDays = 1
+        edges.sharpnessMinDaysToNext = 1
+        q.importanceRules = Parameter(edges, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
     @Test func theImportanceRulesAreListedWithEvidenceAndSource() {
         let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
         #expect(listed["importanceRules"]?.evidence == .carriedOverFM26)

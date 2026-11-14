@@ -267,9 +267,9 @@ do {
             // The planner's tiers: injured players left out, as they cannot play.
             let tiers = try SquadTiers.compute(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
                                                profile: profile, parameters: parameters)
-            suggestions = fixtures.sorted { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }.map { fixture in
-                (fixture, ImportanceAdvisor.suggest(for: fixture, among: fixtures, confirmed: history, players: players,
-                                                    tiers: tiers, parameters: parameters))
+            suggestions = try fixtures.sorted { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }.map { fixture in
+                (fixture, try ImportanceAdvisor.suggest(for: fixture, among: fixtures, confirmed: history, players: players,
+                                                        tiers: tiers, parameters: parameters))
             }
         }
         output = Report.render(header, advice: Report.Advice(

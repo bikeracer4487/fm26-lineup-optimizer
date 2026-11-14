@@ -336,6 +336,48 @@ import Testing
         #expect(try solid(ip: 15, oop: 15) == true)
     }
 
+    @Test func eachOptionSaysWhetherItCountsAsCover() throws {
+        // At D_CL: its first choice and both second-choice centre-backs count; the right centre-back's first choice,
+        // needed at D_CR, does not. An injured or unsolid option does not either.
+        let r = try report(PlannerFixture.squad())
+        let centre = try depth(r, .D_CL)
+        func counts(_ slot: SlotDepth, _ id: PlayerID) throws -> Bool {
+            try #require(slot.options.first { $0.player == id }).countsAsCover
+        }
+        #expect(try counts(centre, PlannerFixture.id(.D_CL, "first")))
+        #expect(try counts(centre, PlannerFixture.id(.D_CL, "second")))
+        #expect(try counts(centre, PlannerFixture.id(.D_CR, "second")))
+        #expect(try !counts(centre, PlannerFixture.id(.D_CR, "first")))
+        let injured = try depth(report(squad { if $0.name == named(.AM_C, "second") { $0.isInjured = true } }), .AM_C)
+        #expect(try !counts(injured, PlannerFixture.id(.AM_C, "second")))
+        let unsolid = try depth(report(squad { if $0.name == named(.AM_C, "second") { $0.familiarity[.attackingMidCentral] = 14 } }), .AM_C)
+        #expect(try !counts(unsolid, PlannerFixture.id(.AM_C, "second")))
+        // A ban does not stop him counting.
+        let banned = try depth(report(squad { if $0.name == named(.AM_C, "second") { $0.isBanned = true } }), .AM_C)
+        #expect(try counts(banned, PlannerFixture.id(.AM_C, "second")))
+        // Cover is the number of options that count, at every slot.
+        for slot in r.slots + [injured, unsolid, banned] {
+            #expect(slot.cover == slot.options.filter(\.countsAsCover).count, "\(slot.slot.rawValue)")
+        }
+    }
+
+    @Test func theNextBestIsWhomTheDropIsMeasuredTo() throws {
+        // The second-choice AM_C is injured; the third is the one who can step in.
+        let third = Player.fixture(name: "Third", all: 10, familiarity: [.attackingMidCentral: 20])
+        let players = try squad { if $0.name == named(.AM_C, "second") { $0.isInjured = true } } + [third]
+        let am = try depth(report(players), .AM_C)
+        #expect(am.nextBest == third.id)
+        let option = try #require(am.options.first { $0.player == third.id })
+        let first = try #require(am.options.first { $0.player == PlannerFixture.id(.AM_C, "first") })
+        #expect(abs(try #require(am.dropToNextBest) - (first.rating - option.rating)) < 1e-9)
+        // With nobody who can step in, both are nil.
+        let alone = try depth(report(players.filter { $0.id != third.id }), .AM_C)
+        #expect(alone.nextBest == nil && alone.dropToNextBest == nil)
+        // In the full squad, each slot's next best is its second choice where he can step in.
+        let full = try depth(report(PlannerFixture.squad()), .GK)
+        #expect(full.nextBest == PlannerFixture.id(.GK, "second"))
+    }
+
     @Test func theReportSaysWhatItRestsOn() throws {
         #expect(try report(PlannerFixture.squad()).basis == .derived)
         var parameters = EngineParameters.fm27

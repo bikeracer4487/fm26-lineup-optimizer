@@ -123,6 +123,19 @@ public enum Rest {
             case (false, true): days = conditionDays
             case (false, false): days = nil
             }
+            // What the days rest on, when they are given.
+            if days != nil {
+                if tooJaded {
+                    evidence += [parameters.restWatchShare.evidence,
+                                 needsHoliday ? parameters.holidayJadednessRecoveryPerDay.evidence
+                                              : parameters.jadednessRecoveryPerDay.evidence]
+                }
+                if lowCondition {
+                    evidence += [parameters.conditionRecoveryPerDay.evidence,
+                                 parameters.naturalFitnessRecoveryPerPoint.evidence,
+                                 parameters.trainingIntensityRecovery.evidence]
+                }
+            }
         case .watch:
             if closeToLimit { reasons.append("Jadedness \(jadedness) is close to his limit of \(limit)") }
             if runTells { reasons.append("Has started the last \(run.starts) matches in quick succession") }
@@ -155,7 +168,15 @@ public enum Rest {
             notes.append("aged \(rules.oldestFromAge) or over")
         } else if player.age >= rules.olderFromAge {
             limit = rules.olderBase
-            notes.append("aged \(rules.olderFromAge) or \(rules.oldestFromAge - 1)")
+            // `FitnessModel.problems` keeps the band at least a year wide.
+            let (first, last) = (rules.olderFromAge, rules.oldestFromAge - 1)
+            if last == first {
+                notes.append("aged \(first)")
+            } else if last == first + 1 {
+                notes.append("aged \(first) or \(last)")
+            } else {
+                notes.append("aged \(first) to \(last)")
+            }
         } else if player.age < rules.youngUnderAge {
             limit = rules.youngBase
             notes.append("under \(rules.youngUnderAge)")

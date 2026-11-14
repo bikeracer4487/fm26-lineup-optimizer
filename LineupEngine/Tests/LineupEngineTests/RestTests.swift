@@ -309,7 +309,8 @@ import Testing
     }
 
     @Test func theBasisIsTheWeakestEvidenceBehindTheAdvice() throws {
-        #expect(try one(Player.fixture(jadedness: 450))?.basis == .fm27Observation)
+        // Over the standard 400 line, with days: the days rest on restWatchShare and jadednessRecoveryPerDay.
+        #expect(try one(Player.fixture(jadedness: 450))?.basis == .carriedOverFM26)
         #expect(try one(Player.fixture(age: 32, jadedness: 450))?.basis == .carriedOverFM26)
         #expect(try one(Player.fixture(jadedness: 640))?.basis == .derived)
         #expect(try one(Player.fixture(condition: 0.80))?.basis == .carriedOverFM26)
@@ -318,6 +319,64 @@ import Testing
         var q = parameters
         q.consecutiveStartWindowDays = Parameter(4, .fm27Measured, source: "test")
         #expect(try one(Player.fixture(jadedness: 350), parameters: q)?.basis == .carriedOverFM26)
+    }
+
+    /// The parameters with `names` given `evidence`, values unchanged.
+    func relabelled(_ names: Set<String>, _ evidence: Evidence, in base: EngineParameters? = nil) -> EngineParameters {
+        var q = base ?? parameters
+        func relabel<T>(_ p: Parameter<T>) -> Parameter<T> { Parameter(p.value, evidence, source: "test") }
+        if names.contains("restWatchShare") { q.restWatchShare = relabel(q.restWatchShare) }
+        if names.contains("jadednessRecoveryPerDay") { q.jadednessRecoveryPerDay = relabel(q.jadednessRecoveryPerDay) }
+        if names.contains("holidayJadednessRecoveryPerDay") { q.holidayJadednessRecoveryPerDay = relabel(q.holidayJadednessRecoveryPerDay) }
+        if names.contains("holidayMargin") { q.holidayMargin = relabel(q.holidayMargin) }
+        if names.contains("conditionFloor") { q.conditionFloor = relabel(q.conditionFloor) }
+        if names.contains("conditionRecoveryPerDay") { q.conditionRecoveryPerDay = relabel(q.conditionRecoveryPerDay) }
+        if names.contains("naturalFitnessRecoveryPerPoint") { q.naturalFitnessRecoveryPerPoint = relabel(q.naturalFitnessRecoveryPerPoint) }
+        if names.contains("trainingIntensityRecovery") { q.trainingIntensityRecovery = relabel(q.trainingIntensityRecovery) }
+        if names.contains("restConditionEstimateDays") { q.restConditionEstimateDays = relabel(q.restConditionEstimateDays) }
+        return q
+    }
+
+    @Test func theParametersBehindTheDaysJoinTheBasis() throws {
+        // A rest for jadedness: restWatchShare and jadednessRecoveryPerDay.
+        let measured = relabelled(["restWatchShare", "jadednessRecoveryPerDay"], .fm27Measured)
+        #expect(try one(Player.fixture(jadedness: 450), parameters: measured)?.basis == .fm27Observation)
+        let slow = relabelled(["jadednessRecoveryPerDay"], .derived, in: measured)
+        #expect(try one(Player.fixture(jadedness: 450), parameters: slow)?.basis == .derived)
+        // A holiday: holidayJadednessRecoveryPerDay, not jadednessRecoveryPerDay.
+        let holiday = relabelled(["restWatchShare", "holidayMargin", "holidayJadednessRecoveryPerDay"], .fm27Measured, in: slow)
+        #expect(try one(Player.fixture(jadedness: 640), parameters: holiday)?.basis == .fm27Observation)
+        let slowHoliday = relabelled(["holidayJadednessRecoveryPerDay"], .derived, in: holiday)
+        #expect(try one(Player.fixture(jadedness: 640), parameters: slowHoliday)?.basis == .derived)
+        // Low condition: the condition-recovery parameters, while the days are known.
+        let condition = relabelled(["conditionFloor", "naturalFitnessRecoveryPerPoint", "trainingIntensityRecovery",
+                                    "restConditionEstimateDays"], .fm27Measured)
+        #expect(try one(Player.fixture(condition: 0.80), parameters: condition)?.basis == .carriedOverFM26)
+        var oneDay = relabelled(["conditionRecoveryPerDay"], .derived, in: condition)
+        #expect(try one(Player.fixture(condition: 0.80), parameters: oneDay)?.basis == .derived)
+        // Looking one day ahead, 80% is clear in a day but 70% is not: with no days, the recovery is not behind it.
+        oneDay.restConditionEstimateDays = Parameter(1, .fm27Measured, source: "test")
+        #expect(try one(Player.fixture(condition: 0.80), parameters: oneDay)?.days == 1)
+        let unknown = try #require(try one(Player.fixture(condition: 0.70), parameters: oneDay))
+        #expect(unknown.days == nil)
+        #expect(unknown.basis == .fm27Observation)
+    }
+
+    @Test func theMiddleAgeBandIsNamedForItsWidth() throws {
+        var rules = parameters.restLimitRules.value
+        rules.olderFromAge = 30
+        rules.oldestFromAge = 33
+        var wide = parameters
+        wide.restLimitRules = Parameter(rules, .carriedOverFM26, source: "test")
+        #expect(try limit(Player.fixture(age: 32), parameters: wide) == (350, ["aged 30 to 32"]))
+        #expect(try limit(Player.fixture(age: 33), parameters: wide) == (300, ["aged 33 or over"]))
+        // Two years: "or".
+        #expect(try limit(Player.fixture(age: 31)) == (350, ["aged 30 or 31"]))
+        // One year: just the age.
+        rules.oldestFromAge = 31
+        var narrow = parameters
+        narrow.restLimitRules = Parameter(rules, .carriedOverFM26, source: "test")
+        #expect(try limit(Player.fixture(age: 30), parameters: narrow) == (350, ["aged 30"]))
     }
 
     // MARK: Who is listed and in what order
