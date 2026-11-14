@@ -250,9 +250,8 @@ import Testing
     @Test func theReportEqualsTheAdvisorsCalledOneByOne() throws {
         let book = try realBook()
         let tactic = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
-        var other = tactic
-        other.name = "Second Sample"
         let catalog = try RoleCatalog.fm27()
+        let other = try AdvisorsTests.twoStrikers(from: tactic, catalog: catalog)
         let profile = try RatingProfile.standard()
         let history = try JSONDecoder().decode([ConfirmedLineup].self, from: Fixtures.data("plans/sample-history.json"))
         let request = AdvisorsRequest(primary: tactic, tactics: [tactic, other], players: book.allPlayers,

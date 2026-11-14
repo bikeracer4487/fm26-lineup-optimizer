@@ -43,6 +43,22 @@ import Testing
                                    jaded, free, loanee])
     }
 
+    /// The sample tactic as a 4-2-2-2: its attacking midfielder replaced by a second striker, ST L, in both phases.
+    /// The planner's squad has two natural strikers, so cover is thin at both striker slots here and at neither in
+    /// the sample, and the two tactics' elevens differ.
+    static func twoStrikers(from tactic: Tactic, catalog: RoleCatalog) throws -> Tactic {
+        var t = tactic
+        t.name = "Two Strikers"
+        t.inPossession[.AM_C] = nil
+        t.outOfPossession[.AM_C] = nil
+        t.mapping[.AM_C] = nil
+        t.inPossession[.ST_L] = "Channel Forward"
+        t.outOfPossession[.ST_L] = "Centre Forward"
+        t.mapping[.ST_L] = .ST_L
+        try #require(t.problems(catalog: catalog).isEmpty)
+        return t
+    }
+
     func request(_ players: [Player], tactics: [Tactic]? = nil, history: [ConfirmedLineup] = [],
                  accepted: [Retraining] = [], rejected: Set<RetrainingChoice> = []) -> AdvisorsRequest {
         AdvisorsRequest(primary: tactic, tactics: tactics ?? [tactic], players: players, ownClub: ownClub,
@@ -74,8 +90,7 @@ import Testing
     }
 
     @Test func theReportEqualsTheAdvisorsCalledOneByOne() throws {
-        var other = tactic
-        other.name = "Second Sample"
+        let other = try Self.twoStrikers(from: tactic, catalog: catalog)
         let history = [ConfirmedLineup(fixture: FixtureID("f1"), date: asOf, starters: [.D_R: id("Tired")])]
         let r = request(try busySquad(), tactics: [tactic, other], history: history,
                         accepted: [Retraining(player: id("Back B"), position: .defenderCentral, acceptedOn: asOf)])
@@ -87,6 +102,11 @@ import Testing
         #expect(!together.removal.advisedToLeave.isEmpty)
         #expect(!together.removal.loans.isEmpty)
         #expect(!together.depth.thin.isEmpty)
+        // The other tactic's needs are its own: the striker slots, thin there and not in the primary.
+        let t = together.training
+        let needs = t.recommendations.flatMap(\.needs) + t.needsWithoutCandidates + t.needsBeingRetrained
+        #expect(needs.contains(RetrainingNeed(tactic: other.name, slot: .ST_L)))
+        #expect(!together.depth.thin.contains(.ST_C))
     }
 
     @Test func trainingNeverRecommendsAPlayerRemovalWouldMoveOn() throws {
@@ -108,14 +128,20 @@ import Testing
     }
 
     @Test func twoSavedTacticsGiveNeedsFromBoth() throws {
-        var other = tactic
-        other.name = "Second Sample"
+        let other = try Self.twoStrikers(from: tactic, catalog: catalog)
         let players = try thinAtLeftBack()
+        // The two shapes really are judged differently: the other is thin at both striker slots, the primary at neither.
+        let primaryDepth = try Depth.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                            profile: profile, parameters: .fm27)
+        let otherDepth = try Depth.report(tactic: other, players: players, ownClub: ownClub, catalog: catalog,
+                                          profile: profile, parameters: .fm27)
+        try #require(primaryDepth.thin == [.D_L])
+        try #require(Set(otherDepth.thin) == [.D_L, .ST_L, .ST_C])
         let primaryNeed = RetrainingNeed(tactic: tactic.name, slot: .D_L)
-        let otherNeed = RetrainingNeed(tactic: other.name, slot: .D_L)
+        let otherNeeds = otherDepth.thin.map { RetrainingNeed(tactic: other.name, slot: $0) }
 
         let both = try report(request(players, tactics: [tactic, other]))
-        #expect(both.training.needsWithoutCandidates == [primaryNeed, otherNeed])
+        #expect(both.training.needsWithoutCandidates == [primaryNeed] + otherNeeds)
         // The primary comes first and is not judged twice, even when the saved tactics list it again or leave it out.
         #expect(try report(request(players, tactics: [other, tactic, tactic])).training == both.training)
         #expect(try report(request(players, tactics: [other])).training == both.training)
@@ -123,11 +149,19 @@ import Testing
         // Elevens, depth and removal judge against the primary alone.
         let alone = try report(request(players))
         #expect(both.elevens == alone.elevens && both.depth == alone.depth && both.removal == alone.removal)
+        #expect(both.depth == primaryDepth)
+        // With the other shape as primary, its own elevens and depth are reported.
+        let swapped = try Advisors.report(
+            AdvisorsRequest(primary: other, tactics: [tactic], players: players, ownClub: ownClub, history: StartHistory([]),
+                            asOf: asOf, intensity: .medium, accepted: [], rejected: []),
+            catalog: catalog, profile: profile, parameters: .fm27)
+        #expect(swapped.depth == otherDepth)
+        #expect(swapped.elevens.first.map(\.slot).contains(.ST_L))
+        #expect(swapped.training.needsWithoutCandidates == otherNeeds + [primaryNeed])
     }
 
     @Test func inputOrderDoesNotMatter() throws {
-        var other = tactic
-        other.name = "Second Sample"
+        let other = try Self.twoStrikers(from: tactic, catalog: catalog)
         let players = try busySquad()
         let accepted = [Retraining(player: id("Back B"), position: .defenderCentral, acceptedOn: asOf),
                         Retraining(player: id("Tired"), position: .defenderLeft, acceptedOn: asOf)]

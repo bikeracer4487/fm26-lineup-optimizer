@@ -376,7 +376,7 @@ import Testing
         #expect(try report(players, rejected: [first, next.choice]).recommendations.isEmpty)
     }
 
-    @Test func anAcceptedPairIsSkipped() throws {
+    @Test func anAcceptedRetrainingIsNotOfferedAgain() throws {
         let players = try thinAtLeftBack([rightBack()])
         let accepted = Retraining(player: id("Right Back"), position: .defenderLeft, acceptedOn: Day(iso: "2026-11-01")!)
         #expect(try report(players, accepted: [accepted]).recommendations.isEmpty)
@@ -391,8 +391,10 @@ import Testing
             let retraining = Retraining(player: id("Right Back"), position: position, acceptedOn: acceptedOn)
             #expect(try report(players, accepted: [retraining]).recommendations.isEmpty, "\(position.rawValue)")
         }
-        // Once that retraining is no longer accepted, he is offered a position again.
-        let other = Retraining(player: id("Back A"), position: .midfielderCentral, acceptedOn: acceptedOn)
+        // Once that retraining is no longer accepted, he is offered a position again, though another player of the
+        // squad is being retrained.
+        let otherPlayer = try #require(players.first { $0.name == named(.D_R, "first") })
+        let other = Retraining(player: otherPlayer.id, position: .midfielderCentral, acceptedOn: acceptedOn)
         #expect(choices(try report(players, accepted: [other])) == [offered])
     }
 
