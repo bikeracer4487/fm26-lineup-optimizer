@@ -393,6 +393,70 @@ public struct RemovalLevels: Sendable, Equatable {
     }
 }
 
+/// A bigger match within `withinDays` days after this one multiplies the suggested importance's score by `factor`.
+public struct BiggerMatchStep: Sendable, Equatable {
+    public var withinDays: Int
+    public var factor: Double
+
+    public init(withinDays: Int, factor: Double) {
+        self.withinDays = withinDays; self.factor = factor
+    }
+}
+
+/// The numbers behind the suggested importance of a fixture: a base for the competition, a factor for the opponent,
+/// schedule factors, the lines between the levels and the rule for suggesting Sharpness.
+public struct ImportanceSuggestionRules: Sendable, Equatable {
+    public var leagueBase: Double
+    public var cupBase: Double
+    public var minorCupBase: Double
+    public var friendlyBase: Double
+    public var unsetBase: Double
+    public var muchStrongerFactor: Double
+    public var strongerFactor: Double
+    public var similarFactor: Double
+    public var weakerFactor: Double
+    public var muchWeakerFactor: Double
+    public var unsetOpponentFactor: Double
+    /// The next match is "bigger" when its base times its opponent factor is at least this.
+    public var biggerMatchFrom: Double
+    /// Tightest first; only the first step that applies is used.
+    public var biggerMatchSteps: [BiggerMatchStep]
+    /// This many matches or more in the `crowdedWindowDays` days before the fixture take `crowdedFactor`.
+    public var crowdedWindowDays: Int
+    public var crowdedMatches: Int
+    public var crowdedFactor: Double
+    /// This many days or more since the last match, with no reduction applying, take `restedFactor`.
+    public var restedAfterDays: Int
+    public var restedFactor: Double
+    public var highFrom: Double
+    public var mediumFrom: Double
+    /// Sharpness is suggested for a score below `sharpnessBelowScore`, with the next match at least
+    /// `sharpnessMinDaysToNext` days later and at least `sharpnessMinPlayers` of the first eleven below `sharpnessBelow`.
+    public var sharpnessBelowScore: Double
+    public var sharpnessMinDaysToNext: Int
+    public var sharpnessMinPlayers: Int
+    public var sharpnessBelow: Double
+
+    public init(leagueBase: Double, cupBase: Double, minorCupBase: Double, friendlyBase: Double, unsetBase: Double,
+                muchStrongerFactor: Double, strongerFactor: Double, similarFactor: Double, weakerFactor: Double,
+                muchWeakerFactor: Double, unsetOpponentFactor: Double, biggerMatchFrom: Double,
+                biggerMatchSteps: [BiggerMatchStep], crowdedWindowDays: Int, crowdedMatches: Int, crowdedFactor: Double,
+                restedAfterDays: Int, restedFactor: Double, highFrom: Double, mediumFrom: Double,
+                sharpnessBelowScore: Double, sharpnessMinDaysToNext: Int, sharpnessMinPlayers: Int, sharpnessBelow: Double) {
+        self.leagueBase = leagueBase; self.cupBase = cupBase; self.minorCupBase = minorCupBase
+        self.friendlyBase = friendlyBase; self.unsetBase = unsetBase
+        self.muchStrongerFactor = muchStrongerFactor; self.strongerFactor = strongerFactor
+        self.similarFactor = similarFactor; self.weakerFactor = weakerFactor
+        self.muchWeakerFactor = muchWeakerFactor; self.unsetOpponentFactor = unsetOpponentFactor
+        self.biggerMatchFrom = biggerMatchFrom; self.biggerMatchSteps = biggerMatchSteps
+        self.crowdedWindowDays = crowdedWindowDays; self.crowdedMatches = crowdedMatches; self.crowdedFactor = crowdedFactor
+        self.restedAfterDays = restedAfterDays; self.restedFactor = restedFactor
+        self.highFrom = highFrom; self.mediumFrom = mediumFrom
+        self.sharpnessBelowScore = sharpnessBelowScore; self.sharpnessMinDaysToNext = sharpnessMinDaysToNext
+        self.sharpnessMinPlayers = sharpnessMinPlayers; self.sharpnessBelow = sharpnessBelow
+    }
+}
+
 /// Lets `EngineParameters.all` list every stored `Parameter` whatever its value type.
 protocol ParameterProtocol {
     var evidence: Evidence { get }
@@ -544,6 +608,8 @@ public struct EngineParameters: Sendable {
     public var mutualTerminationShare: Parameter<Double>
     /// The scores that make a removal advice critical, high or medium.
     public var removalLevels: Parameter<RemovalLevels>
+    /// The numbers behind a fixture's suggested importance.
+    public var importanceRules: Parameter<ImportanceSuggestionRules>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -822,7 +888,22 @@ public struct EngineParameters: Sendable {
                 source: "docs/Research/player-management-and-sales.md: a mutual termination often costs 50% to 60% of the remaining contract; "
                     + "\(removalSource) used 0.55"),
             removalLevels: Parameter(
-                RemovalLevels(critical: 80, high: 50, medium: 30), .carriedOverFM26, source: removalSource))
+                RemovalLevels(critical: 80, high: 50, medium: 30), .carriedOverFM26, source: removalSource),
+            importanceRules: Parameter(
+                ImportanceSuggestionRules(
+                    leagueBase: 80, cupBase: 60, minorCupBase: 30, friendlyBase: 10, unsetBase: 50,
+                    muchStrongerFactor: 1.2, strongerFactor: 1.1, similarFactor: 1.0, weakerFactor: 0.8,
+                    muchWeakerFactor: 0.6, unsetOpponentFactor: 1.0, biggerMatchFrom: 80,
+                    biggerMatchSteps: [BiggerMatchStep(withinDays: 2, factor: 0.6), BiggerMatchStep(withinDays: 3, factor: 0.7),
+                                       BiggerMatchStep(withinDays: 4, factor: 0.9)],
+                    crowdedWindowDays: 7, crowdedMatches: 2, crowdedFactor: 0.8, restedAfterDays: 7, restedFactor: 1.1,
+                    highFrom: 85, mediumFrom: 50,
+                    sharpnessBelowScore: 50, sharpnessMinDaysToNext: 4, sharpnessMinPlayers: 3, sharpnessBelow: 0.70),
+                .carriedOverFM26,
+                source: "scoring_parameters.py (branch customizable-tactics; its automatic importance tables, never called by the old app); "
+                    + "docs/Research/player-rotation-guide.md. Nothing is published for FM27. The branch's table needed the stage of the "
+                    + "competition and the state of the title race, which a fixture does not carry: league is its in-contention value, "
+                    + "cup lies between its early round and quarter-final"))
     }()
 
     private static let removalSource = "ui/api/api_player_removal.py (branch customizable-tactics)"

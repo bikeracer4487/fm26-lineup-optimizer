@@ -407,4 +407,23 @@ import Testing
         q.mutualTerminationShare = Parameter(1.1, .derived, source: "test")
         #expect(FitnessModel.problems(in: q) == ["mutualTerminationShare is 1.1, not between 0 and 1"])
     }
+
+    @Test func theImportanceRulesAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        #expect(listed["importanceRules"]?.evidence == .carriedOverFM26)
+        #expect(listed["importanceRules"]?.source.contains("scoring_parameters.py") == true)
+        #expect(listed["importanceRules"]?.source.contains("docs/Research/player-rotation-guide.md") == true)
+        let r = EngineParameters.fm27.importanceRules.value
+        #expect([r.leagueBase, r.cupBase, r.minorCupBase, r.friendlyBase, r.unsetBase] == [80, 60, 30, 10, 50])
+        #expect([r.muchStrongerFactor, r.strongerFactor, r.similarFactor, r.weakerFactor, r.muchWeakerFactor, r.unsetOpponentFactor]
+                == [1.2, 1.1, 1.0, 0.8, 0.6, 1.0])
+        #expect(r.biggerMatchFrom == 80)
+        #expect(r.biggerMatchSteps == [BiggerMatchStep(withinDays: 2, factor: 0.6), BiggerMatchStep(withinDays: 3, factor: 0.7),
+                                       BiggerMatchStep(withinDays: 4, factor: 0.9)])
+        #expect(r.crowdedWindowDays == 7 && r.crowdedMatches == 2 && r.crowdedFactor == 0.8)
+        #expect(r.restedAfterDays == 7 && r.restedFactor == 1.1)
+        #expect(r.highFrom == 85 && r.mediumFrom == 50)
+        #expect(r.sharpnessBelowScore == 50 && r.sharpnessMinDaysToNext == 4)
+        #expect(r.sharpnessMinPlayers == 3 && r.sharpnessBelow == 0.70)
+    }
 }

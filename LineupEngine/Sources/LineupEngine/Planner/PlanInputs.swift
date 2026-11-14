@@ -12,6 +12,14 @@ public struct FixtureID: Hashable, Codable, Sendable {
     }
 }
 
+/// The kind of competition a fixture belongs to; the importance suggestion starts from it.
+public enum Competition: String, Codable, CaseIterable, Sendable { case league, cup, minorCup, friendly }
+
+/// How strong the opponent is compared with the club.
+public enum OpponentStrength: String, Codable, CaseIterable, Sendable {
+    case muchStronger, stronger, similar, weaker, muchWeaker
+}
+
 /// One match to plan for. Not `Codable`: it embeds an already resolved tactic.
 public struct Fixture: Equatable, Sendable {
     public var id: FixtureID
@@ -22,11 +30,16 @@ public struct Fixture: Equatable, Sendable {
     public var tactic: Tactic
     public var overrides: [SlotID: PlayerID]
     public var rejected: Set<PlayerID>
+    /// Only read by the importance suggestion; the planner uses `importance`.
+    public var competition: Competition?
+    public var opponentStrength: OpponentStrength?
 
     public init(
         id: FixtureID, date: Day, opponent: String, importance: Importance, tactic: Tactic,
-        overrides: [SlotID: PlayerID] = [:], rejected: Set<PlayerID> = []
+        overrides: [SlotID: PlayerID] = [:], rejected: Set<PlayerID> = [],
+        competition: Competition? = nil, opponentStrength: OpponentStrength? = nil
     ) {
+        self.competition = competition; self.opponentStrength = opponentStrength
         self.id = id; self.date = date; self.opponent = opponent
         self.importance = importance; self.tactic = tactic
         self.overrides = overrides; self.rejected = rejected

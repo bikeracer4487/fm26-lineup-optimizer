@@ -68,3 +68,12 @@ import Foundation
         #expect(try JSONDecoder().decode(PlanSettings.self, from: data3) == settings)
     }
 }
+
+@Suite struct FixtureCompetitionTests {
+    @Test func aFixtureBuiltWithoutCompetitionOrOpponentStrengthHasNeither() throws {
+        let f = Fixture(id: FixtureID("f"), date: Day(iso: "2026-11-14")!, opponent: "Rovers", importance: .medium,
+                        tactic: try PlannerFixture.tactic())
+        #expect(f.competition == nil)
+        #expect(f.opponentStrength == nil)
+    }
+}
