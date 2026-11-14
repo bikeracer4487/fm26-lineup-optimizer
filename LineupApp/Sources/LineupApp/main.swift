@@ -29,10 +29,15 @@
 //                                              matches on one day ("match-failed-…"); and its candidate picker on
 //                                              its own for the first fixture's goalkeeper ("match-picker-…") and
 //                                              for the remembered eleven's goalkeeper ("match-remembered-picker-…").
+//                                              The advisor screens ("elevens-…", "rest-…", "training-…",
+//                                              "removal-…") are drawn on the sample, empty ("<screen>-empty-…")
+//                                              and with a primary tactic that has a problem
+//                                              ("<screen>-problem-…").
 //                                              Every screen is drawn again in a narrow window, 800 by 700
-//                                              ("<screen>-narrow-…"), and Match Selection, Tactics and Fixtures
-//                                              in the smallest window ("match-small-…", "tactics-small-…",
-//                                              "fixtures-small-…"). Both
+//                                              ("<screen>-narrow-…"), and Match Selection, Tactics, Fixtures
+//                                              and the advisor screens in the smallest window
+//                                              ("match-small-…", "tactics-small-…", "fixtures-small-…",
+//                                              "elevens-small-…" and so on). Both
 //                                              typefaces are drawn at each weight ("type-…").
 
 import AppKit
@@ -118,6 +123,9 @@ enum SampleState {
     }
 }
 
+/// The screens that show the advisors' reports.
+let advisorScreens: [Screen] = [.elevens, .rest, .training, .removal]
+
 /// The narrow window the pictures are drawn in: beside the game on a laptop's screen.
 let narrowWindow = CGSize(width: 800, height: 700)
 
@@ -161,9 +169,9 @@ let narrowWindow = CGSize(width: 800, height: 700)
     // The narrow and the smallest windows: the detail under the pitch, the pitches stacked, and scrolling; the other
     // screens narrow, so the pills wrap.
     try ScreenPictures.write(model: sampleModel(root, .afterImport), to: directory, size: narrowWindow, variant: "narrow",
-                             screens: [.squad, .fixtures, .settings])
+                             screens: [.squad, .fixtures, .settings] + advisorScreens)
     try ScreenPictures.write(model: plain, to: directory, size: Theme.Layout.minimumWindow, variant: "small",
-                             screens: [.fixtures])
+                             screens: [.fixtures] + advisorScreens)
     for (variant, small) in [("narrow", narrowWindow), ("small", Theme.Layout.minimumWindow)] {
         try ScreenPictures.write(model: plain, to: directory, size: small, variant: variant,
                                  screens: [.matchSelection], matchStart: MatchStart(slot: .D_L))
@@ -197,7 +205,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
             try ScreenPictures.write(model: sampleModel(root, .unsavedTacticChange), to: directory, size: size,
                                      screens: [.tactics], tacticSlot: TacticSlot(.AM_L, in: .inPossession))
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size, variant: "empty",
-                                     screens: [.squad, .tactics, .fixtures, .matchSelection])
+                                     screens: [.squad, .tactics, .fixtures, .matchSelection] + advisorScreens)
             try ScreenPictures.write(model: sampleModel(root, .pastFixtures), to: directory, size: size,
                                      variant: "past", screens: [.fixtures])
             // The editor for the confirmed fixture, so the note about its confirmed lineup is shown.
@@ -206,7 +214,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
             try ScreenPictures.writeFixtureEditor(model: past, draft: past.fixtureDraft(for: confirmed), to: directory)
             // The striker nothing turns into, selected out of possession.
             try ScreenPictures.write(model: sampleModel(root, .tacticProblem), to: directory, size: size,
-                                     variant: "problem", screens: [.tactics],
+                                     variant: "problem", screens: [.tactics] + advisorScreens,
                                      tacticSlot: TacticSlot(.ST_C, in: .outOfPossession))
             try ScreenPictures.write(model: sampleModel(root, .failedImport), to: directory, size: size,
                                      variant: "failed", screens: [.squad])

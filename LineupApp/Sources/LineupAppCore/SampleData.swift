@@ -63,10 +63,13 @@ public enum SampleData {
         let date: Day
         let opponent: String
         let importance: Importance
+        let competition: Competition?
+        let opponentStrength: OpponentStrength?
     }
 
-    /// A model on a temporary directory, filled from the engine's captures under `repositoryRoot`:
-    /// both squads, the sample 4-2-3-1 as the primary tactic, the five sample fixtures and the sample history.
+    /// A model on a temporary directory, filled from the engine's captures under `repositoryRoot`: both squads, the
+    /// sample 4-2-3-1 as the primary tactic, the five sample fixtures with their competitions and opponents' strengths,
+    /// the sample history, and the first retraining the advisors recommend, accepted.
     @MainActor public static func model(repositoryRoot: URL) throws -> AppModel {
         try build(repositoryRoot: repositoryRoot).model
     }
@@ -280,12 +283,24 @@ public enum SampleData {
         }
 
         // The fixtures come before the tactic, so the fixtures are planned only once there is a tactic to plan them with.
-        for fixture in try decode([SampleFixture].self, "plans/sample-fixtures.json") {
-            model.addFixture(date: fixture.date, opponent: fixture.opponent, importance: fixture.importance)
+        for fixture in try decode([SampleFixture].self, "plans/sample-fixtures-with-competitions.json") {
+            let id = model.addFixture(date: fixture.date, opponent: fixture.opponent, importance: fixture.importance)
+            guard var stored = model.fixtures.first(where: { $0.id == id }) else {
+                throw SampleDataError(description: "The sample fixture against \(fixture.opponent) was not saved.")
+            }
+            stored.competition = fixture.competition
+            stored.opponentStrength = fixture.opponentStrength
+            model.update(stored)
         }
         let tactic = try decode(Tactic.self, "tactics/sample-4231.json")
         let tacticID = model.addTactic(named: tactic.name)
         model.update(StoredTactic(id: tacticID, tactic: tactic))
+
+        // One retraining accepted, so the Training screen has one under way.
+        guard case .ready(let advice) = model.adviceState, let recommended = advice.training.recommendations.first else {
+            throw SampleDataError(description: "The sample's advice recommends no retraining to accept: \(model.adviceState)")
+        }
+        model.accept(recommended.choice)
 
         // These matches have no saved fixture, so they cannot be confirmed: the history is saved directly, and the
         // models made from these files load it.

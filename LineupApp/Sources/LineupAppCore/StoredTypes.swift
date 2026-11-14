@@ -161,9 +161,11 @@ public struct TrainingState: Equatable, Codable, Sendable {
     /// Each player's name as it was when a retraining of his was last accepted or turned down.
     public var names: [PlayerID: String]
 
+    /// `accepted` is kept in `order`, as decoding keeps it, so a state equals its own round trip.
     public init(accepted: [Retraining] = [], rejected: Set<RetrainingChoice> = [],
                 observations: [RetrainingChoice: [FamiliarityObservation]] = [:], names: [PlayerID: String] = [:]) {
-        self.accepted = accepted; self.rejected = rejected; self.observations = observations; self.names = names
+        self.accepted = accepted.sorted { Self.order(Self.choice($0), Self.choice($1)) }
+        self.rejected = rejected; self.observations = observations; self.names = names
     }
 
     /// By the player's key, then by the position's place in `Position.allCases`.

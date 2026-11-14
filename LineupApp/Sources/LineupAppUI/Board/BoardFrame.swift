@@ -55,7 +55,7 @@ struct TopRow: View {
     private func pills(_ layout: FlowLayout) -> some View {
         layout {
             ForEach(Screen.allCases) { screen in
-                ScreenPill(title: screen.title, isCurrent: navigation.screen == screen) { navigation.screen = screen }
+                ScreenPill(title: screen.pillTitle, isCurrent: navigation.screen == screen) { navigation.screen = screen }
             }
         }
         .accessibilityElement(children: .contain)

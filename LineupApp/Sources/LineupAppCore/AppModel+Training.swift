@@ -3,14 +3,14 @@ import LineupEngine
 
 extension AppModel {
     /// Accepts the retraining, dated with the game's current date, with the player's familiarity at the position in the
-    /// squads now as its first observation (none when he is not in them). A player learns one position at a time, so an
-    /// earlier acceptance of his is replaced and its observations forgotten. A rejection of the same pair is cleared.
-    /// Accepting a pair already accepted keeps its date and observations and only clears a rejection.
+    /// squads now as its first observation. A player learns one position at a time, so an earlier acceptance of his is
+    /// replaced and its observations forgotten. A rejection of the same pair is cleared. Accepting a pair already
+    /// accepted keeps its date and observations and only clears a rejection. Nothing happens for a player in no squad.
     public func accept(_ choice: RetrainingChoice) {
+        guard let player = squad.book.allPlayers.first(where: { $0.id == choice.player }) else { return }
         guard !training.accepted.contains(where: { TrainingState.choice($0) == choice }) else {
             return changeTraining { $0.rejected.remove(choice) }
         }
-        let player = squad.book.allPlayers.first { $0.id == choice.player }
         let today = settings.currentDate
         changeTraining { state in
             for replaced in state.accepted where replaced.player == choice.player {
@@ -19,21 +19,19 @@ extension AppModel {
             state.accepted.removeAll { $0.player == choice.player }
             state.accepted.append(Retraining(player: choice.player, position: choice.position, acceptedOn: today))
             state.rejected.remove(choice)
-            if let player {
-                state.names[choice.player] = player.name
-                if let familiarity = player.familiarity[choice.position] {
-                    state.record(familiarity, for: choice, on: today)
-                }
+            state.names[choice.player] = player.name
+            if let familiarity = player.familiarity[choice.position] {
+                state.record(familiarity, for: choice, on: today)
             }
         }
     }
 
-    /// Turns the retraining down, leaving any acceptance of it alone.
+    /// Turns the retraining down, leaving any acceptance of it alone. Nothing happens for a player in no squad.
     public func reject(_ choice: RetrainingChoice) {
-        let name = squad.book.allPlayers.first { $0.id == choice.player }?.name
+        guard let player = squad.book.allPlayers.first(where: { $0.id == choice.player }) else { return }
         changeTraining { state in
             state.rejected.insert(choice)
-            if let name { state.names[choice.player] = name }
+            state.names[choice.player] = player.name
         }
     }
 

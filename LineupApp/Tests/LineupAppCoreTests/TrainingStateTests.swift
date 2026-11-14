@@ -177,14 +177,27 @@ import LineupEngine
         #expect(again.notices.isEmpty)
     }
 
-    @Test func acceptingAPlayerNotInTheSquadHasNoFirstObservation() throws {
+    @Test func acceptingOrRejectingAPlayerInNoSquadDoesNothing() throws {
         let t = try TestModel()
         try t.importFirstTeam()
         let choice = RetrainingChoice(player: PlayerID.fmrte(999_999), position: .goalkeeper)
+        let planned = t.model.timesPlanned
         t.model.accept(choice)
-        #expect(t.model.training.accepted.map(\.player) == [choice.player])
-        #expect(t.model.training.observations[choice] == nil)
-        #expect(t.model.training.names.isEmpty)
+        #expect(t.model.training == TrainingState())
+        t.model.reject(choice)
+        #expect(t.model.training == TrainingState())
+        #expect(t.model.timesPlanned == planned)
+        #expect(t.reopened().training == TrainingState())
+    }
+
+    @Test func aStateBuiltUnsortedEqualsItsOwnRoundTrip() throws {
+        let unsorted = TrainingState(
+            accepted: [Retraining(player: bob, position: .striker, acceptedOn: today),
+                       Retraining(player: alice, position: .defenderLeft, acceptedOn: today)],
+            names: [alice: "Alice", bob: "Bob"])
+        #expect(unsorted.accepted.map(\.player) == [alice, bob])
+        let data = try JSONEncoder().encode(unsorted)
+        #expect(try JSONDecoder().decode(TrainingState.self, from: data) == unsorted)
     }
 
     @Test func aPlayerTrainsOnePositionAtATime() throws {

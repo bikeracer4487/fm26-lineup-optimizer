@@ -403,17 +403,21 @@ extension AppModel {
         var seen = Set<UUID>()
         for fixture in fixtures {
             guard let stored = tactic(for: fixture) else {
-                let sentence = "No tactic is the primary one. Make one primary on the Tactics screen."
-                if !found.contains(sentence) { found.append(sentence) }
+                if !found.contains(Self.noPrimaryTactic) { found.append(Self.noPrimaryTactic) }
                 continue
             }
             guard seen.insert(stored.id).inserted else { continue }
-            let problems = problems(of: stored.tactic)
-            if !problems.isEmpty {
-                found.append("\(stored.tactic.name) cannot be used: \(problems.joined(separator: "; ")).")
-            }
+            if let sentence = unusableSentence(stored.tactic) { found.append(sentence) }
         }
         return found
+    }
+
+    static let noPrimaryTactic = "No tactic is the primary one. Make one primary on the Tactics screen."
+
+    /// "<name> cannot be used: <the engine's problems>."; nil when the engine accepts the tactic.
+    func unusableSentence(_ tactic: Tactic) -> String? {
+        let problems = problems(of: tactic)
+        return problems.isEmpty ? nil : "\(tactic.name) cannot be used: \(problems.joined(separator: "; "))."
     }
 
     /// The earliest day with more than one of the fixtures, in words, its opponents in alphabetical order; nil when every

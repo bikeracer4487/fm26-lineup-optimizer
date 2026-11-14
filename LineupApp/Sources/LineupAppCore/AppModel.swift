@@ -83,8 +83,16 @@ public struct AppEnvironment: Sendable {
     /// The notice showing for each file that could not be saved, so a file that keeps failing is noticed once.
     @ObservationIgnored private var saveFailureNotices: [StoreFile: Notice.ID] = [:]
 
+    /// The advice since the last replan; nil until it is first read after one (see `adviceState`).
+    @ObservationIgnored var adviceCache: AdviceCache?
+    /// Changed by every replan, so whatever read the advice is drawn again once there is new advice to work out.
+    private(set) var adviceGeneration = 0
+
     /// How many times the plan has been worked out, so tests can tell when a change did not replan.
     @ObservationIgnored var timesPlanned = 0
+    /// How many times the advice, and the elevens of a tactic other than the primary, have been worked out.
+    @ObservationIgnored var timesAdvised = 0
+    @ObservationIgnored var timesElevensWorkedOut = 0
     @ObservationIgnored let store: Store
     @ObservationIgnored let environment: AppEnvironment
 
@@ -182,11 +190,14 @@ public struct AppEnvironment: Sendable {
         }
     }
 
-    /// Works the plan out again from the saved state. Every action that changes the squad, the saved tactics, the
-    /// fixtures, the history, the settings or the retrainings calls this after saving.
+    /// Works the plan out again from the saved state, and leaves the advice to be worked out again when next read.
+    /// Every action that changes the squad, the saved tactics, the fixtures, the history, the settings or the
+    /// retrainings calls this after saving.
     func replan() {
         timesPlanned += 1
         planState = rememberingElevens(workedOutPlan())
+        adviceCache = nil
+        adviceGeneration &+= 1
     }
 
     /// The drafts as saved: each with its tactic's id, in the order the tactics are listed; then, by id, those kept for

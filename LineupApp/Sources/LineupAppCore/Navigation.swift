@@ -14,8 +14,8 @@ public struct FixtureEditing: Identifiable, Equatable, Sendable {
 }
 
 /// What the owner has chosen to look at, kept while the app is open so it survives a change of screen: the screen,
-/// Match Selection's fixture, selected pick and view, the squad table's filter, search and sort, the tactic shown, and
-/// a fixture being edited.
+/// Match Selection's fixture, selected pick and view, the squad table's filter, search and sort, the tactic shown,
+/// a fixture being edited, and the Elevens screen's view, tactic and slot.
 @MainActor @Observable public final class Navigation {
     public var screen: Screen?
     /// The fixture shown. While nil, or once it has left the plan, `MatchPresentation.initialFixture`.
@@ -31,6 +31,10 @@ public struct FixtureEditing: Identifiable, Equatable, Sendable {
     public var squadSort = SquadSort()
     /// Nil: the editor is closed.
     public var fixtureEditing: FixtureEditing?
+    /// The Elevens screen's view, its tactic (nil: the primary) and the slot chosen in Depth (nil: none chosen).
+    public var elevensView: ElevensView = .first
+    public var elevensTacticID: UUID?
+    public var elevensSlot: SlotID?
 
     public init(screen: Screen? = .squad, matchFixture: FixtureID? = nil, matchSelection: PickSelection? = nil,
                 matchView: MatchView = .teamSheet, squadShown: Squad? = nil, squadSearch: String = "",

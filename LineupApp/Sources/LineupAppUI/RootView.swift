@@ -85,6 +85,10 @@ struct ScreenView: View {
         case .tactics: TacticsScreen(model: model, navigation: navigation, startingSlot: tacticSlot)
         case .fixtures: FixturesScreen(model: model, navigation: navigation)
         case .matchSelection: MatchSelectionScreen(model: model, navigation: navigation)
+        case .elevens: ElevensScreen(model: model, navigation: navigation)
+        case .rest: RestScreen(model: model)
+        case .training: TrainingScreen(model: model)
+        case .removal: RemovalScreen(model: model)
         case .settings: SettingsScreen(model: model)
         }
     }
