@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: mentoring groups design
 
 Date: 14 November 2026
-Status: approved by the owner on 14 November 2026 ("Both designs are approved, write the build plans")
+Status: approved by the owner on 14 November 2026 ("Both designs are approved, write the build plans"); built (see the plan's closing sections)
 
 Research behind it: `docs/Research/fm27-mentoring.md`. Finding numbers below ("finding 9") are that file's.
 
