@@ -40,4 +40,6 @@ struct AdviceCache {
     var suggestions: [FixtureID: ImportanceSuggestion]?
     /// By tactic id, for saved tactics other than the primary.
     var elevens: [UUID: ElevensState] = [:]
+    /// The planner's tiers by tactic id; nil for a tactic the engine refused.
+    var tiers: [UUID: SquadTiers?] = [:]
 }

@@ -46,18 +46,22 @@ extension AppModel {
         }
     }
 
-    /// Forgets the acceptance and its observations; nothing within `trainingActionInterval` of the last training action.
+    /// Forgets the acceptance and its observations, and takes away the notice an accepting or turning down showed, which
+    /// may no longer hold; nothing within `trainingActionInterval` of the last training action.
     public func stopRetraining(_ choice: RetrainingChoice) {
         guard mayTakeTrainingAction() else { return }
+        clearTrainingNotice()
         changeTraining { state in
             state.accepted.removeAll { TrainingState.choice($0) == choice }
             state.observations[choice] = nil
         }
     }
 
-    /// Undoes `reject`; nothing within `trainingActionInterval` of the last training action.
+    /// Undoes `reject`, and takes away the notice an accepting or turning down showed, which may no longer hold; nothing
+    /// within `trainingActionInterval` of the last training action.
     public func allowAgain(_ choice: RetrainingChoice) {
         guard mayTakeTrainingAction() else { return }
+        clearTrainingNotice()
         changeTraining { $0.rejected.remove(choice) }
     }
 
@@ -72,10 +76,16 @@ extension AppModel {
 
     /// Shows `text` as a notice in place of the last one an accepting or turning down showed.
     private func tellTraining(_ text: String) {
-        if let showing = trainingNotice { notices.removeAll { $0.id == showing } }
+        clearTrainingNotice()
         let notice = Notice(text: text)
         notices.append(notice)
         trainingNotice = notice.id
+    }
+
+    /// Takes away the notice the last accepting or turning down showed, if it is still showing.
+    private func clearTrainingNotice() {
+        if let showing = trainingNotice { notices.removeAll { $0.id == showing } }
+        trainingNotice = nil
     }
 
     /// The accepted retrainings of players still in any squad, in the training state's order, as the planner is handed

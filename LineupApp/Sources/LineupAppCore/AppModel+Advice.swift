@@ -76,36 +76,59 @@ extension AppModel {
         return .failed([ErrorDescriptions.describe(error)], fix: fix)
     }
 
-    private func workedOutSuggestions() -> [FixtureID: ImportanceSuggestion] {
+    /// The suggested importance for the fixture as `draft` has it: its date, competition, opponent's strength and
+    /// tactic (the primary when it names none, or names one no longer saved), among the other saved fixtures with no
+    /// confirmed lineup whose tactic the engine accepts, with the history's lineups and the planner's tiers for the
+    /// draft's tactic. Nil while the advice is not ready, for a tactic the engine refuses, for a fixture whose lineup
+    /// is confirmed (it is played), and when the engine cannot work it out.
+    public func suggestion(for draft: FixtureDraft) -> ImportanceSuggestion? {
+        guard case .ready = adviceState else { return nil }
+        if let id = draft.id, history.contains(where: { $0.lineup.fixture == id }) { return nil }
+        let stored = StoredFixture(id: draft.id ?? Self.draftFixtureID, date: draft.date, opponent: draft.opponent,
+                                   importance: draft.importance, tacticID: draft.tacticID,
+                                   competition: draft.competition, opponentStrength: draft.opponentStrength)
+        guard let tactic = tactic(for: stored), unusableSentence(tactic.tactic) == nil,
+              let tiers = tiers(for: tactic), let fixture = fixtureForPlanner(stored) else { return nil }
+        let among = openFixtures().map(\.fixture).filter { $0.id != draft.id }
+        return try? ImportanceAdvisor.suggest(for: fixture, among: among, confirmed: history.map(\.lineup),
+                                              players: squad.book.allPlayers, tiers: tiers, parameters: planParameters)
+    }
+
+    /// The id a fixture not saved yet is handed to the engine with: no saved fixture's id is blank.
+    private static let draftFixtureID = FixtureID("")
+
+    /// Each saved fixture with no confirmed lineup whose tactic the engine accepts, with that tactic, in date order.
+    private func openFixtures() -> [(tactic: StoredTactic, fixture: Fixture)] {
         let confirmed = Set(history.map(\.lineup.fixture))
-        let open = fixtures.compactMap { stored -> (tactic: StoredTactic, fixture: Fixture)? in
+        return fixtures.compactMap { stored -> (tactic: StoredTactic, fixture: Fixture)? in
             guard !confirmed.contains(stored.id), let tactic = tactic(for: stored), unusableSentence(tactic.tactic) == nil,
                   let fixture = fixtureForPlanner(stored) else { return nil }
             return (tactic, fixture)
         }
+    }
+
+    /// The planner's tiers for the tactic, worked out when first asked for after a replan and kept until the next;
+    /// nil when the engine refuses it.
+    private func tiers(for tactic: StoredTactic) -> SquadTiers? {
+        if let cached = adviceCache?.tiers[tactic.id] { return cached }
+        let tiers = try? SquadTiers.compute(tactic: tactic.tactic, players: squad.book.allPlayers, ownClub: ownClub,
+                                            catalog: catalog, profile: profile, parameters: planParameters)
+        adviceCache?.tiers[tactic.id] = .some(tiers)
+        return tiers
+    }
+
+    private func workedOutSuggestions() -> [FixtureID: ImportanceSuggestion] {
+        let open = openFixtures()
         let among = open.map(\.fixture)
         let players = squad.book.allPlayers
-        let club = ownClub
         let parameters = planParameters
         let lineups = history.map(\.lineup)
-        var tiers: [UUID: SquadTiers] = [:]
-        var refused: Set<UUID> = []
         var found: [FixtureID: ImportanceSuggestion] = [:]
-        for (tactic, fixture) in open where !refused.contains(tactic.id) {
-            if tiers[tactic.id] == nil {
-                do {
-                    tiers[tactic.id] = try SquadTiers.compute(tactic: tactic.tactic, players: players, ownClub: club,
-                                                              catalog: catalog, profile: profile, parameters: parameters)
-                } catch {
-                    refused.insert(tactic.id)
-                    continue
-                }
-            }
-            guard let fixtureTiers = tiers[tactic.id] else { continue }
+        for (tactic, fixture) in open {
+            guard let tiers = tiers(for: tactic) else { continue }
             do {
                 found[fixture.id] = try ImportanceAdvisor.suggest(for: fixture, among: among, confirmed: lineups,
-                                                                  players: players, tiers: fixtureTiers,
-                                                                  parameters: parameters)
+                                                                  players: players, tiers: tiers, parameters: parameters)
             } catch {
                 continue   // that fixture has no suggestion
             }

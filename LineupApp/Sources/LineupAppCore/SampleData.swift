@@ -2,7 +2,8 @@ import Foundation
 import Synchronization
 import LineupEngine
 
-/// An environment whose clipboard, FMRTE settings file and clock are set by code, for the sample data and the tests.
+/// An environment whose clipboard, FMRTE settings file and clock are set by code, for the sample data and the tests;
+/// or, for the sample data in a window the owner clicks in, the Mac's own monotonic clock.
 final class ScriptedInput: Sendable {
     enum Config: Sendable {
         case data(Data)
@@ -19,10 +20,13 @@ final class ScriptedInput: Sendable {
     }
 
     let today: Day
+    /// Whether the clock is the Mac's monotonic clock rather than `uptime`.
+    let usesRealClock: Bool
     private let state: Mutex<State>
 
-    init(today: Day, clipboard: String? = nil, config: Config = .data(Data())) {
+    init(today: Day, clipboard: String? = nil, config: Config = .data(Data()), usesRealClock: Bool = false) {
         self.today = today
+        self.usesRealClock = usesRealClock
         self.state = Mutex(State(clipboard: clipboard, config: config))
     }
 
@@ -61,7 +65,8 @@ final class ScriptedInput: Sendable {
                 }
             },
             now: {
-                self.state.withLock { state in
+                if self.usesRealClock { return ProcessInfo.processInfo.systemUptime }
+                return self.state.withLock { state in
                     defer { state.uptime += state.tick }
                     return state.uptime
                 }
@@ -93,6 +98,13 @@ public enum SampleData {
     /// the sample history, and the first retraining the advisors recommend, accepted.
     @MainActor public static func model(repositoryRoot: URL) throws -> AppModel {
         try build(repositoryRoot: repositoryRoot).model
+    }
+
+    /// The sample model for a window the owner clicks in: as `model`, but on the Mac's monotonic clock, so a second
+    /// click within the training actions' interval is ignored as in the real app. The pictures and the tests keep the
+    /// scripted clock, which moves a second at each reading.
+    @MainActor public static func interactiveModel(repositoryRoot: URL) throws -> AppModel {
+        try build(repositoryRoot: repositoryRoot, usesRealClock: true).model
     }
 
     /// The sample model after an import of text that is not FMRTE rows: the squads are unchanged and
@@ -225,6 +237,20 @@ public enum SampleData {
     @MainActor public static func modelWithTwoMatchesOnOneDay(repositoryRoot: URL) throws -> AppModel {
         let model = try build(repositoryRoot: repositoryRoot).model
         model.addFixture(date: Day(year: 2026, month: 11, day: 17)!, opponent: "Opponent F", importance: .low)
+        return model
+    }
+
+    /// The sample model with its second fixture, a league match against a weaker side, made high importance, so the
+    /// medium importance the advice suggests for it differs from the owner's choice. In the sample as it is, every
+    /// fixture's suggestion agrees with its importance.
+    @MainActor public static func modelWithDifferingSuggestion(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        guard model.fixtures.count >= 2 else {
+            throw SampleDataError(description: "The sample model has too few fixtures.")
+        }
+        var second = model.fixtures[1]
+        second.importance = .high
+        model.update(second)
         return model
     }
 
@@ -393,7 +419,8 @@ public enum SampleData {
 
     /// A model on a new temporary directory holding a copy of the sample's files, with the clipboard and FMRTE's
     /// settings file as the sample's last import left them.
-    @MainActor private static func build(repositoryRoot: URL) throws -> (model: AppModel, input: ScriptedInput) {
+    @MainActor private static func build(repositoryRoot: URL, usesRealClock: Bool = false) throws
+        -> (model: AppModel, input: ScriptedInput) {
         let sample = try built[repositoryRoot] ?? buildOnce(repositoryRoot: repositoryRoot)
         built[repositoryRoot] = sample
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("lineup-sample-\(UUID().uuidString)")
@@ -402,7 +429,8 @@ public enum SampleData {
         } catch {
             throw SampleDataError(description: "The sample data could not be copied to \(directory.path): \(error.localizedDescription)")
         }
-        let input = ScriptedInput(today: date, clipboard: sample.clipboard, config: sample.config)
+        let input = ScriptedInput(today: date, clipboard: sample.clipboard, config: sample.config,
+                                  usesRealClock: usesRealClock)
         return (AppModel(store: Store(directory: directory), environment: input.environment), input)
     }
 

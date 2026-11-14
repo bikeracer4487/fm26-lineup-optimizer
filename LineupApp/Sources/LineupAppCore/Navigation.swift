@@ -15,8 +15,8 @@ public struct FixtureEditing: Identifiable, Equatable, Sendable {
 
 /// What the owner has chosen to look at, kept while the app is open so it survives a change of screen: the screen,
 /// Match Selection's fixture, selected pick and view, the squad table's filter, search and sort, the tactic shown,
-/// a fixture being edited, the Elevens screen's view, tactic and slot, and the Player Removal screen's filter and the
-/// rows opened or closed.
+/// a fixture being edited and the fixture whose suggested importance's reasons are shown, the Elevens screen's view,
+/// tactic and slot, and the Player Removal screen's filter and the rows opened or closed.
 @MainActor @Observable public final class Navigation {
     public var screen: Screen?
     /// The fixture shown. While nil, or once it has left the plan, `MatchPresentation.initialFixture`.
@@ -32,6 +32,8 @@ public struct FixtureEditing: Identifiable, Equatable, Sendable {
     public var squadSort = SquadSort()
     /// Nil: the editor is closed.
     public var fixtureEditing: FixtureEditing?
+    /// The fixture whose suggested importance's reasons are shown under its row; nil: none. One at a time.
+    public private(set) var fixtureReasons: FixtureID?
     /// The Elevens screen's view, its tactic (nil: the primary) and the slot chosen in Depth (nil: none chosen).
     public var elevensView: ElevensView = .first
     public var elevensTacticID: UUID?
@@ -45,5 +47,14 @@ public struct FixtureEditing: Identifiable, Equatable, Sendable {
                 tacticID: UUID? = nil) {
         self.screen = screen; self.matchFixture = matchFixture; self.matchSelection = matchSelection
         self.matchView = matchView; self.squadShown = squadShown; self.squadSearch = squadSearch; self.tacticID = tacticID
+    }
+
+    /// Shows the fixture's reasons in place of any others shown, or hides them when they are the ones shown.
+    public func toggleReasons(of fixture: FixtureID) {
+        fixtureReasons = fixtureReasons == fixture ? nil : fixture
+    }
+
+    public func showsReasons(of fixture: FixtureID) -> Bool {
+        fixtureReasons == fixture
     }
 }

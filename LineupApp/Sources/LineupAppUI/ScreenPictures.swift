@@ -25,11 +25,12 @@ public enum ScreenPictures {
     /// "<screen>-light.png" and "<screen>-dark.png" into `directory`; with a variant,
     /// "<screen>-<variant>-light.png" and "<screen>-<variant>-dark.png". Match Selection's pictures are named
     /// "match-…". With a tactic slot, the Tactics editor is drawn with that slot selected; Match Selection is drawn
-    /// as `matchStart` says, the Elevens screen as `elevensStart` says, and Player Removal as `removalStart` says.
+    /// as `matchStart` says, the Elevens screen as `elevensStart` says, Player Removal as `removalStart` says, and
+    /// Fixtures as `fixturesStart` says.
     @MainActor public static func write(
         model: AppModel, to directory: URL, size: CGSize, variant: String? = nil, screens: [Screen] = Screen.allCases,
         tacticSlot: TacticSlot? = nil, matchStart: MatchStart = MatchStart(), elevensStart: ElevensStart = ElevensStart(),
-        removalStart: RemovalStart = RemovalStart()
+        removalStart: RemovalStart = RemovalStart(), fixturesStart: FixturesStart = FixturesStart()
     ) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let appearances: [(suffix: String, name: NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
@@ -38,7 +39,8 @@ public enum ScreenPictures {
                 let name = ([pictureName(of: screen)] + [variant].compactMap { $0 } + [appearance.suffix])
                     .joined(separator: "-") + ".png"
                 let png = try draw(RootView(model: model, showing: screen, tacticSlot: tacticSlot, matchStart: matchStart,
-                                            elevensStart: elevensStart, removalStart: removalStart),
+                                            elevensStart: elevensStart, removalStart: removalStart,
+                                            fixturesStart: fixturesStart),
                                    size: size, appearance: appearance.name, name: name)
                 do {
                     try png.write(to: directory.appendingPathComponent(name), options: .atomic)
@@ -50,16 +52,18 @@ public enum ScreenPictures {
     }
 
     /// Draws the fixture editor's card on its own on the board, for `draft` in `model`, in light and in dark:
-    /// "fixtures-editor-light.png" and "fixtures-editor-dark.png".
-    @MainActor public static func writeFixtureEditor(model: AppModel, draft: FixtureDraft, to directory: URL) throws {
+    /// "<name>-light.png" and "<name>-dark.png", "fixtures-editor-…" unless named otherwise.
+    @MainActor public static func writeFixtureEditor(model: AppModel, draft: FixtureDraft, to directory: URL,
+                                                     name pictureName: String = "fixtures-editor",
+                                                     size: CGSize = Theme.Layout.fixtureEditorPicture) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
-            let name = "fixtures-editor-\(suffix).png"
+            let name = "\(pictureName)-\(suffix).png"
             let editor = BoardFrame {
                 FixtureEditor(model: model, draft: .constant(draft)) {}
             }
             .boardAppearance()
-            let png = try draw(editor, size: Theme.Layout.fixtureEditorPicture, appearance: appearance, name: name)
+            let png = try draw(editor, size: size, appearance: appearance, name: name)
             do {
                 try png.write(to: directory.appendingPathComponent(name), options: .atomic)
             } catch {

@@ -170,6 +170,45 @@ import Testing
         #expect(again.filter(disclosure.isOpen).map(\.name) == ["Keep One", "High One", "Critical One"])
     }
 
+    @Test func theOwnersChoiceHoldsOnlyAtTheLevelItWasMadeAt() {
+        func rows(_ level: RemovalLevel) -> [RemovalRow] {
+            RemovalPresentation.sheet(report([advice("p", name: "Josh Ashby", level: level),
+                                              advice("q", name: "Ewan Clark", level: .medium)]),
+                                      squads: [:], ages: [:]).rows
+        }
+        var disclosure = RemovalDisclosure()
+        let medium = rows(.medium)
+        disclosure.toggle(medium[0])
+        disclosure.toggle(medium[1])
+        #expect(medium.map(disclosure.isOpen) == [true, true])
+
+        // His level changes: his row is as the new level says, and the choice is dropped when the rows are rebuilt.
+        let keep = rows(.keep)
+        #expect(!disclosure.isOpen(keep[0]))
+        disclosure.prune(to: keep)
+        #expect(disclosure.isOpen(keep[1]))   // Ewan Clark's level did not change, so his choice stays.
+
+        // Back at the old level, the old choice does not come back.
+        disclosure.prune(to: medium)
+        #expect(medium.map(disclosure.isOpen) == [false, true])
+
+        // The same for a row open by default that the owner closed.
+        let high = rows(.high)
+        disclosure.toggle(high[0])
+        #expect(!disclosure.isOpen(high[0]))
+        disclosure.prune(to: rows(.critical))
+        disclosure.prune(to: high)
+        #expect(disclosure.isOpen(high[0]))
+    }
+
+    @Test func aPlayerNoLongerListedLosesTheOwnersChoice() {
+        var disclosure = RemovalDisclosure()
+        let rows = RemovalPresentation.sheet(report(everyLevel), squads: [:], ages: [:]).rows
+        disclosure.toggle(rows[2])
+        disclosure.prune(to: Array(rows.prefix(2)))
+        #expect(disclosure == RemovalDisclosure())
+    }
+
     @Test func everyRowCanBeOpenedAtOnce() {
         let rows = RemovalPresentation.sheet(report(everyLevel), squads: [:], ages: [:]).rows
         let disclosure = RemovalDisclosure.allOpen(rows)

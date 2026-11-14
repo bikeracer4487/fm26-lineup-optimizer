@@ -4,7 +4,8 @@
 //   LineupApp                                  opens the window on the app's own files in
 //                                              ~/Library/Application Support/FM27 Lineup Optimizer
 //   LineupApp --sample-data <repository root>  opens the window on the engine's sample squads, tactic and
-//                                              fixtures, in a temporary directory
+//                                              fixtures, in a temporary directory, on the Mac's own clock
+//                                              (the pictures use a scripted one)
 //   LineupApp --pictures <directory>           draws every screen, light and dark, to PNG files in
 //                                              <directory>, then exits (0 on success, 1 on a problem).
 //                                              Without --sample-data it draws an empty model; with it,
@@ -17,6 +18,12 @@
 //                                              screen is drawn empty ("fixtures-empty-…"), five days on with one
 //                                              past fixture confirmed and one not ("fixtures-past-…"), and its
 //                                              editor on its own for the confirmed fixture ("fixtures-editor-…").
+//                                              The Fixtures screen itself ("fixtures-…", "fixtures-narrow-…",
+//                                              "fixtures-small-…") is drawn with the second fixture made high
+//                                              importance, so its suggested importance differs and shows; so
+//                                              with that suggestion's reasons shown ("fixtures-reasons-…"); and
+//                                              the editor on its own for that fixture
+//                                              ("fixture-editor-suggestion-…").
 //                                              Match Selection ("match-…") is drawn on the first fixture with the
 //                                              left back selected; as starts ("match-starts-…"); with the owner's
 //                                              choices in the first fixture, in a taller window
@@ -126,6 +133,7 @@ enum SampleState {
     case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange, pastFixtures
     case afterConfirmingFirst, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
     case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, nothingToRetrain, loanee
+    case differingSuggestion
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -151,6 +159,7 @@ enum SampleState {
         case .retrainingUnderWay: return try SampleData.modelWithRetrainingUnderWay(repositoryRoot: url)
         case .nothingToRetrain: return try SampleData.modelWithNothingToRetrain(repositoryRoot: url)
         case .loanee: return try SampleData.modelWithLoanee(repositoryRoot: url)
+        case .differingSuggestion: return try SampleData.modelWithDifferingSuggestion(repositoryRoot: url)
         }
     } catch {
         fail("\(error)")
@@ -203,15 +212,31 @@ let narrowWindow = CGSize(width: 800, height: 700)
     // The narrow and the smallest windows: the detail under the pitch, the pitches stacked, and scrolling; the other
     // screens narrow, so the pills wrap.
     try ScreenPictures.write(model: sampleModel(root, .afterImport), to: directory, size: narrowWindow, variant: "narrow",
-                             screens: [.squad, .fixtures, .settings] + advisorScreens)
+                             screens: [.squad, .settings] + advisorScreens)
     try ScreenPictures.write(model: plain, to: directory, size: Theme.Layout.minimumWindow, variant: "small",
-                             screens: [.fixtures] + advisorScreens)
+                             screens: advisorScreens)
     for (variant, small) in [("narrow", narrowWindow), ("small", Theme.Layout.minimumWindow)] {
         try ScreenPictures.write(model: plain, to: directory, size: small, variant: variant,
                                  screens: [.matchSelection], matchStart: MatchStart(slot: .D_L))
         try ScreenPictures.write(model: sampleModel(root, .unsavedTacticChange), to: directory, size: small,
                                  variant: variant, screens: [.tactics], tacticSlot: TacticSlot(.AM_L, in: .inPossession))
     }
+}
+
+/// The Fixtures screen with a suggestion that differs, its reasons, and the editor with it: see the usage at the top.
+@MainActor func drawFixtures(_ root: String, to directory: URL, size: CGSize) throws {
+    let model = sampleModel(root, .differingSuggestion)
+    guard let differing = model.fixtures.first(where: { model.suggestionLine(for: $0) != nil }) else {
+        fail("No sample fixture has a suggested importance that differs from its own.")
+    }
+    for (variant, window) in [(String?.none, size), ("narrow", narrowWindow), ("small", Theme.Layout.minimumWindow)] {
+        try ScreenPictures.write(model: model, to: directory, size: window, variant: variant, screens: [.fixtures])
+    }
+    try ScreenPictures.write(model: model, to: directory, size: size, variant: "reasons", screens: [.fixtures],
+                             fixturesStart: FixturesStart(reasonsOf: differing.id))
+    try ScreenPictures.writeFixtureEditor(model: model, draft: model.fixtureDraft(for: differing), to: directory,
+                                          name: "fixture-editor-suggestion",
+                                          size: Theme.Layout.fixtureEditorSuggestionPicture)
 }
 
 /// The Elevens screen's views: see the usage at the top.
@@ -291,7 +316,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
         if let root = sampleDataRoot {
             // The left back has the most reasons in the first fixture.
             try ScreenPictures.write(model: sampleModel(root), to: directory, size: size,
-                                     screens: Screen.allCases.filter { $0 != .tactics && $0 != .training },
+                                     screens: Screen.allCases.filter { ![.tactics, .training, .fixtures].contains($0) },
                                      matchStart: MatchStart(slot: .D_L))
             // With an unsaved change, the left inside forward made a winger and selected, so the role menu,
             // "Remove", what he becomes and the marks for unsaved changes are all shown.
@@ -313,6 +338,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
                                      variant: "failed", screens: [.squad])
             try ScreenPictures.write(model: sampleModel(root, .afterImport), to: directory, size: size,
                                      variant: "imported", screens: [.squad])
+            try drawFixtures(root, to: directory, size: size)
             try drawMatchSelection(root, to: directory, size: size)
             try drawElevens(root, to: directory, size: size)
             try drawRest(root, to: directory, size: size)
@@ -346,7 +372,14 @@ if let pictures = options.picturesDirectory {
     if let typefaceNotice { fail(typefaceNotice) }
     exit(drawPictures(to: pictures, sampleDataRoot: options.sampleDataRoot))
 }
-Startup.model = options.sampleDataRoot.map { sampleModel($0) }
-    ?? AppModel(store: Store(directory: LiveEnvironment.storeDirectory), environment: LiveEnvironment.make())
+// The window on the sample data reads the Mac's clock, so the training actions' guard against a second click works
+// there as in the real app.
+Startup.model = options.sampleDataRoot.map { root in
+    do {
+        return try SampleData.interactiveModel(repositoryRoot: URL(fileURLWithPath: root, isDirectory: true))
+    } catch {
+        fail("\(error)")
+    }
+} ?? AppModel(store: Store(directory: LiveEnvironment.storeDirectory), environment: LiveEnvironment.make())
 if let typefaceNotice { Startup.model?.addNotice(typefaceNotice) }
 LineupApplication.main()

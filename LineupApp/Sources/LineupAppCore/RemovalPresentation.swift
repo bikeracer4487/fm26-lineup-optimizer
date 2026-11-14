@@ -160,32 +160,41 @@ public struct RemovalFigure: Identifiable, Equatable, Sendable {
 }
 
 /// Which removal rows the owner has opened or closed while the app runs; any other row is open or closed as its level
-/// says. Kept by player, so a row stays as the owner left it when the advice is worked out again.
+/// says. Kept by player, so a row stays as the owner left it when the advice is worked out again, but only while his
+/// level is the one the choice was made at: a choice for another level does not apply, and `prune` drops it.
 public struct RemovalDisclosure: Equatable, Sendable {
-    /// Rows closed by default that the owner opened.
-    public var opened: Set<PlayerID> = []
-    /// Rows open by default that the owner closed.
-    public var closed: Set<PlayerID> = []
+    /// Rows closed by default that the owner opened, with the level each was at.
+    public private(set) var opened: [PlayerID: RemovalLevel] = [:]
+    /// Rows open by default that the owner closed, with the level each was at.
+    public private(set) var closed: [PlayerID: RemovalLevel] = [:]
 
     public init() {}
 
     public func isOpen(_ row: RemovalRow) -> Bool {
-        row.opensByDefault ? !closed.contains(row.id) : opened.contains(row.id)
+        row.opensByDefault ? closed[row.id] != row.level : opened[row.id] == row.level
     }
 
     /// Opens the row if it is closed, closes it if it is open.
     public mutating func toggle(_ row: RemovalRow) {
         if row.opensByDefault {
-            if closed.remove(row.id) == nil { closed.insert(row.id) }
+            closed[row.id] = closed[row.id] == row.level ? nil : row.level
         } else {
-            if opened.remove(row.id) == nil { opened.insert(row.id) }
+            opened[row.id] = opened[row.id] == row.level ? nil : row.level
         }
+    }
+
+    /// Drops each choice whose player is no longer among `rows` (every row of the sheet, whatever the filter), or is
+    /// at another level than the choice was made at, so a stale choice cannot come back if he returns to that level.
+    public mutating func prune(to rows: [RemovalRow]) {
+        let levels = Dictionary(rows.map { ($0.id, $0.level) }, uniquingKeysWith: { first, _ in first })
+        opened = opened.filter { levels[$0.key] == $0.value }
+        closed = closed.filter { levels[$0.key] == $0.value }
     }
 
     /// Every one of `rows` open.
     public static func allOpen(_ rows: [RemovalRow]) -> RemovalDisclosure {
         var disclosure = RemovalDisclosure()
-        disclosure.opened = Set(rows.filter { !$0.opensByDefault }.map(\.id))
+        for row in rows where !row.opensByDefault { disclosure.opened[row.id] = row.level }
         return disclosure
     }
 }

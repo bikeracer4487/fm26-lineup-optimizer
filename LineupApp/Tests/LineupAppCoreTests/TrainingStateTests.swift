@@ -315,6 +315,51 @@ import LineupEngine
         #expect(t.model.training.rejected == [second])
     }
 
+    @Test func allowingAgainWithinTheIntervalIsIgnored() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let choice = try learner(t.model)
+        t.input.tick = 0
+        t.input.uptime = 1_000
+        t.model.reject(choice)
+        t.input.uptime += AppModel.trainingActionInterval / 2
+        t.model.allowAgain(choice)
+        #expect(t.model.training.rejected == [choice])
+    }
+
+    @Test func anIgnoredActionDoesNotMoveTheWindow() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let (first, second) = try twoLearners(t.model)
+        t.input.tick = 0
+        t.input.uptime = 1_000
+        t.model.accept(first)
+        t.input.uptime = 1_000.25
+        t.model.accept(second)
+        #expect(t.model.training.accepted.map(\.player) == [first.player])
+        // Half a second after the last action that went ahead, not after the one ignored.
+        t.input.uptime = 1_000.5
+        t.model.reject(second)
+        #expect(t.model.training.rejected == [second])
+    }
+
+    @Test func theSampleWindowUsesTheMacsMonotonicClockAndThePicturesTheScriptedOne() throws {
+        // Two readings with nothing between them: the real clock barely moves, inside the interval, so a second click
+        // is ignored. (Each action replans, which in a debug build can itself take longer than the interval.)
+        let model = try SampleData.interactiveModel(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let before = model.environment.now()
+        let real = ProcessInfo.processInfo.systemUptime
+        let after = model.environment.now()
+        #expect(before <= real && real <= after)
+        #expect(after - before < AppModel.trainingActionInterval)
+        // The scripted clock of the picture run and the tests moves a second at each reading.
+        let scripted = try SampleData.model(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: scripted.store.directory) }
+        let first = scripted.environment.now()
+        #expect(scripted.environment.now() - first == 1)
+    }
+
     @Test func theFirstTrainingActionIsNeverIgnored() throws {
         // A model whose clock reads 0 on its first training action, as a monotonic clock may soon after starting.
         let t = try TestModel()
@@ -367,10 +412,44 @@ import LineupEngine
         t.model.accept(first)
         t.model.accept(second)
         #expect(t.model.notices.count == 1)
-        // Stopping and offering again change nothing the owner has to act on in the game: no notice.
-        t.input.uptime += 1
+    }
+
+    @Test func stoppingOrAllowingAgainTakesAwayTheTrainingNoticeAndSaysNothingNew() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let (first, second) = try twoLearners(t.model)
+        t.model.addNotice("Something else")
+        t.model.accept(first)
+        #expect(t.model.notices.count == 2)
+        // "… is now learning …" no longer holds once the retraining is stopped; the other notice stays.
+        t.model.stopRetraining(RetrainingChoice(player: first.player, position: first.position))
+        #expect(t.model.notices.map(\.text) == ["Something else"])
+        #expect(t.model.trainingNotice == nil)
+
+        t.model.reject(second)
+        #expect(t.model.notices.count == 2)
+        t.model.allowAgain(second)
+        #expect(t.model.notices.map(\.text) == ["Something else"])
+
+        // With no training notice showing, stopping leaves the notices alone.
+        t.model.accept(first)
+        let showing = try #require(t.model.notices.last)
+        t.model.dismiss(showing)
         t.model.stopRetraining(first)
+        #expect(t.model.notices.map(\.text) == ["Something else"])
+    }
+
+    @Test func anIgnoredStopLeavesTheTrainingNotice() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let choice = try learner(t.model)
+        t.input.tick = 0
+        t.input.uptime = 1_000
+        t.model.accept(choice)
+        t.input.uptime += AppModel.trainingActionInterval / 2
+        t.model.stopRetraining(choice)
         #expect(t.model.notices.count == 1)
+        #expect(t.model.training.accepted.map(\.player) == [choice.player])
     }
 
     // MARK: Observations at each import

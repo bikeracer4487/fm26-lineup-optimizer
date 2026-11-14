@@ -68,6 +68,21 @@ public enum AdvisorText {
         }
     }
 
+    /// A fixture's importance by name, as a menu or a badge shows it.
+    public static func name(_ importance: Importance) -> String {
+        switch importance {
+        case .high: "High"
+        case .medium: "Medium"
+        case .low: "Low"
+        case .sharpness: "Sharpness"
+        }
+    }
+
+    /// "Suggested: High": the importance the advice suggests for a fixture.
+    public static func suggested(_ suggestion: ImportanceSuggestion) -> String {
+        "Suggested: \(name(suggestion.importance))"
+    }
+
     /// How well backed a piece of advice is, as a note after it; nil for FM27 evidence.
     public static func note(for basis: Evidence) -> String? {
         switch basis {

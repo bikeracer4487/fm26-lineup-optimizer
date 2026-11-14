@@ -2,15 +2,8 @@ import Foundation
 import LineupEngine
 
 extension Importance {
-    /// The importance's name on a badge or in a menu.
-    public var displayName: String {
-        switch self {
-        case .high: "High"
-        case .medium: "Medium"
-        case .low: "Low"
-        case .sharpness: "Sharpness"
-        }
-    }
+    /// The importance's name on a badge or in a menu, in the engine's words.
+    public var displayName: String { AdvisorText.name(self) }
 }
 
 extension TrainingIntensity {
@@ -76,6 +69,25 @@ public struct FixtureDraft: Equatable, Sendable {
 
     public var isNew: Bool { id == nil }
 
+    /// The competition menu: "Not set", then each competition in the engine's words.
+    public static var competitionChoices: [(value: Competition?, title: String)] {
+        [(nil, notSet)] + Competition.allCases.map { (Competition?.some($0), AdvisorText.name($0)) }
+    }
+
+    /// The opponent menu: "Not set", then each strength in the engine's words, strongest first.
+    public static var opponentChoices: [(value: OpponentStrength?, title: String)] {
+        [(nil, notSet)] + OpponentStrength.allCases.map { (OpponentStrength?.some($0), AdvisorText.name($0)) }
+    }
+
+    public static let notSet = "Not set"
+    public static let competitionLabel = "Competition"
+    public static let opponentStrengthLabel = "Opponent"
+
+    /// Takes the suggested importance as the draft's; the fixture changes only when the draft is saved.
+    public mutating func take(_ suggestion: SuggestionNote) {
+        importance = suggestion.importance
+    }
+
     public var saveButtonTitle: String { isNew ? "Add fixture" : "Save changes" }
 
     /// Whether the owner has tried to save, or typed an opponent and cleared it. Until then a blank opponent is not
@@ -109,7 +121,50 @@ public struct FixtureDraft: Equatable, Sendable {
     }
 }
 
+/// A suggested importance as the Fixtures screen and its editor show it: "Suggested: High", the engine's reasons as
+/// written, its evidence note, and whether it differs from the importance chosen.
+public struct SuggestionNote: Equatable, Sendable {
+    public static let useItTitle = "Use it"
+
+    /// What a click on the line in the table does.
+    public static func clickHelp(_ shown: Bool) -> String {
+        shown ? "Hide the reasons" : "Show the reasons"
+    }
+
+    public let importance: Importance
+    /// "Suggested: High", in the engine's words.
+    public let text: String
+    /// The engine's reasons, in its order.
+    public let reasons: [String]
+    /// The evidence note in brackets: "(this tool's estimate)"; nil for FM27 evidence.
+    public let noteText: String?
+    /// Whether the suggestion differs from the importance chosen, so "Use it" is offered.
+    public let showsUseIt: Bool
+
+    public init(_ suggestion: ImportanceSuggestion, chosen: Importance) {
+        importance = suggestion.importance
+        text = AdvisorText.suggested(suggestion)
+        reasons = suggestion.reasons
+        noteText = AdvisorText.note(for: suggestion.basis).map { "(\($0))" }
+        showsUseIt = suggestion.importance != chosen
+    }
+}
+
 extension AppModel {
+    /// The suggestion for the fixture as the draft has it, against the importance the draft has chosen; nil when
+    /// there is none.
+    public func suggestionNote(for draft: FixtureDraft) -> SuggestionNote? {
+        suggestion(for: draft).map { SuggestionNote($0, chosen: draft.importance) }
+    }
+
+    /// The line under a fixture's importance in the table: its suggestion, only when that differs from the importance
+    /// the owner chose and no lineup is confirmed for it.
+    public func suggestionLine(for fixture: StoredFixture) -> SuggestionNote? {
+        guard state(of: fixture) != .confirmed, let suggestion = suggestions[fixture.id],
+              suggestion.importance != fixture.importance else { return nil }
+        return SuggestionNote(suggestion, chosen: fixture.importance)
+    }
+
     public func state(of fixture: StoredFixture) -> FixtureState {
         if history.contains(where: { $0.lineup.fixture == fixture.id }) { return .confirmed }
         return fixture.date < settings.currentDate ? .pastNotConfirmed : .toPlay

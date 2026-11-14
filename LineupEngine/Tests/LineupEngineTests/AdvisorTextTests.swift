@@ -15,6 +15,20 @@ import Testing
                 == ["Much stronger", "Stronger", "Similar", "Weaker", "Much weaker"])
     }
 
+    @Test func eachImportanceHasItsName() {
+        #expect(Importance.allCases.map { AdvisorText.name($0) } == ["High", "Medium", "Low", "Sharpness"])
+    }
+
+    @Test func aSuggestionNamesItsImportance() {
+        func suggestion(_ importance: Importance) -> ImportanceSuggestion {
+            ImportanceSuggestion(importance: importance, score: 6, reasons: ["League match: 6"], basis: .derived)
+        }
+        #expect(AdvisorText.suggested(suggestion(.high)) == "Suggested: High")
+        #expect(AdvisorText.suggested(suggestion(.sharpness)) == "Suggested: Sharpness")
+        #expect(Importance.allCases.map { AdvisorText.suggested(suggestion($0)) }
+                == Importance.allCases.map { "Suggested: \(AdvisorText.name($0))" })
+    }
+
     @Test func evidenceNotes() {
         #expect(AdvisorText.note(for: .fm27Measured) == nil)
         #expect(AdvisorText.note(for: .fm27Official) == nil)

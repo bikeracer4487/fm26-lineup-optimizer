@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import LineupEngine
+@testable import LineupEngine
 @testable import LineupAppCore
 
 @Suite struct FixtureWordsTests {
@@ -284,6 +284,262 @@ import LineupEngine
         #expect(model.notices.isEmpty)
         #expect(model.settings.currentDate == day("2026-11-18"))
         #expect(model.fixtures.map(model.state(of:)) == [.confirmed, .pastNotConfirmed, .toPlay, .toPlay, .toPlay])
+    }
+
+    // MARK: Competition and opponent
+
+    @Test func theCompetitionAndOpponentMenusStartWithNotSetThenTheEnginesNames() {
+        #expect(FixtureDraft.competitionChoices.map(\.value) == [nil] + Competition.allCases.map(Optional.some))
+        #expect(FixtureDraft.competitionChoices.map(\.title) == ["Not set", "League", "Cup", "Minor cup", "Friendly"])
+        #expect(FixtureDraft.competitionChoices.dropFirst().map(\.title) == Competition.allCases.map { AdvisorText.name($0) })
+        #expect(FixtureDraft.opponentChoices.map(\.value) == [nil] + OpponentStrength.allCases.map(Optional.some))
+        #expect(FixtureDraft.opponentChoices.map(\.title)
+                == ["Not set", "Much stronger", "Stronger", "Similar", "Weaker", "Much weaker"])
+        #expect(FixtureDraft.opponentChoices.dropFirst().map(\.title) == OpponentStrength.allCases.map { AdvisorText.name($0) })
+    }
+
+    @Test func theImportanceIsNamedAsTheEngineNamesIt() {
+        #expect(Importance.allCases.map(\.displayName) == Importance.allCases.map { AdvisorText.name($0) })
+    }
+
+    // MARK: The suggestion for a draft
+
+    /// The engine's suggestion for `fixture` among `among`, with the planner's tiers for the primary tactic.
+    private func engineSuggestion(_ model: AppModel, for fixture: Fixture, among: [StoredFixture]) throws
+        -> ImportanceSuggestion {
+        let tactic = try #require(model.primaryTactic).tactic
+        let tiers = try SquadTiers.compute(tactic: tactic, players: model.squad.book.allPlayers, ownClub: model.ownClub,
+                                           catalog: model.catalog, profile: model.profile, parameters: model.planParameters)
+        return try ImportanceAdvisor.suggest(
+            for: fixture, among: among.compactMap(model.fixtureForPlanner), confirmed: model.history.map(\.lineup),
+            players: model.squad.book.allPlayers, tiers: tiers, parameters: model.planParameters)
+    }
+
+    /// The draft as the engine sees it, on the primary tactic.
+    private func engineFixture(_ model: AppModel, _ draft: FixtureDraft, id: FixtureID) throws -> Fixture {
+        Fixture(id: id, date: draft.date, opponent: draft.opponent, importance: draft.importance,
+                tactic: try #require(model.primaryTactic).tactic, competition: draft.competition,
+                opponentStrength: draft.opponentStrength)
+    }
+
+    private func sample() throws -> AppModel {
+        try SampleData.model(repositoryRoot: Captures.repositoryRoot)
+    }
+
+    @Test func theSuggestionForAFixtureBeingEditedIsTheEnginesAmongTheOtherFixtures() throws {
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let saved = model.fixtures[2]
+        let others = model.fixtures.filter { $0.id != saved.id }
+        let draft = model.fixtureDraft(for: saved)
+        let expected = try engineSuggestion(model, for: try engineFixture(model, draft, id: saved.id), among: others)
+        #expect(model.suggestion(for: draft) == expected)
+        // Unedited, it is the saved fixture's own suggestion.
+        #expect(model.suggestion(for: draft) == model.suggestions[saved.id])
+    }
+
+    @Test func editingTheCompetitionTheOpponentAndTheDateEachChangeTheSuggestionAsTheEngineSays() throws {
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let saved = model.fixtures[1]
+        let others = model.fixtures.filter { $0.id != saved.id }
+        var draft = model.fixtureDraft(for: saved)
+        let before = try #require(model.suggestion(for: draft))
+        func check(_ what: String, sourceLocation: SourceLocation = #_sourceLocation) throws -> ImportanceSuggestion {
+            let found = try #require(model.suggestion(for: draft), sourceLocation: sourceLocation)
+            #expect(found == (try engineSuggestion(model, for: try engineFixture(model, draft, id: saved.id), among: others)),
+                    "\(what)", sourceLocation: sourceLocation)
+            return found
+        }
+
+        draft.competition = .friendly
+        let friendly = try check("competition")
+        #expect(friendly != before)
+        draft.opponentStrength = .muchStronger
+        let stronger = try check("opponent")
+        #expect(stronger != friendly)
+        draft.date = Day(iso: "2026-11-19")!
+        let moved = try check("date")
+        #expect(moved != stronger)
+        // Nothing saved: the saved fixture's suggestion is as it was.
+        #expect(model.suggestions[saved.id] == before)
+    }
+
+    @Test func aDraftWithNothingSetIsSuggestedFromTheScheduleAlone() throws {
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        var draft = model.newFixtureDraft()
+        draft.opponent = "Opponent F"
+        #expect(draft.competition == nil && draft.opponentStrength == nil)
+        let found = try #require(model.suggestion(for: draft))
+        #expect(found == (try engineSuggestion(model, for: try engineFixture(model, draft, id: FixtureID("any")),
+                                               among: model.fixtures)))
+        #expect(found.reasons.first?.hasPrefix("No competition set") == true)
+    }
+
+    @Test func aDraftOnAnotherTacticIsSuggestedWithThatTacticsTiers() throws {
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let saved = model.fixtures[3]
+        let id = model.addTactic(named: model.unusedTacticName("Wide"))
+        var stored = try #require(model.tactics.first { $0.id == id })
+        var tacticDraft = TacticDraft(stored.tactic)
+        tacticDraft.setRole("Winger", at: .AM_L, in: .inPossession)
+        stored.tactic = tacticDraft.tactic
+        model.update(stored)
+        #expect(model.problems(of: stored.tactic).isEmpty)
+        #expect(stored.tactic != model.primaryTactic?.tactic)
+        var draft = model.fixtureDraft(for: saved)
+        draft.tacticID = id
+        let tiers = try SquadTiers.compute(tactic: stored.tactic, players: model.squad.book.allPlayers,
+                                           ownClub: model.ownClub, catalog: model.catalog, profile: model.profile,
+                                           parameters: model.planParameters)
+        var fixture = try engineFixture(model, draft, id: saved.id)
+        fixture.tactic = stored.tactic
+        let expected = try ImportanceAdvisor.suggest(
+            for: fixture, among: model.fixtures.filter { $0.id != saved.id }.compactMap(model.fixtureForPlanner),
+            confirmed: model.history.map(\.lineup), players: model.squad.book.allPlayers, tiers: tiers,
+            parameters: model.planParameters)
+        #expect(model.suggestion(for: draft) == expected)
+    }
+
+    @Test func aDraftHasNoSuggestionWithoutAdviceOrAUsableTacticOrForAConfirmedMatch() throws {
+        // No squad: the advice is not ready.
+        let t = try TestModel()
+        var empty = t.model.newFixtureDraft()
+        empty.opponent = "A"
+        #expect(t.model.suggestion(for: empty) == nil)
+        #expect(t.model.suggestionNote(for: empty) == nil)
+
+        // A tactic the engine refuses.
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let refused = model.addTactic(named: model.unusedTacticName("Broken"))
+        var stored = try #require(model.tactics.first { $0.id == refused })
+        var tacticDraft = TacticDraft(stored.tactic)
+        tacticDraft.toggle(.ST_C, in: .inPossession, catalog: model.catalog)
+        stored.tactic = tacticDraft.tactic
+        model.update(stored)
+        var draft = model.fixtureDraft(for: model.fixtures[0])
+        #expect(model.suggestion(for: draft) != nil)
+        draft.tacticID = refused
+        #expect(model.suggestion(for: draft) == nil)
+
+        // A match already confirmed is played: nothing to suggest.
+        let confirmedModel = try SampleData.modelAfterConfirmingFirst(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: confirmedModel.store.directory) }
+        let first = try #require(confirmedModel.fixtures.first)
+        #expect(confirmedModel.suggestion(for: confirmedModel.fixtureDraft(for: first)) == nil)
+        #expect(confirmedModel.suggestionLine(for: first) == nil)
+    }
+
+    // MARK: How the suggestion is shown
+
+    private func suggestion(_ importance: Importance, basis: Evidence = .derived) -> ImportanceSuggestion {
+        ImportanceSuggestion(importance: importance, score: 7, reasons: ["League match: 6", "Score 7: high"], basis: basis)
+    }
+
+    @Test func theSuggestionSaysWhatItIsWithItsReasonsAndEvidenceNote() {
+        let note = SuggestionNote(suggestion(.high), chosen: .medium)
+        #expect(note.text == "Suggested: High")
+        #expect(note.text == AdvisorText.suggested(suggestion(.high)))
+        #expect(note.reasons == ["League match: 6", "Score 7: high"])
+        #expect(note.noteText == "(this tool's estimate)")
+        #expect(note.importance == .high)
+        #expect(SuggestionNote(suggestion(.high, basis: .carriedOverFM26), chosen: .high).noteText == "(FM26-era numbers)")
+        #expect(SuggestionNote(suggestion(.high, basis: .fm27Measured), chosen: .high).noteText == nil)
+        #expect(SuggestionNote.useItTitle == "Use it")
+        #expect(SuggestionNote.clickHelp(false) == "Show the reasons")
+        #expect(SuggestionNote.clickHelp(true) == "Hide the reasons")
+        #expect(FixtureDraft.competitionLabel == "Competition")
+        #expect(FixtureDraft.opponentStrengthLabel == "Opponent")
+    }
+
+    @Test func useItShowsOnlyWhenTheSuggestionDiffersFromTheChoice() {
+        #expect(SuggestionNote(suggestion(.high), chosen: .medium).showsUseIt)
+        #expect(SuggestionNote(suggestion(.sharpness), chosen: .low).showsUseIt)
+        #expect(!SuggestionNote(suggestion(.high), chosen: .high).showsUseIt)
+    }
+
+    @Test func usingTheSuggestionSetsTheDraftsImportanceAndNothingElse() throws {
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let saved = model.fixtures[0]
+        var draft = model.fixtureDraft(for: saved)
+        draft.importance = Importance.allCases.first { $0 != model.suggestion(for: draft)?.importance } ?? .high
+        let note = try #require(model.suggestionNote(for: draft))
+        #expect(note.showsUseIt)
+        var taken = draft
+        taken.take(note)
+        #expect(taken.importance == note.importance)
+        var expected = draft
+        expected.importance = note.importance
+        #expect(taken == expected)
+        #expect(model.suggestionNote(for: taken)?.showsUseIt == false)
+        // Only the owner's save changes the fixture.
+        #expect(model.fixtures.first { $0.id == saved.id }?.importance == saved.importance)
+    }
+
+    @Test func theTableShowsASuggestionOnlyWhereItDiffers() throws {
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        #expect(model.suggestions.count == model.fixtures.count)
+        for fixture in model.fixtures {
+            let suggestion = try #require(model.suggestions[fixture.id])
+            let line = model.suggestionLine(for: fixture)
+            if suggestion.importance == fixture.importance {
+                #expect(line == nil)
+            } else {
+                #expect(line == SuggestionNote(suggestion, chosen: fixture.importance))
+            }
+        }
+        // The owner taking the suggestion makes the line go.
+        let fixture = try #require(model.fixtures.first)
+        var changed = fixture
+        changed.importance = Importance.allCases.first { $0 != model.suggestions[fixture.id]?.importance } ?? .high
+        model.update(changed)
+        let differing = try #require(model.fixtures.first { $0.id == fixture.id })
+        #expect(model.suggestionLine(for: differing)?.showsUseIt == true)
+        var taken = model.fixtureDraft(for: differing)
+        taken.take(try #require(model.suggestionLine(for: differing)))
+        model.save(taken)
+        #expect(model.suggestionLine(for: try #require(model.fixtures.first { $0.id == fixture.id })) == nil)
+    }
+
+    @Test func theSuggestionNeverChangesAnImportanceByItself() throws {
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let before = model.fixtures.map(\.importance)
+        _ = model.suggestions
+        for fixture in model.fixtures { _ = model.suggestionLine(for: fixture) }
+        _ = model.suggestion(for: model.fixtureDraft(for: model.fixtures[0]))
+        #expect(model.fixtures.map(\.importance) == before)
+    }
+
+    @Test func theReasonsShownAreOneFixtureAtATimeAndKeptInTheNavigation() {
+        let navigation = Navigation()
+        let a = FixtureID("a"), b = FixtureID("b")
+        #expect(navigation.fixtureReasons == nil)
+        navigation.toggleReasons(of: a)
+        #expect(navigation.showsReasons(of: a) && !navigation.showsReasons(of: b))
+        navigation.toggleReasons(of: b)
+        #expect(navigation.fixtureReasons == b)
+        #expect(!navigation.showsReasons(of: a))
+        navigation.screen = .squad
+        navigation.screen = .fixtures
+        #expect(navigation.showsReasons(of: b))
+        navigation.toggleReasons(of: b)
+        #expect(navigation.fixtureReasons == nil)
+    }
+
+    @Test func theSampleWithADifferingSuggestionShowsItOnTheSecondFixtureOnly() throws {
+        let model = try SampleData.modelWithDifferingSuggestion(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let second = model.fixtures[1]
+        #expect(second.importance == .high)
+        #expect(model.suggestionLine(for: second)?.text == "Suggested: Medium")
+        #expect(model.fixtures.filter { model.suggestionLine(for: $0) != nil }.map(\.id) == [second.id])
+        #expect(second.competition != nil && second.opponentStrength != nil)
     }
 
     // MARK: Today

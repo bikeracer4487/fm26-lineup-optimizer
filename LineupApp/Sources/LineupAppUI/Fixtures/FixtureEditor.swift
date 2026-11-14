@@ -2,7 +2,9 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// The card on the board that adds a fixture or changes one: its date, opponent, importance and tactic.
+/// The card on the board that adds a fixture or changes one: its date, opponent, the competition and how strong the
+/// opponent is, importance and tactic. Under the importance, the importance the advice suggests for the fixture as it
+/// is being edited, its reasons and evidence note, and "Use it" when it differs from the importance chosen.
 struct FixtureEditor: View {
     let model: AppModel
     /// Held in the window's navigation, so a change of screen does not lose it.
@@ -34,11 +36,30 @@ struct FixtureEditor: View {
                         if let problem = draft.shownProblem {
                             CautionLine(problem)
                         }
+                        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Theme.Spacing.m,
+                             verticalSpacing: Theme.Spacing.xs) {
+                            GridRow {
+                                smallLabel(FixtureDraft.competitionLabel)
+                                menu(FixtureDraft.competitionLabel, FixtureDraft.competitionChoices,
+                                     selection: $draft.competition)
+                            }
+                            GridRow {
+                                smallLabel(FixtureDraft.opponentStrengthLabel)
+                                menu(FixtureDraft.opponentStrengthLabel, FixtureDraft.opponentChoices,
+                                     selection: $draft.opponentStrength)
+                            }
+                        }
+                        .padding(.top, Theme.Spacing.xs)
                     }
                 }
                 GridRow {
                     label("Importance")
-                    BoardTabs(choices: Importance.allCases.map { ($0, $0.displayName) }, selection: $draft.importance)
+                    VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                        BoardTabs(choices: Importance.allCases.map { ($0, $0.displayName) }, selection: $draft.importance)
+                        if let suggestion = model.suggestionNote(for: draft) {
+                            SuggestionBlock(note: suggestion) { draft.take(suggestion) }
+                        }
+                    }
                 }
                 GridRow {
                     label("Tactic")
@@ -74,6 +95,69 @@ struct FixtureEditor: View {
         Text(text)
             .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
             .gridColumnAlignment(.leading)
+    }
+
+    private func smallLabel(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
+            .foregroundStyle(Theme.Colour.mutedInk)
+            .gridColumnAlignment(.leading)
+    }
+
+    private func menu<Value: Hashable>(_ title: String, _ choices: [(value: Value, title: String)],
+                                       selection: Binding<Value>) -> some View {
+        Picker(title, selection: selection) {
+            ForEach(choices, id: \.value) { choice in
+                Text(choice.title).tag(choice.value)
+            }
+        }
+        .labelsHidden()
+        .fixedSize()
+    }
+}
+
+/// The importance the advice suggests, its reasons each on a line, the evidence note, and "Use it" when it differs
+/// from the importance chosen.
+private struct SuggestionBlock: View {
+    let note: SuggestionNote
+    let use: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
+                Text(note.text)
+                    .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
+                    .foregroundStyle(Theme.Colour.ink)
+                if note.showsUseIt {
+                    Button(SuggestionNote.useItTitle, action: use)
+                        .buttonStyle(.secondary)
+                }
+            }
+            SuggestionReasons(note: note)
+        }
+    }
+}
+
+/// A suggestion's reasons, each on its own line in the engine's words, then its evidence note.
+struct SuggestionReasons: View {
+    let note: SuggestionNote
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+            // Keyed by place, so two identical reasons are both shown.
+            ForEach(Array(note.reasons.enumerated()), id: \.offset) { _, reason in
+                Text(reason)
+                    .font(Theme.Typeface.text(Theme.TypeSize.small))
+                    .foregroundStyle(Theme.Colour.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let evidence = note.noteText {
+                Text(evidence)
+                    .font(Theme.Typeface.text(Theme.TypeSize.small))
+                    .foregroundStyle(Theme.Colour.mutedInk)
+            }
+        }
+        .textSelection(.enabled)
     }
 }
 

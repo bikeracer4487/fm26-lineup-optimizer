@@ -2,10 +2,21 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
+/// How the Fixtures screen opens: with no fixture's reasons shown, or with one fixture's.
+public struct FixturesStart: Sendable {
+    public var reasonsOf: FixtureID?
+
+    public init(reasonsOf: FixtureID? = nil) {
+        self.reasonsOf = reasonsOf
+    }
+}
+
 /// The matches to plan for, in date order, as rows on the board with a small sticky note for each one's importance;
 /// the editor for adding or changing one is a card on the board above them, its draft kept in the window's navigation
-/// so it survives a change of screen. The rows always fit the board: the opponent, tactic and state wrap to two lines,
-/// and when there is still no room, Edit and Delete go on a line of their own under each fixture.
+/// so it survives a change of screen. Under a fixture's note, the importance the advice suggests when it differs from
+/// the owner's; a click on it shows its reasons under the row, one fixture's at a time. The rows always fit the board:
+/// the opponent, tactic, state and suggestion wrap, and when there is still no room, Edit and Delete go on a line of
+/// their own under each fixture.
 public struct FixturesScreen: View {
     let model: AppModel
     @Bindable var navigation: Navigation
@@ -95,7 +106,9 @@ public struct FixturesScreen: View {
     }
 
     private func row(_ fixture: StoredFixture, index: Int, actionsBeside: Bool) -> some View {
-        VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
+        let suggestion = model.suggestionLine(for: fixture)
+        let showsReasons = suggestion != nil && navigation.showsReasons(of: fixture.id)
+        return VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
             HStack(spacing: 0) {
                 Text(DayText.short(fixture.date))
                     .font(Theme.Typeface.display(Theme.TypeSize.noteHeading))
@@ -105,8 +118,16 @@ public struct FixturesScreen: View {
                     .help(fixture.opponent)
                     .padding(.trailing, Theme.Spacing.s)
                     .frame(minWidth: Theme.Column.opponentMinimum, maxWidth: .infinity, alignment: .leading)
-                ImportanceNote(importance: fixture.importance, tilt: NoteTilt.degrees(at: index))
-                    .frame(width: Theme.Column.importance, alignment: .leading)
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    ImportanceNote(importance: fixture.importance, tilt: NoteTilt.degrees(at: index))
+                    if let suggestion {
+                        SuggestionLine(note: suggestion, shown: showsReasons) {
+                            navigation.toggleReasons(of: fixture.id)
+                        }
+                    }
+                }
+                .padding(.trailing, Theme.Spacing.s)
+                .frame(width: Theme.Column.importance, alignment: .leading)
                 Text(model.tacticText(for: fixture))
                     .lineLimit(Theme.Table.wrappedLines)
                     .padding(.trailing, Theme.Spacing.s)
@@ -118,6 +139,12 @@ public struct FixturesScreen: View {
                     actions(fixture)
                         .frame(width: Theme.Column.fixtureActions, alignment: .trailing)
                 }
+            }
+            if let suggestion, showsReasons {
+                SuggestionReasons(note: suggestion)
+                    .padding(.leading, Theme.Column.fixtureDate)
+                    .padding(.bottom, Theme.Spacing.xs)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             if !actionsBeside {
                 actions(fixture)
@@ -164,6 +191,29 @@ public struct FixturesScreen: View {
         } else {
             model.deleteFixture(fixture.id)
         }
+    }
+}
+
+/// "Suggested: High" in muted ink with a mark saying whether its reasons are shown; a click shows or hides them.
+private struct SuggestionLine: View {
+    let note: SuggestionNote
+    let shown: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        Button(action: toggle) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.xs) {
+                Text(note.text)
+                    .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Image(systemName: shown ? "chevron.down" : "chevron.right")
+                    .font(Theme.Typeface.text(Theme.TypeSize.caption, weight: .bold))
+            }
+            .foregroundStyle(Theme.Colour.mutedInk)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(SuggestionNote.clickHelp(shown))
     }
 }
 

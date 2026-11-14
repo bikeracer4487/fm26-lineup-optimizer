@@ -30,9 +30,10 @@ public struct RootView: View {
     ///   - matchStart: the fixture, pick and view Match Selection opens with.
     ///   - elevensStart: the view and slot the Elevens screen opens with.
     ///   - removalStart: whether the Player Removal screen opens with every row open.
+    ///   - fixturesStart: the fixture whose suggestion's reasons the Fixtures screen opens with shown.
     public init(model: AppModel, showing screen: Screen = .squad, tacticSlot: TacticSlot? = nil,
                 matchStart: MatchStart = MatchStart(), elevensStart: ElevensStart = ElevensStart(),
-                removalStart: RemovalStart = RemovalStart()) {
+                removalStart: RemovalStart = RemovalStart(), fixturesStart: FixturesStart = FixturesStart()) {
         self.model = model
         self.tacticSlot = tacticSlot
         var selection: PickSelection?
@@ -46,6 +47,9 @@ public struct RootView: View {
         navigation.elevensSlot = elevensStart.slot
         if removalStart.allOpen, let report = AdvicePresentation.report(model.adviceState) {
             navigation.removalDisclosure = .allOpen(model.removalSheet(report).rows)
+        }
+        if let fixture = fixturesStart.reasonsOf {
+            navigation.toggleReasons(of: fixture)
         }
         _navigation = State(initialValue: navigation)
     }

@@ -64,6 +64,8 @@ private struct RemovalBody: View {
             }
         }
         .onGeometryChange(for: Bool.self) { $0.size.width >= Theme.Removal.wideTableWidth } action: { wide = $0 }
+        // A choice made at a level the player is no longer at is dropped as soon as the rows show the change.
+        .onChange(of: sheet.rows, initial: true) { navigation.removalDisclosure.prune(to: sheet.rows) }
     }
 
     /// The line, the figures and the filter.

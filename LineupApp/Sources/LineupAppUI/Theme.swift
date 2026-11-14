@@ -465,6 +465,8 @@ public enum Theme {
         public static let fixtureEditorWidth: CGFloat = 480
         /// The picture of the fixture editor on its own.
         public static let fixtureEditorPicture = CGSize(width: 560, height: 420)
+        /// The picture of the fixture editor with a suggestion, its reasons and "Use it".
+        public static let fixtureEditorSuggestionPicture = CGSize(width: 560, height: 600)
         /// The picture of the two typefaces at each weight.
         public static let typeSpecimenPicture = CGSize(width: 760, height: 640)
         /// The widest a setting's control runs, so a slider is not stretched across a wide window.
