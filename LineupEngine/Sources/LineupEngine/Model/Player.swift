@@ -95,7 +95,8 @@ public struct Player: Identifiable, Equatable, Codable, Sendable {
     public var loanedTo: String?
     public var contractType: ContractType
     public var monthsLeft: Int?
-    public var wagePerWeek: Int
+    /// Kept per week whatever period FMRTE showed it in; need not be a whole number. See `WagePeriod`.
+    public var wagePerWeek: Double
     public var askingPrice: Int?
     public var nationalities: [String]
     /// Optional grid columns this tool does not model, keyed by FMRTE column path.
@@ -107,7 +108,7 @@ public struct Player: Identifiable, Equatable, Codable, Sendable {
         attributes: [Attribute: Int], familiarity: [Position: Int],
         condition: Double, sharpness: Double, jadedness: Int,
         isInjured: Bool, isBanned: Bool, club: String?, loanedTo: String?,
-        contractType: ContractType, monthsLeft: Int?, wagePerWeek: Int, askingPrice: Int?,
+        contractType: ContractType, monthsLeft: Int?, wagePerWeek: Double, askingPrice: Int?,
         nationalities: [String], extras: [String: String]
     ) {
         self.id = id; self.name = name; self.squad = squad; self.age = age

@@ -63,7 +63,8 @@ extension AppModel {
             players: players, ownClub: ownClub, history: StartHistory(history.map(\.lineup)), asOf: asOf,
             intensity: settings.plan.trainingIntensity, accepted: retrainingForPlan, rejected: training.rejected)
         do {
-            return .ready(try Advisors.report(request, catalog: catalog, profile: profile, parameters: planParameters))
+            return .ready(try Advisors.report(request, money: squad.book.moneyStyle, catalog: catalog, profile: profile,
+                                              parameters: planParameters))
         } catch {
             return Self.failedAdvice(error)
         }

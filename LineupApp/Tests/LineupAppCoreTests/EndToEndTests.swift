@@ -170,7 +170,8 @@ import LineupEngine
             ownClub: model.ownClub, history: StartHistory(model.history.map(\.lineup)), asOf: try #require(model.planStartDay),
             intensity: model.settings.plan.trainingIntensity, accepted: model.training.accepted,
             rejected: model.training.rejected)
-        return try Advisors.report(request, catalog: model.catalog, profile: model.profile, parameters: model.planParameters)
+        return try Advisors.report(request, money: model.squad.book.moneyStyle, catalog: model.catalog,
+                                   profile: model.profile, parameters: model.planParameters)
     }
 
     private func recommended(_ model: AppModel) -> [RecommendationCard] {

@@ -88,15 +88,25 @@ import Testing
     }
 
     @Test func costs() {
-        #expect(AdvisorText.costs(of: removal(release: 24_700, mutual: 13_585))
+        #expect(AdvisorText.costs(of: removal(release: 24_700, mutual: 13_585), money: .weeklyPounds)
                 == "Releasing him costs about £24,700; a mutual termination about £13,585")
-        #expect(AdvisorText.costs(of: removal(release: 0, mutual: 0)) == "Releasing him costs nothing")
-        #expect(AdvisorText.costs(of: removal(release: nil, mutual: nil)) == "The cost of releasing him is not known")
+        #expect(AdvisorText.costs(of: removal(release: 0, mutual: 0), money: .weeklyPounds) == "Releasing him costs nothing")
+        #expect(AdvisorText.costs(of: removal(release: nil, mutual: nil), money: .weeklyPounds)
+                == "The cost of releasing him is not known")
+    }
+
+    @Test func costsTakeTheSymbolOfTheSquads() {
+        let dollars = MoneyStyle(symbol: "$", period: .monthly)
+        #expect(AdvisorText.costs(of: removal(release: 33_222, mutual: 18_272), money: dollars)
+                == "Releasing him costs about $33,222; a mutual termination about $18,272")
+        #expect(AdvisorText.costs(of: removal(release: 0, mutual: 0), money: dollars) == "Releasing him costs nothing")
     }
 
     @Test func costsWithOnlyOneKnownAreNotKnown() {
-        #expect(AdvisorText.costs(of: removal(release: 26_000, mutual: nil)) == "The cost of releasing him is not known")
-        #expect(AdvisorText.costs(of: removal(release: nil, mutual: 14_300)) == "The cost of releasing him is not known")
+        #expect(AdvisorText.costs(of: removal(release: 26_000, mutual: nil), money: .weeklyPounds)
+                == "The cost of releasing him is not known")
+        #expect(AdvisorText.costs(of: removal(release: nil, mutual: 14_300), money: .weeklyPounds)
+                == "The cost of releasing him is not known")
     }
 
     @Test func whyEachAction() {
@@ -339,7 +349,7 @@ import Testing
         // A real Player Removal reason for the planner squad's first-choice left back.
         let players = try PlannerFixture.squad()
         let report = try Removal.report(tactic: try PlannerFixture.tactic(), players: players, ownClub: "Oxford City",
-                                        catalog: try RoleCatalog.fm27(), profile: try RatingProfile.standard(),
+                                        money: .weeklyPounds, catalog: try RoleCatalog.fm27(), profile: try RatingProfile.standard(),
                                         parameters: parameters)
         let advice = try #require(report.advice.first { $0.player == PlannerFixture.id(.D_L, "first") })
         let sentence = try #require(advice.reasons.map(\.text).first { $0.hasPrefix("In the first eleven") })

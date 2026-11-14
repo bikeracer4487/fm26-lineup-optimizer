@@ -195,7 +195,7 @@ enum Report {
     private static func removal(_ report: RemovalReport) -> [String] {
         var out = ["", "=== Player Removal ==="]
         out.append("Squad average ability: " + (report.squadAverageAbility.map { fixed($0, 1) } ?? "none")
-                   + "   Wages of the critical and high players: \(Display.perWeek(report.weeklyWagesAtStake))")
+                   + "   Wages of the critical and high players: \(Display.wage(perWeek: report.weeklyWagesAtStake, report.money))")
         var medium = 0, keep = 0
         for one in report.advice {
             switch one.level {
@@ -203,7 +203,7 @@ enum Report {
             case .medium: medium += 1; continue
             case .keep: keep += 1; continue
             }
-            let cost = AdvisorText.costs(of: one).lowercasedFirst
+            let cost = AdvisorText.costs(of: one, money: report.money).lowercasedFirst
             out.append("  \(pad(AdvisorText.name(one.level).uppercased(), 8)) \(pad(AdvisorText.name(one.action).lowercased(), 9)) \(pad(one.name, 22)) "
                        + "score \(one.score); \(cost)\(mark(one.basis))")
             for reason in one.reasons { out.append("        \(points(reason.points)) \(reason.text)") }
@@ -382,7 +382,7 @@ enum Report {
     static func describe(_ warning: SquadWarning) -> String {
         switch warning {
         case .ownClubUnknown: ErrorDescriptions.describe(warning) + " Pass --own-club <name>."
-        case .sharedName: ErrorDescriptions.describe(warning)
+        case .sharedName, .mixedCurrencies: ErrorDescriptions.describe(warning)
         }
     }
 

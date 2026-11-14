@@ -20,10 +20,10 @@ import Testing
         LoanReview(player: PlayerID(key: key), name: name, verdict: verdict, score: score, reasons: reasons, basis: basis)
     }
 
-    private func report(_ advice: [RemovalAdvice], loans: [LoanReview] = [], wages: Int = 600,
-                        average: Double? = 61.6) -> RemovalReport {
+    private func report(_ advice: [RemovalAdvice], loans: [LoanReview] = [], wages: Double = 600,
+                        average: Double? = 61.6, money: MoneyStyle = .weeklyPounds) -> RemovalReport {
         RemovalReport(advice: advice, loans: loans, weeklyWagesAtStake: wages, squadAverageAbility: average,
-                      advisedToLeave: [])
+                      money: money, advisedToLeave: [])
     }
 
     /// One row at each level, in the engine's order.
@@ -100,7 +100,7 @@ import Testing
         #expect(row.ageText == "33")
         #expect(row.scoreText == "85")
         #expect(row.costsText == "Releasing him costs about £26,000; a mutual termination about £14,300")
-        #expect(row.costsText == AdvisorText.costs(of: given))
+        #expect(row.costsText == AdvisorText.costs(of: given, money: .weeklyPounds))
         #expect(row.reasons == [PointedReason(text: "In neither eleven", pointsText: "+25", tone: .red),
                                 PointedReason(text: "Aged 33", pointsText: "+60", tone: .red)])
         #expect(row.whyText == "Selling is the way left: nothing cheaper applies")
@@ -314,7 +314,17 @@ import Testing
         let sheet = RemovalPresentation.sheet(report(everyLevel, wages: 12_500, average: 61.6), squads: [:], ages: [:])
         #expect(sheet.figures == [RemovalFigure(label: "First team's average ability", figure: "62"),
                                   RemovalFigure(label: "Wages of the critical and high players", figure: "£12,500 a week")])
-        #expect(sheet.figures[1].figure == Display.perWeek(12_500))
+        #expect(sheet.figures[1].figure == Display.wage(perWeek: 12_500, .weeklyPounds))
+    }
+
+    @Test func theWagesAndCostsAreWrittenAsTheSquadsWereImported() throws {
+        let dollars = MoneyStyle(symbol: "$", period: .monthly)
+        let sheet = RemovalPresentation.sheet(report(everyLevel, wages: 807, money: dollars), squads: [:], ages: [:])
+        #expect(sheet.figures[1] == RemovalFigure(label: "Wages of the critical and high players", figure: "$3,497 a month"))
+        #expect(sheet.figures[1].figure == Display.wage(perWeek: 807, dollars))
+        let row = try #require(sheet.rows.first)
+        #expect(row.costsText == "Releasing him costs about $26,000; a mutual termination about $14,300")
+        #expect(row.costsText == AdvisorText.costs(of: everyLevel[0], money: dollars))
     }
 
     @Test func theAverageRoundsToTheNearest() {

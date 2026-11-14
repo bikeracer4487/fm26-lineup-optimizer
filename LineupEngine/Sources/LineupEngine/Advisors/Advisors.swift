@@ -42,9 +42,10 @@ public enum Advisors {
     /// Every advisor at once, each giving what it gives when called alone. The squad's elevens are solved once for the
     /// primary tactic and once for each other saved tactic, and shared. Player Removal runs before Training, and Training
     /// is handed `advisedToLeave`. Training's tactics are the primary first, then the saved tactics in the order given,
-    /// each once. Throws `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, before anything
-    /// else, and otherwise what the advisors throw.
-    public static func report(_ request: AdvisorsRequest, catalog: RoleCatalog, profile: RatingProfile,
+    /// each once. Player Removal writes money in `money`, the style of the squads the players came from. Throws
+    /// `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, before anything else, and otherwise
+    /// what the advisors throw.
+    public static func report(_ request: AdvisorsRequest, money: MoneyStyle, catalog: RoleCatalog, profile: RatingProfile,
                               parameters: EngineParameters) throws -> AdvisorsReport {
         let problems = FitnessModel.problems(in: parameters)
         guard problems.isEmpty else { throw PlanError.badParameters(problems) }
@@ -62,7 +63,7 @@ public enum Advisors {
         let primary = try solve(request.primary)
         let rest = try Rest.advice(players: players, ownClub: ownClub, history: request.history, asOf: request.asOf,
                                    intensity: request.intensity, parameters: parameters)
-        let removal = try Removal.report(players: players, ownClub: ownClub, elevens: primary.elevens,
+        let removal = try Removal.report(players: players, ownClub: ownClub, money: money, elevens: primary.elevens,
                                          depth: primary.depth, parameters: parameters)
 
         var tactics = [request.primary]

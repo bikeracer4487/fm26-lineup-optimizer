@@ -6,7 +6,8 @@ import Testing
     /// A Swift case rendered as `caseName(` is a debug dump, not a sentence.
     private func expectPlain(_ text: String, sourceLocation: SourceLocation = #_sourceLocation) {
         let names = ["configUnreadable", "noPlayerGrids", "emptyClipboard", "notAnFMRTEGrid", "raggedRows", "noGridFits",
-                     "ambiguousGrid", "missingColumns", "invalidValue", "unexpectedScale", "duplicateID", "malformed", "unknownAttribute",
+                     "ambiguousGrid", "missingColumns", "invalidValue", "unexpectedScale", "duplicateID", "unknownWagePeriod",
+                     "mixedCurrency", "mixedCurrencies", "malformed", "unknownAttribute",
                      "unknownRole", "missingAttribute", "missingFamiliarity", "keyNotFound", "valueNotFound", "typeMismatch",
                      "dataCorrupted", "wrongSlotCount", "missingGoalkeeper", "unmapped", "mappingTargetInactive",
                      "duplicateMappingTarget", "goalkeeperMappedToOutfield", "TacticError", "problems", "fixtureBeforeSnapshot",
@@ -44,6 +45,21 @@ import Testing
     @Test func twoRowsWithOneIdNameTheIdAndBothPlayers() {
         let text = ErrorDescriptions.describe(ImportError.duplicateID(id: "146837", players: ["Alfie Potter", "Jonny Maxted"]))
         #expect(text == "Two rows have the same FMRTE Id 146837: Alfie Potter and Jonny Maxted")
+        expectPlain(text)
+    }
+
+    @Test func anUnknownWagePeriodNamesTheWordAndWhatToSet() {
+        let text = ErrorDescriptions.describe(ImportError.unknownWagePeriod(found: "Fortnightly"))
+        #expect(text == "FMRTE is set to show wages by a period this tool does not know (“Fortnightly”). Set it to Weekly, "
+                    + "Monthly or Yearly in FMRTE's settings, then import again.")
+        #expect(ErrorDescriptions.describe(ImportError.unknownWagePeriod(found: "2")).contains("(“2”)"))
+        expectPlain(text)
+    }
+
+    @Test func aWageInAnotherCurrencyNamesThePlayerAndBothSymbols() {
+        let text = ErrorDescriptions.describe(ImportError.mixedCurrency(player: "Scott Pollock", symbol: "€", expected: "$"))
+        #expect(text == "Scott Pollock's wage is in € where the rest of the paste is in $. Check FMRTE's currency setting, "
+                    + "then copy the rows again.")
         expectPlain(text)
     }
 

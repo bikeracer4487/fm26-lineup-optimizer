@@ -213,7 +213,7 @@ import Testing
                 players[index].jadedness = 0
                 players[index].condition = 1
             }
-            _ = model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: []), to: squad)
+            _ = model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: [], money: .weeklyPounds), to: squad)
         }
         model.replan()
         guard case .ready(let report) = model.adviceState else {

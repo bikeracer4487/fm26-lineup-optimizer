@@ -24,6 +24,9 @@ public enum SquadWarning: Equatable, Sendable {
     case ownClubUnknown
     /// More than one player in the book has this name, each under his own key.
     case sharedName(String)
+    /// The squads held do not all carry one currency: each squad's symbol, for every squad that has players. A squad
+    /// imported before the tool read the currency is taken as pounds.
+    case mixedCurrencies([Squad: String])
 }
 
 /// What one import changed in its squad, each list in the order of the new import
@@ -41,12 +44,40 @@ public struct SquadChange: Equatable, Sendable {
     }
 }
 
-/// The latest import of each squad, and the import it replaced.
+/// The latest import of each squad, the import it replaced, and how the imports wrote money.
 public struct SquadBook: Equatable, Codable, Sendable {
     public private(set) var current: [Squad: [Player]] = [:]
     public private(set) var previous: [Squad: [Player]] = [:]
+    /// How the most recent import wrote money; nil for a book saved before the tool read FMRTE's period and currency.
+    public private(set) var money: MoneyStyle?
+    /// The currency symbol of each squad's latest import. A squad imported before the tool read the currency has none.
+    public private(set) var currencies: [Squad: String] = [:]
 
     public init() {}
+
+    private enum CodingKeys: String, CodingKey { case current, previous, money, currencies }
+
+    /// A book saved before the tool read FMRTE's period and currency has neither money entry, and opens without them.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        current = try container.decode([Squad: [Player]].self, forKey: .current)
+        previous = try container.decode([Squad: [Player]].self, forKey: .previous)
+        money = try container.decodeIfPresent(MoneyStyle.self, forKey: .money)
+        currencies = try container.decodeIfPresent([Squad: String].self, forKey: .currencies) ?? [:]
+    }
+
+    /// How to show money: as the most recent import wrote it, or, until a squad is imported after the tool began
+    /// reading FMRTE's period and currency, as weekly pounds, which is how the squads held were read.
+    public var moneyStyle: MoneyStyle { money ?? .weeklyPounds }
+
+    /// The symbol each squad with players was imported in; pounds for one imported before the currency was read.
+    private var heldCurrencies: [Squad: String] {
+        var held: [Squad: String] = [:]
+        for squad in Self.bookOrder where !(current[squad] ?? []).isEmpty {
+            held[squad] = currencies[squad] ?? MoneyStyle.weeklyPounds.symbol
+        }
+        return held
+    }
 
     /// Replaces the squad with the import. Each incoming player's key is decided by the first rule
     /// that matches, `isSamePerson` deciding who is the same person.
@@ -139,6 +170,8 @@ public struct SquadBook: Equatable, Codable, Sendable {
         }
         if current[squad] != nil { previous[squad] = old }
         current[squad] = incoming
+        money = result.money
+        currencies[squad] = result.money.symbol
         return change
     }
 
@@ -192,7 +225,8 @@ public struct SquadBook: Equatable, Codable, Sendable {
 
     /// `ownClubUnknown` first, then one `sharedName` for each name held under more than one
     /// name-based key, in `allPlayers` order and spelt as first seen there. Players keyed by FMRTE's
-    /// id never raise it: their ids already tell them apart.
+    /// id never raise it: their ids already tell them apart. Last, `mixedCurrencies` when the squads with players
+    /// were not all imported in one currency.
     public func warnings(override: String?) -> [SquadWarning] {
         var found: [SquadWarning] = []
         if ownClub(override: override) == nil && allPlayers.contains(where: { $0.loanedTo != nil }) {
@@ -206,6 +240,8 @@ public struct SquadBook: Equatable, Codable, Sendable {
             keysByName[normalised, default: []].insert(player.id)
         }
         found += names.filter { keysByName[$0.normalised]!.count > 1 }.map { .sharedName($0.spelling) }
+        let held = heldCurrencies
+        if Set(held.values).count > 1 { found.append(.mixedCurrencies(held)) }
         return found
     }
 }

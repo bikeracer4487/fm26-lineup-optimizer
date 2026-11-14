@@ -19,12 +19,7 @@ public enum FMRTEConfig {
     /// Every grid whose columns include `DisplayedName`. Grids with identical column lists
     /// are returned once, under the first key. Unknown keys in the file are ignored.
     public static func playerGrids(from data: Data) throws -> [GridLayout] {
-        let root: Any
-        do {
-            root = try JSONSerialization.jsonObject(with: data)
-        } catch {
-            throw ImportError.configUnreadable(reason: "not valid JSON: \(error.localizedDescription)")
-        }
+        let root = try object(from: data)
         guard let items = ((root as? [String: Any])?["ColumnsSettings"] as? [String: Any])?["Items"] as? [[String: Any]] else {
             throw ImportError.configUnreadable(reason: "ColumnsSettings.Items not found")
         }
@@ -39,5 +34,30 @@ public enum FMRTEConfig {
             grids.append(GridLayout(key: key, columns: paths))
         }
         return grids
+    }
+
+    /// The words FMRTE writes for its wage period, under the top-level entry `Wages`.
+    private static let wagePeriods: [String: WagePeriod] = ["Weekly": .weekly, "Monthly": .monthly, "Yearly": .yearly]
+
+    /// The period FMRTE shows wages by: its top-level entry `Wages`. A file with no such entry is weekly, FMRTE's own
+    /// default. Any other value, a word it does not write or not a word at all, throws `unknownWagePeriod` with what was
+    /// found.
+    public static func wagePeriod(from data: Data) throws -> WagePeriod {
+        guard let root = try object(from: data) as? [String: Any] else {
+            throw ImportError.configUnreadable(reason: "the file is not a JSON object")
+        }
+        guard let value = root["Wages"] else { return .weekly }
+        guard let word = value as? String, let period = wagePeriods[word] else {
+            throw ImportError.unknownWagePeriod(found: "\(value)")
+        }
+        return period
+    }
+
+    private static func object(from data: Data) throws -> Any {
+        do {
+            return try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw ImportError.configUnreadable(reason: "not valid JSON: \(error.localizedDescription)")
+        }
     }
 }

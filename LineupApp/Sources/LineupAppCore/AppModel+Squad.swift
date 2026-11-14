@@ -62,7 +62,8 @@ extension AppModel {
             }
         }.map(\.name)
         return .imported(ImportSummary(
-            squad: target, date: date, grid: result.grid, playerCount: result.players.count, onLoan: onLoan,
+            squad: target, date: date, grid: result.grid, playerCount: result.players.count, money: result.money,
+            onLoan: onLoan,
             warnings: result.warnings.map(ErrorDescriptions.describe) + unconfirmedBeforeToday, change: change))
     }
 

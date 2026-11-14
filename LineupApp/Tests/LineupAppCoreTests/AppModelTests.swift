@@ -292,6 +292,59 @@ import LineupEngine
         #expect(t.model.squadWarnings.isEmpty)
     }
 
+    @Test func squadsInDifferentCurrenciesAreWarnedOf() throws {
+        let t = try TestModel()
+        try t.importFirstTeamInDollarsMonthly()
+        try t.importU21()
+        let warning = ErrorDescriptions.describe(SquadWarning.mixedCurrencies([.firstTeam: "$", .u21: "£"]))
+        #expect(warning == "The first team's wages are in $ and the U21s' are in £. Wages in different currencies cannot "
+                    + "be compared: import every squad with the same currency set in FMRTE.")
+        #expect(t.model.squadWarnings.contains(warning))
+        #expect(t.model.listedSquadWarnings.contains(warning))
+
+        t.importSquad(.u21, paste: Captures.inDollars(try Captures.u21),
+                      grids: try Captures.grids(try Captures.u21Grids, wages: "Monthly"))
+        #expect(!t.model.squadWarnings.contains(warning))
+        #expect(t.model.squadWarnings.isEmpty)
+    }
+
+    @Test func aSquadFileSavedBeforeMoneyWasReadOpensAsWeeklyPounds() throws {
+        let t = try TestModel()
+        try t.importFirstTeamInDollarsMonthly()
+        try t.importU21()
+        #expect(t.model.squad.book.moneyStyle == .weeklyPounds)
+        try t.importFirstTeamInDollarsMonthly()
+        #expect(t.model.squad.book.moneyStyle == MoneyStyle(symbol: "$", period: .monthly))
+        // The file as the app wrote it before it read FMRTE's period and currency: no money entries in the book.
+        let url = t.directory.appendingPathComponent("squad.json")
+        var file = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        var value = try #require(file["value"] as? [String: Any])
+        var book = try #require(value["book"] as? [String: Any])
+        #expect(book["money"] != nil && book["currencies"] != nil)
+        book["money"] = nil
+        book["currencies"] = nil
+        value["book"] = book
+        file["value"] = value
+        try JSONSerialization.data(withJSONObject: file).write(to: url)
+
+        let model = t.reopened()
+        #expect(model.notices.isEmpty)
+        #expect(model.players == t.model.players)
+        #expect(model.squad.book.moneyStyle == .weeklyPounds)
+        #expect(model.squadWarnings.isEmpty)
+        var settings = model.settings
+        settings.clubName = "Oxford City"
+        model.update(settings)
+        model.addTactic(named: "4-2-3-1")
+        guard case .ready(let report) = model.adviceState else {
+            Issue.record("expected ready advice, got \(model.adviceState)")
+            return
+        }
+        #expect(report.removal.money == .weeklyPounds)
+        let wages = try #require(model.removalSheet(report).figures.last).figure
+        #expect(wages.hasPrefix("£") && wages.hasSuffix(" a week"))
+    }
+
     // MARK: Tactics
 
     @Test func theFirstTacticIsPrimary() throws {

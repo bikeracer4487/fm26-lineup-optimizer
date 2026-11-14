@@ -107,7 +107,7 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
         return parts.compactMap { $0 }.joined(separator: ", ")
     }
 
-    init(_ advice: RemovalAdvice, squad: Squad?, age: Int?, mark: SaleMark?) {
+    init(_ advice: RemovalAdvice, squad: Squad?, age: Int?, mark: SaleMark?, money: MoneyStyle) {
         id = advice.player
         name = advice.name
         level = advice.level
@@ -116,7 +116,7 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
         squadText = squad?.displayName
         ageText = age.map(String.init)
         scoreText = AdvisorText.score(advice.score)
-        costsText = AdvisorText.costs(of: advice)
+        costsText = AdvisorText.costs(of: advice, money: money)
         reasons = advice.reasons.map(PointedReason.init)
         whyText = AdvisorText.why(advice.action, for: advice)
         noteText = AdvisorText.note(for: advice.basis).map { "(\($0))" }
@@ -300,18 +300,21 @@ public enum RemovalPresentation {
     }
 
     /// The sheet for `report`, with each player's squad and age from `squads` and `ages`, and the owner's mark on him
-    /// from `marks`. The average ability is shown to the nearest whole number, and only when the report has one. The
-    /// loans to the club take no mark.
+    /// from `marks`. The average ability is shown to the nearest whole number, and only when the report has one. Money
+    /// is written as the report writes it: the squads' currency, the wages in FMRTE's period. The loans to the club take
+    /// no mark.
     public static func sheet(_ report: RemovalReport, squads: [PlayerID: Squad], ages: [PlayerID: Int],
                              marks: [PlayerID: SaleMark] = [:]) -> RemovalSheet {
         let average = report.squadAverageAbility.map {
             RemovalFigure(label: averageLabel, figure: String(Int($0.rounded())))
         }
-        let wages = RemovalFigure(label: wagesLabel, figure: Display.perWeek(report.weeklyWagesAtStake))
+        let wages = RemovalFigure(label: wagesLabel,
+                                  figure: Display.wage(perWeek: report.weeklyWagesAtStake, report.money))
         return RemovalSheet(
             figures: [average].compactMap { $0 } + [wages],
             rows: report.advice.map {
-                RemovalRow($0, squad: squads[$0.player], age: ages[$0.player], mark: marks[$0.player])
+                RemovalRow($0, squad: squads[$0.player], age: ages[$0.player], mark: marks[$0.player],
+                           money: report.money)
             },
             loans: report.loans.map(LoanBlock.init))
     }

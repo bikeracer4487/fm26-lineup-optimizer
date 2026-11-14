@@ -31,10 +31,11 @@ public struct RemovalAdvice: Equatable, Sendable {
     public let isProspect: Bool
     public let isFalseProspect: Bool
     public let isMentor: Bool
-    /// Wages left on the contract, in pounds: 0 for a player out of contract, or on a full-time or youth contract with 0
-    /// months left; nil when months left is unknown, or for a contract type this tool does not read.
+    /// Wages left on the contract, in whole units of the squads' currency: 0 for a player out of contract, or on a
+    /// full-time or youth contract with 0 months left; nil when months left is unknown, or for a contract type this
+    /// tool does not read.
     public let releaseCost: Int?
-    /// The likely cost of a mutual termination, in pounds; 0 and nil as `releaseCost`.
+    /// The likely cost of a mutual termination, in whole units of the squads' currency; 0 and nil as `releaseCost`.
     public let mutualCost: Int?
     /// The weakest evidence among the parameters behind this advice.
     public let basis: Evidence
@@ -59,9 +60,11 @@ public struct RemovalReport: Equatable, Sendable {
     /// Players on loan at the club: highest score first, then key.
     public let loans: [LoanReview]
     /// The weekly wages of the critical and high players.
-    public let weeklyWagesAtStake: Int
+    public let weeklyWagesAtStake: Double
     /// Mean current ability of the club's own first-team players; nil when there are none.
     public let squadAverageAbility: Double?
+    /// How the report's figures and reasons write money: the squads' currency, and wages in FMRTE's period.
+    public let money: MoneyStyle
     /// The players the owner is advised to move on: critical or high, to be released, loaned out, terminated or sold.
     /// The caller passes them to `Training.report` as `leaving`, so nobody is retrained who is advised to go.
     public var advisedToLeave: Set<PlayerID>
@@ -76,25 +79,27 @@ public enum Removal {
     /// Advice for every player of the club's own and a review of every player on loan at the club; players out on loan
     /// get neither, and injured players are assessed. The squad average ability and the median wage are over the club's
     /// own first-team players, so a large youth squad on low wages does not move them; with no first-team player, the
-    /// rules that need them do not apply. Throws `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, what
+    /// rules that need them do not apply. Money is written in `money`, the style of the squads the players came from. Throws `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, what
     /// `Elevens.report` throws, and `RatingError.missingAttribute` for an assessed player without Consistency, Important
     /// Matches, Injury Proneness, Professionalism, Ambition, Controversy, Temperament or Determination. Throws what
     /// `Depth.report` throws.
-    public static func report(tactic: Tactic, players: [Player], ownClub: String?, catalog: RoleCatalog,
-                              profile: RatingProfile, parameters: EngineParameters) throws -> RemovalReport {
+    public static func report(tactic: Tactic, players: [Player], ownClub: String?, money: MoneyStyle,
+                              catalog: RoleCatalog, profile: RatingProfile,
+                              parameters: EngineParameters) throws -> RemovalReport {
         let problems = FitnessModel.problems(in: parameters)
         guard problems.isEmpty else { throw PlanError.badParameters(problems) }
         let elevens = try Elevens.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
                                          profile: profile, parameters: parameters)
         let depth = try Depth.report(tactic: tactic, players: players, ownClub: ownClub, elevens: elevens, catalog: catalog,
                                      profile: profile, parameters: parameters)
-        return try report(players: players, ownClub: ownClub, elevens: elevens, depth: depth, parameters: parameters)
+        return try report(players: players, ownClub: ownClub, money: money, elevens: elevens, depth: depth,
+                          parameters: parameters)
     }
 
     /// The same, from `elevens` and `depth` already worked out for the tactic and these players. The caller has
     /// checked the parameters with `FitnessModel.problems(in:)`. Throws `RatingError.missingAttribute` as above.
-    static func report(players: [Player], ownClub: String?, elevens: ElevensReport, depth depthReport: DepthReport,
-                       parameters: EngineParameters) throws -> RemovalReport {
+    static func report(players: [Player], ownClub: String?, money: MoneyStyle, elevens: ElevensReport,
+                       depth depthReport: DepthReport, parameters: EngineParameters) throws -> RemovalReport {
         let tiers = elevens.tiers
         let depth = depthReport.slots
 
@@ -120,10 +125,10 @@ public enum Removal {
             tiers: tiers, depth: depth, thinBelow: parameters.depthThinBelow.value)
 
         var advice: [RemovalAdvice] = []
-        var wagesAtStake = 0
+        var wagesAtStake = 0.0
         var leaving: Set<PlayerID> = []
         for player in own {
-            let one = Self.advice(for: player, traits: traits[player.id]!, squad: squad, parameters: parameters)
+            let one = Self.advice(for: player, traits: traits[player.id]!, squad: squad, money: money, parameters: parameters)
             switch one.level {
             case .critical, .high: wagesAtStake += player.wagePerWeek
             case .medium, .keep: break
@@ -142,12 +147,13 @@ public enum Removal {
         return RemovalReport(
             advice: advice.sorted { $0.score != $1.score ? $0.score > $1.score : $0.player.key < $1.player.key },
             loans: loans.sorted { $0.score != $1.score ? $0.score > $1.score : $0.player.key < $1.player.key },
-            weeklyWagesAtStake: wagesAtStake, squadAverageAbility: squad.averageAbility, advisedToLeave: leaving)
+            weeklyWagesAtStake: wagesAtStake, squadAverageAbility: squad.averageAbility, money: money,
+            advisedToLeave: leaving)
     }
 
     // MARK: Players of the club's own
 
-    private static func advice(for player: Player, traits: Traits, squad: SquadFacts,
+    private static func advice(for player: Player, traits: Traits, squad: SquadFacts, money: MoneyStyle,
                                parameters: EngineParameters) -> RemovalAdvice {
         let rules = parameters.removalRules.value
         var reasons = Reasons()
@@ -184,12 +190,12 @@ public enum Removal {
 
         let wageRules = parameters.removalWageRules.value
         if let median = squad.medianWage, median > 0, !inEither {
-            let wage = Double(player.wagePerWeek)
+            let wage = player.wagePerWeek
             let points: Int? = wage > wageRules.highMultiple * median ? wageRules.highPoints
                 : wage > median ? wageRules.abovePoints : nil
             if let points {
-                reasons.add(points, "Paid \(Display.perWeek(player.wagePerWeek)), against a median of "
-                            + "\(Display.pounds(Int(median.rounded()))), and in neither eleven")
+                reasons.add(points, "Paid \(Display.wage(perWeek: wage, money)), against a median of "
+                            + "\(Display.wageAmount(perWeek: median, money)), and in neither eleven")
                 evidence.append(parameters.removalWageRules.evidence)
             }
         }
@@ -277,7 +283,7 @@ public enum Removal {
             (releaseCost, mutualCost) = (0, 0)
         } else if costsKnown, let months = player.monthsLeft {
             let monthsOfWages = Double(months) + parameters.contractMonthsAllowance.value
-            let release = Int((Double(player.wagePerWeek) * weeksPerYear / monthsPerYear * monthsOfWages).rounded())
+            let release = Int((player.wagePerWeek * weeksPerYear / monthsPerYear * monthsOfWages).rounded())
             (releaseCost, mutualCost) = (release, Int((parameters.mutualTerminationShare.value * Double(release)).rounded()))
         } else {
             (releaseCost, mutualCost) = (nil, nil)
@@ -470,10 +476,10 @@ public enum Removal {
     }
 
     /// The middle wage, or the mean of the middle two for an even count; nil for none.
-    private static func median(_ wages: [Int]) -> Double? {
+    private static func median(_ wages: [Double]) -> Double? {
         guard !wages.isEmpty else { return nil }
         let sorted = wages.sorted()
         let middle = sorted.count / 2
-        return sorted.count % 2 == 1 ? Double(sorted[middle]) : (Double(sorted[middle - 1]) + Double(sorted[middle])) / 2
+        return sorted.count % 2 == 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
     }
 }

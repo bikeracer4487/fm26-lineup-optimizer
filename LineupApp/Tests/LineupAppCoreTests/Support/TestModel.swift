@@ -26,6 +26,19 @@ enum Captures {
     static var firstTeamGrids: Data { get throws { try data("first-team.grids.json") } }
     static var u21: String { get throws { try text("u21.tsv") } }
     static var u21Grids: Data { get throws { try data("u21.grids.json") } }
+
+    /// The paste with every pound sign made a dollar, as FMRTE pastes it when set to show dollars.
+    static func inDollars(_ paste: String) -> String { paste.replacingOccurrences(of: "£", with: "$") }
+
+    /// FMRTE's settings file holding `grids`' column layouts and a top-level `Wages` entry of `wages`, as FMRTE writes it
+    /// when set to show wages by that period. The captures hold only the layouts.
+    static func grids(_ grids: Data, wages: String) throws -> Data {
+        guard var root = try JSONSerialization.jsonObject(with: grids) as? [String: Any] else {
+            throw SampleDataError(description: "the grid layouts are not a JSON object")
+        }
+        root["Wages"] = wages
+        return try JSONSerialization.data(withJSONObject: root)
+    }
 }
 
 /// A model on a new temporary directory with a scripted environment; the directory is removed when this is freed.
@@ -57,6 +70,12 @@ enum Captures {
 
     func importFirstTeam() throws { importSquad(.firstTeam, paste: try Captures.firstTeam, grids: try Captures.firstTeamGrids) }
     func importU21() throws { importSquad(.u21, paste: try Captures.u21, grids: try Captures.u21Grids) }
+
+    /// The first team as FMRTE pastes it when set to show wages monthly in dollars.
+    func importFirstTeamInDollarsMonthly() throws {
+        importSquad(.firstTeam, paste: Captures.inDollars(try Captures.firstTeam),
+                    grids: try Captures.grids(try Captures.firstTeamGrids, wages: "Monthly"))
+    }
 
     deinit {
         try? FileManager.default.removeItem(at: directory)

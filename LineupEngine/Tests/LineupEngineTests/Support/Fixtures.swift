@@ -22,6 +22,16 @@ enum Fixtures {
         try Data(contentsOf: url(name))
     }
 
+    /// FMRTE's settings file as `captures/<capture>.grids.json` holds it, with a top-level `Wages` entry of `wages`, as
+    /// FMRTE writes beside its column layouts. The captures hold only the layouts.
+    static func settings(_ capture: String, wages: Any) throws -> Data {
+        guard var root = try JSONSerialization.jsonObject(with: data("captures/\(capture).grids.json")) as? [String: Any] else {
+            throw MissingFixture(description: "captures/\(capture).grids.json is not a JSON object")
+        }
+        root["Wages"] = wages
+        return try JSONSerialization.data(withJSONObject: root)
+    }
+
     /// The column paths of one grid in `captures/<capture>.grids.json`.
     static func gridColumns(_ capture: String, grid: String) throws -> [String] {
         struct File: Decodable {

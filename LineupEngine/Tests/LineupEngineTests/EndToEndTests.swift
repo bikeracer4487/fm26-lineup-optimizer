@@ -258,8 +258,10 @@ import Testing
                                       ownClub: book.ownClub(override: ownClubName), history: StartHistory(history),
                                       asOf: try #require(Day(iso: "2026-11-13")), intensity: .medium, accepted: [],
                                       rejected: [])
-        let together = try Advisors.report(request, catalog: catalog, profile: profile, parameters: .fm27)
-        #expect(together == (try AdvisorsTests.oneByOne(request, catalog: catalog, profile: profile, parameters: .fm27)))
+        let together = try Advisors.report(request, money: book.moneyStyle, catalog: catalog, profile: profile,
+                                           parameters: .fm27)
+        #expect(together == (try AdvisorsTests.oneByOne(request, money: book.moneyStyle, catalog: catalog,
+                                                        profile: profile, parameters: .fm27)))
         #expect(!together.removal.advisedToLeave.isEmpty && !together.depth.thin.isEmpty)
     }
 
@@ -310,8 +312,8 @@ import Testing
         // Training: every thin slot is covered by a recommendation, already being retrained, or a need nobody suits;
         // every recommendation is explained and names one of the club's own players, and none a player Player
         // Removal advises moving on.
-        let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
-                                         profile: profile, parameters: parameters)
+        let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, money: .weeklyPounds,
+                                         catalog: catalog, profile: profile, parameters: parameters)
         let training = try Training.report(tactics: [tactic], players: players, ownClub: ownClub, accepted: [], rejected: [],
                                            leaving: removal.advisedToLeave, catalog: catalog, profile: profile,
                                            parameters: parameters)

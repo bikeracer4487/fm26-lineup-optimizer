@@ -15,6 +15,10 @@ public enum ImportError: Error, Equatable {
     case unexpectedScale(column: String)
     /// Two rows carry the same FMRTE `Id`; `players` names the earlier row's player, then the later's.
     case duplicateID(id: String, players: [String])
+    /// FMRTE's settings file names a wage period this tool does not know; `found` is what it holds, as written.
+    case unknownWagePeriod(found: String)
+    /// The player's wage carries `symbol` where the paste's first row carries `expected`.
+    case mixedCurrency(player: String, symbol: String, expected: String)
 }
 
 public enum ImportWarning: Equatable, Sendable {
@@ -33,11 +37,14 @@ public struct ImportResult: Equatable, Sendable {
     public let grid: String
     public let players: [Player]
     public let warnings: [ImportWarning]
+    /// How the paste wrote money: the currency symbol on its wages and the period FMRTE shows them by.
+    public let money: MoneyStyle
 
-    public init(grid: String, players: [Player], warnings: [ImportWarning]) {
+    public init(grid: String, players: [Player], warnings: [ImportWarning], money: MoneyStyle) {
         self.grid = grid
         self.players = players
         self.warnings = warnings
+        self.money = money
     }
 }
 
@@ -48,6 +55,8 @@ public enum Importer {
     static let percentageScaleCeiling = 100
     /// Divisor from FMRTE's 0 to 10,000 scale to a fraction of 1.
     static let fmrteScale = 10_000.0
+    /// The wage column. FMRTE keeps this name whatever period it shows wages by.
+    private static let wagePath = "Contract.WagePerWeek"
 
     /// Columns the importer reads into a typed field; every other column goes into `extras`.
     private static let modelledColumns: Set<String> = Set(GridDetector.requiredColumns)
@@ -61,9 +70,10 @@ public enum Importer {
         let rows = try ClipboardText.rows(clipboard)
         let grids = try FMRTEConfig.playerGrids(from: fmrteConfig)
         guard !grids.isEmpty else { throw ImportError.noPlayerGrids }
+        let period = try FMRTEConfig.wagePeriod(from: fmrteConfig)
 
         let layout = try chooseLayout(rows: rows, grids: grids)
-        return try parse(rows: rows, layout: layout, squad: squad)
+        return try parse(rows: rows, layout: layout, squad: squad, period: period)
     }
 
     /// The detected grid; or, when none fits, the single closest grid if the misfit is small
@@ -85,7 +95,8 @@ public enum Importer {
         }
     }
 
-    private static func parse(rows: [[String]], layout: GridLayout, squad: Squad) throws -> ImportResult {
+    /// Every wage must carry the first row's currency symbol, and is kept per week from FMRTE's `period`.
+    private static func parse(rows: [[String]], layout: GridLayout, squad: Squad, period: WagePeriod) throws -> ImportResult {
         let index = Dictionary(layout.columns.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
         // With FMRTE's Id column every player is keyed by it; without, by name, which the warning says.
         let idColumn = index[GridDetector.idPath]
@@ -95,6 +106,8 @@ public enum Importer {
         var rawSharpness: [Int] = []
         // The name on the first row that carried each FMRTE id.
         var nameByID: [Int: String] = [:]
+        // The currency symbol on the first row's wage, which every other row's must match.
+        var currency: String?
 
         for (rowIndex, row) in rows.enumerated() {
             let name = row[index["DisplayedName"]!].trimmingCharacters(in: .whitespaces)
@@ -108,6 +121,12 @@ public enum Importer {
                 throw fail(path)
             }
             func cell(_ path: String) -> String { row[index[path]!] }
+            // A wage cell that fits its column starts with its currency symbol.
+            let symbol = String(cell(wagePath).prefix(1))
+            if let currency, symbol != currency {
+                throw ImportError.mixedCurrency(player: display, symbol: symbol, expected: currency)
+            }
+            currency = symbol
             func int(_ path: String) throws -> Int {
                 guard let value = Int(cell(path)) else { throw fail(path) }
                 return value
@@ -175,7 +194,7 @@ public enum Importer {
                 isInjured: cell("IsInjured") == "True", isBanned: cell("IsBanned") == "True",
                 club: club.flatMap { $0.isEmpty ? nil : $0 }, loanedTo: loan.isEmpty ? nil : loan,
                 contractType: contractType, monthsLeft: months < 0 ? nil : months,
-                wagePerWeek: try money("Contract.WagePerWeek"),
+                wagePerWeek: period.perWeek(Double(try money(wagePath))),
                 askingPrice: index["AskingPrice"] == nil ? nil : try money("AskingPrice"),
                 nationalities: index["Nationalities"].map {
                     row[$0].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
@@ -189,7 +208,10 @@ public enum Importer {
 
         // FMRTE's ids already tell every player apart; only name keys need the namesake handling.
         if idColumn == nil { warnings += disambiguateDuplicates(&players) }
-        return ImportResult(grid: layout.key, players: players, warnings: warnings)
+        // `ClipboardText.rows` gives at least one row, so the first row's symbol is known.
+        guard let currency else { throw ImportError.emptyClipboard }
+        return ImportResult(grid: layout.key, players: players, warnings: warnings,
+                            money: MoneyStyle(symbol: currency, period: period))
     }
 
     /// Gives players who share a normalised name distinct keys that neither a birthday nor a

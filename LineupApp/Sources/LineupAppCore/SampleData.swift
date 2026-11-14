@@ -348,7 +348,8 @@ public enum SampleData {
             for index in players.indices where players[index].id == accepted.player {
                 players[index].familiarity[accepted.position] = readings.last?.familiarity
             }
-            _ = model.squad.book.apply(ImportResult(grid: "sample", players: players, warnings: []), to: squad)
+            _ = model.squad.book.apply(ImportResult(grid: "sample", players: players, warnings: [],
+                                                    money: model.squad.book.moneyStyle), to: squad)
         }
         model.save(.squad)
         model.replan()
@@ -511,7 +512,8 @@ public enum SampleData {
         for squad in Squad.allCases {
             guard var players = model.squad.book.current[squad] else { continue }
             for index in players.indices { change(&players[index]) }
-            _ = model.squad.book.apply(ImportResult(grid: "sample", players: players, warnings: []), to: squad)
+            _ = model.squad.book.apply(ImportResult(grid: "sample", players: players, warnings: [],
+                                                    money: model.squad.book.moneyStyle), to: squad)
         }
         model.save(.squad)
         model.replan()

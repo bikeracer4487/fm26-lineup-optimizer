@@ -178,6 +178,7 @@ private func player(
         #expect(report.lines == [
             "Recognised as FMRTE's squad grid.",
             "18 players.",
+            "Wages are in £ a week, as FMRTE shows them.",
             "No one is out on loan.",
             "This is the first import of this squad.",
         ])
@@ -193,7 +194,16 @@ private func player(
         try t.importU21()
         let s = try summary(t)
         #expect(!s.onLoan.isEmpty)
-        #expect(t.model.report(of: s).lines[2] == "Out on loan: \(s.onLoan.joined(separator: ", ")).")
+        #expect(t.model.report(of: s).lines[3] == "Out on loan: \(s.onLoan.joined(separator: ", ")).")
+    }
+
+    @Test func anImportSaysHowWagesWereRead() throws {
+        let t = try TestModel()
+        try t.importFirstTeamInDollarsMonthly()
+        let s = try summary(t)
+        #expect(s.money == MoneyStyle(symbol: "$", period: .monthly))
+        #expect(t.model.report(of: s).lines[2] == "Wages are in $ a month, as FMRTE shows them.")
+        #expect(t.model.report(of: s).lines[2] == Display.wagesRead(s.money))
     }
 
     @Test func theSameImportAgainChangesNothing() throws {
@@ -230,8 +240,8 @@ private func player(
 
     @Test func aPlayerFromAnotherSquadIsReportedAsMovedInNotAdded() {
         let summary = ImportSummary(
-            squad: .u21, date: TestModel.today, grid: "SearchPlayersColumns", playerCount: 3, onLoan: [], warnings: [],
-            change: SquadChange(added: [PlayerID(key: "a"), PlayerID(key: "b")], removed: [], movedIn: [PlayerID(key: "b")], changed: []))
+            squad: .u21, date: TestModel.today, grid: "SearchPlayersColumns", playerCount: 3, money: .weeklyPounds,
+            onLoan: [], warnings: [], change: SquadChange(added: [PlayerID(key: "a"), PlayerID(key: "b")], removed: [], movedIn: [PlayerID(key: "b")], changed: []))
         let names = [PlayerID(key: "a"): "Ann Able", PlayerID(key: "b"): "Ben Best"]
         #expect(ImportReport.changeLine(summary.change, firstImport: false, name: { names[$0] ?? $0.key })
             == "Since the last import: 1 added (Ann Able); 1 moved in from another squad (Ben Best).")

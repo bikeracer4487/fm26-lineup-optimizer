@@ -35,6 +35,12 @@ public enum ErrorDescriptions {
         case .unexpectedScale(let column): "Column \(column) looks like percentages; FMRTE's 0 to 10000 scale is expected"
         case .duplicateID(let id, let players):
             "Two rows have the same FMRTE Id \(id): \(players.joined(separator: " and "))"
+        case .unknownWagePeriod(let found):
+            "FMRTE is set to show wages by a period this tool does not know (“\(found)”). Set it to Weekly, Monthly or "
+                + "Yearly in FMRTE's settings, then import again."
+        case .mixedCurrency(let player, let symbol, let expected):
+            "\(player)'s wage is in \(symbol) where the rest of the paste is in \(expected). Check FMRTE's currency "
+                + "setting, then copy the rows again."
         }
     }
 
@@ -61,6 +67,9 @@ public enum ErrorDescriptions {
         case .sharedName(let name):
             "More than one player is called \(name); they are kept as separate players, told apart by potential "
                 + "ability, then nationality."
+        case .mixedCurrencies(let symbols):
+            currenciesSentence(symbols) + " Wages in different currencies cannot be compared: import every squad with the "
+                + "same currency set in FMRTE."
         }
     }
 
@@ -168,6 +177,28 @@ public enum ErrorDescriptions {
         case .typeMismatch(_, let context): return "the field \(path(context.codingPath)) has the wrong kind of value: \(context.debugDescription)"
         case .dataCorrupted(let context): return "the data at \(path(context.codingPath)) is not valid: \(context.debugDescription)"
         @unknown default: return "the file could not be decoded: \(error.localizedDescription)"
+        }
+    }
+
+    /// "The first team's wages are in $ and the U21s' are in £.": every squad given, first team first.
+    private static func currenciesSentence(_ symbols: [Squad: String]) -> String {
+        let held = Squad.allCases.compactMap { squad in symbols[squad].map { (squad: squad, symbol: $0) } }
+        var parts = held.map { "\(possessive($0.squad)) are in \($0.symbol)" }
+        // The first part starts the sentence and says what is in each currency.
+        if let first = held.first {
+            let owner = possessive(first.squad)
+            parts[0] = owner.prefix(1).uppercased() + owner.dropFirst() + " wages are in \(first.symbol)"
+        }
+        guard let last = parts.popLast() else { return "" }
+        return (parts.isEmpty ? last : parts.joined(separator: ", ") + " and " + last) + "."
+    }
+
+    /// The squad as the owner of its wages: "the first team's", "the U21s'".
+    private static func possessive(_ squad: Squad) -> String {
+        switch squad {
+        case .firstTeam: "the first team's"
+        case .u21: "the U21s'"
+        case .u18: "the U18s'"
         }
     }
 

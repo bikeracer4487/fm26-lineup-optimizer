@@ -10,14 +10,29 @@ private func importU21() throws -> ImportResult {
 private func u21() throws -> [Player] { try importU21().players }
 
 /// The search-grid paste with `change` applied to its rows (each a list of fields), re-joined
-/// with tabs and CRLF, imported against the real two-grid config.
-private func importU21(changingRows change: ([[String]]) -> [[String]]) throws -> ImportResult {
+/// with tabs and CRLF, imported against the real two-grid config, or against `settings` when given.
+private func importU21(settings: Data? = nil, changingRows change: ([[String]]) -> [[String]]) throws -> ImportResult {
     let rows = try Fixtures.text("captures/u21.tsv")
         .components(separatedBy: "\r\n").filter { !$0.isEmpty }
         .map { $0.components(separatedBy: "\t") }
     let text = change(rows).map { $0.joined(separator: "\t") }.joined(separator: "\r\n") + "\r\n"
     return try Importer.importPlayers(clipboard: text,
-                                      fmrteConfig: Fixtures.data("captures/u21.grids.json"), squad: .u21)
+                                      fmrteConfig: settings ?? Fixtures.data("captures/u21.grids.json"), squad: .u21)
+}
+
+/// The U21 paste imported with FMRTE set to `wages`, every wage cell's pound sign made `symbol`, and Brayden Daniel's
+/// (the first row's) wage `firstWage`.
+private func importU21(wages: String, symbol: String, firstWage: String) throws -> ImportResult {
+    let wage = try column("Contract.WagePerWeek")
+    return try importU21(settings: Fixtures.settings("u21", wages: wages)) { rows in
+        var rows = rows.map { row in
+            var row = row
+            row[wage] = row[wage].replacingOccurrences(of: "£", with: symbol)
+            return row
+        }
+        rows[0][wage] = quoted(firstWage)
+        return rows
+    }
 }
 
 /// Where a column sits in the search grid.
@@ -301,7 +316,58 @@ private func isNameWarning(_ warning: ImportWarning) -> Bool {
             return rows
         }
         let daniel = try #require(r.players.first { $0.name == "Brayden Daniel" })
-        #expect(daniel.wagePerWeek == pounds && daniel.askingPrice == pounds)
+        #expect(daniel.wagePerWeek == Double(pounds) && daniel.askingPrice == pounds)
+    }
+
+    @Test func aMonthlyWageIsKeptPerWeekAndTheStyleIsTheOnePasted() throws {
+        let r = try importU21(wages: "Monthly", symbol: "$", firstWage: "$3,497")
+        let daniel = try #require(r.players.first { $0.name == "Brayden Daniel" })
+        #expect(daniel.wagePerWeek == 807)      // 3,497 × 12 ÷ 52
+        #expect(r.money == MoneyStyle(symbol: "$", period: .monthly))
+        // A monthly wage that is not a whole number of a week is kept as it is, not rounded.
+        let other = try importU21(wages: "Monthly", symbol: "$", firstWage: "$3,500")
+        #expect(try #require(other.players.first { $0.name == "Brayden Daniel" }).wagePerWeek == 3_500.0 * 12 / 52)
+    }
+
+    @Test func aYearlyWageIsKeptPerWeek() throws {
+        let r = try importU21(wages: "Yearly", symbol: "$", firstWage: "$41,964")
+        #expect(try #require(r.players.first { $0.name == "Brayden Daniel" }).wagePerWeek == 807)      // 41,964 ÷ 52
+        #expect(r.money == MoneyStyle(symbol: "$", period: .yearly))
+    }
+
+    @Test func aWeeklyWageIsKeptAsPasted() throws {
+        let r = try importU21(wages: "Weekly", symbol: "£", firstWage: "£600")
+        #expect(try #require(r.players.first { $0.name == "Brayden Daniel" }).wagePerWeek == 600)
+        #expect(r.money == .weeklyPounds)
+    }
+
+    @Test func theCapturesAsTheyStandAreWeeklyPounds() throws {
+        #expect(try importU21().money == .weeklyPounds)
+        let first = try Importer.importPlayers(clipboard: Fixtures.text("captures/first-team.tsv"),
+                                               fmrteConfig: Fixtures.data("captures/first-team.grids.json"), squad: .firstTeam)
+        #expect(first.money == .weeklyPounds)
+        #expect(try #require(first.players.first { $0.name == "Jonny Maxted" }).wagePerWeek == 600)
+    }
+
+    @Test func aWageInAnotherCurrencyStopsTheImportAndNamesThePlayer() throws {
+        let wage = try column("Contract.WagePerWeek")
+        #expect(throws: ImportError.mixedCurrency(player: "Max Treml", symbol: "€", expected: "$")) {
+            try importU21(settings: Fixtures.settings("u21", wages: "Monthly")) { rows in
+                var rows = rows.map { row in
+                    var row = row
+                    row[wage] = row[wage].replacingOccurrences(of: "£", with: "$")
+                    return row
+                }
+                rows[1][wage] = quoted("€3,497")
+                return rows
+            }
+        }
+    }
+
+    @Test func anUnknownWagePeriodStopsTheImport() throws {
+        #expect(throws: ImportError.unknownWagePeriod(found: "Fortnightly")) {
+            try importU21(settings: Fixtures.settings("u21", wages: "Fortnightly")) { $0 }
+        }
     }
 
     @Test func aWageWithMoreThanTwoDecimalPlacesStopsTheImport() throws {

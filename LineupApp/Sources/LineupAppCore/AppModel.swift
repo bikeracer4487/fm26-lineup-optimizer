@@ -20,6 +20,8 @@ public struct ImportSummary: Equatable, Sendable {
     /// The FMRTE grid recognised.
     public let grid: String
     public let playerCount: Int
+    /// How the paste wrote money: the currency on its wages and the period FMRTE shows them by.
+    public let money: MoneyStyle
     /// Names of players out on loan, in the order of the paste.
     public let onLoan: [String]
     /// The engine's sentences for the import's warnings, then one for each match before the current date with no
@@ -27,9 +29,9 @@ public struct ImportSummary: Equatable, Sendable {
     public let warnings: [String]
     public let change: SquadChange
 
-    public init(squad: Squad, date: Day, grid: String, playerCount: Int, onLoan: [String], warnings: [String],
-                change: SquadChange) {
-        self.squad = squad; self.date = date; self.grid = grid; self.playerCount = playerCount
+    public init(squad: Squad, date: Day, grid: String, playerCount: Int, money: MoneyStyle, onLoan: [String],
+                warnings: [String], change: SquadChange) {
+        self.squad = squad; self.date = date; self.grid = grid; self.playerCount = playerCount; self.money = money
         self.onLoan = onLoan; self.warnings = warnings; self.change = change
     }
 }

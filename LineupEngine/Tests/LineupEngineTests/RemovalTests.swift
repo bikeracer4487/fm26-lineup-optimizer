@@ -8,9 +8,10 @@ import Testing
     let profile = try! RatingProfile.standard()
     let parameters = EngineParameters.fm27
 
-    func report(_ players: [Player], ownClub: String? = "Oxford City", parameters: EngineParameters? = nil) throws -> RemovalReport {
-        try Removal.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog, profile: profile,
-                           parameters: parameters ?? self.parameters)
+    func report(_ players: [Player], ownClub: String? = "Oxford City", parameters: EngineParameters? = nil,
+                money: MoneyStyle = .weeklyPounds) throws -> RemovalReport {
+        try Removal.report(tactic: tactic, players: players, ownClub: ownClub, money: money, catalog: catalog,
+                           profile: profile, parameters: parameters ?? self.parameters)
     }
 
     /// A weak player of the club's own, in neither eleven and among the weakest: every attribute 10, familiarity 1
@@ -388,7 +389,7 @@ import Testing
     // MARK: Wages
 
     @Test func aHighWageOutsideBothElevensAddsPoints() throws {
-        let cases: [(Int, RemovalReason?)] = [
+        let cases: [(Double, RemovalReason?)] = [
             (751, reason("Paid £751 a week, against a median of £500, and in neither eleven", 35)),
             (750, reason("Paid £750 a week, against a median of £500, and in neither eleven", 20)),
             (501, reason("Paid £501 a week, against a median of £500, and in neither eleven", 20)),
@@ -1016,13 +1017,52 @@ import Testing
     // MARK: Money
 
     @Test func poundsAreWholeWithThousandsSeparators() {
-        #expect(Display.pounds(0) == "£0")
-        #expect(Display.pounds(999) == "£999")
-        #expect(Display.pounds(1_000) == "£1,000")
-        #expect(Display.pounds(1_250) == "£1,250")
-        #expect(Display.pounds(52_000) == "£52,000")
-        #expect(Display.pounds(1_234_567) == "£1,234,567")
-        #expect(Display.pounds(-1_250) == "-£1,250")
-        #expect(Display.perWeek(1_250) == "£1,250 a week")
+        #expect(Display.money(0, symbol: "£") == "£0")
+        #expect(Display.money(999, symbol: "£") == "£999")
+        #expect(Display.money(1_000, symbol: "£") == "£1,000")
+        #expect(Display.money(1_250, symbol: "£") == "£1,250")
+        #expect(Display.money(52_000, symbol: "£") == "£52,000")
+        #expect(Display.money(1_234_567, symbol: "£") == "£1,234,567")
+        #expect(Display.money(-1_250, symbol: "£") == "-£1,250")
+        #expect(Display.wage(perWeek: 1_250, .weeklyPounds) == "£1,250 a week")
+    }
+
+    /// Scott Pollock, pasted as $3,497 a month (807 a week) with 9 months left, outside both elevens of the planner's
+    /// squad, whose other players are on 700 a week. The game quoted $34,000 to release him.
+    func pollock(_ money: MoneyStyle) throws -> (report: RemovalReport, advice: RemovalAdvice) {
+        let player = target("Scott Pollock") { $0.wagePerWeek = 807; $0.monthsLeft = 9 }
+        let players = try squad([player]).map { p -> Player in
+            var p = p; if p.id != player.id { p.wagePerWeek = 700 }; return p
+        }
+        let r = try report(players, money: money)
+        return (r, try #require(r.advice.first { $0.player == player.id }))
+    }
+
+    @Test func aMonthlyDollarWageIsCostedPerWeekAndWrittenInDollarsAMonth() throws {
+        let dollars = MoneyStyle(symbol: "$", period: .monthly)
+        let (r, a) = try pollock(dollars)
+        #expect(r.money == dollars)
+        // 807 × 52 ÷ 12 × (9 + 0.5) is 33,221.5.
+        #expect(a.releaseCost == 33_222 && a.mutualCost == 18_272)
+        #expect(AdvisorText.costs(of: a, money: r.money)
+                == "Releasing him costs about $33,222; a mutual termination about $18,272")
+        #expect(reasons(a.reasons, "Paid")
+                == [reason("Paid $3,497 a month, against a median of $3,033, and in neither eleven", 20)])
+    }
+
+    @Test func theSamePlayerInWeeklyPoundsReadsAsBefore() throws {
+        let (r, a) = try pollock(.weeklyPounds)
+        #expect(r.money == .weeklyPounds)
+        #expect(a.releaseCost == 33_222 && a.mutualCost == 18_272)
+        #expect(AdvisorText.costs(of: a, money: r.money)
+                == "Releasing him costs about £33,222; a mutual termination about £18,272")
+        #expect(reasons(a.reasons, "Paid") == [reason("Paid £807 a week, against a median of £700, and in neither eleven", 20)])
+    }
+
+    @Test func theWagesAtStakeNeedNotBeWhole() throws {
+        let leaving = try report(try squad([target { $0.wagePerWeek = 807.5; $0.monthsLeft = nil }]))
+        let level = try #require(leaving.advice.first { $0.player == target().id }).level
+        #expect(level == .critical || level == .high)
+        #expect(leaving.weeklyWagesAtStake == 807.5)
     }
 }

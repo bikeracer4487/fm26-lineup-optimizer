@@ -66,21 +66,22 @@ import Testing
                         rejected: rejected)
     }
 
-    func report(_ request: AdvisorsRequest, parameters: EngineParameters = .fm27) throws -> AdvisorsReport {
-        try Advisors.report(request, catalog: catalog, profile: profile, parameters: parameters)
+    func report(_ request: AdvisorsRequest, money: MoneyStyle = .weeklyPounds,
+                parameters: EngineParameters = .fm27) throws -> AdvisorsReport {
+        try Advisors.report(request, money: money, catalog: catalog, profile: profile, parameters: parameters)
     }
 
     /// Every advisor called on its own, as a caller without `Advisors.report` would.
-    static func oneByOne(_ r: AdvisorsRequest, catalog: RoleCatalog, profile: RatingProfile,
-                         parameters: EngineParameters) throws -> AdvisorsReport {
+    static func oneByOne(_ r: AdvisorsRequest, money: MoneyStyle = .weeklyPounds, catalog: RoleCatalog,
+                         profile: RatingProfile, parameters: EngineParameters) throws -> AdvisorsReport {
         let elevens = try Elevens.report(tactic: r.primary, players: r.players, ownClub: r.ownClub, catalog: catalog,
                                          profile: profile, parameters: parameters)
         let depth = try Depth.report(tactic: r.primary, players: r.players, ownClub: r.ownClub, catalog: catalog,
                                      profile: profile, parameters: parameters)
         let rest = try Rest.advice(players: r.players, ownClub: r.ownClub, history: r.history, asOf: r.asOf,
                                    intensity: r.intensity, parameters: parameters)
-        let removal = try Removal.report(tactic: r.primary, players: r.players, ownClub: r.ownClub, catalog: catalog,
-                                         profile: profile, parameters: parameters)
+        let removal = try Removal.report(tactic: r.primary, players: r.players, ownClub: r.ownClub, money: money,
+                                         catalog: catalog, profile: profile, parameters: parameters)
         var tactics = [r.primary]
         for t in r.tactics where !tactics.contains(t) { tactics.append(t) }
         let training = try Training.report(tactics: tactics, players: r.players, ownClub: r.ownClub, accepted: r.accepted,
@@ -98,6 +99,11 @@ import Testing
         #expect(together == (try Self.oneByOne(r, catalog: catalog, profile: profile, parameters: .fm27)))
         // Every advisor has something to say, so the comparison means something.
         #expect(!together.training.recommendations.isEmpty)
+        // Player Removal writes money in the style handed in.
+        let dollars = MoneyStyle(symbol: "$", period: .monthly)
+        let inDollars = try report(r, money: dollars)
+        #expect(inDollars.removal.money == dollars && together.removal.money == .weeklyPounds)
+        #expect(inDollars == (try Self.oneByOne(r, money: dollars, catalog: catalog, profile: profile, parameters: .fm27)))
         #expect(!together.rest.isEmpty)
         #expect(!together.removal.advisedToLeave.isEmpty)
         #expect(!together.removal.loans.isEmpty)
@@ -154,7 +160,7 @@ import Testing
         let swapped = try Advisors.report(
             AdvisorsRequest(primary: other, tactics: [tactic], players: players, ownClub: ownClub, history: StartHistory([]),
                             asOf: asOf, intensity: .medium, accepted: [], rejected: []),
-            catalog: catalog, profile: profile, parameters: .fm27)
+            money: .weeklyPounds, catalog: catalog, profile: profile, parameters: .fm27)
         #expect(swapped.depth == otherDepth)
         #expect(swapped.elevens.first.map(\.slot).contains(.ST_L))
         #expect(swapped.training.needsWithoutCandidates == otherNeeds + [primaryNeed])

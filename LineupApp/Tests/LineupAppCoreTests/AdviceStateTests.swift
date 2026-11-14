@@ -37,7 +37,8 @@ import LineupEngine
             history: StartHistory(model.history.map(\.lineup)), asOf: try #require(model.squad.importedOn.values.max()),
             intensity: model.settings.plan.trainingIntensity, accepted: model.retrainingForPlan,
             rejected: model.training.rejected)
-        return try Advisors.report(request, catalog: model.catalog, profile: model.profile, parameters: model.planParameters)
+        return try Advisors.report(request, money: model.squad.book.moneyStyle, catalog: model.catalog,
+                                   profile: model.profile, parameters: model.planParameters)
     }
 
     /// A copy of the primary tactic, saved under another name, with the in-possession striker taken out, so the engine
@@ -67,6 +68,27 @@ import LineupEngine
     }
 
     // MARK: Each state
+
+    @Test func theAdviceWritesMoneyAsTheSquadsWereImported() throws {
+        let t = try TestModel()
+        try t.importFirstTeamInDollarsMonthly()
+        t.importSquad(.u21, paste: Captures.inDollars(try Captures.u21),
+                      grids: try Captures.grids(try Captures.u21Grids, wages: "Monthly"))
+        var settings = t.model.settings
+        settings.clubName = "Oxford City"
+        t.model.update(settings)
+        t.model.addTactic(named: "4-2-3-1")
+        let dollars = MoneyStyle(symbol: "$", period: .monthly)
+        #expect(t.model.squad.book.moneyStyle == dollars)
+        let r = try #require(report(t.model))
+        #expect(r.removal.money == dollars)
+        #expect(r == (try engineReport(t.model)))
+        let sheet = t.model.removalSheet(r)
+        #expect(sheet.figures.last?.figure == Display.wage(perWeek: r.removal.weeklyWagesAtStake, dollars))
+        #expect(sheet.figures.last?.figure.hasPrefix("$") == true && sheet.figures.last?.figure.hasSuffix(" a month") == true)
+        let costs = sheet.rows.map(\.costsText).filter { $0.hasPrefix("Releasing him costs about") }
+        #expect(!costs.isEmpty && costs.allSatisfy { $0.contains("$") && !$0.contains("£") })
+    }
 
     @Test func withNoSquadTheAdviceNeedsOne() {
         let model = SampleData.emptyModel()
@@ -109,7 +131,7 @@ import LineupEngine
         var players = try #require(model.squad.book.current[.firstTeam])
         let name = players[0].name
         players[0].attributes[.consistency] = nil
-        _ = model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: []), to: .firstTeam)
+        _ = model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: [], money: .weeklyPounds), to: .firstTeam)
         model.replan()
         #expect(model.adviceState == .failed(
             [ErrorDescriptions.describe(RatingError.missingAttribute(player: name, attribute: .consistency))], fix: .squad))
@@ -167,7 +189,7 @@ import LineupEngine
         model.addFixture(date: TestModel.today.adding(days: 1), opponent: "Rovers", importance: .medium)
         var players = try #require(model.squad.book.current[.firstTeam])
         players[0].attributes[.consistency] = nil
-        _ = model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: []), to: .firstTeam)
+        _ = model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: [], money: .weeklyPounds), to: .firstTeam)
         model.replan()
         guard case .failed = model.adviceState else {
             Issue.record("expected the advice to stop, got \(model.adviceState)")

@@ -126,12 +126,15 @@ public enum AdvisorText {
         advice.limitNotes.isEmpty ? nil : advice.limitNotes.joined(separator: ", ")
     }
 
-    public static func costs(of advice: RemovalAdvice) -> String {
+    /// What releasing him costs, in the squads' currency: "Releasing him costs about $33,222; a mutual termination about
+    /// $18,272".
+    public static func costs(of advice: RemovalAdvice, money: MoneyStyle) -> String {
         guard let release = advice.releaseCost, let mutual = advice.mutualCost else {
             return "The cost of releasing him is not known"
         }
         if release == 0 && mutual == 0 { return "Releasing him costs nothing" }
-        return "Releasing him costs about \(Display.pounds(release)); a mutual termination about \(Display.pounds(mutual))"
+        return "Releasing him costs about \(Display.money(release, symbol: money.symbol)); "
+            + "a mutual termination about \(Display.money(mutual, symbol: money.symbol))"
     }
 
     /// A reason's points with their sign: "+25" against him, "−40" (a true minus, U+2212) for him, "0" for neither.

@@ -3,7 +3,7 @@ import Testing
 @testable import LineupEngine
 
 private func result(_ players: [Player]) -> ImportResult {
-    ImportResult(grid: "test", players: players, warnings: [])
+    ImportResult(grid: "test", players: players, warnings: [], money: .weeklyPounds)
 }
 
 private func book(_ capture: String, squad: Squad) throws -> SquadBook {
@@ -572,5 +572,92 @@ private func book(_ capture: String, squad: Squad) throws -> SquadBook {
         #expect(Set(current.keys) == ["firstTeam", "u21"])
         let previous = try #require(object["previous"] as? [String: Any])
         #expect(Set(previous.keys) == ["u21"])
+    }
+}
+
+@Suite struct SquadBookMoneyTests {
+    private let dollarsMonthly = MoneyStyle(symbol: "$", period: .monthly)
+
+    private func result(_ name: String, _ money: MoneyStyle) -> ImportResult {
+        ImportResult(grid: "test", players: [.fixture(name: name)], warnings: [], money: money)
+    }
+
+    private func mixed(_ symbols: [Squad: String]) -> SquadWarning { .mixedCurrencies(symbols) }
+
+    @Test func theBookShowsMoneyAsTheMostRecentImportWroteIt() {
+        var book = SquadBook()
+        book.apply(result("A", dollarsMonthly), to: .firstTeam)
+        #expect(book.moneyStyle == dollarsMonthly)
+        #expect(book.warnings(override: nil).isEmpty)
+
+        book.apply(result("B", .weeklyPounds), to: .u21)
+        #expect(book.moneyStyle == .weeklyPounds)
+        #expect(book.warnings(override: nil) == [mixed([.firstTeam: "$", .u21: "£"])])
+        #expect(book.warnings(override: nil).map(ErrorDescriptions.describe) == [
+            "The first team's wages are in $ and the U21s' are in £. Wages in different currencies cannot be compared: "
+                + "import every squad with the same currency set in FMRTE.",
+        ])
+
+        book.apply(result("B", MoneyStyle(symbol: "$", period: .weekly)), to: .u21)
+        #expect(book.warnings(override: nil).isEmpty)
+        #expect(book.moneyStyle == MoneyStyle(symbol: "$", period: .weekly))
+    }
+
+    @Test func threeSquadsInThreeCurrenciesAreAllNamed() {
+        var book = SquadBook()
+        book.apply(result("C", MoneyStyle(symbol: "€", period: .yearly)), to: .u18)
+        book.apply(result("B", .weeklyPounds), to: .u21)
+        book.apply(result("A", dollarsMonthly), to: .firstTeam)
+        #expect(book.warnings(override: nil) == [mixed([.firstTeam: "$", .u21: "£", .u18: "€"])])
+        #expect(book.warnings(override: nil).map(ErrorDescriptions.describe) == [
+            "The first team's wages are in $, the U21s' are in £ and the U18s' are in €. Wages in different currencies "
+                + "cannot be compared: import every squad with the same currency set in FMRTE.",
+        ])
+    }
+
+    @Test func theCurrencyWarningComesAfterTheOtherTwo() {
+        var book = SquadBook()
+        book.apply(ImportResult(grid: "test", players: [.fixture(name: "A", club: nil, loanedTo: "Wallingford"),
+                                                        .fixture(name: "B", club: nil)],
+                                warnings: [], money: dollarsMonthly), to: .firstTeam)
+        book.apply(ImportResult(grid: "test", players: [.fixture(name: "B", potentialAbility: 90, club: nil)],
+                                warnings: [], money: .weeklyPounds), to: .u21)
+        #expect(book.warnings(override: nil) == [.ownClubUnknown, .sharedName("B"), mixed([.firstTeam: "$", .u21: "£"])])
+    }
+
+    /// A book saved before the tool read FMRTE's currency: its JSON has neither money entry.
+    private func bookSavedBefore() throws -> Data {
+        var book = SquadBook()
+        book.apply(result("A", dollarsMonthly), to: .firstTeam)
+        book.apply(result("B", MoneyStyle(symbol: "€", period: .yearly)), to: .u21)
+        var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(book)) as? [String: Any])
+        #expect(object["money"] != nil && object["currencies"] != nil)
+        object["money"] = nil
+        object["currencies"] = nil
+        return try JSONSerialization.data(withJSONObject: object)
+    }
+
+    @Test func aBookSavedBeforeMoneyWasReadOpensAsWeeklyPounds() throws {
+        let book = try JSONDecoder().decode(SquadBook.self, from: bookSavedBefore())
+        #expect(book.allPlayers.map(\.name) == ["A", "B"])
+        #expect(book.moneyStyle == .weeklyPounds)
+        #expect(book.warnings(override: nil).isEmpty)
+    }
+
+    @Test func aSquadNotImportedSinceIsTakenAsPounds() throws {
+        var book = try JSONDecoder().decode(SquadBook.self, from: bookSavedBefore())
+        book.apply(result("A", dollarsMonthly), to: .firstTeam)
+        #expect(book.moneyStyle == dollarsMonthly)
+        #expect(book.warnings(override: nil) == [mixed([.firstTeam: "$", .u21: "£"])])
+    }
+
+    @Test func theMoneyRecordedRoundTripsThroughJSON() throws {
+        var book = SquadBook()
+        book.apply(result("A", dollarsMonthly), to: .firstTeam)
+        book.apply(result("B", .weeklyPounds), to: .u21)
+        let decoded = try JSONDecoder().decode(SquadBook.self, from: JSONEncoder().encode(book))
+        #expect(decoded == book)
+        #expect(decoded.moneyStyle == .weeklyPounds)
+        #expect(decoded.warnings(override: nil) == [mixed([.firstTeam: "$", .u21: "£"])])
     }
 }

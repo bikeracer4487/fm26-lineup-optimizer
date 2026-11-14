@@ -446,7 +446,7 @@ import LineupEngine
         let index = try #require(players.firstIndex { LoanStatus.of($0, ownClub: club) == .own })
         let name = players[index].name
         players[index].attributes[.pressure] = nil
-        _ = t.model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: []), to: .firstTeam)
+        _ = t.model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: [], money: .weeklyPounds), to: .firstTeam)
         t.model.replan()
 
         let sentence = ErrorDescriptions.describe(RatingError.missingAttribute(player: name, attribute: .pressure))

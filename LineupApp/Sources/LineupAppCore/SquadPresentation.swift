@@ -272,6 +272,7 @@ extension AppModel {
             lines: [
                 ImportReport.gridLine(summary.grid),
                 ImportReport.playerCountLine(summary.playerCount),
+                Display.wagesRead(summary.money),
                 loans,
                 ImportReport.changeLine(summary.change, firstImport: previous == nil, name: { names[$0] ?? $0.key }),
             ],

@@ -512,8 +512,8 @@ public enum Display {
     public static func percent(_ fraction: Double) -> String { "\(Int((fraction * 100 + displayNoise).rounded(.down)))%" }
     static func twoDecimals(_ x: Double) -> String { String(format: "%.2f", x) }
 
-    /// Whole pounds with a comma between each group of three digits, whatever the locale: "£1,250".
-    public static func pounds(_ amount: Int) -> String {
+    /// Whole units of the currency with a comma between each group of three digits, whatever the locale: "$1,250".
+    public static func money(_ amount: Int, symbol: String) -> String {
         var digits = String(amount.magnitude)
         var groups: [Substring] = []
         while digits.count > 3 {
@@ -521,9 +521,21 @@ public enum Display {
             digits.removeLast(3)
         }
         groups.insert(Substring(digits), at: 0)
-        return (amount < 0 ? "-" : "") + "£" + groups.joined(separator: ",")
+        return (amount < 0 ? "-" : "") + symbol + groups.joined(separator: ",")
     }
 
-    /// A weekly wage: "£1,250 a week".
-    public static func perWeek(_ amount: Int) -> String { "\(pounds(amount)) a week" }
+    /// A wage kept per week, shown in the style's period and rounded to a whole unit: "$3,497 a month", "£600 a week".
+    public static func wage(perWeek: Double, _ style: MoneyStyle) -> String {
+        wageAmount(perWeek: perWeek, style) + style.period.suffix
+    }
+
+    /// A wage kept per week, in the style's period and rounded to a whole unit, without the period: "$3,497".
+    static func wageAmount(perWeek: Double, _ style: MoneyStyle) -> String {
+        money(Int(style.period.amount(perWeek: perWeek).rounded()), symbol: style.symbol)
+    }
+
+    /// How an import read its wages: "Wages are in $ a month, as FMRTE shows them."
+    public static func wagesRead(_ style: MoneyStyle) -> String {
+        "Wages are in \(style.symbol)\(style.period.suffix), as FMRTE shows them."
+    }
 }

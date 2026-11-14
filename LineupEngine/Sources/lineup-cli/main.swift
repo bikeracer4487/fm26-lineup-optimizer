@@ -263,7 +263,8 @@ do {
         let advisors = try Advisors.report(AdvisorsRequest(
             primary: tactic, tactics: [tactic], players: players, ownClub: ownClub, history: StartHistory(history),
             asOf: options.asOf!, intensity: options.settings.trainingIntensity, accepted: [], rejected: []),
-            catalog: catalog, profile: profile, parameters: parameters)
+            // Money is shown as the squads given wrote it; of several, the last one given decides the period.
+            money: book.moneyStyle, catalog: catalog, profile: profile, parameters: parameters)
         var suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]?
         if let fixtures {
             // The planner's tiers: injured players left out, as they cannot play.
@@ -292,9 +293,9 @@ do {
 } catch {
     // The library describes FMRTE's configuration without knowing where it was read from.
     let isConfigError = switch error as? ImportError {
-    case .configUnreadable?, .noPlayerGrids?: true
+    case .configUnreadable?, .noPlayerGrids?, .unknownWagePeriod?: true
     case .emptyClipboard?, .notAnFMRTEGrid?, .raggedRows?, .noGridFits?, .ambiguousGrid?, .missingColumns?,
-         .invalidValue?, .unexpectedScale?, .duplicateID?, nil: false
+         .invalidValue?, .unexpectedScale?, .duplicateID?, .mixedCurrency?, nil: false
     }
     fail(ErrorDescriptions.describe(error) + (isConfigError ? " (read from \(options.grids!))" : ""))
 }

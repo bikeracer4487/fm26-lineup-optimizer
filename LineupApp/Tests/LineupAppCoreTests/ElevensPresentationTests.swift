@@ -32,7 +32,7 @@ import LineupEngine
         for squad in Squad.allCases {
             guard var players = model.squad.book.current[squad] else { continue }
             for index in players.indices { edit(&players[index]) }
-            _ = model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: []), to: squad)
+            _ = model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: [], money: .weeklyPounds), to: squad)
         }
         model.replan()
     }
