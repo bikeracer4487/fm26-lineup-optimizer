@@ -333,6 +333,22 @@ public enum SampleData {
         return model
     }
 
+    /// The player `modelWithLoanee` puts on loan here: the longest name in the sample.
+    public static let loaneeName = "Kauan Bitencourt de Oliveira"
+
+    /// The sample model with one U21 player given a parent club in its copy of the squads, so the engine reads him as on
+    /// loan to the club and the Player Removal screen reviews his loan.
+    @MainActor public static func modelWithLoanee(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        guard model.players.contains(where: { $0.name == loaneeName }) else {
+            throw SampleDataError(description: "The sample model lacks \(loaneeName).")
+        }
+        edit(model) { player in
+            if player.name == loaneeName { player.club = "Banbury United" }
+        }
+        return model
+    }
+
     /// Changes every player in the model's copy of the squads as `change` says, as an import of the changed squads
     /// would, saves the squads and works the plan and advice out again.
     @MainActor private static func edit(_ model: AppModel, _ change: (inout Player) -> Void) {

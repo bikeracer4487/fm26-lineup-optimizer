@@ -89,6 +89,18 @@ import Testing
         #expect(AdvisorText.why(.keep, for: advice) == "Nothing here says he should go")
     }
 
+    @Test func aReasonsPointsAreSignedWithATrueMinus() {
+        #expect(AdvisorText.points(of: RemovalReason(text: "In neither eleven", points: 25)) == "+25")
+        #expect(AdvisorText.points(of: RemovalReason(text: "A model professional", points: -40)) == "\u{2212}40")
+        #expect(AdvisorText.points(of: RemovalReason(text: "Contract type", points: 0)) == "0")
+    }
+
+    @Test func aScoreHasATrueMinusAndNoPlus() {
+        #expect(AdvisorText.score(45) == "45")
+        #expect(AdvisorText.score(0) == "0")
+        #expect(AdvisorText.score(-12) == "\u{2212}12")
+    }
+
     func depth(cover: Int) -> SlotDepth {
         SlotDepth(slot: .D_L, ipPosition: .defenderLeft, oopPosition: .defenderLeft, options: [], onLoan: [], cover: cover,
                   isThin: cover < 2, dropToNextBest: nil, nextBest: nil)

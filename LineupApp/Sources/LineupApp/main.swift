@@ -55,6 +55,11 @@
 //                                              under way, a second whose player has left and a pair turned
 //                                              down, taller ("training-accepted-…"), and with nothing to list
 //                                              ("training-none-…").
+//                                              The Player Removal screen ("removal-…", its critical and high
+//                                              rows open) is drawn with every row open, tall enough for a
+//                                              medium and a keep row's reasons ("removal-all-open-…"), and
+//                                              with a U21 player on loan here so the loan review shows
+//                                              ("removal-loanee-…").
 //                                              Every screen is drawn again in a narrow window, 800 by 700
 //                                              ("<screen>-narrow-…"), and Match Selection, Tactics, Fixtures
 //                                              and the advisor screens in the smallest window
@@ -120,7 +125,7 @@ func fail(_ message: String) -> Never {
 enum SampleState {
     case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange, pastFixtures
     case afterConfirmingFirst, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
-    case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, nothingToRetrain
+    case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, nothingToRetrain, loanee
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -145,6 +150,7 @@ enum SampleState {
         case .beforeRetraining: return try SampleData.modelBeforeRetraining(repositoryRoot: url)
         case .retrainingUnderWay: return try SampleData.modelWithRetrainingUnderWay(repositoryRoot: url)
         case .nothingToRetrain: return try SampleData.modelWithNothingToRetrain(repositoryRoot: url)
+        case .loanee: return try SampleData.modelWithLoanee(repositoryRoot: url)
         }
     } catch {
         fail("\(error)")
@@ -259,6 +265,14 @@ let narrowWindow = CGSize(width: 800, height: 700)
                              screens: [.training])
 }
 
+/// The Player Removal screen with every row open and with a loanee: see the usage at the top.
+@MainActor func drawRemoval(_ root: String, to directory: URL, size: CGSize) throws {
+    try ScreenPictures.write(model: sampleModel(root), to: directory, size: CGSize(width: size.width, height: size.height * 4),
+                             variant: "all-open", screens: [.removal], removalStart: RemovalStart(allOpen: true))
+    try ScreenPictures.write(model: sampleModel(root, .loanee), to: directory,
+                             size: CGSize(width: size.width, height: size.height * 3), variant: "loanee", screens: [.removal])
+}
+
 /// Draws the pictures and returns the process's exit status.
 @MainActor func drawPictures(to path: String, sampleDataRoot: String?) -> Int32 {
     do {
@@ -303,6 +317,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
             try drawElevens(root, to: directory, size: size)
             try drawRest(root, to: directory, size: size)
             try drawTraining(root, to: directory, size: size)
+            try drawRemoval(root, to: directory, size: size)
         } else {
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size)
         }

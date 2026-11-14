@@ -84,12 +84,22 @@ public enum Theme {
             }
         }
 
-        /// A stamp's text and outline: marker red or amber as text, or ink.
+        /// A stamp's text and outline: marker red or amber as text, ink, or muted ink.
         public static func stamp(_ tone: StampTone) -> Color {
             switch tone {
             case .red: redText
             case .amber: amberText
             case .ink: ink
+            case .muted: mutedInk
+            }
+        }
+
+        /// A reason's points: red against him, green for him, muted for none.
+        public static func points(_ tone: PointsTone) -> Color {
+            switch tone {
+            case .red: redText
+            case .green: greenText
+            case .muted: mutedInk
             }
         }
 
@@ -618,6 +628,36 @@ public enum Theme {
         /// The marks in the key under the track.
         public static let keyMark: CGFloat = 12
         public static let keySolidHeight: CGFloat = 14
+    }
+
+    // MARK: Player Removal
+
+    public enum Removal {
+        /// The disclosure mark at a row's start.
+        public static let disclosureColumn: CGFloat = 22
+        /// The level's stamp, room for the widest level's.
+        public static let stampColumn: CGFloat = 86
+        /// The action, room for the longest: "Terminate".
+        public static let actionColumn: CGFloat = 96
+        /// The name on a wide board; a longer name wraps to a second line. On a narrow board the name takes what the
+        /// other columns leave, with the costs sentence under it.
+        public static let nameColumn: CGFloat = 240
+        public static let squadColumn: CGFloat = 84
+        public static let ageColumn: CGFloat = 40
+        public static let scoreColumn: CGFloat = 60
+        /// The least the costs sentence keeps beside the rest; below it, the sentence goes under the name.
+        public static let costsMinimum: CGFloat = 260
+        /// From this board width the costs sentence has a column of its own.
+        public static let wideTableWidth: CGFloat = disclosureColumn + stampColumn + actionColumn + nameColumn
+            + squadColumn + ageColumn + scoreColumn + Table.columnLead + costsMinimum
+        /// The most lines a name wraps to.
+        public static let nameLines = 2
+        /// The points before each reason, right-aligned so the figures line up.
+        public static let pointsColumn: CGFloat = 44
+        /// The verdict's stamp before a loanee's name, room for the longest: "Keep to the end".
+        public static let verdictColumn: CGFloat = 136
+        /// The space above "Loans to the club".
+        public static let loansGap: CGFloat = 32
     }
 
     // MARK: Columns

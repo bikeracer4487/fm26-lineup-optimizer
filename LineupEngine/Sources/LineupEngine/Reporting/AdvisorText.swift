@@ -108,6 +108,21 @@ public enum AdvisorText {
         return "Releasing him costs \(Display.pounds(release)); a mutual termination about \(Display.pounds(mutual))"
     }
 
+    /// A reason's points with their sign: "+25" against him, "−40" (a true minus, U+2212) for him, "0" for neither.
+    public static func points(of reason: RemovalReason) -> String {
+        reason.points > 0 ? "+\(reason.points)" : signed(reason.points)
+    }
+
+    /// A removal or loan score: "45", "0", or "−12" with a true minus sign (U+2212).
+    public static func score(_ score: Int) -> String {
+        signed(score)
+    }
+
+    /// A negative number with a true minus sign (U+2212), as the app writes it; any other as it is.
+    private static func signed(_ number: Int) -> String {
+        number < 0 ? "\u{2212}\(number.magnitude)" : String(number)
+    }
+
     /// The rule that chose the action, in one sentence. The termination line is a parameter, so it is not named in
     /// months here.
     public static func why(_ action: RemovalAction, for advice: RemovalAdvice) -> String {

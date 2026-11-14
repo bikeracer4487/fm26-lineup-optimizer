@@ -25,10 +25,11 @@ public enum ScreenPictures {
     /// "<screen>-light.png" and "<screen>-dark.png" into `directory`; with a variant,
     /// "<screen>-<variant>-light.png" and "<screen>-<variant>-dark.png". Match Selection's pictures are named
     /// "match-…". With a tactic slot, the Tactics editor is drawn with that slot selected; Match Selection is drawn
-    /// as `matchStart` says, and the Elevens screen as `elevensStart` says.
+    /// as `matchStart` says, the Elevens screen as `elevensStart` says, and Player Removal as `removalStart` says.
     @MainActor public static func write(
         model: AppModel, to directory: URL, size: CGSize, variant: String? = nil, screens: [Screen] = Screen.allCases,
-        tacticSlot: TacticSlot? = nil, matchStart: MatchStart = MatchStart(), elevensStart: ElevensStart = ElevensStart()
+        tacticSlot: TacticSlot? = nil, matchStart: MatchStart = MatchStart(), elevensStart: ElevensStart = ElevensStart(),
+        removalStart: RemovalStart = RemovalStart()
     ) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let appearances: [(suffix: String, name: NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
@@ -37,7 +38,7 @@ public enum ScreenPictures {
                 let name = ([pictureName(of: screen)] + [variant].compactMap { $0 } + [appearance.suffix])
                     .joined(separator: "-") + ".png"
                 let png = try draw(RootView(model: model, showing: screen, tacticSlot: tacticSlot, matchStart: matchStart,
-                                            elevensStart: elevensStart),
+                                            elevensStart: elevensStart, removalStart: removalStart),
                                    size: size, appearance: appearance.name, name: name)
                 do {
                     try png.write(to: directory.appendingPathComponent(name), options: .atomic)

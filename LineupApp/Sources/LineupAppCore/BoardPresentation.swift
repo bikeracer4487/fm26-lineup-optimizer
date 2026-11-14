@@ -177,9 +177,9 @@ public enum NoteTilt {
     }
 }
 
-/// The colour a stamp is inked in: marker red, marker amber, or ink.
+/// The colour a stamp is inked in: marker red, marker amber, ink, or muted ink for one that should recede.
 public enum StampTone: Hashable, Sendable {
-    case red, amber, ink
+    case red, amber, ink, muted
 }
 
 /// A status written as a stamp: in sentence case, in its colour.
