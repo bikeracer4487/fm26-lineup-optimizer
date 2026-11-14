@@ -47,9 +47,11 @@
 //                                              raised so a holiday and a rest over the limit show
 //                                              ("rest-levels-…"), that also in the smallest window
 //                                              ("rest-levels-small-…").
-//                                              The Training screen is drawn tall enough for all four
-//                                              parts ("training-tall-…", and "training-small-tall-…" in
-//                                              the smallest window's width), with its retraining six weeks
+//                                              The Training screen ("training-…") is drawn on the sample
+//                                              before its retraining is accepted, so its recommendations
+//                                              show, and so tall enough for all four parts
+//                                              ("training-tall-…", and "training-small-tall-…" in the
+//                                              smallest window's width); with its retraining six weeks
 //                                              under way, a second whose player has left and a pair turned
 //                                              down, taller ("training-accepted-…"), and with nothing to list
 //                                              ("training-none-…").
@@ -118,7 +120,7 @@ func fail(_ message: String) -> Never {
 enum SampleState {
     case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange, pastFixtures
     case afterConfirmingFirst, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
-    case jadedPlayers, nobodyNeedingRest, retrainingUnderWay, nothingToRetrain
+    case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, nothingToRetrain
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -140,6 +142,7 @@ enum SampleState {
         case .twoMatchesOnOneDay: return try SampleData.modelWithTwoMatchesOnOneDay(repositoryRoot: url)
         case .jadedPlayers: return try SampleData.modelWithJadedPlayers(repositoryRoot: url)
         case .nobodyNeedingRest: return try SampleData.modelWithNobodyNeedingRest(repositoryRoot: url)
+        case .beforeRetraining: return try SampleData.modelBeforeRetraining(repositoryRoot: url)
         case .retrainingUnderWay: return try SampleData.modelWithRetrainingUnderWay(repositoryRoot: url)
         case .nothingToRetrain: return try SampleData.modelWithNothingToRetrain(repositoryRoot: url)
         }
@@ -245,9 +248,10 @@ let narrowWindow = CGSize(width: 800, height: 700)
 @MainActor func drawTraining(_ root: String, to directory: URL, size: CGSize) throws {
     let tall = CGSize(width: size.width, height: size.height * 2.5)
     let smallTall = CGSize(width: Theme.Layout.minimumWindow.width, height: Theme.Layout.minimumWindow.height * 4)
-    let plain = sampleModel(root)
-    try ScreenPictures.write(model: plain, to: directory, size: tall, variant: "tall", screens: [.training])
-    try ScreenPictures.write(model: plain, to: directory, size: smallTall, variant: "small-tall", screens: [.training])
+    let open = sampleModel(root, .beforeRetraining)
+    try ScreenPictures.write(model: open, to: directory, size: size, screens: [.training])
+    try ScreenPictures.write(model: open, to: directory, size: tall, variant: "tall", screens: [.training])
+    try ScreenPictures.write(model: open, to: directory, size: smallTall, variant: "small-tall", screens: [.training])
     try ScreenPictures.write(model: sampleModel(root, .retrainingUnderWay), to: directory,
                              size: CGSize(width: size.width, height: size.height * 3.5), variant: "accepted",
                              screens: [.training])
@@ -273,7 +277,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
         if let root = sampleDataRoot {
             // The left back has the most reasons in the first fixture.
             try ScreenPictures.write(model: sampleModel(root), to: directory, size: size,
-                                     screens: Screen.allCases.filter { $0 != .tactics },
+                                     screens: Screen.allCases.filter { $0 != .tactics && $0 != .training },
                                      matchStart: MatchStart(slot: .D_L))
             // With an unsaved change, the left inside forward made a winger and selected, so the role menu,
             // "Remove", what he becomes and the marks for unsaved changes are all shown.

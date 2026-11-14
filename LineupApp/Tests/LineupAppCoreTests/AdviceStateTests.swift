@@ -127,15 +127,21 @@ import LineupEngine
 
     @Test func theAdviceIsTheEnginesReportForThePlansSquadDateHistoryAndRetrainings() throws {
         let model = try sample()
+        // The sample's retraining fills the slot it was recommended for, so it is stopped to see the recommendations.
+        let sampled = try #require(model.training.accepted.first)
+        model.stopRetraining(RetrainingChoice(player: sampled.player, position: sampled.position))
         let recommended = try #require(report(model)?.training.recommendations)
-        #expect(recommended.count >= 2)
-        // The sample has accepted the first recommendation; turning the next down changes what is handed on.
+        try #require(recommended.count >= 2)
+        // Turning one down and accepting another changes what is handed on.
         model.reject(recommended[1].choice)
+        #expect(!(try #require(report(model))).training.recommendations.contains { $0.choice == recommended[1].choice })
+        model.accept(recommended[0].choice)
         let other = try addOtherTactic(model)
         let advice = try #require(report(model))
         #expect(advice == (try engineReport(model)))
         #expect(model.tactics.contains { $0.id == other })
-        #expect(!advice.training.recommendations.contains { $0.choice == recommended[1].choice })
+        #expect(model.training.accepted.map(\.player) == [recommended[0].choice.player])
+        #expect(model.training.rejected == [recommended[1].choice])
     }
 
     @Test func aSavedTacticTheEngineRefusesIsLeftOutWithoutStoppingTheAdvice() throws {

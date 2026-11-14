@@ -58,7 +58,9 @@ public struct TrainingReport: Equatable, Sendable {
     /// Thin slots no recommendation covers and no accepted retraining covers: places to recruit. Most in need first.
     public let needsWithoutCandidates: [RetrainingNeed]
     /// Thin slots no recommendation covers that a player of the club's own is already being retrained for: an accepted
-    /// retraining at the slot's in-possession or out-of-possession position where he is not yet solid. Most in need first.
+    /// retraining at the slot's in-possession or out-of-possession position where he is not yet solid. A slot whose cover
+    /// and retrainings toward it together reach `depthThinBelow` gets no recommendation and is always here. Most in need
+    /// first.
     public let needsBeingRetrained: [RetrainingNeed]
 }
 
@@ -71,7 +73,9 @@ public enum Training {
     /// Who should learn a position to cover the thin slots of `tactics`. A player in `leaving`, whom the owner is advised
     /// to move on, is never a candidate; the caller passes `RemovalReport.advisedToLeave` there, since Training does not
     /// run Player Removal itself. A player with an accepted retraining, at any position, is not a candidate for another:
-    /// one retraining at a time. Throws `PlanError.badParameters` when
+    /// one retraining at a time. A thin slot gets no recommendation once its cover plus the accepted retrainings toward
+    /// it (as `TrainingReport.needsBeingRetrained` counts them) reaches `depthThinBelow`: those under way will fill it.
+    /// Throws `PlanError.badParameters` when
     /// `FitnessModel.problems(in:)` finds problems, what `Depth.report` throws, `RatingError.missingAttribute` for a
     /// candidate without Versatility or Professionalism, and `RatingError.missingFamiliarity` for a missing position.
     public static func report(tactics: [Tactic], players: [Player], ownClub: String?,
@@ -108,15 +112,17 @@ public enum Training {
         let byID = Dictionary(sorted.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let solidFrom = parameters.depthSolidFamiliarity.value
 
-        /// An accepted retraining of one of the club's own players at a position of the slot where he is not yet solid.
-        func isBeingRetrained(_ assignment: SlotAssignment) throws -> Bool {
+        /// The accepted retrainings toward the slot: of the club's own players, at a position of the slot where the
+        /// player is not yet solid. Each retraining counts once.
+        func retrainingsToward(_ assignment: SlotAssignment) throws -> Int {
+            var count = 0
             for retraining in accepted {
-                guard let player = byID[retraining.player], case .own = LoanStatus.of(player, ownClub: ownClub) else { continue }
-                for position in [assignment.ipPosition, assignment.oopPosition] where retraining.position == position {
-                    if try familiarity(player, position) < solidFrom { return true }
-                }
+                guard let player = byID[retraining.player], case .own = LoanStatus.of(player, ownClub: ownClub),
+                      retraining.position == assignment.ipPosition || retraining.position == assignment.oopPosition
+                else { continue }
+                if try familiarity(player, retraining.position) < solidFrom { count += 1 }
             }
-            return false
+            return count
         }
 
         for tactic in tactics {
@@ -130,9 +136,11 @@ public enum Training {
             for slot in depth.thin {
                 guard let assignment = assignments[slot], let slotDepth = slots[slot] else { continue }
                 let index = needs.count
+                let toward = try retrainingsToward(assignment)
                 needs.append(NeedFacts(need: RetrainingNeed(tactic: tactic.name, slot: slot), ipPosition: assignment.ipPosition,
-                                       cover: slotDepth.cover,
-                                       isBeingRetrained: try isBeingRetrained(assignment)))
+                                       cover: slotDepth.cover, isBeingRetrained: toward > 0))
+                // The cover and the retrainings under way together reach the line: nobody else need learn it.
+                guard slotDepth.cover + toward < parameters.depthThinBelow.value else { continue }
                 // Without a first choice there is nothing to measure a candidate against.
                 guard let first = firstChoice[slot], first.rating.value > 0 else { continue }
                 for player in sorted where !leaving.contains(player.id) && !retraining.contains(player.id) {

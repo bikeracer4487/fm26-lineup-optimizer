@@ -476,11 +476,45 @@ import Testing
         #expect(r.needsWithoutCandidates.isEmpty)
     }
 
-    @Test func aNeedBeingRetrainedCanStillGetAnotherRecommendation() throws {
+    func leftBackCover(_ players: [Player]) throws -> Int {
+        let depth = try Depth.report(tactic: tactic, players: players, ownClub: "Oxford City", catalog: catalog,
+                                     profile: profile, parameters: .fm27)
+        return try #require(depth.slots.first { $0.slot == .D_L }).cover
+    }
+
+    @Test func aNeedWhoseCoverAndRetrainingsReachTheLineGetsNoFurtherRecommendation() throws {
+        // Cover 1 (the first choice) and one retraining toward the slot make 2, the thin line.
         let players = try thinAtLeftBack([rightBack("Back A", versatility: 14), rightBack("Back B", versatility: 13)])
+        try #require(try leftBackCover(players) == 1)
+        try #require(EngineParameters.fm27.depthThinBelow.value == 2)
+        let r = try report(players, accepted: [Retraining(player: id("Back A"), position: .defenderLeft, acceptedOn: acceptedOn)])
+        #expect(r.recommendations.isEmpty)
+        #expect(r.needsBeingRetrained == [leftBackNeed])
+        #expect(r.needsWithoutCandidates.isEmpty)
+        // With nothing accepted, both are recommended for it.
+        #expect(Set(choices(try report(players))) == [RetrainingChoice(player: id("Back A"), position: .defenderLeft),
+                                                      RetrainingChoice(player: id("Back B"), position: .defenderLeft)])
+    }
+
+    @Test func aNeedWhoseCoverAndRetrainingsAreStillBelowTheLineCanGetAnotherRecommendation() throws {
+        // The first-choice left back injured: cover 0, so one retraining toward the slot is not enough.
+        let players = try thinAtLeftBack([rightBack("Back A", versatility: 14), rightBack("Back B", versatility: 13)]).map { p in
+            var p = p
+            if p.name == named(.D_L, "first") { p.isInjured = true }
+            return p
+        }
+        try #require(try leftBackCover(players) == 0)
         let r = try report(players, accepted: [Retraining(player: id("Back A"), position: .defenderLeft, acceptedOn: acceptedOn)])
         #expect(choices(r) == [RetrainingChoice(player: id("Back B"), position: .defenderLeft)])
         #expect(r.needsBeingRetrained.isEmpty && r.needsWithoutCandidates.isEmpty)
+    }
+
+    @Test func aRetrainingTowardTheSlotThatDoesNotCountLeavesItOpenToRecommendations() throws {
+        // Accepted at a position the slot does not use: cover 1 and no retraining toward it, so Back B is offered.
+        let players = try thinAtLeftBack([rightBack("Back A", versatility: 14), rightBack("Back B", versatility: 13)])
+        let r = try report(players, accepted: [Retraining(player: id("Back A"), position: .defenderCentral, acceptedOn: acceptedOn)])
+        #expect(choices(r) == [RetrainingChoice(player: id("Back B"), position: .defenderLeft)])
+        #expect(r.needsBeingRetrained.isEmpty)
     }
 
     @Test func aPlayerWhoseBestPositionIsFullIsOfferedHisNextBest() throws {

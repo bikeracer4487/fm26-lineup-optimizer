@@ -234,23 +234,41 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model before any retraining is accepted, so its recommendations show: the sample's accepted
+    /// retraining fills the thin slot it was recommended for, which then gets no more recommendations.
+    @MainActor public static func modelBeforeRetraining(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        for retraining in model.training.accepted {
+            model.stopRetraining(TrainingState.choice(retraining))
+        }
+        return model
+    }
+
     /// The sample model with its accepted retraining six weeks under way, accepted on 2 October and read at an import
     /// every two weeks since, his familiarity rising a point each time (short of solid) and the squad's copy showing the
-    /// latest; a second retraining, of the player with the longest name, who has since left the squads; and the first
-    /// recommendation then made, turned down.
+    /// latest; the second recommendation made before it was accepted, turned down; and a second retraining, of the
+    /// player with the longest name, who has since left the squads.
     @MainActor public static func modelWithRetrainingUnderWay(repositoryRoot: URL) throws -> AppModel {
         let model = try build(repositoryRoot: repositoryRoot).model
         guard let accepted = model.training.accepted.first,
               let start = model.training.observations[TrainingState.choice(accepted)]?.first?.familiarity else {
             throw SampleDataError(description: "The sample model has no accepted retraining with a first observation.")
         }
+        let choice = TrainingState.choice(accepted)
+        model.stopRetraining(choice)
+        guard case .ready(let open) = model.adviceState, open.training.recommendations.count >= 2,
+              open.training.recommendations[0].choice == choice else {
+            throw SampleDataError(description: "The sample's advice does not recommend its retraining and another.")
+        }
+        model.reject(open.training.recommendations[1].choice)
+        model.accept(choice)
+
         guard let leaver = model.players.filter({ $0.id != accepted.player }).max(by: { $0.name.count < $1.name.count }),
               let position = Position.allCases.min(by: { (leaver.familiarity[$0] ?? 0) < (leaver.familiarity[$1] ?? 0) }) else {
             throw SampleDataError(description: "The sample model has no second player to retrain.")
         }
         model.accept(RetrainingChoice(player: leaver.id, position: position))
 
-        let choice = TrainingState.choice(accepted)
         let solid = model.planParameters.depthSolidFamiliarity.value
         let readings = (0..<4).map { step in
             FamiliarityObservation(day: date.adding(days: 14 * step - 42), familiarity: min(start + step, solid - 1))
@@ -273,10 +291,6 @@ public enum SampleData {
         }
         model.save(.squad)
         model.replan()
-        guard case .ready(let advice) = model.adviceState, let first = advice.training.recommendations.first else {
-            throw SampleDataError(description: "The sample's advice recommends no retraining to turn down: \(model.adviceState)")
-        }
-        model.reject(first.choice)
         return model
     }
 
