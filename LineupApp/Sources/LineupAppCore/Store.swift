@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 public enum StoreFile: String, CaseIterable, Sendable {
     case settings, tactics, fixtures, history, squad
@@ -62,7 +63,22 @@ public struct Loaded<Value> {
     }
 }
 
-/// Reads and writes the app's files under one directory. Each file is `{"version": 1, "value": ...}`.
+/// Why the Store would not write a file.
+public enum StoreError: Error, Equatable, CustomStringConvertible {
+    /// The file could not be read and could not be moved aside, so writing it would lose it.
+    case leftUnread(StoreFile, path: String)
+
+    public var description: String {
+        switch self {
+        case let .leftUnread(file, path):
+            "The file holding \(file.description) could not be read or moved aside, so changes to \(file.description) are "
+                + "not being saved and the file is kept as it is. Move or delete \(path), then reopen the app."
+        }
+    }
+}
+
+/// Reads and writes the app's files under one directory. Each file is `{"version": 1, "value": ...}`. A file that
+/// could be neither read nor moved aside is never written over while this Store and its copies last.
 public struct Store: Sendable {
     static let currentVersion = 1
     let directory: URL
@@ -70,6 +86,12 @@ public struct Store: Sendable {
     private let copy: @Sendable (URL, URL) throws -> Void
     /// An error to throw instead of saving the file; nil to save it.
     private let refuse: @Sendable (StoreFile) -> (any Error)?
+    /// The files that could be neither read nor moved aside, shared by the Store's copies.
+    private let leftUnread = LeftUnread()
+
+    private final class LeftUnread: Sendable {
+        let files = Mutex<Set<StoreFile>>([])
+    }
 
     public init(directory: URL) {
         self.init(directory: directory, move: { try FileManager.default.moveItem(at: $0, to: $1) })
@@ -100,6 +122,11 @@ public struct Store: Sendable {
 
     private func url(_ file: StoreFile) -> URL {
         directory.appendingPathComponent("\(file.rawValue).json")
+    }
+
+    /// Whether the file could be neither read nor moved aside when it was loaded, so it is not written over.
+    public func isLeftUnread(_ file: StoreFile) -> Bool {
+        leftUnread.files.withLock { $0.contains(file) }
     }
 
     /// Whether the file is on disk, readable or not.
@@ -135,8 +162,11 @@ public struct Store: Sendable {
             newer = false
         }
         let kept = setAside(path, file: file)
+        if kept == nil {
+            leftUnread.files.withLock { _ = $0.insert(file) }
+        }
         let tail = kept.map { "The unreadable file was kept as \($0)." }
-            ?? "The unreadable file could not be kept aside and will be replaced the next time that part of the app is saved."
+            ?? "The unreadable file could not be moved aside, so it is left where it is and changes are not saved over it."
         let lead = newer
             ? "The file holding \(file.description) comes from a newer version of the app, so \(file.startsWith)."
             : "\(subject(file)) could not be read as saved data (the file may have been cut short), so \(file.startsWith)."
@@ -162,6 +192,7 @@ public struct Store: Sendable {
 
     public func save<Value: Codable>(_ value: Value, to file: StoreFile) throws {
         if let refusal = refuse(file) { throw refusal }
+        if isLeftUnread(file) { throw StoreError.leftUnread(file, path: url(file).path) }
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         let encoder = JSONEncoder()

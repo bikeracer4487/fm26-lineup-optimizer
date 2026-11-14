@@ -370,7 +370,7 @@ import Testing
         let model = AppModel(store: Store(directory: t.directory, refuse: { refusals.error(for: $0) }),
                              environment: t.input.environment)
         refusals.files = [.tactics]
-        model.saveDraft(id)
+        #expect(model.saveDraft(id) == false)
         #expect(model.notices.contains { $0.text.hasPrefix("Your tactics could not be saved") })
         #expect(model.hasUnsavedChanges(id))
         // The tactics file still holds the old tactic, and the edit is still saved as a draft.
@@ -394,11 +394,46 @@ import Testing
         #expect(model.tacticDrafts[id]?.tactic == changed.tactic)
         #expect(try Data(contentsOf: draftsFile) == draftsBefore)
 
-        // Changing another tactic saves the drafts with the one whose tactic could not be read still in them.
+        // Adding another tactic does not write over the tactics file, which is kept as it was, and says so once.
+        let tacticsFile = t.directory.appendingPathComponent("tactics.json")
         let other = model.addTactic(named: "Other")
         model.setDraft(try changedDraft(model, other), for: other)
+        #expect(try Data(contentsOf: tacticsFile) == Data("{".utf8))
+        #expect(model.notices.filter { $0.text.hasPrefix("The file holding your tactics could not be read or moved aside") }
+            .count == 1)
+        // The drafts file can be written, and keeps the draft whose tactic could not be read.
         let onDisk = Store(directory: t.directory).load(.drafts, as: [StoredTactic].self, otherwise: []).value
         #expect(Set(onDisk.map(\.id)) == [id, other])
+    }
+
+    @Test func aFailedTacticSaveLeavesTheSavedTacticAsItWas() throws {
+        let t = try TestModel()
+        let id = t.model.addTactic(named: "Main")
+        let other = t.model.addTactic(named: "Other")
+        let saved = try #require(t.model.tactics.first { $0.id == id })
+        t.model.setDraft(try changedDraft(t.model, id), for: id)
+        let refusals = Refusals()
+        let model = AppModel(store: Store(directory: t.directory, refuse: { refusals.error(for: $0) }),
+                             environment: t.input.environment)
+        let planned = model.timesPlanned
+        refusals.files = [.tactics]
+        #expect(model.saveDraft(id) == false)
+        // The draft is the only copy of the change, and the plan was not worked out from it.
+        #expect(model.tactics.first { $0.id == id } == saved)
+        #expect(model.hasUnsavedChanges(id))
+        #expect(model.timesPlanned == planned)
+
+        model.revertDraft(id)
+        #expect(model.tactics.first { $0.id == id } == saved)
+        #expect(!model.hasUnsavedChanges(id))
+
+        // A later save of another tactic does not write the reverted change.
+        refusals.files = []
+        model.setDraft(try changedDraft(model, other), for: other)
+        #expect(model.saveDraft(other))
+        let onDisk = Store(directory: t.directory).load(.tactics, as: [StoredTactic].self, otherwise: []).value
+        #expect(onDisk.first { $0.id == id } == saved)
+        #expect(onDisk.first { $0.id == other }?.tactic == model.tactics.first { $0.id == other }?.tactic)
     }
 
     // MARK: The editor's words

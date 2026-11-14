@@ -518,6 +518,22 @@ import LineupEngine
                 == ["Your saved fixtures coul", "Your settings could not ", "Your tactics could not b"])
     }
 
+    @Test func aFixturesFileThatCouldNotBeReadOrMovedAsideIsNeverSavedOver() throws {
+        let t = try TestModel()
+        let fixturesFile = t.directory.appendingPathComponent("fixtures.json")
+        try Data("not json".utf8).write(to: fixturesFile)
+        struct Refused: Error {}
+        let store = Store(directory: t.directory, move: { _, _ in throw Refused() }, copy: { _, _ in throw Refused() })
+        let model = AppModel(store: store, environment: t.input.environment)
+        model.addFixture(date: day("2026-11-14"), opponent: "Rovers", importance: .high)
+        model.addFixture(date: day("2026-11-17"), opponent: "United", importance: .low)
+        #expect(model.fixtures.count == 2)
+        #expect(try Data(contentsOf: fixturesFile) == Data("not json".utf8))
+        let leftUnread = model.notices.filter { $0.text == StoreError.leftUnread(.fixtures, path: fixturesFile.path).description }
+        #expect(leftUnread.count == 1)
+        #expect(!model.notices.contains { $0.text.hasPrefix("Your saved fixtures could not be saved") })
+    }
+
     // MARK: Sample data
 
     @Test func sampleDataLoadsBothSquadsATacticAndFiveFixtures() throws {

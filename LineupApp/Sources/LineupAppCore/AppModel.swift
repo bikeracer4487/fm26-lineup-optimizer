@@ -115,7 +115,7 @@ public struct AppEnvironment: Sendable {
         // A draft is kept only for a saved tactic it differs from. When the tactics file could not be read and was left
         // where it is, its tactics are still on disk, so every draft is kept for them.
         let saved = Dictionary(tactics.value.map { ($0.id, $0.tactic) }, uniquingKeysWith: { first, _ in first })
-        let tacticsLeftUnread = tactics.notice != nil && !tactics.replaceOnDisk && store.exists(.tactics)
+        let tacticsLeftUnread = store.isLeftUnread(.tactics)
         let kept = tacticsLeftUnread
             ? drafts.value
             : drafts.value.filter { saved[$0.id] != nil && saved[$0.id] != $0.tactic }
@@ -164,8 +164,10 @@ public struct AppEnvironment: Sendable {
         } catch {
             if let showing = saveFailureNotices[file], notices.contains(where: { $0.id == showing }) { return false }
             let subject = file.description.prefix(1).uppercased() + file.description.dropFirst()
-            let notice = Notice(text: "\(subject) could not be saved: \(error.localizedDescription) "
-                + "The change is kept while the app is open and is saved the next time that part of the app changes.")
+            let text = (error as? StoreError)?.description
+                ?? "\(subject) could not be saved: \(error.localizedDescription) "
+                + "The change is kept while the app is open and is saved the next time that part of the app changes."
+            let notice = Notice(text: text)
             notices.append(notice)
             saveFailureNotices[file] = notice.id
             return false

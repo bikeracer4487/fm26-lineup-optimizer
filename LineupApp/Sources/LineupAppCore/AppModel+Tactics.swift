@@ -84,8 +84,10 @@ extension AppModel {
         tactics.map(\.id).filter { tacticDrafts[$0] != nil }
     }
 
-    /// Saves the tactic's draft, its name trimmed, and drops the draft. Refuses, and returns false, when there is
-    /// no draft or while `problems(saving:)` lists anything for it.
+    /// Saves the tactic's draft, its name trimmed, drops the draft and replans, and returns whether the tactic was
+    /// saved. Returns false, changing nothing, when there is no draft or while `problems(saving:)` lists anything for
+    /// it; and false when the tactics file could not be written, with the saved tactic put back as it was, so the draft
+    /// stays the only copy of the change and the plan is still worked out from the saved tactic.
     @discardableResult public func saveDraft(_ id: UUID) -> Bool {
         guard let draft = tacticDrafts[id] else { return false }
         var tactic = draft.tactic
@@ -93,10 +95,13 @@ extension AppModel {
         let stored = StoredTactic(id: id, tactic: tactic)
         guard problems(saving: stored).isEmpty, let index = tactics.firstIndex(where: { $0.id == id }) else { return false }
         // The tactic is saved first, and the draft dropped only once it is on disk, so a failed save loses no edit.
+        let previous = tactics[index]
         tactics[index] = stored
-        if save(.tactics) {
-            changeDrafts { $0[id] = nil }
+        guard save(.tactics) else {
+            tactics[index] = previous
+            return false
         }
+        changeDrafts { $0[id] = nil }
         replan()
         return true
     }

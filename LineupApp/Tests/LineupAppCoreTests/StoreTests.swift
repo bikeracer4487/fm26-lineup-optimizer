@@ -223,7 +223,7 @@ import LineupEngine
         #expect(try Data(contentsOf: dir.appendingPathComponent("fixtures.unreadable-1.json")) == Data("{".utf8))
     }
 
-    @Test func whenNothingCanKeepTheFileAsideTheNoticeSaysItWillBeReplaced() throws {
+    @Test func whenNothingCanKeepTheFileAsideTheNoticeSaysItIsLeftAndNotSavedOver() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("store-tests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: dir) }
         struct Refused: Error {}
@@ -231,7 +231,36 @@ import LineupEngine
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try Data("{".utf8).write(to: dir.appendingPathComponent("fixtures.json"))
         let loaded = store.load(.fixtures, as: [StoredFixture].self, otherwise: [])
-        #expect(try #require(loaded.notice).contains("will be replaced the next time"))
+        #expect(!loaded.replaceOnDisk)
+        #expect(try #require(loaded.notice).hasSuffix(
+            "The unreadable file could not be moved aside, so it is left where it is and changes are not saved over it."))
+        #expect(store.isLeftUnread(.fixtures))
+        #expect(!store.isLeftUnread(.tactics))
+    }
+
+    /// The Store refuses to write a file it could neither read nor move aside, whoever asks, so the file is kept.
+    @Test func aFileLeftUnreadIsNeverSavedOver() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("store-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        struct Refused: Error {}
+        let store = Store(directory: dir, move: { _, _ in throw Refused() }, copy: { _, _ in throw Refused() })
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let path = dir.appendingPathComponent("fixtures.json")
+        try Data("{".utf8).write(to: path)
+        _ = store.load(.fixtures, as: [StoredFixture].self, otherwise: [])
+        #expect(throws: StoreError.leftUnread(.fixtures, path: path.path)) {
+            try store.save([StoredFixture](), to: .fixtures)
+        }
+        #expect(try Data(contentsOf: path) == Data("{".utf8))
+        // Other files are written as usual.
+        try store.save([StoredTactic](), to: .tactics)
+        #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("tactics.json").path))
+    }
+
+    @Test func aFileLeftUnreadIsNamedWithWhatToDo() {
+        #expect(StoreError.leftUnread(.tactics, path: "/x/tactics.json").description
+            == "The file holding your tactics could not be read or moved aside, so changes to your tactics are not being "
+            + "saved and the file is kept as it is. Move or delete /x/tactics.json, then reopen the app.")
     }
 
     @Test func aFirstRunHasNoNotices() throws {
