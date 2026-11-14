@@ -133,6 +133,11 @@ extension AppModel {
             names: importedNames, asOf: settings.currentDate, parameters: planParameters)
     }
 
+    /// The squads imported: those with at least one current player.
+    public var importedSquads: Set<Squad> {
+        Set(Squad.allCases.filter { !(squad.book.current[$0] ?? []).isEmpty })
+    }
+
     /// The hierarchy editor's rows for the squad.
     public func dynamicsRows(for squad: Squad) -> [DynamicsRow] {
         MentoringPresentation.dynamicsRows(self.squad.book.current[squad] ?? [], ownClub: ownClub,

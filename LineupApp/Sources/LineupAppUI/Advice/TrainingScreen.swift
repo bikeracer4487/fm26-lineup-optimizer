@@ -1,32 +1,95 @@
 import LineupAppCore
+import LineupEngine
 import SwiftUI
 
-/// Who to retrain for the thin slots, and how the retrainings under way are going: four parts down the screen,
-/// scrolling down. While the advice is not ready, the retrainings under way and those turned down still show under
-/// what is missing, as they come from the owner's saved choices.
+/// Where the Training screen starts: which tab, the squad the Mentoring tab is asked to show, and what that tab has
+/// open for editing. The app starts with the defaults; the pictures choose.
+public struct TrainingStart: Sendable {
+    public var view: TrainingView
+    public var squad: Squad
+    public var editing: MentoringEditing?
+
+    public init(view: TrainingView = .retraining, squad: Squad = .firstTeam, editing: MentoringEditing? = nil) {
+        self.view = view; self.squad = squad; self.editing = editing
+    }
+}
+
+/// The Training screen: its heading with the two tabs beside it and, on Mentoring, the squad menu at the end of the
+/// row, then the chosen tab, scrolling down. The heading row is there whatever the advice's state, so Mentoring, which
+/// needs no tactic, can always be reached.
 public struct TrainingScreen: View {
     let model: AppModel
+    @Bindable var navigation: Navigation
 
-    public init(model: AppModel) {
+    public init(model: AppModel, navigation: Navigation) {
         self.model = model
+        self.navigation = navigation
     }
 
     public var body: some View {
         ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: Theme.Training.partGap) {
-                AdviceGate(screen: .training, state: model.adviceState, importLine: model.adviceImportLine) { _ in
-                    Text(TrainingPresentation.explanation)
-                        .font(Theme.Typeface.text(Theme.TypeSize.body))
-                        .foregroundStyle(Theme.Colour.mutedInk)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                ForEach(model.trainingParts) { part in
-                    TrainingPartView(part: part, model: model)
-                        .frame(maxWidth: Theme.Training.columnMaximumWidth, alignment: .leading)
+            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                headingRow
+                switch navigation.trainingView {
+                case .retraining: RetrainingTab(model: model)
+                case .mentoring: MentoringTab(model: model, navigation: navigation)
                 }
             }
             .padding(.bottom, Theme.Spacing.l)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// "Training", the tabs, and on Mentoring the squad menu, pushed to the end of the row or under the rest when narrow.
+    private var headingRow: some View {
+        WrappingRow(alignment: .center, spacing: Theme.Spacing.m) {
+            BoardHeading(Screen.training.title, size: Theme.TypeSize.title)
+                .padding(.trailing, Theme.Spacing.m)
+            BoardTabs(choices: TrainingView.allCases.map { ($0, $0.title) }, selection: $navigation.trainingView)
+        } trailing: {
+            switch navigation.trainingView {
+            case .retraining: EmptyView()
+            case .mentoring: squadMenu
+            }
+        }
+        // The menu ends where the tab's parts end.
+        .frame(maxWidth: Theme.Training.columnMaximumWidth, alignment: .leading)
+    }
+
+    private var squadMenu: some View {
+        let imported = model.importedSquads
+        return Picker(MentoringPresentation.squadMenuLabel, selection: Binding(
+            get: { MentoringPresentation.squadShown(navigation.mentoringSquad, imported: imported) },
+            set: { navigation.mentoringSquad = $0 })) {
+            ForEach(MentoringPresentation.squadChoices(imported: imported), id: \.self) { squad in
+                Text(MentoringPresentation.squadTitle(squad))
+                    .tag(squad)
+            }
+        }
+        .font(Theme.Typeface.text())
+        .fixedSize()
+    }
+}
+
+/// Who to retrain for the thin slots, and how the retrainings under way are going: four parts down the screen. While
+/// the advice is not ready, the retrainings under way and those turned down still show under what is missing, as they
+/// come from the owner's saved choices.
+private struct RetrainingTab: View {
+    let model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Training.partGap) {
+            AdviceGate(screen: .training, state: model.adviceState, importLine: model.adviceImportLine,
+                       showsHeading: false) { _ in
+                Text(TrainingPresentation.explanation)
+                    .font(Theme.Typeface.text(Theme.TypeSize.body))
+                    .foregroundStyle(Theme.Colour.mutedInk)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(model.trainingParts) { part in
+                TrainingPartView(part: part, model: model)
+                    .frame(maxWidth: Theme.Training.columnMaximumWidth, alignment: .leading)
+            }
         }
     }
 }
@@ -81,7 +144,7 @@ private struct TrainingPartView: View {
 }
 
 /// Rows, each with a faint rule under it; nothing at all for no rows.
-private struct RuledRows<Row: Identifiable, Content: View>: View {
+struct RuledRows<Row: Identifiable, Content: View>: View {
     let rows: [Row]
     @ViewBuilder let content: (Row) -> Content
 

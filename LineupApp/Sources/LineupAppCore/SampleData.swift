@@ -384,6 +384,113 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model with the first team's hierarchy entered, as the owner enters it: the three oldest first-team
+    /// players of the club's own raised, the oldest to Team Leader, the next to Highly Influential and the third to
+    /// Influential, all three in the core social group, and the two youngest in secondary group A; nobody else has an
+    /// entry. The U21s have none, so their advice goes by age alone.
+    @MainActor public static func modelWithHierarchy(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        let own = (model.squad.book.current[.firstTeam] ?? []).filter { LoanStatus.of($0, ownClub: model.ownClub) == .own }
+        let oldest = own.sorted { ($1.age, $0.name) < ($0.age, $1.name) }
+        let youngest = own.sorted { ($0.age, $0.name) < ($1.age, $1.name) }
+        guard own.count >= 5 else {
+            throw SampleDataError(description: "The sample first team has too few players of the club's own.")
+        }
+        var entries: [PlayerID: PlayerDynamics] = [:]
+        for (player, standing) in zip(oldest, [Standing.teamLeader, .highlyInfluential, .influential]) {
+            entries[player.id] = PlayerDynamics(standing: standing, socialGroup: .core)
+        }
+        for player in youngest.prefix(2) {
+            entries[player.id] = PlayerDynamics(standing: .others, socialGroup: .secondary("A"))
+        }
+        model.setDynamics(entries, for: .firstTeam)
+        return model
+    }
+
+    /// The hierarchy sample with the advice's first suggested first-team group recorded five weeks before the game's
+    /// current date, and an import today in which the first of its members after the lead has risen one in
+    /// Professionalism.
+    @MainActor public static func modelWithMentoringGroup(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithHierarchy(repositoryRoot: repositoryRoot)
+        try recordGroupWithARise(in: model)
+        return model
+    }
+
+    /// As `modelWithMentoringGroup`, with the group's lead given an Ambition one below the highest a member has (counting
+    /// no higher than where Ambition stops counting) before the group was recorded, so he may drag that member down.
+    /// His Ambition is the same at both readings, so the group is not doing harm.
+    @MainActor public static func modelWithMentoringWarning(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithHierarchy(repositoryRoot: repositoryRoot)
+        let group = try firstSuggestion(model)
+        let ceiling = model.planParameters.mentoringCeilings.value[.ambition] ?? 20
+        let players = model.squad.book.current[.firstTeam] ?? []
+        let highest = group.members.compactMap { member in
+            players.first { $0.id == member.player }?.attributes[.ambition].map { min($0, ceiling) }
+        }.max()
+        guard let highest, highest > 1 else {
+            throw SampleDataError(description: "No member of the sample's first suggested group has an Ambition above 1.")
+        }
+        edit(model) { player in
+            if player.id == group.lead { player.attributes[.ambition] = highest - 1 }
+        }
+        try recordGroupWithARise(in: model, group: group)
+        return model
+    }
+
+    /// The hierarchy sample with the advice's first suggested first-team group recorded fourteen weeks before the game's
+    /// current date, its members' readings then and today the same, so it has stopped working.
+    @MainActor public static func modelWithStoppedGroup(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithHierarchy(repositoryRoot: repositoryRoot)
+        record(try firstSuggestion(model), in: model, weeksAgo: 14)
+        return model
+    }
+
+    /// The group sample with the first first-team player of the club's own given no Pressure value in its copy of the
+    /// squads, so the first team's mentoring advice stops; the U21s' and the other advice do not.
+    @MainActor public static func modelWithMentoringFailure(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithMentoringGroup(repositoryRoot: repositoryRoot)
+        guard let player = (model.squad.book.current[.firstTeam] ?? [])
+            .first(where: { LoanStatus.of($0, ownClub: model.ownClub) == .own }) else {
+            throw SampleDataError(description: "The sample first team has no player of the club's own.")
+        }
+        edit(model) { if $0.id == player.id { $0.attributes[.pressure] = nil } }
+        return model
+    }
+
+    /// The first group the mentoring advice suggests for the first team.
+    @MainActor private static func firstSuggestion(_ model: AppModel) throws -> SuggestedGroup {
+        guard case .ready(let report) = model.mentoringAdvice(for: .firstTeam), let group = report.suggestions.first else {
+            throw SampleDataError(description: "The sample's mentoring advice suggests no first-team group.")
+        }
+        return group
+    }
+
+    /// Records `group` (the first suggested, if not given) five weeks back, then takes today's reading again with the
+    /// first member after the lead one higher in Professionalism.
+    @MainActor private static func recordGroupWithARise(in model: AppModel, group given: SuggestedGroup? = nil) throws {
+        let group = try given ?? firstSuggestion(model)
+        let ceiling = model.planParameters.mentoringCeilings.value[.professionalism] ?? 20
+        guard let mentee = group.members.first,
+              let value = (model.squad.book.current[.firstTeam] ?? []).first(where: { $0.id == mentee.player })?
+                .attributes[.professionalism], value < ceiling else {
+            throw SampleDataError(description: "The sample's first suggested group has no member who can rise in Professionalism.")
+        }
+        record(group, in: model, weeksAgo: 5)
+        edit(model) { if $0.id == mentee.player { $0.attributes[.professionalism] = value + 1 } }
+        model.recordPersonality(after: .firstTeam, on: model.settings.currentDate)
+    }
+
+    /// Records the suggested first-team group as the owner would have `weeks` weeks before the game's current date: the
+    /// date moved back, the first team read as an import that day reads it, the group recorded and its notice dismissed,
+    /// and the date moved on again.
+    @MainActor private static func record(_ group: SuggestedGroup, in model: AppModel, weeksAgo weeks: Int) {
+        model.moveToday(by: -7 * weeks)
+        model.recordPersonality(after: .firstTeam, on: model.settings.currentDate)
+        model.recordGroup(group, in: .firstTeam)
+        for notice in model.notices where notice.id == model.trainingNotice { model.dismiss(notice) }
+        model.moveToday(by: 7 * weeks)
+    }
+
     /// Changes every player in the model's copy of the squads as `change` says, as an import of the changed squads
     /// would, saves the squads and works the plan and advice out again.
     @MainActor private static func edit(_ model: AppModel, _ change: (inout Player) -> Void) {

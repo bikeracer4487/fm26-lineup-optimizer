@@ -192,6 +192,13 @@ public enum MentoringPresentation {
         return AdvisorText.noGroupToSuggest
     }
 
+    /// The heading over the players not placed; nil when there is nobody to list, so the part is not drawn.
+    public static func notPlacedHeading(_ sheet: MentoringSheet) -> String? {
+        sheet.notPlaced.isEmpty ? nil : headings.notPlaced
+    }
+
+    public static let squadMenuLabel = "Squad"
+
     public static func squadTitle(_ squad: Squad) -> String {
         squad.displayName
     }
@@ -201,6 +208,12 @@ public enum MentoringPresentation {
     public static func squadShown(_ asked: Squad, imported: Set<Squad>) -> Squad {
         if imported.contains(asked) { return asked }
         return Squad.allCases.first { imported.contains($0) } ?? .firstTeam
+    }
+
+    /// The squads the menu offers: those imported, in book order; with none imported, the one shown.
+    public static func squadChoices(imported: Set<Squad>) -> [Squad] {
+        let choices = Squad.allCases.filter { imported.contains($0) }
+        return choices.isEmpty ? [squadShown(.firstTeam, imported: imported)] : choices
     }
 
     // MARK: Building

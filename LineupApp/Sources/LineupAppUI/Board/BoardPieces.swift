@@ -196,24 +196,27 @@ struct FaintRule: View {
     }
 }
 
-/// A caution in marker amber: a triangle, then the sentence in ink.
+/// A caution in marker amber: a triangle, then the sentence in ink. A warning is marked the same way in marker red, so
+/// it stands out from a caution.
 struct CautionLine: View {
     let text: String
     /// Whether the triangle takes a reason's sign's room, so the sentence lines up with reasons above or below it.
     let alignsWithReasons: Bool
+    let isWarning: Bool
 
-    init(_ text: String, alignsWithReasons: Bool = false) {
+    init(_ text: String, alignsWithReasons: Bool = false, isWarning: Bool = false) {
         self.text = text
         self.alignsWithReasons = alignsWithReasons
+        self.isWarning = isWarning
     }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: alignsWithReasons ? Theme.Spacing.m - Theme.Spacing.xxs : Theme.Spacing.s) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(Theme.Typeface.text(alignsWithReasons ? Theme.TypeSize.body : Theme.TypeSize.caption, weight: .bold))
-                .foregroundStyle(Theme.Colour.markerAmber)
+                .foregroundStyle(isWarning ? Theme.Colour.markerRed : Theme.Colour.markerAmber)
                 .frame(width: alignsWithReasons ? Theme.Match.signDiameter : nil)
-                .accessibilityLabel("Caution")
+                .accessibilityLabel(isWarning ? "Warning" : "Caution")
             Text(text)
                 .font(Theme.Typeface.text())
                 .foregroundStyle(Theme.Colour.ink)

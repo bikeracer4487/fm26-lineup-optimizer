@@ -442,4 +442,112 @@ import LineupEngine
         #expect(choices.prefix(3).allSatisfy { $0.unavailableText != nil })
         #expect(choices.dropFirst(3).allSatisfy { $0.unavailableText == nil })
     }
+
+    // MARK: The squads imported
+
+    @Test func theSquadsImportedAreThoseWithPlayers() throws {
+        let t = try TestModel()
+        #expect(t.model.importedSquads.isEmpty)
+        try t.importU21()
+        #expect(t.model.importedSquads == [.u21])
+        try t.importFirstTeam()
+        #expect(t.model.importedSquads == [.firstTeam, .u21])
+        #expect(t.reopened().importedSquads == [.firstTeam, .u21])
+    }
+
+    // MARK: The sample states the pictures draw
+
+    private func report(_ model: AppModel, _ squad: Squad = .firstTeam) throws -> MentoringReport {
+        let advice = model.mentoringAdvice(for: squad)
+        guard case .ready(let report) = advice else {
+            Issue.record("expected advice for \(squad), got \(advice)")
+            throw SampleDataError(description: "no advice")
+        }
+        return report
+    }
+
+    private func firstTeam(_ model: AppModel) -> [Player] { model.squad.book.current[.firstTeam] ?? [] }
+
+    @Test func theHierarchySampleRaisesThreeFirstTeamPlayersAndHasSuggestions() throws {
+        let model = try SampleData.modelWithHierarchy(repositoryRoot: Captures.repositoryRoot)
+        let raised = model.mentoring.dynamics.filter { $0.value.standing != .others }
+        #expect(raised.count == 3)
+        #expect(Set(raised.values.map(\.standing)) == [.teamLeader, .highlyInfluential, .influential])
+        #expect(Set(raised.keys).isSubset(of: Set(firstTeam(model).map(\.id))))
+        // Social groups for some players, not all.
+        #expect(model.mentoring.dynamics.values.contains { $0.socialGroup != nil })
+        #expect(model.mentoring.dynamics.count < firstTeam(model).count)
+        #expect(model.mentoring.dynamicsUpdatedOn == [.firstTeam: model.settings.currentDate])
+        let report = try report(model)
+        #expect(!report.byAgeAlone && !report.isStale)
+        #expect(!report.suggestions.isEmpty)
+        #expect(model.mentoring.groups.isEmpty)
+        #expect(model.mentoringSheet(for: .firstTeam).hierarchyLines.count == 4)
+        #expect(model.notices.isEmpty)
+    }
+
+    @Test func theGroupSampleHasAMemberWhoseProfessionalismRoseByOneInFiveWeeks() throws {
+        let model = try SampleData.modelWithMentoringGroup(repositoryRoot: Captures.repositoryRoot)
+        let report = try report(model)
+        let review = try #require(report.groups.first)
+        #expect(report.groups.count == 1)
+        #expect(review.group.startedOn == model.settings.currentDate.adding(days: -35))
+        #expect(review.lead != nil)
+        let improved = review.members.flatMap { member in member.changes.map { (member, $0) } }.filter { $0.1.change == .improved }
+        #expect(improved.count == 1)
+        let (member, change) = try #require(improved.first)
+        #expect(!member.isLead)
+        #expect(change.attribute == .professionalism)
+        #expect(change.latest == change.start.map { $0 + 1 })
+        #expect(change.weeks == 5)
+        #expect(!review.isDoingHarm && !review.hasStoppedWorking)
+        #expect(!review.warnings.contains { if case .mayBeDraggedDown = $0 { true } else { false } })
+        let card = try #require(model.mentoringSheet(for: .firstTeam).yours.first)
+        #expect(card.stateText == nil)
+        #expect(card.members.contains { $0.detailText?.contains(AdvisorText.change(change)!) == true })
+        #expect(model.notices.isEmpty)
+    }
+
+    @Test func theWarningSampleHasALeadWhoMayDragAMemberDownInAmbition() throws {
+        let model = try SampleData.modelWithMentoringWarning(repositoryRoot: Captures.repositoryRoot)
+        let review = try #require(try report(model).groups.first)
+        let dragged = review.warnings.filter { warning in
+            if case .mayBeDraggedDown(let above, _, .ambition, let aboveValue, let belowValue) = warning {
+                return above == review.lead && aboveValue < belowValue
+            }
+            return false
+        }
+        #expect(!dragged.isEmpty)
+        // The lead's Ambition was the same at both readings: the group is not doing harm.
+        #expect(!review.isDoingHarm)
+        let card = try #require(model.mentoringSheet(for: .firstTeam).yours.first)
+        #expect(card.stateText == nil)
+        #expect(!card.warnings.isEmpty)
+    }
+
+    @Test func theStoppedSampleIsFourteenWeeksOldWithNoChange() throws {
+        let model = try SampleData.modelWithStoppedGroup(repositoryRoot: Captures.repositoryRoot)
+        let review = try #require(try report(model).groups.first)
+        #expect(review.group.startedOn == model.settings.currentDate.adding(days: -98))
+        #expect(review.hasStoppedWorking && !review.isDoingHarm)
+        #expect(review.members.allSatisfy { $0.changes.allSatisfy { $0.change == .noChange } })
+        let card = try #require(model.mentoringSheet(for: .firstTeam).yours.first)
+        #expect(card.stateText == AdvisorText.state(of: review, parameters: model.planParameters))
+        #expect(card.stateText != nil)
+    }
+
+    @Test func theFailureSampleStopsTheFirstTeamOnAMissingPressureValue() throws {
+        let model = try SampleData.modelWithMentoringFailure(repositoryRoot: Captures.repositoryRoot)
+        let missing = firstTeam(model).filter { $0.attributes[.pressure] == nil }
+        #expect(missing.count == 1)
+        let player = try #require(missing.first)
+        let sentence = ErrorDescriptions.describe(RatingError.missingAttribute(player: player.name, attribute: .pressure))
+        #expect(model.mentoringAdvice(for: .firstTeam) == .failed([sentence]))
+        let sheet = model.mentoringSheet(for: .firstTeam)
+        #expect(sheet.failures == [sentence])
+        #expect(!sheet.hierarchyLines.isEmpty)
+        #expect(!sheet.yours.isEmpty)
+        #expect(isReady(model.mentoringAdvice(for: .u21)))
+        guard case .ready = model.adviceState else { Issue.record("expected advice, got \(model.adviceState)"); return }
+    }
 }

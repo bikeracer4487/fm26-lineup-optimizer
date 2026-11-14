@@ -62,7 +62,19 @@
 //                                              smallest window's width); with its retraining six weeks
 //                                              under way, a second whose player has left and a pair turned
 //                                              down, taller ("training-accepted-…"), and with nothing to list
-//                                              ("training-none-…").
+//                                              ("training-none-…"). Its Mentoring tab is drawn, taller, with the
+//                                              first team's hierarchy entered so its groups are suggested
+//                                              ("training-mentoring-…"), on the sample with no hierarchy
+//                                              ("training-mentoring-no-hierarchy-…"), empty
+//                                              ("training-mentoring-empty-…"), on the U21s
+//                                              ("training-mentoring-u21-…"), with a group recorded five weeks ago
+//                                              and a member risen since ("training-mentoring-recorded-…"), the same
+//                                              with a lead who may drag a member down
+//                                              ("training-mentoring-warning-…"), with a group fourteen weeks old
+//                                              that has stopped working ("training-mentoring-stopped-…"), with a
+//                                              first-team player missing a Pressure value
+//                                              ("training-mentoring-failed-…"), and the warning's state in the
+//                                              smallest window's width, tall ("training-mentoring-small-…").
 //                                              The Player Removal screen ("removal-…", its critical and high
 //                                              rows open) is drawn with every row open, tall enough for a
 //                                              medium and a keep row's reasons ("removal-all-open-…"), and
@@ -136,6 +148,7 @@ enum SampleState {
     case afterConfirmingFirst, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
     case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, nothingToRetrain, loanee
     case differingSuggestion
+    case hierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -162,6 +175,11 @@ enum SampleState {
         case .nothingToRetrain: return try SampleData.modelWithNothingToRetrain(repositoryRoot: url)
         case .loanee: return try SampleData.modelWithLoanee(repositoryRoot: url)
         case .differingSuggestion: return try SampleData.modelWithDifferingSuggestion(repositoryRoot: url)
+        case .hierarchy: return try SampleData.modelWithHierarchy(repositoryRoot: url)
+        case .mentoringGroup: return try SampleData.modelWithMentoringGroup(repositoryRoot: url)
+        case .mentoringWarning: return try SampleData.modelWithMentoringWarning(repositoryRoot: url)
+        case .stoppedGroup: return try SampleData.modelWithStoppedGroup(repositoryRoot: url)
+        case .mentoringFailure: return try SampleData.modelWithMentoringFailure(repositoryRoot: url)
         }
     } catch {
         fail("\(error)")
@@ -292,6 +310,29 @@ let narrowWindow = CGSize(width: 800, height: 700)
                              screens: [.training])
     try ScreenPictures.write(model: sampleModel(root, .nothingToRetrain), to: directory, size: size, variant: "none",
                              screens: [.training])
+    try drawMentoring(root, to: directory, size: size)
+}
+
+/// The Training screen's Mentoring tab: see the usage at the top.
+@MainActor func drawMentoring(_ root: String, to directory: URL, size: CGSize) throws {
+    let mentoring = TrainingStart(view: .mentoring)
+    let tall = CGSize(width: size.width, height: size.height * 2)
+    let pictures: [(String, AppModel, CGSize, TrainingStart)] = [
+        ("mentoring", sampleModel(root, .hierarchy), tall, mentoring),
+        ("mentoring-no-hierarchy", sampleModel(root), tall, mentoring),
+        ("mentoring-empty", SampleData.emptyModel(), size, mentoring),
+        ("mentoring-u21", sampleModel(root, .hierarchy), size, TrainingStart(view: .mentoring, squad: .u21)),
+        ("mentoring-recorded", sampleModel(root, .mentoringGroup), tall, mentoring),
+        ("mentoring-warning", sampleModel(root, .mentoringWarning), tall, mentoring),
+        ("mentoring-stopped", sampleModel(root, .stoppedGroup), tall, mentoring),
+        ("mentoring-failed", sampleModel(root, .mentoringFailure), size, mentoring),
+        ("mentoring-small", sampleModel(root, .mentoringWarning),
+         CGSize(width: Theme.Layout.minimumWindow.width, height: Theme.Layout.minimumWindow.height * 4), mentoring),
+    ]
+    for (variant, model, window, start) in pictures {
+        try ScreenPictures.write(model: model, to: directory, size: window, variant: variant, screens: [.training],
+                                 trainingStart: start)
+    }
 }
 
 /// The Player Removal screen with every row open, with a loanee, and with two players marked: see the usage at the top.

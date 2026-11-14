@@ -367,6 +367,27 @@ import Testing
 
     @Test func eachSquadHasItsTitle() {
         #expect(Squad.allCases.map(MentoringPresentation.squadTitle) == ["First team", "U21s", "U18s"])
+        #expect(MentoringPresentation.squadMenuLabel == "Squad")
+    }
+
+    @Test func theSquadMenuOffersTheSquadsImportedInBookOrder() {
+        #expect(MentoringPresentation.squadChoices(imported: [.u21, .firstTeam]) == [.firstTeam, .u21])
+        #expect(MentoringPresentation.squadChoices(imported: [.u18]) == [.u18])
+        // With none imported, the squad shown.
+        #expect(MentoringPresentation.squadChoices(imported: []) == [.firstTeam])
+        #expect(MentoringPresentation.squadChoices(imported: []) == [MentoringPresentation.squadShown(.u21, imported: [])])
+    }
+
+    // MARK: Not placed
+
+    @Test func theNotPlacedHeadingShowsOnlyWithSomeoneToList() throws {
+        let players = [player(hart, "Hart", age: 34), player(young, "Young", age: 18)]
+        let placed = try sheet(players, advice: pinned(notPlaced: []))
+        #expect(MentoringPresentation.notPlacedHeading(placed) == nil)
+        let left = try sheet(players, advice: pinned(notPlaced: [NotPlaced(player: young, name: "Young", age: 18,
+                                                                             reason: .nobodyAbove)]))
+        #expect(MentoringPresentation.notPlacedHeading(left) == "Not placed")
+        #expect(MentoringPresentation.notPlacedHeading(try sheet([], advice: .needsSquad)) == nil)
     }
 
     // MARK: The editors

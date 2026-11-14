@@ -632,6 +632,19 @@ public enum Theme {
         public static let keySolidHeight: CGFloat = 14
     }
 
+    // MARK: Mentoring
+
+    public enum Mentoring {
+        /// The column a member's name and age take on a group's card; a longer name wraps to a second line.
+        public static let memberNameWidth: CGFloat = 210
+        /// The most lines a name wraps to.
+        public static let nameLines = 2
+        /// The note saying the hierarchy is old, or that the groups go by age alone, is no wider than this.
+        public static let noteMaximumWidth: CGFloat = Layout.readingWidth
+        /// The pink band across the top of a card whose group is doing harm or has stopped working.
+        public static let stateNote = Note.warning
+    }
+
     // MARK: Player Removal
 
     public enum Removal {
