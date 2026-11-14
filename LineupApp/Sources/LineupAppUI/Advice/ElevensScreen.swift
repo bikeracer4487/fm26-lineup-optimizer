@@ -41,11 +41,17 @@ public struct ElevensScreen: View {
         AdviceGate(screen: .elevens, state: model.adviceState) {
             controls
         } content: { _ in
+            if let unsaved = model.elevensUnsavedLine(navigation.elevensTacticID) {
+                Text(unsaved)
+                    .font(Theme.Typeface.text(Theme.TypeSize.caption))
+                    .foregroundStyle(Theme.Colour.mutedInk)
+            }
             ElevensContent(model: model, navigation: navigation, layout: layout)
         }
     }
 
-    /// The tactic menu, the primary marked as the Tactics screen marks it, and the three views as tabs.
+    /// The tactic menu, the primary marked as the Tactics screen marks it, and the three views as tabs. A line under
+    /// them says when the tactic shown has unsaved changes, since the elevens are for its saved version.
     private var controls: some View {
         HStack(alignment: .center, spacing: Theme.Spacing.l) {
             Picker(ElevensPresentation.tacticMenuLabel, selection: Binding(

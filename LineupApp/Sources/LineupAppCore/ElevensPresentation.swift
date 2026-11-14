@@ -112,10 +112,10 @@ public struct DepthDetail: Equatable, Sendable {
 public enum ElevensPresentation {
     public static let averageLabel = "Average rating"
     public static let nobody = "Nobody"
-    public static let nobodyCanPlay = "Nobody can play here"
     public static let onLoanHeading = "Out on loan"
     public static let failedLead = "This tactic cannot be used, so there are no elevens for it."
     public static let tacticMenuLabel = "Tactic"
+    public static let unsavedLine = "Showing the saved version of this tactic; it has unsaved changes."
     public static let chooseSlotHint = "Click a slot on the pitch to see who could play there."
 
     public static let injuredStamp = StatusStamp(text: "Injured", isOut: true)
@@ -199,18 +199,9 @@ public enum ElevensPresentation {
         AdvisorText.recruitFirst(depth)
     }
 
-    /// What cover counts, in the engine's sentence, with the evidence note after it in brackets when it has one.
+    /// What cover counts, in the engine's sentence with its evidence note.
     public static func coverLine(_ parameters: EngineParameters, basis: Evidence) -> String {
-        let line = AdvisorText.whatCoverCounts(parameters)
-        return AdvisorText.note(for: basis).map { "\(line) (\($0))" } ?? line
-    }
-
-    /// "Also needed at left back"; nil for none.
-    public static func alsoNeeded(_ slots: [SlotID]) -> String? {
-        guard !slots.isEmpty else { return nil }
-        let names = slots.map(\.longName)
-        let list = names.count == 1 ? names[0] : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
-        return "Also needed at \(list)"
+        AdvisorText.whatCoverCounts(parameters, basis: basis)
     }
 
     /// The detail for `slot`; nil when the tactic has no such slot.
@@ -223,7 +214,7 @@ public enum ElevensPresentation {
                                familiarityText: familiarityText(ip: option.ipFamiliarity, oop: option.oopFamiliarity),
                                countsAsCover: option.countsAsCover,
                                unavailable: option.unavailable.map { sentenceCase(ErrorDescriptions.describe($0, parameters: parameters)) },
-                               alsoNeeded: alsoNeeded(option.alsoNeededAt))
+                               alsoNeeded: AdvisorText.alsoNeeded(at: option.alsoNeededAt))
             }
         }
         let nextName = shown.nextBest.flatMap { id in shown.options.first { $0.player == id }?.name }
@@ -231,7 +222,7 @@ public enum ElevensPresentation {
                            cover: AdvisorText.cover(shown, parameters: parameters),
                            nextBest: AdvisorText.nextBest(shown, name: nextName),
                            options: rows(shown.options), onLoan: rows(shown.onLoan),
-                           emptyText: shown.options.isEmpty ? nobodyCanPlay : nil)
+                           emptyText: AdvisorText.nobodyCanPlay(shown))
     }
 
     /// The first letter made a capital.
@@ -261,9 +252,16 @@ extension AppModel {
         ElevensPresentation.coverLine(planParameters, basis: depth.basis)
     }
 
-    /// The tactic menu's choices: every saved tactic as the Tactics screen's menu names it.
+    /// The tactic menu's choices: every saved tactic as the Tactics screen's menu names it, the primary marked, but
+    /// without its mark for unsaved changes, since the elevens are for the saved version.
     public var elevensTacticChoices: [(id: UUID, title: String)] {
-        tactics.map { ($0.id, menuTitle(of: $0.id)) }
+        tactics.map { ($0.id, menuTitle(of: $0.id, markingUnsaved: false)) }
+    }
+
+    /// The line under the menu when the tactic shown has unsaved changes; nil otherwise.
+    public func elevensUnsavedLine(_ chosen: UUID?) -> String? {
+        guard let shown = elevensTacticShown(chosen), hasUnsavedChanges(shown) else { return nil }
+        return ElevensPresentation.unsavedLine
     }
 
     /// The tactic the menu shows for the owner's choice: that tactic while it is saved, else the primary.

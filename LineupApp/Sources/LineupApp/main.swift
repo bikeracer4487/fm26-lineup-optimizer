@@ -39,7 +39,8 @@
 //                                              smallest window ("elevens-depth-small-…") and, to see
 //                                              the lists under the pitch, in a window as narrow and
 //                                              taller ("elevens-first-tall-…", and "elevens-depth-tall-…"
-//                                              on the right attacking midfielder).
+//                                              on the right attacking midfielder), and with the primary
+//                                              tactic changed but not saved ("elevens-unsaved-…").
 //                                              Every screen is drawn again in a narrow window, 800 by 700
 //                                              ("<screen>-narrow-…"), and Match Selection, Tactics, Fixtures
 //                                              and the advisor screens in the smallest window
@@ -199,6 +200,9 @@ let narrowWindow = CGSize(width: 800, height: 700)
                              elevensStart: ElevensStart(view: .depth, slot: .D_CL))
     try ScreenPictures.write(model: plain, to: directory, size: Theme.Layout.minimumWindow, variant: "depth-small",
                              screens: [.elevens], elevensStart: ElevensStart(view: .depth))
+    // The primary with an unsaved change, so the line saying the saved version is shown appears.
+    try ScreenPictures.write(model: sampleModel(root, .unsavedTacticChange), to: directory, size: size,
+                             variant: "unsaved", screens: [.elevens])
     let tall = CGSize(width: Theme.Layout.minimumWindow.width, height: Theme.Layout.minimumWindow.height * 3)
     // Depth on the right attacking midfielder, whose options include the longest name in the sample.
     for (variant, start) in [("first-tall", ElevensStart(view: .first)), ("depth-tall", ElevensStart(view: .depth, slot: .AM_R))] {

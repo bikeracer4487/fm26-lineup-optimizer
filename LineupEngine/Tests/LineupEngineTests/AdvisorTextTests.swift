@@ -104,6 +104,33 @@ import Testing
         #expect(AdvisorText.nextBest(stepIn(drop: nil), name: "Josh Ashby") == "Nobody else can step in")
     }
 
+    @Test func alsoNeededNamesTheOtherSlotsInTheOrderGiven() {
+        #expect(AdvisorText.alsoNeeded(at: []) == nil)
+        #expect(AdvisorText.alsoNeeded(at: [.D_L]) == "Also needed at left back")
+        #expect(AdvisorText.alsoNeeded(at: [.D_L, .D_C]) == "Also needed at left back and centre-back")
+        #expect(AdvisorText.alsoNeeded(at: [.D_L, .D_C, .ST_C]) == "Also needed at left back, centre-back and striker")
+    }
+
+    @Test func nobodyCanPlayOnlyWhereTheSlotHasNoOptions() {
+        let option = DepthOption(player: PlayerID(key: "p"), name: "P", squad: .firstTeam, rating: 100, ipFamiliarity: 20,
+                                 oopFamiliarity: 20, isSolid: true, unavailable: nil, tier: nil, alsoNeededAt: [],
+                                 countsAsCover: true)
+        func slot(_ options: [DepthOption]) -> SlotDepth {
+            SlotDepth(slot: .GK, ipPosition: .goalkeeper, oopPosition: .goalkeeper, options: options, onLoan: [],
+                      cover: options.count, isThin: options.count < 2, dropToNextBest: nil, nextBest: nil)
+        }
+        #expect(AdvisorText.nobodyCanPlay(slot([])) == "Nobody can play here")
+        #expect(AdvisorText.nobodyCanPlay(slot([option])) == nil)
+    }
+
+    @Test func whatCoverCountsWithItsEvidenceNoteInsideTheSentence() {
+        #expect(AdvisorText.whatCoverCounts(parameters, basis: .derived)
+                == "Cover counts players solid in the slot (familiarity 15 or over in both phases), not injured and not first choice elsewhere; fewer than 2 is thin (this tool's estimate).")
+        #expect(AdvisorText.whatCoverCounts(parameters, basis: .carriedOverFM26)
+                == "Cover counts players solid in the slot (familiarity 15 or over in both phases), not injured and not first choice elsewhere; fewer than 2 is thin (FM26-era numbers).")
+        #expect(AdvisorText.whatCoverCounts(parameters, basis: .fm27Measured) == AdvisorText.whatCoverCounts(parameters))
+    }
+
     @Test func whatCoverCounts() {
         #expect(AdvisorText.whatCoverCounts(parameters)
                 == "Cover counts players solid in the slot (familiarity 15 or over in both phases), not injured and not first choice elsewhere; fewer than 2 is thin.")

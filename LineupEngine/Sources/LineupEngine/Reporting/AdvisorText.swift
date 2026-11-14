@@ -132,8 +132,32 @@ public enum AdvisorText {
     }
 
     public static func whatCoverCounts(_ parameters: EngineParameters) -> String {
+        coverRule(parameters) + "."
+    }
+
+    /// The same sentence with the note for `basis` in brackets before its full stop: "…fewer than 2 is thin (this
+    /// tool's estimate)."; without one for FM27 evidence.
+    public static func whatCoverCounts(_ parameters: EngineParameters, basis: Evidence) -> String {
+        coverRule(parameters) + (note(for: basis).map { " (\($0))" } ?? "") + "."
+    }
+
+    private static func coverRule(_ parameters: EngineParameters) -> String {
         "Cover counts players solid in the slot (familiarity \(parameters.depthSolidFamiliarity.value) or over in both phases), "
-            + "not injured and not first choice elsewhere; fewer than \(parameters.depthThinBelow.value) is thin."
+            + "not injured and not first choice elsewhere; fewer than \(parameters.depthThinBelow.value) is thin"
+    }
+
+    /// "Also needed at left back, centre-back and striker": the other slots where an option is first or second
+    /// choice, in the order given; nil for none.
+    public static func alsoNeeded(at slots: [SlotID]) -> String? {
+        let names = slots.map { PositionText.plain($0) }
+        guard let last = names.last else { return nil }
+        let list = names.count == 1 ? last : names.dropLast().joined(separator: ", ") + " and " + last
+        return "Also needed at \(list)"
+    }
+
+    /// "Nobody can play here" for a slot with no options; nil otherwise.
+    public static func nobodyCanPlay(_ slot: SlotDepth) -> String? {
+        slot.options.isEmpty ? "Nobody can play here" : nil
     }
 
     public static func progress(_ progress: RetrainingProgress, toward position: Position,

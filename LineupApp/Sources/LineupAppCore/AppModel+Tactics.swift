@@ -111,13 +111,13 @@ extension AppModel {
         changeDrafts { $0[id] = nil }
     }
 
-    /// The tactic's name as the tactics menu lists it, marked "(primary)" and "— unsaved changes" where they
-    /// apply; empty if `id` is not saved.
-    public func menuTitle(of id: UUID) -> String {
+    /// The tactic's name as the tactics menu lists it, marked "(primary)" and, unless `markingUnsaved` is false,
+    /// "— unsaved changes" where they apply; empty if `id` is not saved.
+    public func menuTitle(of id: UUID, markingUnsaved: Bool = true) -> String {
         guard let stored = tactics.first(where: { $0.id == id }) else { return "" }
         var title = stored.tactic.name
         if id == settings.primaryTacticID { title += " (primary)" }
-        if hasUnsavedChanges(id) { title += " — unsaved changes" }
+        if markingUnsaved && hasUnsavedChanges(id) { title += " — unsaved changes" }
         return title
     }
 

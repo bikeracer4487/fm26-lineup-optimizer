@@ -189,10 +189,10 @@ import LineupEngine
         #expect(ElevensPresentation.selectedSlot(depth.slots.last?.slot, in: depth) == depth.slots.last?.slot)
         #expect(ElevensPresentation.recruitNote(depth) == AdvisorText.recruitFirst(depth))
         let parameters = model.planParameters
-        let note = try #require(AdvisorText.note(for: .derived))
         #expect(ElevensPresentation.coverLine(parameters, basis: .derived)
-                == AdvisorText.whatCoverCounts(parameters) + " (\(note))")
-        #expect(ElevensPresentation.coverLine(parameters, basis: .fm27Measured) == AdvisorText.whatCoverCounts(parameters))
+                == AdvisorText.whatCoverCounts(parameters, basis: .derived))
+        #expect(ElevensPresentation.coverLine(parameters, basis: .derived).hasSuffix("is thin (this tool's estimate)."))
+        #expect(model.coverLine(depth) == AdvisorText.whatCoverCounts(parameters, basis: depth.basis))
     }
 
     @Test func theGoalkeepersDetailSaysNobodyElseCanStepIn() throws {
@@ -240,17 +240,11 @@ import LineupEngine
         for slot in depth.slots {
             let detail = try #require(model.depthDetail(for: slot.slot, in: depth))
             for (row, option) in zip(detail.options, slot.options) {
-                if let other = option.alsoNeededAt.first {
-                    #expect(row.alsoNeeded == "Also needed at \(other.longName)")
-                    found = true
-                } else {
-                    #expect(row.alsoNeeded == nil)
-                }
+                #expect(row.alsoNeeded == AdvisorText.alsoNeeded(at: option.alsoNeededAt))
+                if !option.alsoNeededAt.isEmpty { found = true }
             }
         }
         #expect(found, "a first or second choice is an option at another slot")
-        #expect(ElevensPresentation.alsoNeeded([.D_L, .D_C]) == "Also needed at left back and centre-back")
-        #expect(ElevensPresentation.alsoNeeded([]) == nil)
     }
 
     @Test func anOptionWhoCannotPlayTodaySaysWhyInTheEnginesWords() throws {
@@ -314,12 +308,56 @@ import LineupEngine
         let other = model.addTactic(named: model.unusedTacticName("Wide"))
         #expect(model.elevensTacticChoices.map(\.id) == model.tactics.map(\.id))
         #expect(model.elevensTacticChoices.map(\.title) == model.tactics.map { model.menuTitle(of: $0.id) })
-        #expect(model.elevensTacticChoices.first { $0.id == primary }?.title.hasSuffix("(primary)") == true)
+        #expect(model.elevensTacticChoices.first { $0.id == primary }?.title == "4-2-3-1 (primary)")
+        #expect(model.elevensTacticChoices.first { $0.id == other }?.title == "Wide")
         #expect(model.elevensTacticShown(nil) == primary)
         #expect(model.elevensTacticShown(other) == other)
         #expect(model.elevensTacticShown(UUID()) == primary, "a tactic since deleted")
         #expect(model.elevensTacticChoice(primary) == nil)
         #expect(model.elevensTacticChoice(other) == other)
+    }
+
+    @Test func aTacticWithUnsavedChangesIsShownSavedAndSaysSo() throws {
+        let t = try TestModel()
+        let model = try squad(t)
+        let primary = try #require(model.primaryTactic).id
+        let other = model.addTactic(named: model.unusedTacticName("Wide"))
+        #expect(model.elevensUnsavedLine(nil) == nil)
+        #expect(model.elevensUnsavedLine(other) == nil)
+        var draft = try #require(model.draft(for: primary))
+        draft.setRole("Winger", at: .AM_L, in: .inPossession)
+        model.setDraft(draft, for: primary)
+        #expect(model.hasUnsavedChanges(primary))
+        #expect(model.menuTitle(of: primary).hasSuffix("— unsaved changes"), "the Tactics screen still marks it")
+        #expect(model.elevensTacticChoices.first { $0.id == primary }?.title == "4-2-3-1 (primary)")
+        #expect(model.elevensUnsavedLine(nil) == "Showing the saved version of this tactic; it has unsaved changes.")
+        #expect(model.elevensUnsavedLine(primary) == model.elevensUnsavedLine(nil))
+        #expect(model.elevensUnsavedLine(other) == nil, "the tactic shown has none")
+        model.revertDraft(primary)
+        #expect(model.elevensUnsavedLine(nil) == nil)
+    }
+
+    @Test func aFirstElevenRowAndADepthOptionReadAsWritten() throws {
+        let t = try TestModel()
+        let model = try squad(t)
+        let (elevens, depth) = try ready(model)
+        let sheet = model.elevenSheet(.first, report: elevens, depth: depth)
+        let back = try #require(sheet.rows.first { $0.slot == .D_L })
+        #expect(back.name == "Evan Humphries")
+        #expect(back.placeLine == "Left back, First team")
+        #expect(back.familiarityText == "20 / 20")
+        #expect(back.ratingText == "106.9")
+        #expect(back.stamps.isEmpty)
+        let centre = try #require(model.depthDetail(for: .D_CL, in: depth))
+        #expect(centre.title == "Left centre-back")
+        #expect(centre.cover == "3 solid players")
+        let carroll = try #require(centre.options.first { $0.name == "Canice Carroll" })
+        #expect(carroll.squadText == "First team")
+        #expect(carroll.ratingText == "108.0")
+        #expect(carroll.familiarityText == "20 / 20")
+        #expect(carroll.alsoNeeded == "Also needed at left defensive midfield")
+        #expect(carroll.unavailable == nil)
+        #expect(!carroll.countsAsCover)
     }
 
     @Test func aTacticTheEngineRefusesHasItsOwnLead() {
