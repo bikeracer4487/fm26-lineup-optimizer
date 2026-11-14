@@ -11,19 +11,22 @@ import Testing
     }
 
     func context(_ importance: Importance, history: [ConfirmedLineup] = [], tiers: SquadTiers? = nil,
-                 retraining: [Retraining] = [], stability: Double = 0, ownClub: String? = "Oxford City") -> RuleContext {
+                 retraining: [Retraining] = [], marks: [PlayerID: SaleMark] = [:], stability: Double = 0,
+                 ownClub: String? = "Oxford City") -> RuleContext {
         RuleContext(importance: importance, date: date, assignments: assignments, ownClub: ownClub,
                     history: StartHistory(history), tiers: tiers ?? SquadTiers(first: [:], second: [:], ratings: [:]),
-                    retraining: retraining, stability: stability)
+                    retraining: retraining, marks: marks, stability: stability)
     }
 
     func run(_ player: Player, _ importance: Importance, history: [ConfirmedLineup] = [], tiers: SquadTiers? = nil,
-             retraining: [Retraining] = [], stability: Double = 0, ownClub: String? = "Oxford City")
+             retraining: [Retraining] = [], marks: [PlayerID: SaleMark] = [:], stability: Double = 0,
+             ownClub: String? = "Oxford City", parameters: EngineParameters? = nil)
         -> (everySlot: [Adjustment], bySlot: [SlotID: [Adjustment]]) {
         ImportanceRules.adjustments(
             for: player,
-            context: context(importance, history: history, tiers: tiers, retraining: retraining, stability: stability, ownClub: ownClub),
-            parameters: parameters)
+            context: context(importance, history: history, tiers: tiers, retraining: retraining, marks: marks,
+                             stability: stability, ownClub: ownClub),
+            parameters: parameters ?? self.parameters)
     }
 
     func every(_ r: (everySlot: [Adjustment], bySlot: [SlotID: [Adjustment]]), _ kind: Adjustment.Kind) -> Adjustment? {
@@ -210,6 +213,46 @@ import Testing
         #expect(ImportanceRules.adjustments(for: exact, context: context, parameters: q).everySlot.map(\.kind) == [.development])
         let below = Player.fixture(age: 21, currentAbility: 100, potentialAbility: 109)
         #expect(ImportanceRules.adjustments(for: below, context: context, parameters: q).everySlot.isEmpty)
+    }
+
+    // MARK: Marked to sell or loan out
+
+    @Test func aMarkedPlayerIsFavouredInALowOrSharpnessFixture() {
+        let p = Player.fixture(age: 28, currentAbility: 100, potentialAbility: 100)
+        for importance in [Importance.low, .sharpness] {
+            let sell = every(run(p, importance, marks: [p.id: .toSell]), .shopWindow)
+            #expect(sell?.factor == 1.03)
+            #expect(sell?.reason == "Marked to sell: favoured for minutes, an untested way to bring offers (×1.03)")
+            let loan = every(run(p, importance, marks: [p.id: .toLoanOut]), .shopWindow)
+            #expect(loan?.factor == 1.03)
+            #expect(loan?.reason == "Marked to loan out: favoured for minutes, an untested way to bring offers (×1.03)")
+        }
+    }
+
+    @Test func aMarkDoesNothingInAMediumOrHighFixture() {
+        let p = Player.fixture(age: 28, currentAbility: 100, potentialAbility: 100)
+        #expect(every(run(p, .medium, marks: [p.id: .toSell]), .shopWindow) == nil)
+        #expect(every(run(p, .high, marks: [p.id: .toSell]), .shopWindow) == nil)
+    }
+
+    @Test func anUnmarkedPlayerIsNotFavoured() {
+        let p = Player.fixture(age: 28, currentAbility: 100, potentialAbility: 100)
+        let other = Player.fixture(name: "Someone else")
+        #expect(every(run(p, .low), .shopWindow) == nil)
+        #expect(every(run(p, .low, marks: [other.id: .toSell]), .shopWindow) == nil)
+    }
+
+    @Test func aMarkedProspectGetsBothAndInKindOrder() {
+        let p = Player.fixture(age: 19, currentAbility: 100, potentialAbility: 130)
+        let kinds = run(p, .low, marks: [p.id: .toLoanOut]).everySlot.map(\.kind)
+        #expect(kinds == [.development, .shopWindow])
+    }
+
+    @Test func aFactorOfOneSwitchesTheRuleOff() {
+        var off = EngineParameters.fm27
+        off.shopWindowFactor = Parameter(1, .derived, source: "test")
+        let p = Player.fixture(age: 28, currentAbility: 100, potentialAbility: 100)
+        #expect(every(run(p, .low, marks: [p.id: .toSell], parameters: off), .shopWindow) == nil)
     }
 
     // MARK: Retraining

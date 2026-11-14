@@ -11,6 +11,17 @@ public enum AdvisorText {
         }
     }
 
+    public static func name(_ mark: SaleMark) -> String {
+        switch mark {
+        case .toSell: "To sell"
+        case .toLoanOut: "To loan out"
+        }
+    }
+
+    /// What a mark does and how far to trust it, shown where marks are made.
+    public static let marksNote = "A marked player gets a little more playing time in low-importance and "
+        + "sharpness fixtures. Whether playing a player brings offers has not been tested."
+
     public static func name(_ level: RemovalLevel) -> String {
         switch level {
         case .critical: "Critical"

@@ -3,6 +3,11 @@ import Foundation
 @testable import LineupEngine
 
 @Suite struct PlanInputsTests {
+    @Test func aMarkIsStoredByItsWord() throws {
+        let stored = String(decoding: try JSONEncoder().encode([SaleMark.toSell, .toLoanOut]), as: UTF8.self)
+        #expect(stored == #"["toSell","toLoanOut"]"#)
+    }
+
     @Test func standardSettingsHaveNoProblems() {
         let s = PlanSettings.standard
         #expect(s.problems().isEmpty)

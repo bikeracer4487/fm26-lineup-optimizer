@@ -554,6 +554,9 @@ public struct EngineParameters: Sendable {
     public var prospectHeadroom: Parameter<Double>
     /// Factor on a prospect's value in a lesser fixture.
     public var developmentFactor: Parameter<Double>
+    /// Factor on the value, in a low or sharpness fixture, of a player the owner has marked to sell or to loan out;
+    /// 1 switches the rule off.
+    public var shopWindowFactor: Parameter<Double>
     /// Lowest familiarity at which a retrainee is favoured in a low or sharpness fixture.
     public var retrainingFromFamiliarity: Parameter<Int>
     /// Lowest familiarity at which a retrainee is favoured in a medium fixture.
@@ -749,6 +752,10 @@ public struct EngineParameters: Sendable {
             developmentFactor: Parameter(
                 1.10, .derived,
                 source: "this design's size; the premise, that growth comes mainly from match time, is one FM27 tester's report in docs/Research/fm27-training-and-retraining.md"),
+            shopWindowFactor: Parameter(
+                1.03, .derived,
+                source: "this design's size, a tie-breaker: no test in any version shows that playing a player brings offers "
+                    + "(docs/Research/fm27-playing-time-and-transfer-interest.md, docs/Research/fm27-selling-and-loans.md)"),
             retrainingFromFamiliarity: Parameter(10, .carriedOverFM26, source: retrainingSource),
             retrainingFromFamiliarityMedium: Parameter(15, .carriedOverFM26, source: retrainingSource),
             retrainingUntilFamiliarity: Parameter(18, .carriedOverFM26, source: retrainingSource),

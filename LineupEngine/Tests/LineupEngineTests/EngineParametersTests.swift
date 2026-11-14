@@ -76,7 +76,7 @@ import Testing
     @Test func theImportanceRuleParametersAreListedWithEvidenceAndSource() {
         let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
         let names = ["loanedInFactor", "consecutiveStartSteps", "sharpnessNeedFull", "sharpnessNeedMost", "sharpnessNeedStrengthLow",
-                     "sharpnessNeedStrengthBuild", "fullySharpFactor", "prospectMaxAge", "prospectHeadroom", "developmentFactor",
+                     "sharpnessNeedStrengthBuild", "fullySharpFactor", "prospectMaxAge", "prospectHeadroom", "developmentFactor", "shopWindowFactor",
                      "retrainingFromFamiliarity", "retrainingFromFamiliarityMedium", "retrainingUntilFamiliarity",
                      "retrainingFactorLow", "retrainingFactorMedium", "stabilityAnchorRun", "stabilityAnchorBonus", "stabilityRecentBonus"]
         for name in names {
@@ -84,6 +84,7 @@ import Testing
             #expect(!(listed[name]?.source.isEmpty ?? true), "\(name) has no source")
         }
         #expect(listed["sharpnessNeedMost"]?.evidence == .derived)
+        #expect(listed["shopWindowFactor"]?.evidence == .derived)
         #expect(listed["loanedInFactor"]?.evidence == .carriedOverFM26)
     }
 

@@ -58,6 +58,11 @@ public struct ConfirmedLineup: Equatable, Codable, Sendable {
 }
 
 /// A position change the manager accepted for a player.
+/// The owner's mark on a player of the club's own whom he means to sell or to loan out. The app stores the raw values.
+public enum SaleMark: String, Codable, CaseIterable, Sendable {
+    case toSell, toLoanOut
+}
+
 public struct Retraining: Equatable, Codable, Sendable {
     public var player: PlayerID
     public var position: Position

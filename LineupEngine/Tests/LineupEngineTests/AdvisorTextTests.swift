@@ -15,6 +15,13 @@ import Testing
                 == ["Much stronger", "Stronger", "Similar", "Weaker", "Much weaker"])
     }
 
+    @Test func theMarksHaveTheirNamesAndTheNoteSaysItIsUntested() {
+        #expect(AdvisorText.name(SaleMark.toSell) == "To sell")
+        #expect(AdvisorText.name(SaleMark.toLoanOut) == "To loan out")
+        #expect(AdvisorText.marksNote == "A marked player gets a little more playing time in low-importance and "
+                + "sharpness fixtures. Whether playing a player brings offers has not been tested.")
+    }
+
     @Test func eachImportanceHasItsName() {
         #expect(Importance.allCases.map { AdvisorText.name($0) } == ["High", "Medium", "Low", "Sharpness"])
     }

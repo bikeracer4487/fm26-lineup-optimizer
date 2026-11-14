@@ -111,6 +111,7 @@ public enum FitnessModel {
         let notUsable = "not a finite number of 0 or more"
         for (name, value) in [("fullySharpFactor", parameters.fullySharpFactor.value),
                               ("developmentFactor", parameters.developmentFactor.value),
+                              ("shopWindowFactor", parameters.shopWindowFactor.value),
                               ("retrainingFactorLow", parameters.retrainingFactorLow.value),
                               ("retrainingFactorMedium", parameters.retrainingFactorMedium.value),
                               ("sharpnessNeedStrengthLow", parameters.sharpnessNeedStrengthLow.value),

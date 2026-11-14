@@ -7,13 +7,16 @@ public struct RuleContext: Sendable {
     public var history: StartHistory
     public var tiers: SquadTiers
     public var retraining: [Retraining]
+    /// The players the owner has marked to sell or to loan out.
+    public var marks: [PlayerID: SaleMark]
     /// The manager's stability setting, 0 (none) to 1 (full).
     public var stability: Double
 
     public init(importance: Importance, date: Day, assignments: [SlotAssignment], ownClub: String?, history: StartHistory,
-                tiers: SquadTiers, retraining: [Retraining], stability: Double) {
+                tiers: SquadTiers, retraining: [Retraining], marks: [PlayerID: SaleMark] = [:], stability: Double) {
         self.importance = importance; self.date = date; self.assignments = assignments; self.ownClub = ownClub
-        self.history = history; self.tiers = tiers; self.retraining = retraining; self.stability = stability
+        self.history = history; self.tiers = tiers; self.retraining = retraining; self.marks = marks
+        self.stability = stability
     }
 }
 
@@ -28,6 +31,7 @@ public enum ImportanceRules {
         everySlot += consecutiveStarts(player, context, parameters)
         everySlot += needsSharpness(player, context, parameters)
         everySlot += development(player, context, parameters)
+        everySlot += shopWindow(player, context, parameters)
 
         let recent = context.history.recentSlots(
             of: player.id, before: context.date, limit: parameters.stabilityAnchorRun.value)
@@ -124,6 +128,24 @@ public enum ImportanceRules {
         else { return [] }
         return [Adjustment(kind: .development, factor: factor,
                            reason: "Young player with room to grow: favoured for minutes (×\(Display.twoDecimals(factor)))")]
+    }
+
+    /// The owner's belief that minutes bring offers is untested, so the factor only breaks near-ties, and only where
+    /// the result matters least.
+    private static func shopWindow(_ player: Player, _ context: RuleContext, _ parameters: EngineParameters) -> [Adjustment] {
+        switch context.importance {
+        case .high, .medium: return []
+        case .low, .sharpness: break
+        }
+        let factor = parameters.shopWindowFactor.value
+        guard let mark = context.marks[player.id], factor != 1 else { return [] }
+        let words: String
+        switch mark {
+        case .toSell: words = "to sell"
+        case .toLoanOut: words = "to loan out"
+        }
+        return [Adjustment(kind: .shopWindow, factor: factor,
+                           reason: "Marked \(words): favoured for minutes, an untested way to bring offers (×\(Display.twoDecimals(factor)))")]
     }
 
     private static func retraining(_ player: Player, _ assignment: SlotAssignment, _ context: RuleContext,
