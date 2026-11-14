@@ -108,12 +108,17 @@ public struct AppEnvironment: Sendable {
     /// Changed by every change to the mentoring state, as `adviceGeneration` is by a replan, so the mentoring advice
     /// is worked out again when next read.
     private(set) var mentoringGeneration = 0
+    /// The mentoring advice by squad, with the game's date it was worked out for; cleared by every replan and every
+    /// change to the mentoring state (see `mentoringAdvice(for:)`).
+    @ObservationIgnored var mentoringCache: [Squad: (asOf: Day, advice: MentoringAdvice)] = [:]
 
     /// How many times the plan has been worked out, so tests can tell when a change did not replan.
     @ObservationIgnored var timesPlanned = 0
     /// How many times the advice, and the elevens of a tactic other than the primary, have been worked out.
     @ObservationIgnored var timesAdvised = 0
     @ObservationIgnored var timesElevensWorkedOut = 0
+    /// How many times one squad's mentoring advice has been worked out.
+    @ObservationIgnored var timesMentoringWorkedOut = 0
     @ObservationIgnored let store: Store
     @ObservationIgnored let environment: AppEnvironment
 
@@ -230,6 +235,7 @@ public struct AppEnvironment: Sendable {
         timesPlanned += 1
         planState = rememberingElevens(workedOutPlan())
         adviceCache = nil
+        mentoringCache = [:]
         adviceGeneration &+= 1
     }
 
@@ -277,6 +283,7 @@ public struct AppEnvironment: Sendable {
         guard state != mentoring else { return }
         mentoring = state
         save(.mentoring)
+        mentoringCache = [:]
         mentoringGeneration &+= 1
     }
 

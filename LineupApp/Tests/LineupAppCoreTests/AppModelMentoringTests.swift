@@ -276,4 +276,170 @@ import LineupEngine
         t.model.setDynamics([ids(t.model, .firstTeam)[0]: PlayerDynamics(standing: .teamLeader)], for: .firstTeam)
         #expect(t.model.mentoringGeneration > before)
     }
+
+    // MARK: The advice
+
+    /// Both squads, the club named and a tactic, so the other advisors' advice is ready.
+    private func advised() throws -> TestModel {
+        let t = try both()
+        var settings = t.model.settings
+        settings.clubName = "Oxford City"
+        t.model.update(settings)
+        t.model.addTactic(named: "4-2-3-1")
+        return t
+    }
+
+    /// The engine's report for the squad from the model's saved state, with `leaving` handed on.
+    private func engineReport(_ model: AppModel, _ squad: Squad, leaving: Set<PlayerID>) throws -> MentoringReport {
+        let request = MentoringRequest(
+            squad: squad, players: model.squad.book.allPlayers, ownClub: model.ownClub,
+            dynamics: model.mentoring.dynamics, dynamicsUpdatedOn: model.mentoring.dynamicsUpdatedOn[squad],
+            groups: model.mentoring.groups, readings: model.mentoring.readings, names: model.mentoring.names,
+            leaving: leaving, asOf: model.settings.currentDate)
+        return try Mentoring.report(request, parameters: .fm27)
+    }
+
+    private func isReady(_ advice: MentoringAdvice) -> Bool {
+        if case .ready = advice { true } else { false }
+    }
+
+    @Test func mentoringWorksWithNoTactic() throws {
+        let t = try both()
+        #expect(t.model.adviceState == .needsTactic([]))
+        let advice = t.model.mentoringAdvice(for: .firstTeam)
+        #expect(advice == .ready(try engineReport(t.model, .firstTeam, leaving: [])))
+        guard case .ready(let report) = advice else { Issue.record("expected advice, got \(advice)"); return }
+        #expect(!report.suggestions.isEmpty)
+        #expect(isReady(t.model.mentoringAdvice(for: .u21)))
+    }
+
+    @Test func aSquadNotImportedNeedsItsSquad() throws {
+        let t = try TestModel()
+        #expect(t.model.mentoringAdvice(for: .firstTeam) == .needsSquad)
+        try t.importFirstTeam()
+        #expect(isReady(t.model.mentoringAdvice(for: .firstTeam)))
+        #expect(t.model.mentoringAdvice(for: .u21) == .needsSquad)
+        #expect(t.model.mentoringAdvice(for: .u18) == .needsSquad)
+        #expect(t.model.mentoringSheet(for: .u21).notReady == "The U21s have not been imported yet.")
+    }
+
+    @Test func theAdviceIsKeptUntilSomethingChanges() throws {
+        let t = try both()
+        let before = t.model.mentoringAdvice(for: .firstTeam)
+        let times = t.model.timesMentoringWorkedOut
+        #expect(t.model.mentoringAdvice(for: .firstTeam) == before)
+        _ = t.model.mentoringSheet(for: .firstTeam)
+        #expect(t.model.timesMentoringWorkedOut == times)
+
+        let lead = ids(t.model, .firstTeam)[0]
+        t.model.setDynamics([lead: PlayerDynamics(standing: .teamLeader)], for: .firstTeam)
+        let after = t.model.mentoringAdvice(for: .firstTeam)
+        #expect(t.model.timesMentoringWorkedOut == times + 1)
+        #expect(after != before)
+        #expect(after == .ready(try engineReport(t.model, .firstTeam, leaving: [])))
+        _ = t.model.mentoringAdvice(for: .firstTeam)
+        #expect(t.model.timesMentoringWorkedOut == times + 1)
+
+        // Each squad is worked out on its own.
+        _ = t.model.mentoringAdvice(for: .u21)
+        #expect(t.model.timesMentoringWorkedOut == times + 2)
+
+        t.model.replan()
+        _ = t.model.mentoringAdvice(for: .firstTeam)
+        #expect(t.model.timesMentoringWorkedOut == times + 3)
+    }
+
+    @Test func aNewDateWorksTheAdviceOutAgain() throws {
+        let t = try both()
+        t.model.setDynamics([ids(t.model, .firstTeam)[0]: PlayerDynamics(standing: .teamLeader)], for: .firstTeam)
+        #expect(t.model.mentoringSheet(for: .firstTeam).staleText == nil)
+        let times = t.model.timesMentoringWorkedOut
+        var settings = t.model.settings
+        settings.currentDate = today.adding(days: 29)
+        t.model.update(settings)
+        let sheet = t.model.mentoringSheet(for: .firstTeam)
+        #expect(t.model.timesMentoringWorkedOut == times + 1)
+        #expect(sheet.staleText != nil)
+        #expect(sheet.updatedText == "Updated \(DayText.short(today))")
+    }
+
+    @Test func playerRemovalsLeaversAreHandedOnWhenTheAdviceIsReady() throws {
+        let t = try advised()
+        guard case .ready(let advice) = t.model.adviceState else { Issue.record("expected advice"); return }
+        let leaving = advice.removal.advisedToLeave
+        #expect(!leaving.isEmpty)
+        var differs = false
+        for squad in [Squad.firstTeam, .u21] {
+            let withLeavers = try engineReport(t.model, squad, leaving: leaving)
+            #expect(t.model.mentoringAdvice(for: squad) == .ready(withLeavers))
+            let withNone = try engineReport(t.model, squad, leaving: [])
+            differs = differs || withLeavers != withNone
+        }
+        // Otherwise the test could not tell the two apart.
+        #expect(differs)
+    }
+
+    @Test func withNoAdviceNobodyIsHandedOnAsLeaving() throws {
+        let t = try both()
+        var settings = t.model.settings
+        settings.clubName = "Oxford City"
+        t.model.update(settings)
+        #expect(t.model.adviceState == .needsTactic([]))
+        for squad in [Squad.firstTeam, .u21] {
+            #expect(t.model.mentoringAdvice(for: squad) == .ready(try engineReport(t.model, squad, leaving: [])))
+        }
+    }
+
+    @Test func oneSquadsMissingValueDoesNotStopTheOthers() throws {
+        let t = try advised()
+        guard case .ready = t.model.adviceState else { Issue.record("expected advice"); return }
+        var players = try #require(t.model.squad.book.current[.firstTeam])
+        let club = t.model.ownClub
+        let index = try #require(players.firstIndex { LoanStatus.of($0, ownClub: club) == .own })
+        let name = players[index].name
+        players[index].attributes[.pressure] = nil
+        _ = t.model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: []), to: .firstTeam)
+        t.model.replan()
+
+        let sentence = ErrorDescriptions.describe(RatingError.missingAttribute(player: name, attribute: .pressure))
+        #expect(t.model.mentoringAdvice(for: .firstTeam) == .failed([sentence]))
+        #expect(t.model.mentoringSheet(for: .firstTeam).failures == [sentence])
+        #expect(isReady(t.model.mentoringAdvice(for: .u21)))
+        guard case .ready = t.model.adviceState else { Issue.record("expected advice, got \(t.model.adviceState)"); return }
+    }
+
+    @Test func aMemberWhoHasLeftEverySquadIsShownByHisName() throws {
+        let t = try both()
+        let group = try suggestion(t.model, .firstTeam)
+        t.model.recordGroup(group, in: .firstTeam)
+        let gone = group.members[0]
+        let rows = try Captures.firstTeam.split(whereSeparator: \.isNewline).map(String.init)
+        let kept = rows.filter { !$0.contains("\t\(gone.name)\t") && !$0.contains("\"\(gone.name)\"") }
+        t.importSquad(.firstTeam, paste: kept.joined(separator: "\n") + "\n", grids: try Captures.firstTeamGrids)
+        #expect(!t.model.players.contains { $0.id == gone.player })
+
+        let card = try #require(t.model.mentoringSheet(for: .firstTeam).yours.first)
+        #expect(card.titleText.contains(gone.name))
+        #expect(card.members.contains { $0.nameText == gone.name })
+        #expect(card.warnings.contains(AdvisorText.warning(.notInSquad(gone.player), names: [gone.player: gone.name])))
+        let everything = [card.titleText] + card.members.map(\.nameText) + card.warnings
+        #expect(!everything.contains { $0.contains(gone.player.key) })
+    }
+
+    @Test func dynamicsRowsAndMemberChoicesAreTheSquadsPlayers() throws {
+        let t = try both()
+        let chosen = try #require(t.model.dynamicsRows(for: .u21).last).id
+        t.model.setDynamics([chosen: PlayerDynamics(standing: .influential)], for: .u21)
+        let rows = t.model.dynamicsRows(for: .u21)
+        #expect(rows == MentoringPresentation.dynamicsRows(
+            t.model.squad.book.current[.u21] ?? [], ownClub: t.model.ownClub, dynamics: t.model.mentoring.dynamics))
+        #expect(rows.first { $0.id == chosen }?.dynamics.standing == .influential)
+        #expect(rows.filter { $0.id != chosen }.allSatisfy { $0.dynamics == PlayerDynamics() })
+        t.model.saveGroup(MentoringGroupDraft(squad: .firstTeam, members: Array(ids(t.model, .firstTeam)[0..<3])))
+        let choices = t.model.memberChoices(for: MentoringGroupDraft(squad: .firstTeam))
+        #expect(choices.map(\.id) == MentoringPresentation.dynamicsRows(
+            t.model.squad.book.current[.firstTeam] ?? [], ownClub: t.model.ownClub, dynamics: [:]).map(\.id))
+        #expect(choices.prefix(3).allSatisfy { $0.unavailableText != nil })
+        #expect(choices.dropFirst(3).allSatisfy { $0.unavailableText == nil })
+    }
 }

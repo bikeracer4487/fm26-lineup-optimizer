@@ -13,10 +13,24 @@ public struct FixtureEditing: Identifiable, Equatable, Sendable {
     }
 }
 
+/// What the Mentoring tab has open for editing: a squad's hierarchy, or a group being added or changed.
+public enum MentoringEditing: Identifiable, Equatable, Sendable {
+    case hierarchy(Squad)
+    case group(MentoringGroupDraft)
+
+    public var id: String {
+        switch self {
+        case .hierarchy(let squad): "hierarchy-\(squad.rawValue)"
+        case .group(let draft): "group-\(draft.id.uuidString)"
+        }
+    }
+}
+
 /// What the owner has chosen to look at, kept while the app is open so it survives a change of screen: the screen,
 /// Match Selection's fixture, selected pick and view, the squad table's filter, search and sort, the tactic shown,
 /// a fixture being edited and the fixture whose suggested importance's reasons are shown, the Elevens screen's view,
-/// tactic and slot, and the Player Removal screen's filter and the rows opened or closed.
+/// tactic and slot, the Player Removal screen's filter and the rows opened or closed, and the Training screen's tab,
+/// the squad its Mentoring tab shows and what that tab has open for editing.
 @MainActor @Observable public final class Navigation {
     public var screen: Screen?
     /// The fixture shown. While nil, or once it has left the plan, `MatchPresentation.initialFixture`.
@@ -41,6 +55,11 @@ public struct FixtureEditing: Identifiable, Equatable, Sendable {
     /// The Player Removal screen's filter, and the rows the owner has opened or closed.
     public var removalFilter: RemovalFilter = .all
     public var removalDisclosure = RemovalDisclosure()
+    /// The Training screen's tab, the squad the Mentoring tab is asked to show (`MentoringPresentation.squadShown`
+    /// decides the one shown), and what it has open for editing (nil: nothing).
+    public var trainingView: TrainingView = .retraining
+    public var mentoringSquad: Squad = .firstTeam
+    public var mentoringEditing: MentoringEditing?
 
     public init(screen: Screen? = .squad, matchFixture: FixtureID? = nil, matchSelection: PickSelection? = nil,
                 matchView: MatchView = .teamSheet, squadShown: Squad? = nil, squadSearch: String = "",

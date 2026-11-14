@@ -33,6 +33,28 @@ public enum ElevensView: CaseIterable, Hashable, Sendable {
     }
 }
 
+/// The mentoring advice for one squad. Worked out apart from the other advisors: it needs no tactic, and one squad's
+/// failing stops neither the other squads nor any other advisor screen.
+public enum MentoringAdvice: Equatable, Sendable {
+    /// This squad has not been imported.
+    case needsSquad
+    /// The engine's sentences for why the advice for this squad stopped.
+    case failed([String])
+    case ready(MentoringReport)
+}
+
+/// The Training screen's two tabs.
+public enum TrainingView: CaseIterable, Hashable, Sendable {
+    case retraining, mentoring
+
+    public var title: String {
+        switch self {
+        case .retraining: "Retraining"
+        case .mentoring: "Mentoring"
+        }
+    }
+}
+
 /// The advice worked out since the last change, and what has been worked out from it so far. Each part is worked out
 /// when first read.
 struct AdviceCache {

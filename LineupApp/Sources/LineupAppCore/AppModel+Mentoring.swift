@@ -109,6 +109,62 @@ extension AppModel {
         changeMentoring { $0.record(imported, on: day) }
     }
 
+    // MARK: The advice
+
+    /// The mentoring advice for the squad: every imported player, the club, the saved hierarchy, groups, readings and
+    /// names, the game's current date, and as leaving Player Removal's list while the other advice is ready (none while
+    /// it is not, so no tactic is needed). Worked out when first read after a change to the squads, the hierarchy or
+    /// the groups, or to the game's date, and kept until the next.
+    public func mentoringAdvice(for squad: Squad) -> MentoringAdvice {
+        _ = mentoringGeneration
+        _ = adviceGeneration
+        let asOf = settings.currentDate
+        if let cached = mentoringCache[squad], cached.asOf == asOf { return cached.advice }
+        let advice = workedOutMentoring(for: squad, asOf: asOf)
+        mentoringCache[squad] = (asOf, advice)
+        return advice
+    }
+
+    /// The Mentoring tab for the squad: its hierarchy, its suggested and recorded groups and the players not placed.
+    public func mentoringSheet(for squad: Squad) -> MentoringSheet {
+        let advice = mentoringAdvice(for: squad)
+        return MentoringPresentation.sheet(
+            squad, advice: advice, players: self.squad.book.current[squad] ?? [], ownClub: ownClub, state: mentoring,
+            names: importedNames, asOf: settings.currentDate, parameters: planParameters)
+    }
+
+    /// The hierarchy editor's rows for the squad.
+    public func dynamicsRows(for squad: Squad) -> [DynamicsRow] {
+        MentoringPresentation.dynamicsRows(self.squad.book.current[squad] ?? [], ownClub: ownClub,
+                                           dynamics: mentoring.dynamics)
+    }
+
+    /// The players the group editor offers for the draft.
+    public func memberChoices(for draft: MentoringGroupDraft) -> [MemberChoice] {
+        MentoringPresentation.memberChoices(draft, players: squad.book.current[draft.squad] ?? [], ownClub: ownClub,
+                                            state: mentoring)
+    }
+
+    private func workedOutMentoring(for squad: Squad, asOf: Day) -> MentoringAdvice {
+        timesMentoringWorkedOut += 1
+        guard !(self.squad.book.current[squad] ?? []).isEmpty else { return .needsSquad }
+        let leaving = AdvicePresentation.report(adviceState)?.removal.advisedToLeave ?? []
+        let request = MentoringRequest(
+            squad: squad, players: self.squad.book.allPlayers, ownClub: ownClub, dynamics: mentoring.dynamics,
+            dynamicsUpdatedOn: mentoring.dynamicsUpdatedOn[squad], groups: mentoring.groups,
+            readings: mentoring.readings, names: mentoring.names, leaving: leaving, asOf: asOf)
+        do {
+            return .ready(try Mentoring.report(request, parameters: planParameters))
+        } catch {
+            return .failed([ErrorDescriptions.describe(error)])
+        }
+    }
+
+    /// Every imported player's name, the first held under a key.
+    private var importedNames: [PlayerID: String] {
+        Dictionary(squad.book.allPlayers.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+    }
+
     private func isInLiveGroup(_ player: PlayerID, except id: UUID?) -> Bool {
         mentoring.groups.contains { $0.isLive && $0.id != id && $0.current.contains { $0.player == player } }
     }
