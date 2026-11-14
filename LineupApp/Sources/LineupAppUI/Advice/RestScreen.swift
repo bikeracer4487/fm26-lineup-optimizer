@@ -63,7 +63,8 @@ private struct RestBlock: View {
                 }
             }
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                ForEach(row.reasons, id: \.self) { ReasonLine(reason: $0) }
+                // Keyed by place, so two identical reasons are both shown.
+                ForEach(Array(row.reasons.enumerated()), id: \.offset) { ReasonLine(reason: $0.element) }
             }
             .foregroundStyle(Theme.Colour.ink)
             .padding(.leading, nameIndent)

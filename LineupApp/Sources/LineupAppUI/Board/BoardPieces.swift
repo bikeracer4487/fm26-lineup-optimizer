@@ -199,16 +199,20 @@ struct FaintRule: View {
 /// A caution in marker amber: a triangle, then the sentence in ink.
 struct CautionLine: View {
     let text: String
+    /// Whether the triangle takes a reason's sign's room, so the sentence lines up with reasons above or below it.
+    let alignsWithReasons: Bool
 
-    init(_ text: String) {
+    init(_ text: String, alignsWithReasons: Bool = false) {
         self.text = text
+        self.alignsWithReasons = alignsWithReasons
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
+        HStack(alignment: .firstTextBaseline, spacing: alignsWithReasons ? Theme.Spacing.m - Theme.Spacing.xxs : Theme.Spacing.s) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(Theme.Typeface.text(Theme.TypeSize.caption, weight: .bold))
+                .font(Theme.Typeface.text(alignsWithReasons ? Theme.TypeSize.body : Theme.TypeSize.caption, weight: .bold))
                 .foregroundStyle(Theme.Colour.markerAmber)
+                .frame(width: alignsWithReasons ? Theme.Match.signDiameter : nil)
                 .accessibilityLabel("Caution")
             Text(text)
                 .font(Theme.Typeface.text())

@@ -189,6 +189,89 @@ import Testing
                 == "Familiarity at striker 8 to 11 in 3 weeks: about 1.2 a week, 3 weeks to solid")
     }
 
+    // MARK: Retraining
+
+    func recommendation(position: Position = .defenderLeft, from: Position = .defenderRight,
+                        difficulty: RetrainingDifficulty = .structural, weeks: Int = 21,
+                        needs: [RetrainingNeed] = [RetrainingNeed(tactic: "Sample 4-2-3-1", slot: .D_L)]) -> RetrainingRecommendation {
+        RetrainingRecommendation(
+            choice: RetrainingChoice(player: PlayerID(key: "p"), position: position), name: "P", age: 22,
+            currentFamiliarity: 9, needs: needs, ratingIfLearnt: 100, shareOfFirstChoice: 0.9, learnability: 0.6,
+            from: from, difficulty: difficulty, weeks: weeks, reasons: [], cautions: [], basis: .derived)
+    }
+
+    @Test func learnAndLearningNameThePositionInWords() {
+        #expect(AdvisorText.learn(.defenderLeft) == "Learn left back")
+        #expect(AdvisorText.learn(.defensiveMidfielder) == "Learn defensive midfield")
+        #expect(AdvisorText.learning(.defenderLeft) == "Learning left back")
+        #expect(AdvisorText.learning(.goalkeeper) == "Learning goalkeeper")
+        for position in Position.allCases {
+            #expect(AdvisorText.learn(position) == "Learn \(PositionText.plain(position))")
+            #expect(!AdvisorText.learn(position).contains("("), "\(position)")
+        }
+    }
+
+    @Test func aNeedIsItsSlotInWordsThenItsTactic() {
+        #expect(AdvisorText.need(RetrainingNeed(tactic: "Sample 4-2-3-1", slot: .D_L)) == "Left back in Sample 4-2-3-1")
+        #expect(AdvisorText.need(RetrainingNeed(tactic: "Another", slot: .D_CL)) == "Left centre-back in Another")
+        #expect(AdvisorText.need(RetrainingNeed(tactic: "Sample 4-2-3-1", slot: .GK)) == "Goalkeeper in Sample 4-2-3-1")
+    }
+
+    @Test func coversNamesEachNeedInItsOrder() {
+        let a = RetrainingNeed(tactic: "Sample 4-2-3-1", slot: .D_L)
+        let b = RetrainingNeed(tactic: "Another", slot: .D_CL)
+        let c = RetrainingNeed(tactic: "Third", slot: .WB_L)
+        #expect(AdvisorText.covers([]) == nil)
+        #expect(AdvisorText.covers([a]) == "Covers left back in Sample 4-2-3-1")
+        #expect(AdvisorText.covers([a, b]) == "Covers left back in Sample 4-2-3-1 and left centre-back in Another")
+        #expect(AdvisorText.covers([b, a]) == "Covers left centre-back in Another and left back in Sample 4-2-3-1")
+        #expect(AdvisorText.covers([a, b, c])
+                == "Covers left back in Sample 4-2-3-1, left centre-back in Another and left wing-back in Third")
+        // The same need twice is named once.
+        #expect(AdvisorText.covers([a, a]) == "Covers left back in Sample 4-2-3-1")
+    }
+
+    @Test func alreadyBeingRetrainedNamesTheNeedsOrNothing() {
+        let a = RetrainingNeed(tactic: "Sample 4-2-3-1", slot: .D_L)
+        let b = RetrainingNeed(tactic: "Another", slot: .GK)
+        #expect(AdvisorText.alreadyBeingRetrained([]) == nil)
+        #expect(AdvisorText.alreadyBeingRetrained([a]) == "Already being retrained for: left back in Sample 4-2-3-1")
+        #expect(AdvisorText.alreadyBeingRetrained([a, b])
+                == "Already being retrained for: left back in Sample 4-2-3-1 and goalkeeper in Another")
+    }
+
+    @Test func timeToLearnGivesTheWeeksTheChangeAndWhereFrom() {
+        #expect(AdvisorText.timeToLearn(recommendation())
+                == "About 21 weeks: a structural change from right back")
+        #expect(AdvisorText.timeToLearn(recommendation(from: .wingBackLeft, difficulty: .fluid, weeks: 1))
+                == "About 1 week: a fluid change from left wing-back")
+        #expect(AdvisorText.timeToLearn(recommendation(from: .midfielderCentral, difficulty: .spatial, weeks: 40))
+                == "About 40 weeks: a spatial change from central midfield")
+        #expect(AdvisorText.timeToLearn(recommendation(from: .defenderRight, difficulty: .inversion, weeks: 60))
+                == "About 60 weeks: an inversion change from right back")
+    }
+
+    @Test func aRealRecommendationsWordsHaveNoCodes() throws {
+        // The planner squad without its second-choice left back, so left back is thin, and a right back to learn it.
+        let players = try PlannerFixture.squad().filter { $0.name != PlannerFixture.name(.D_L, "second") } + [
+            Player.fixture(name: "Right Back", age: 20, all: 13, attributes: [.versatility: 14, .professionalism: 12],
+                           familiarity: [.defenderRight: 20, .defenderLeft: 8], currentAbility: 100,
+                           potentialAbility: 120, club: "Oxford City")]
+        let report = try Training.report(tactics: [try PlannerFixture.tactic()], players: players, ownClub: "Oxford City",
+                                         accepted: [], rejected: [], catalog: try RoleCatalog.fm27(),
+                                         profile: try RatingProfile.standard(), parameters: parameters)
+        let recommendation = try #require(report.recommendations.first { $0.name == "Right Back" })
+        #expect(AdvisorText.learn(recommendation.choice.position) == "Learn left back")
+        #expect(AdvisorText.covers(recommendation.needs) == "Covers left back in Sample 4-2-3-1")
+        #expect(AdvisorText.timeToLearn(recommendation) == "About 16 weeks: a structural change from right back")
+        for sentence in [AdvisorText.learn(recommendation.choice.position), AdvisorText.covers(recommendation.needs) ?? "",
+                         AdvisorText.timeToLearn(recommendation)] + recommendation.needs.map(AdvisorText.need) {
+            for code in ["(", "_", "D L", "D_L"] {
+                #expect(!sentence.contains(code), "\(sentence)")
+            }
+        }
+    }
+
     @Test func aReasonNamesThePositionInWords() throws {
         // A real Player Removal reason for the planner squad's first-choice left back.
         let players = try PlannerFixture.squad()

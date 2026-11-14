@@ -47,6 +47,12 @@
 //                                              raised so a holiday and a rest over the limit show
 //                                              ("rest-levels-…"), that also in the smallest window
 //                                              ("rest-levels-small-…").
+//                                              The Training screen is drawn tall enough for all four
+//                                              parts ("training-tall-…", and "training-small-tall-…" in
+//                                              the smallest window's width), with its retraining six weeks
+//                                              under way, a second whose player has left and a pair turned
+//                                              down, taller ("training-accepted-…"), and with nothing to list
+//                                              ("training-none-…").
 //                                              Every screen is drawn again in a narrow window, 800 by 700
 //                                              ("<screen>-narrow-…"), and Match Selection, Tactics, Fixtures
 //                                              and the advisor screens in the smallest window
@@ -112,7 +118,7 @@ func fail(_ message: String) -> Never {
 enum SampleState {
     case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange, pastFixtures
     case afterConfirmingFirst, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
-    case jadedPlayers, nobodyNeedingRest
+    case jadedPlayers, nobodyNeedingRest, retrainingUnderWay, nothingToRetrain
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -134,6 +140,8 @@ enum SampleState {
         case .twoMatchesOnOneDay: return try SampleData.modelWithTwoMatchesOnOneDay(repositoryRoot: url)
         case .jadedPlayers: return try SampleData.modelWithJadedPlayers(repositoryRoot: url)
         case .nobodyNeedingRest: return try SampleData.modelWithNobodyNeedingRest(repositoryRoot: url)
+        case .retrainingUnderWay: return try SampleData.modelWithRetrainingUnderWay(repositoryRoot: url)
+        case .nothingToRetrain: return try SampleData.modelWithNothingToRetrain(repositoryRoot: url)
         }
     } catch {
         fail("\(error)")
@@ -233,6 +241,20 @@ let narrowWindow = CGSize(width: 800, height: 700)
                              screens: [.rest])
 }
 
+/// The Training screen whole, under way and with nothing to list: see the usage at the top.
+@MainActor func drawTraining(_ root: String, to directory: URL, size: CGSize) throws {
+    let tall = CGSize(width: size.width, height: size.height * 2.5)
+    let smallTall = CGSize(width: Theme.Layout.minimumWindow.width, height: Theme.Layout.minimumWindow.height * 4)
+    let plain = sampleModel(root)
+    try ScreenPictures.write(model: plain, to: directory, size: tall, variant: "tall", screens: [.training])
+    try ScreenPictures.write(model: plain, to: directory, size: smallTall, variant: "small-tall", screens: [.training])
+    try ScreenPictures.write(model: sampleModel(root, .retrainingUnderWay), to: directory,
+                             size: CGSize(width: size.width, height: size.height * 3.5), variant: "accepted",
+                             screens: [.training])
+    try ScreenPictures.write(model: sampleModel(root, .nothingToRetrain), to: directory, size: size, variant: "none",
+                             screens: [.training])
+}
+
 /// Draws the pictures and returns the process's exit status.
 @MainActor func drawPictures(to path: String, sampleDataRoot: String?) -> Int32 {
     do {
@@ -276,6 +298,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
             try drawMatchSelection(root, to: directory, size: size)
             try drawElevens(root, to: directory, size: size)
             try drawRest(root, to: directory, size: size)
+            try drawTraining(root, to: directory, size: size)
         } else {
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size)
         }

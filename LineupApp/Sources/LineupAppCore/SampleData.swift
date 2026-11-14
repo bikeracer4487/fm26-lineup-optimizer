@@ -234,6 +234,65 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model with its accepted retraining six weeks under way, accepted on 2 October and read at an import
+    /// every two weeks since, his familiarity rising a point each time (short of solid) and the squad's copy showing the
+    /// latest; a second retraining, of the player with the longest name, who has since left the squads; and the first
+    /// recommendation then made, turned down.
+    @MainActor public static func modelWithRetrainingUnderWay(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        guard let accepted = model.training.accepted.first,
+              let start = model.training.observations[TrainingState.choice(accepted)]?.first?.familiarity else {
+            throw SampleDataError(description: "The sample model has no accepted retraining with a first observation.")
+        }
+        guard let leaver = model.players.filter({ $0.id != accepted.player }).max(by: { $0.name.count < $1.name.count }),
+              let position = Position.allCases.min(by: { (leaver.familiarity[$0] ?? 0) < (leaver.familiarity[$1] ?? 0) }) else {
+            throw SampleDataError(description: "The sample model has no second player to retrain.")
+        }
+        model.accept(RetrainingChoice(player: leaver.id, position: position))
+
+        let choice = TrainingState.choice(accepted)
+        let solid = model.planParameters.depthSolidFamiliarity.value
+        let readings = (0..<4).map { step in
+            FamiliarityObservation(day: date.adding(days: 14 * step - 42), familiarity: min(start + step, solid - 1))
+        }
+        model.changeTraining(replanning: false) { state in
+            state.accepted = state.accepted.map { retraining in
+                retraining.player == accepted.player
+                    ? Retraining(player: retraining.player, position: retraining.position, acceptedOn: date.adding(days: -42))
+                    : retraining
+            }
+            state.observations[choice] = readings
+        }
+        for squad in Squad.allCases {
+            guard var players = model.squad.book.current[squad] else { continue }
+            players.removeAll { $0.id == leaver.id }
+            for index in players.indices where players[index].id == accepted.player {
+                players[index].familiarity[accepted.position] = readings.last?.familiarity
+            }
+            _ = model.squad.book.apply(ImportResult(grid: "sample", players: players, warnings: []), to: squad)
+        }
+        model.save(.squad)
+        model.replan()
+        guard case .ready(let advice) = model.adviceState, let first = advice.training.recommendations.first else {
+            throw SampleDataError(description: "The sample's advice recommends no retraining to turn down: \(model.adviceState)")
+        }
+        model.reject(first.choice)
+        return model
+    }
+
+    /// The sample model with nothing for the Training screen to list: its retraining stopped, and every player natural
+    /// in every position, so no slot is thin.
+    @MainActor public static func modelWithNothingToRetrain(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        for retraining in model.training.accepted {
+            model.stopRetraining(TrainingState.choice(retraining))
+        }
+        edit(model) { player in
+            for position in Position.allCases { player.familiarity[position] = 20 }
+        }
+        return model
+    }
+
     /// Changes every player in the model's copy of the squads as `change` says, as an import of the changed squads
     /// would, saves the squads and works the plan and advice out again.
     @MainActor private static func edit(_ model: AppModel, _ change: (inout Player) -> Void) {

@@ -597,6 +597,29 @@ public enum Theme {
         public static let clearTopPadding: CGFloat = TypeSize.small + Spacing.xs + Spacing.xxs
     }
 
+    // MARK: Training
+
+    public enum Training {
+        /// The space between the screen's four parts.
+        public static let partGap: CGFloat = 32
+        /// The parts are no wider than this, so each card's and row's buttons stay near its words on a wide window.
+        public static let columnMaximumWidth: CGFloat = 940
+        /// The name's column in a row under way or turned down; a longer name wraps to a second line.
+        public static let nameWidth: CGFloat = 250
+        /// The most lines a name wraps to.
+        public static let nameLines = 2
+        /// The track from 1 to 20: its bar, the marks for where he started and where he is now, and the solid line.
+        public static let trackWidth: CGFloat = 300
+        public static let trackHeight: CGFloat = 8
+        public static let trackMark: CGFloat = 16
+        public static let trackMarkLine: CGFloat = 2.5
+        public static let solidLineWidth: CGFloat = 3
+        public static let solidLineHeight: CGFloat = 26
+        /// The marks in the key under the track.
+        public static let keyMark: CGFloat = 12
+        public static let keySolidHeight: CGFloat = 14
+    }
+
     // MARK: Columns
 
     /// Column widths for the tables on the board. The name and status columns share what a wider window gives.

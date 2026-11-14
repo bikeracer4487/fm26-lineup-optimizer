@@ -172,6 +172,54 @@ public enum AdvisorText {
         slot.options.isEmpty ? "Nobody can play here" : nil
     }
 
+    /// "Learn left back".
+    public static func learn(_ position: Position) -> String {
+        "Learn \(PositionText.plain(position))"
+    }
+
+    /// "Learning left back", for a retraining under way.
+    public static func learning(_ position: Position) -> String {
+        "Learning \(PositionText.plain(position))"
+    }
+
+    /// "Left back in Sample 4-2-3-1": a thin slot in words, then its tactic.
+    public static func need(_ need: RetrainingNeed) -> String {
+        let slot = PositionText.plain(need.slot)
+        return slot.prefix(1).uppercased() + slot.dropFirst() + " in \(need.tactic)"
+    }
+
+    /// "Covers left back in Sample 4-2-3-1 and left centre-back in Another": the thin slots a retraining would cover,
+    /// in the order given, each named once; nil for none.
+    public static func covers(_ needs: [RetrainingNeed]) -> String? {
+        list(needs).map { "Covers \($0)" }
+    }
+
+    /// "Already being retrained for: left back in Sample 4-2-3-1": the thin slots a retraining under way is meant to
+    /// fill, in the order given; nil for none.
+    public static func alreadyBeingRetrained(_ needs: [RetrainingNeed]) -> String? {
+        list(needs).map { "Already being retrained for: \($0)" }
+    }
+
+    /// "About 21 weeks: a structural change from right back".
+    public static func timeToLearn(_ recommendation: RetrainingRecommendation) -> String {
+        let weeks = recommendation.weeks
+        let change = name(recommendation.difficulty).lowercased()
+        let article = change.first.map { "aeiou".contains($0) } == true ? "an" : "a"
+        return "About \(weeks) \(weeks == 1 ? "week" : "weeks"): \(article) \(change) change from "
+            + PositionText.plain(recommendation.from)
+    }
+
+    /// "left back in X, goalkeeper in Y and striker in Z", each need named once in the order given; nil for none.
+    private static func list(_ needs: [RetrainingNeed]) -> String? {
+        var names: [String] = []
+        for need in needs {
+            let name = "\(PositionText.plain(need.slot)) in \(need.tactic)"
+            if !names.contains(name) { names.append(name) }
+        }
+        guard let last = names.last else { return nil }
+        return names.count == 1 ? last : names.dropLast().joined(separator: ", ") + " and " + last
+    }
+
     public static func progress(_ progress: RetrainingProgress, toward position: Position,
                                 parameters: EngineParameters) -> String {
         let place = PositionText.plain(position)
