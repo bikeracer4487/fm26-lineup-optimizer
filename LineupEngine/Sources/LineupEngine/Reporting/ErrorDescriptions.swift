@@ -69,7 +69,7 @@ public enum ErrorDescriptions {
         case .malformed(let reason): "The role or rating data is damaged: \(reason)"
         case .unknownAttribute(let role, let name): "\(role) uses an attribute the engine does not know: \(name)"
         case .unknownRole(let name, let phase, let position):
-            "\(name) is not an \(phaseName(phase)) role for \(position.rawValue)"
+            "\(name) is not an \(phaseName(phase)) role for \(PositionText.plain(position))"
         }
     }
 
@@ -81,19 +81,21 @@ public enum ErrorDescriptions {
         switch problem {
         case .wrongSlotCount(let phase, let n): "The \(phaseName(phase)) side has \(n) slots, not 11"
         case .missingGoalkeeper(let phase): "The \(phaseName(phase)) side has no goalkeeper"
-        case .unmapped(let slot): "\(slot.rawValue) has no out-of-possession slot to turn into"
-        case .mappingTargetInactive(let from, let to): "\(from.rawValue) turns into \(to.rawValue), which has no out-of-possession role"
-        case .duplicateMappingTarget(let slot): "More than one slot turns into \(slot.rawValue)"
-        case .unknownRole(let phase, let slot, let role): "\(role) is not an \(phaseName(phase)) role for \(slot.rawValue)"
+        case .unmapped(let slot): "\(capitalised(slot)) has no out-of-possession slot to turn into"
+        case .mappingTargetInactive(let from, let to):
+            "\(capitalised(from)) turns into \(PositionText.plain(to)), which has no out-of-possession role"
+        case .duplicateMappingTarget(let slot): "More than one slot turns into \(PositionText.plain(slot))"
+        case .unknownRole(let phase, let slot, let role):
+            "\(role) is not an \(phaseName(phase)) role for \(PositionText.plain(slot))"
         case .goalkeeperMappedToOutfield(let slot):
-            "GK turns into \(slot.rawValue) out of possession; the goalkeeper must stay in goal"
+            "\(capitalised(.GK)) turns into \(PositionText.plain(slot)) out of possession; the goalkeeper must stay in goal"
         }
     }
 
     public static func describe(_ error: RatingError) -> String {
         switch error {
         case .missingAttribute(let player, let attribute): "\(player) has no value for the attribute \(attribute.rawValue)"
-        case .missingFamiliarity(let player, let position): "\(player) has no familiarity for the position \(position.rawValue)"
+        case .missingFamiliarity(let player, let position): "\(player) has no familiarity for the position \(PositionText.plain(position))"
         }
     }
 
@@ -170,4 +172,10 @@ public enum ErrorDescriptions {
     }
 
     private static func phaseName(_ phase: Phase) -> String { phase == .inPossession ? "in-possession" : "out-of-possession" }
+
+    /// The slot in words with a capital first letter, to start a sentence: "Left back".
+    private static func capitalised(_ slot: SlotID) -> String {
+        let words = PositionText.plain(slot)
+        return words.prefix(1).uppercased() + words.dropFirst()
+    }
 }

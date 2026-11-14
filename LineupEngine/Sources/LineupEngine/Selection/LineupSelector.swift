@@ -291,8 +291,8 @@ public struct LineupSelector: Sendable {
         if let broken { warnings.append(.overridesRule(broken)) }
 
         var reasons = ["Rating \(oneDecimal(rating.value)): "
-            + "\(assignment.ipPosition.rawValue) familiarity \(rating.inPossession.familiarity) in possession, "
-            + "\(assignment.oopPosition.rawValue) familiarity \(rating.outOfPossession.familiarity) out of possession"]
+            + "\(PositionText.plain(assignment.ipPosition)) familiarity \(rating.inPossession.familiarity) in possession, "
+            + "\(PositionText.plain(assignment.oopPosition)) familiarity \(rating.outOfPossession.familiarity) out of possession"]
         func label(_ name: String) -> String { projected ? "Projected " + name.lowercased() : name }
         if fitness.condition < 1 { reasons.append("\(label("Condition")) \(percent(player.condition)) (×\(twoDecimals(fitness.condition)))") }
         if fitness.sharpness < 1 { reasons.append("\(label("Sharpness")) \(percent(player.sharpness)) (×\(twoDecimals(fitness.sharpness)))") }
@@ -361,7 +361,7 @@ public struct LineupSelector: Sendable {
         if let displacement {
             switch displacement {
             case .inHisSlot(let chosen):
-                return left(.displacedByOverride(by: [chosen.id]), "Left out: you chose \(chosen.name) for \(assignment.ipPosition.rawValue)")
+                return left(.displacedByOverride(by: [chosen.id]), "Left out: you chose \(chosen.name) for \(PositionText.plain(assignment.ipPosition))")
             case .elsewhere(let chosen):
                 return left(.displacedByOverride(by: chosen.map(\.id)),
                             "Left out: your choice of \(listed(chosen.map(\.name))) moved others into his place")

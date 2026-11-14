@@ -58,7 +58,8 @@ public struct TrainingReport: Equatable, Sendable {
     /// Thin slots no recommendation covers and no accepted retraining covers: places to recruit. Most in need first.
     public let needsWithoutCandidates: [RetrainingNeed]
     /// Thin slots no recommendation covers that a player of the club's own is already being retrained for: an accepted
-    /// retraining at the slot's in-possession or out-of-possession position where he is not yet solid. A slot whose cover
+    /// retraining at the slot's in-possession or out-of-possession position where he is not yet solid, of a player not
+    /// advised to leave. A slot whose cover
     /// and retrainings toward it together reach `depthThinBelow` gets no recommendation and is always here. Most in need
     /// first.
     public let needsBeingRetrained: [RetrainingNeed]
@@ -75,6 +76,7 @@ public enum Training {
     /// run Player Removal itself. A player with an accepted retraining, at any position, is not a candidate for another:
     /// one retraining at a time. A thin slot gets no recommendation once its cover plus the accepted retrainings toward
     /// it (as `TrainingReport.needsBeingRetrained` counts them) reaches `depthThinBelow`: those under way will fill it.
+    /// A retrainee in `leaving` does not count toward a slot, since he is advised to go before he could fill it.
     /// Throws `PlanError.badParameters` when
     /// `FitnessModel.problems(in:)` finds problems, what `Depth.report` throws, `RatingError.missingAttribute` for a
     /// candidate without Versatility or Professionalism, and `RatingError.missingFamiliarity` for a missing position.
@@ -112,11 +114,11 @@ public enum Training {
         let byID = Dictionary(sorted.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let solidFrom = parameters.depthSolidFamiliarity.value
 
-        /// The accepted retrainings toward the slot: of the club's own players, at a position of the slot where the
-        /// player is not yet solid. Each retraining counts once.
+        /// The accepted retrainings toward the slot: of the club's own players not in `leaving`, at a position of the
+        /// slot where the player is not yet solid. Each retraining counts once.
         func retrainingsToward(_ assignment: SlotAssignment) throws -> Int {
             var count = 0
-            for retraining in accepted {
+            for retraining in accepted where !leaving.contains(retraining.player) {
                 guard let player = byID[retraining.player], case .own = LoanStatus.of(player, ownClub: ownClub),
                       retraining.position == assignment.ipPosition || retraining.position == assignment.oopPosition
                 else { continue }

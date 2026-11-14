@@ -496,6 +496,25 @@ import Testing
                                                       RetrainingChoice(player: id("Back B"), position: .defenderLeft)])
     }
 
+    @Test func aRetraineeAdvisedToLeaveDoesNotCountTowardTheSlot() throws {
+        // Back A, learning left back, is advised to leave: cover 1 and no retraining that counts stay below the line,
+        // so Back B is offered and the need is not "being retrained".
+        let players = try thinAtLeftBack([rightBack("Back A", versatility: 14), rightBack("Back B", versatility: 13)])
+        let accepted = [Retraining(player: id("Back A"), position: .defenderLeft, acceptedOn: acceptedOn)]
+        let r = try report(players, accepted: accepted, leaving: [id("Back A")])
+        #expect(choices(r) == [RetrainingChoice(player: id("Back B"), position: .defenderLeft)])
+        #expect(r.needsBeingRetrained.isEmpty && r.needsWithoutCandidates.isEmpty)
+        // The only retrainee leaving, with nobody else to learn it: the need is for recruitment.
+        let alone = try report(try thinAtLeftBack([rightBack()]),
+                               accepted: [Retraining(player: id("Right Back"), position: .defenderLeft, acceptedOn: acceptedOn)],
+                               leaving: [id("Right Back")])
+        #expect(alone.recommendations.isEmpty)
+        #expect(alone.needsBeingRetrained.isEmpty && alone.needsWithoutCandidates == [leftBackNeed])
+        // Someone leaving who is not the retrainee changes nothing: Back A still counts.
+        let other = try report(players, accepted: accepted, leaving: [id("Back B")])
+        #expect(other.recommendations.isEmpty && other.needsBeingRetrained == [leftBackNeed])
+    }
+
     @Test func aNeedWhoseCoverAndRetrainingsAreStillBelowTheLineCanGetAnotherRecommendation() throws {
         // The first-choice left back injured: cover 0, so one retraining toward the slot is not enough.
         let players = try thinAtLeftBack([rightBack("Back A", versatility: 14), rightBack("Back B", versatility: 13)]).map { p in

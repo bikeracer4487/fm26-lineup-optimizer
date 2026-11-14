@@ -85,7 +85,8 @@ import Testing
         let attribute = ErrorDescriptions.describe(CatalogError.unknownAttribute(role: "Poacher", name: "Flair2"))
         #expect(attribute == "Poacher uses an attribute the engine does not know: Flair2")
         let role = ErrorDescriptions.describe(CatalogError.unknownRole(name: "Libero", phase: .outOfPossession, position: .defenderCentral))
-        #expect(role.contains("Libero") && role.contains("out-of-possession") && role.contains(Position.defenderCentral.rawValue))
+        #expect(role == "Libero is not an out-of-possession role for centre-back")
+        #expect(!role.contains(Position.defenderCentral.rawValue))
         let ip = ErrorDescriptions.describe(CatalogError.unknownRole(name: "Libero", phase: .inPossession, position: .defenderCentral))
         #expect(ip.contains("in-possession"))
         for text in [malformed, attribute, role] { expectPlain(text) }
@@ -95,23 +96,32 @@ import Testing
         let problems: [(TacticProblem, [String])] = [
             (.wrongSlotCount(.inPossession, 10), ["in-possession", "10"]),
             (.missingGoalkeeper(.outOfPossession), ["out-of-possession", "goalkeeper"]),
-            (.unmapped(.D_L), ["D_L"]),
-            (.mappingTargetInactive(from: .D_L, to: .D_R), ["D_L", "D_R"]),
-            (.duplicateMappingTarget(.GK), ["GK"]),
-            (.unknownRole(.inPossession, .AM_C, "Wizard"), ["Wizard", "AM_C", "in-possession"]),
-            (.goalkeeperMappedToOutfield(.D_CL), ["GK", "D_CL", "goal"]),
+            (.unmapped(.D_L), ["Left back"]),
+            (.mappingTargetInactive(from: .D_L, to: .D_R), ["Left back", "right back"]),
+            (.duplicateMappingTarget(.GK), ["goalkeeper"]),
+            (.unknownRole(.inPossession, .AM_C, "Wizard"), ["Wizard", "central attacking midfield", "in-possession"]),
+            (.goalkeeperMappedToOutfield(.D_CL), ["Goalkeeper", "left centre-back", "goal"]),
         ]
         for (problem, parts) in problems {
             let text = ErrorDescriptions.describe(problem)
             for part in parts { #expect(text.contains(part), "\(text) should contain \(part)") }
+            for code in SlotID.allCases.map(\.rawValue) where code.contains("_") || code == "GK" {
+                #expect(!text.contains(code), "\(text) should name no slot by its code")
+            }
             expectPlain(text)
         }
+        #expect(ErrorDescriptions.describe(TacticProblem.unmapped(.D_L))
+            == "Left back has no out-of-possession slot to turn into")
+        #expect(ErrorDescriptions.describe(TacticProblem.mappingTargetInactive(from: .D_L, to: .D_R))
+            == "Left back turns into right back, which has no out-of-possession role")
+        #expect(ErrorDescriptions.describe(TacticProblem.duplicateMappingTarget(.GK))
+            == "More than one slot turns into goalkeeper")
         #expect(ErrorDescriptions.describe(TacticProblem.unknownRole(.inPossession, .AM_C, "Wizard"))
-            == "Wizard is not an in-possession role for AM_C")
+            == "Wizard is not an in-possession role for central attacking midfield")
         #expect(ErrorDescriptions.describe(TacticProblem.unknownRole(.outOfPossession, .AM_C, "Wizard"))
-            == "Wizard is not an out-of-possession role for AM_C")
+            == "Wizard is not an out-of-possession role for central attacking midfield")
         #expect(ErrorDescriptions.describe(TacticProblem.goalkeeperMappedToOutfield(.D_CL))
-            == "GK turns into D_CL out of possession; the goalkeeper must stay in goal")
+            == "Goalkeeper turns into left centre-back out of possession; the goalkeeper must stay in goal")
         let all = ErrorDescriptions.describe(TacticError(problems: problems.map(\.0)))
         #expect(all.contains("Wizard") && all.contains("10 slots"))
         expectPlain(all)
@@ -121,7 +131,7 @@ import Testing
         let attribute = ErrorDescriptions.describe(RatingError.missingAttribute(player: "Jo Bloggs", attribute: Attribute.allCases[0]))
         #expect(attribute.contains("Jo Bloggs") && attribute.contains(Attribute.allCases[0].rawValue))
         let familiarity = ErrorDescriptions.describe(RatingError.missingFamiliarity(player: "Jo Bloggs", position: .defenderCentral))
-        #expect(familiarity.contains("Jo Bloggs") && familiarity.contains(Position.defenderCentral.rawValue))
+        #expect(familiarity == "Jo Bloggs has no familiarity for the position centre-back")
         expectPlain(attribute); expectPlain(familiarity)
     }
 

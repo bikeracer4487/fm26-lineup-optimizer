@@ -158,10 +158,11 @@ public enum AdvisorText {
         return slot.cover < line ? "\(count); \(line) needed" : count
     }
 
-    /// "Recruit first: goalkeeper, left back": the thin slots, most in need first; nil when no slot is thin.
-    public static func recruitFirst(_ depth: DepthReport) -> String? {
+    /// "Thin cover: goalkeeper, left back": the thin slots, most in need first; nil when no slot is thin. It names them
+    /// without saying what to do: whether to retrain or recruit is Training's advice.
+    public static func thinCover(_ depth: DepthReport) -> String? {
         guard !depth.thin.isEmpty else { return nil }
-        return "Recruit first: " + depth.thin.map { PositionText.plain($0) }.joined(separator: ", ")
+        return "Thin cover: " + depth.thin.map { PositionText.plain($0) }.joined(separator: ", ")
     }
 
     /// "Next best: Josh Ashby, 6.7 lower": who would step in at the slot, `name` being the next best's, and how far his
@@ -228,6 +229,27 @@ public enum AdvisorText {
     /// fill, in the order given; nil for none.
     public static func alreadyBeingRetrained(_ needs: [RetrainingNeed]) -> String? {
         list(needs).map { "Already being retrained for: \($0)" }
+    }
+
+    /// "No retraining is recommended today." when the report recommends nobody; nil when it recommends someone.
+    public static func nothingRecommended(_ report: TrainingReport) -> String? {
+        report.recommendations.isEmpty ? "No retraining is recommended today." : nil
+    }
+
+    /// What the list of slots to recruit for says when it names none: "No slot is thin." when no saved tactic has a
+    /// thin slot; "Every thin slot has someone learning it or recommended for it." when each thin slot has a
+    /// recommendation or a retraining under way; nil when some thin slot has neither, since the list names it. Every
+    /// thin slot is in the report: covered by a recommendation, or among the needs without candidates or being retrained.
+    public static func nothingToRecruit(_ report: TrainingReport) -> String? {
+        guard report.needsWithoutCandidates.isEmpty else { return nil }
+        if report.recommendations.isEmpty && report.needsBeingRetrained.isEmpty { return "No slot is thin." }
+        return "Every thin slot has someone learning it or recommended for it."
+    }
+
+    /// "Player Removal advises moving him on.", for a player being retrained whom Player Removal advises moving on;
+    /// `name` is the player's.
+    public static func advisedToLeave(_ name: String) -> String {
+        "Player Removal advises moving him on."
     }
 
     /// What accepting a retraining did: "Keegan Bloom is now learning left back. Set it up in the game as well."

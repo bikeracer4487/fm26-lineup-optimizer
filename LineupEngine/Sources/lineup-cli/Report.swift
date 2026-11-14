@@ -138,7 +138,7 @@ enum Report {
                 + slot.onLoan.map { "\($0.name) \(fixed($0.rating, 1))" }.joined(separator: ", ")
             out.append("  \(pad(slot.slot.rawValue, 6)) cover \(slot.cover), \(drop)\(slot.isThin ? ", THIN" : ""): \(options)\(loans)")
         }
-        out.append("Recruit first: " + (report.thin.isEmpty ? "none" : report.thin.map(\.rawValue).joined(separator: ", ")))
+        out.append(AdvisorText.thinCover(report) ?? "Thin cover: none")
         return out
     }
 

@@ -128,12 +128,12 @@ import Testing
         #expect(AdvisorText.cover(depth(cover: 4), parameters: parameters) == "4 solid players")
     }
 
-    @Test func recruitFirstNamesTheThinSlotsInTheirOrder() {
-        #expect(AdvisorText.recruitFirst(DepthReport(slots: [], thin: [.GK, .D_L], basis: .derived))
-                == "Recruit first: goalkeeper, left back")
-        #expect(AdvisorText.recruitFirst(DepthReport(slots: [], thin: [.D_CL], basis: .derived))
-                == "Recruit first: left centre-back")
-        #expect(AdvisorText.recruitFirst(DepthReport(slots: [], thin: [], basis: .derived)) == nil)
+    @Test func thinCoverNamesTheThinSlotsInTheirOrderWithoutSayingToRecruit() {
+        #expect(AdvisorText.thinCover(DepthReport(slots: [], thin: [.GK, .D_L], basis: .derived))
+                == "Thin cover: goalkeeper, left back")
+        #expect(AdvisorText.thinCover(DepthReport(slots: [], thin: [.D_CL], basis: .derived))
+                == "Thin cover: left centre-back")
+        #expect(AdvisorText.thinCover(DepthReport(slots: [], thin: [], basis: .derived)) == nil)
     }
 
     func stepIn(drop: Double?) -> SlotDepth {
@@ -255,6 +255,46 @@ import Testing
         #expect(AdvisorText.alreadyBeingRetrained([a]) == "Already being retrained for: left back in Sample 4-2-3-1")
         #expect(AdvisorText.alreadyBeingRetrained([a, b])
                 == "Already being retrained for: left back in Sample 4-2-3-1 and goalkeeper in Another")
+    }
+
+    func trainingReport(recommending needs: [[RetrainingNeed]] = [], withoutCandidates: [RetrainingNeed] = [],
+                        beingRetrained: [RetrainingNeed] = []) -> TrainingReport {
+        let recommendations = needs.enumerated().map { index, needs in
+            RetrainingRecommendation(
+                choice: RetrainingChoice(player: PlayerID(key: "p\(index)"), position: .defenderLeft), name: "P\(index)",
+                age: 20, currentFamiliarity: 8, needs: needs, ratingIfLearnt: 100, shareOfFirstChoice: 0.95,
+                learnability: 0.7, from: .defenderRight, difficulty: .fluid, weeks: 12, reasons: [], cautions: [],
+                basis: .derived)
+        }
+        return TrainingReport(recommendations: recommendations, needsWithoutCandidates: withoutCandidates,
+                              needsBeingRetrained: beingRetrained)
+    }
+
+    @Test func nothingRecommendedOnlyWhenTheReportRecommendsNobody() {
+        let a = RetrainingNeed(tactic: "Sample 4-2-3-1", slot: .D_L)
+        #expect(AdvisorText.nothingRecommended(trainingReport()) == "No retraining is recommended today.")
+        #expect(AdvisorText.nothingRecommended(trainingReport(withoutCandidates: [a], beingRetrained: [a]))
+                == "No retraining is recommended today.")
+        #expect(AdvisorText.nothingRecommended(trainingReport(recommending: [[a]])) == nil)
+    }
+
+    @Test func nothingToRecruitTellsNoThinSlotFromThinSlotsAllCovered() {
+        let a = RetrainingNeed(tactic: "Sample 4-2-3-1", slot: .D_L)
+        let b = RetrainingNeed(tactic: "Sample 4-2-3-1", slot: .GK)
+        // No thin slot in any tactic.
+        #expect(AdvisorText.nothingToRecruit(trainingReport()) == "No slot is thin.")
+        // Thin slots, each with someone recommended for it or already learning it.
+        let covered = "Every thin slot has someone learning it or recommended for it."
+        #expect(AdvisorText.nothingToRecruit(trainingReport(recommending: [[a]])) == covered)
+        #expect(AdvisorText.nothingToRecruit(trainingReport(beingRetrained: [a])) == covered)
+        #expect(AdvisorText.nothingToRecruit(trainingReport(recommending: [[a]], beingRetrained: [b])) == covered)
+        // A thin slot nobody suits: the list names it, so there is no sentence in its place.
+        #expect(AdvisorText.nothingToRecruit(trainingReport(withoutCandidates: [b])) == nil)
+        #expect(AdvisorText.nothingToRecruit(trainingReport(recommending: [[a]], withoutCandidates: [b])) == nil)
+    }
+
+    @Test func advisedToLeaveSaysPlayerRemovalWouldMoveHimOn() {
+        #expect(AdvisorText.advisedToLeave("Keegan Bloom") == "Player Removal advises moving him on.")
     }
 
     @Test func whatAcceptingAndTurningDownSay() {
