@@ -569,3 +569,36 @@ Known limits of this plan, for the owner:
 - The app is not signed for distribution. It runs on this Mac from `tools/build_app.sh` or Xcode (open `LineupApp/Package.swift`).
 - There is no undo. Deleting a tactic or a fixture is final; confirming can be unlocked.
 - The plan is worked out again after every change. If that ever feels slow it moves off the main thread.
+
+## Changes made while building
+
+Decisions taken during the build that differ from, or add to, the tasks above. Each can be undone; the cost of being wrong is in brackets.
+
+- The screens were built before any mock-ups, to a written direction. The owner found the result bland and the numbers cramped, was shown three directions, and chose the Tactics board; Task 11 restyled every screen. (Paid: one restyle.)
+- The app is a second SwiftPM package with a script that assembles the `.app`; there is no Xcode project file. (An Xcode project can be added around the same sources.)
+- The plan starts from the latest squad import date, not the current date. (One line in the model.)
+- Sentences the engine lacked were added to the engine, not written in the app: squad warnings, why a player cannot play, a pick's warnings. The command-line tool's wording changed with them.
+- The saved tactics are a menu above the editor, not a list beside it, so both pitches get the full width.
+- Unsaved changes to a tactic are kept, and saved to their own file, until saved or reverted. (One more file.)
+- A confirmed fixture's record follows a change of its date; its starters and tactic name stay as confirmed.
+- An unconfirmed fixture dated before the last import is "missed": it is left out of the plan, which carries on. It keeps the eleven last planned for it, which can be corrected and confirmed as played. (A remembered eleven can be out of date if the plan was never looked at.)
+- The app refuses two matches on one day itself, naming the opponents.
+- Only the earliest planned fixture can be confirmed. Confirming moves the current date up to that fixture's date and shows the next fixture; unlocking stays where it is.
+- A match confirmed since a squad's last import keeps its load on its starters until that squad is imported again (Task 10, with an engine change). A match dated before the plan's first day is applied on its own date and its starters then recover up to the first day.
+- An import names the matches it leaves unconfirmed. The date control is on the Squad screen as well as Fixtures.
+- Candidates who can play are listed first; surnames keep their particle ("De Silva"); slots are football words in sentences ("left back").
+- The board look is the same in light and dark system appearance. (A dark variant would be added in `Theme`.)
+- The squad and fixtures tables are hand-built rows, to take the look, so they do not have the system table's row-by-row keyboard movement. Menus, the date picker, sliders, steppers, the checkbox and alerts are still the system's.
+
+## Known limits and small faults left
+
+- Importing on a match day after the match, but before confirming it, replans that match on post-match fitness and replaces the remembered eleven. Confirm a match before importing after it; otherwise set the slots to who started before confirming.
+- A match confirmed after an import made on the match day after the match is counted twice until the next import.
+- Unlocking does not lower a current date that confirming raised.
+- A fixture beyond the planning horizon that goes unconfirmed has no remembered eleven.
+- A clash of two matches on one day beyond the horizon stops the plan; an opponent-only edit of a fixture that already shares a day cannot be saved until a date changes.
+- The saving-players estimate does not see matches played between fixtures.
+- The left-out list needs a scroll at the default window size. Some long surnames print smaller than their neighbours on a confirmed pitch, and an empty slot sits slightly high on a pitch that shows no values.
+- A "could not be saved" notice is not cleared by a later save that works.
+- Not checked in pictures, so to be looked at in the running app: the sliders' tint, menus in dark appearance, dragging the window by the board's frame, focus rings, the choices popover.
+
