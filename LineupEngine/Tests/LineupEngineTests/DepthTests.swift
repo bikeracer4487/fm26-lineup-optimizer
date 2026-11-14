@@ -172,7 +172,14 @@ import Testing
         #expect(am.cover == 1 && am.isThin)
     }
 
-    @Test func dropToNextBestIsTheGapToTheBestOtherOption() throws {
+    /// Whether `option` could step in at `slot`: not injured and not first choice at another slot.
+    func canStepIn(_ option: DepthOption, at slot: SlotID) -> Bool {
+        if option.unavailable == .injured { return false }
+        if case .first(let other) = option.tier, other != slot { return false }
+        return true
+    }
+
+    @Test func dropToNextBestIsTheGapToTheBestPlayerWhoCanStepIn() throws {
         let all = try PlannerFixture.squad()
         let firsts = all.filter { $0.name.hasSuffix("first") }
         let seconds = all.filter { $0.name.hasSuffix("second") }.prefix(4)
@@ -182,7 +189,7 @@ import Testing
         var withDrop = 0, without = 0
         for slot in r.slots {
             let first = try #require(tiers.first[slot.slot])
-            let others = slot.options.filter { $0.player != first }
+            let others = slot.options.filter { $0.player != first && canStepIn($0, at: slot.slot) }
             if let best = others.map(\.rating).max() {
                 let gap = try #require(tiers.ratings[first]?[slot.slot]) - best
                 #expect(abs(try #require(slot.dropToNextBest) - gap) < 1e-9)
@@ -192,30 +199,68 @@ import Testing
                 without += 1
             }
         }
-        // GK and D_L have their second choices; the centre-backs, and the two defensive midfielders, are options at
-        // each other's slots; nobody else can cover AM_L, AM_C, AM_R or ST_C.
-        #expect(withDrop == 6 && without == 5)
+        // GK, D_L and the two centre-back slots have a second choice who can step in; the centre-backs and the
+        // defensive midfielders are options at each other's slots, but as first choices there they do not step in.
+        #expect(withDrop == 4 && without == 7)
     }
 
     @Test func theDropIsToTheBestOtherOption() throws {
         // Without a second left back, a spare player familiar nowhere fills left back in the second eleven, while the
-        // first-choice right back, competent at left back, is an option there.
+        // second-choice right back, competent at left back, is an option there.
         let spare = Player.fixture(name: "Spare", all: 10)
-        let rightBack = named(.D_R, "first")
+        let rightBack = named(.D_R, "second")
         let players = try squad({ if $0.name == rightBack { $0.familiarity[.defenderLeft] = 15 } },
                                 without: [named(.D_L, "second")]) + [spare]
         let tiers = try SquadTiers.compute(tactic: tactic, players: players, ownClub: "Oxford City",
                                            catalog: catalog, profile: profile, parameters: .fm27, ignoringInjuries: true)
         try #require(tiers.second[.D_L] == spare.id)
         try #require(tiers.first[.D_L] == PlannerFixture.id(.D_L, "first"))
+        try #require(tiers.second[.D_R] == PlannerFixture.id(.D_R, "second"))
         let r = try report(players)
         let left = try depth(r, .D_L)
         #expect(!left.options.contains { $0.player == spare.id })
         let first = try #require(tiers.ratings[PlannerFixture.id(.D_L, "first")]?[.D_L])
-        let next = try #require(tiers.ratings[PlannerFixture.id(.D_R, "first")]?[.D_L])
+        let next = try #require(tiers.ratings[PlannerFixture.id(.D_R, "second")]?[.D_L])
         let byTheSecondEleven = try #require(tiers.ratings[spare.id]?[.D_L])
         #expect(abs(try #require(left.dropToNextBest) - (first - next)) < 1e-9)
         #expect(abs(try #require(left.dropToNextBest) - (first - byTheSecondEleven)) > 1)
+    }
+
+    @Test func aFirstChoiceElsewhereIsNotTheNextBest() throws {
+        // The first-choice right defensive midfielder is far stronger; at whichever DM slot he is not first choice, he
+        // rates above that slot's first choice, but he is needed at his own slot, so the drop is to a second choice.
+        let strong = named(.DM_R, "first")
+        let players = try squad { if $0.name == strong { for a in Attribute.allCases { $0.attributes[a] = 18 } } }
+        let tiers = try SquadTiers.compute(tactic: tactic, players: players, ownClub: "Oxford City",
+                                           catalog: catalog, profile: profile, parameters: .fm27, ignoringInjuries: true)
+        let r = try report(players)
+        let strongID = PlannerFixture.id(.DM_R, "first")
+        let other = try #require([SlotID.DM_L, .DM_R].first { tiers.first[$0] != strongID })
+        let first = try #require(tiers.first[other])
+        let firstRating = try #require(tiers.ratings[first]?[other])
+        try #require(try #require(tiers.ratings[strongID]?[other]) > firstRating)
+        let seconds = [PlannerFixture.id(.DM_L, "second"), PlannerFixture.id(.DM_R, "second")]
+        let best = try seconds.map { try #require(tiers.ratings[$0]?[other]) }.max()!
+        let drop = try #require(try depth(r, other).dropToNextBest)
+        #expect(drop >= 0)
+        #expect(abs(drop - (firstRating - best)) < 1e-9)
+    }
+
+    @Test func anInjuredPlayerIsNotTheNextBest() throws {
+        // The second-choice AM_C is injured; a third, weaker attacking midfielder is the one who can step in.
+        let third = Player.fixture(name: "Third", all: 10, familiarity: [.attackingMidCentral: 20])
+        let injured = named(.AM_C, "second")
+        let players = try squad { if $0.name == injured { $0.isInjured = true } } + [third]
+        let tiers = try SquadTiers.compute(tactic: tactic, players: players, ownClub: "Oxford City",
+                                           catalog: catalog, profile: profile, parameters: .fm27, ignoringInjuries: true)
+        let am = try depth(report(players), .AM_C)
+        try #require(am.options.contains { $0.player == PlannerFixture.id(.AM_C, "second") && $0.unavailable == .injured })
+        let first = try #require(tiers.ratings[PlannerFixture.id(.AM_C, "first")]?[.AM_C])
+        let next = try #require(tiers.ratings[third.id]?[.AM_C])
+        #expect(abs(try #require(am.dropToNextBest) - (first - next)) < 1e-9)
+        // Without the third, nobody can step in, and there is no drop.
+        let alone = try depth(report(players.filter { $0.id != third.id }), .AM_C)
+        #expect(alone.dropToNextBest == nil)
     }
 
     @Test func theDropIsNilWithNoOtherOption() throws {
@@ -235,16 +280,13 @@ import Testing
     }
 
     @Test func thinSlotsAreOrderedByNeed() throws {
-        // ST_C has nobody (cover 0); AM_C and GK each have one fit player, AM_C with the larger drop.
-        let weak = named(.AM_C, "second")
-        let injured: Set<String> = [named(.AM_C, "second"), named(.GK, "second")]
+        // ST_C has nobody (cover 0); AM_C and GK each have one solid player and a second choice short of solid who
+        // could still step in, AM_C's much weaker, so AM_C has the larger drop.
+        let weak = named(.AM_C, "second"), keeper = named(.GK, "second")
         let players = try PlannerFixture.squad().filter { !$0.name.hasPrefix("ST_C") }.map { p -> Player in
             var p = p
-            if injured.contains(p.name) { p.isInjured = true }
-            if p.name == weak {
-                p = Player.fixture(name: p.name, all: 4, familiarity: [.attackingMidCentral: 20])
-                p.isInjured = true
-            }
+            if p.name == keeper { p.familiarity[.goalkeeper] = 14 }
+            if p.name == weak { p = Player.fixture(name: p.name, all: 4, familiarity: [.attackingMidCentral: 14]) }
             return p
         }
         let r = try report(players)
@@ -258,24 +300,19 @@ import Testing
     }
 
     @Test func slotsTiedOnCoverAndDropGoInSlotOrder() throws {
-        // Eleven first choices and nobody else: every slot has cover 1. The two centre-backs, and the two defensive
-        // midfielders, are equal options at each other's slots (a drop of 0); every other slot has no other option.
+        // Eleven first choices and nobody else: every slot has cover 1 and nobody who could step in (the centre-backs
+        // and the defensive midfielders are options at each other's slots, but first choices there).
         let r = try report(PlannerFixture.squad().filter { $0.name.hasSuffix("first") })
-        #expect(r.slots.allSatisfy { $0.cover == 1 })
-        let order = (try tactic.assignments(catalog: catalog)).map(\.slot)
-        let paired: Set<SlotID> = [.D_CL, .D_CR, .DM_L, .DM_R]
-        for slot in r.slots {
-            #expect(slot.dropToNextBest == (paired.contains(slot.slot) ? 0 : nil), "\(slot.slot.rawValue)")
-        }
-        #expect(r.thin == order.filter { !paired.contains($0) } + order.filter { paired.contains($0) })
+        #expect(r.slots.allSatisfy { $0.cover == 1 && $0.dropToNextBest == nil })
+        #expect(r.thin == (try tactic.assignments(catalog: catalog)).map(\.slot))
     }
 
     @Test func aSlotWithoutASecondChoiceRanksAheadOfOneWithAnyDrop() throws {
         let all = try PlannerFixture.squad()
         let firsts = all.filter { $0.name.hasSuffix("first") }
-        // ST_C has no second player; AM_C has one, injured, so both have cover 1.
+        // ST_C has no second player; AM_C has one, short of solid, so both have cover 1.
         let seconds = all.filter { $0.name.hasSuffix("second") && !$0.name.hasPrefix("ST_C") }.map { p -> Player in
-            var p = p; if p.name.hasPrefix("AM_C") { p.isInjured = true }; return p
+            var p = p; if p.name.hasPrefix("AM_C") { p.familiarity[.attackingMidCentral] = 14 }; return p
         }
         let r = try report(firsts + seconds)
         let st = try depth(r, .ST_C), am = try depth(r, .AM_C)

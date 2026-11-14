@@ -199,49 +199,92 @@ import Testing
 
     // MARK: Thin cover
 
+    /// His reasons from the thin-cover rule.
+    func thinReasons(_ a: RemovalAdvice) -> [RemovalReason] {
+        a.reasons.filter { $0.text.hasSuffix("where cover is thin") || $0.text.hasSuffix("would be thin without him") }
+    }
+
+    func depth(_ players: [Player], _ slot: SlotID) throws -> SlotDepth {
+        try #require(try Depth.report(tactic: tactic, players: players, ownClub: "Oxford City", catalog: catalog,
+                                      profile: profile, parameters: parameters).slots.first { $0.slot == slot })
+    }
+
     @Test func aFirstChoiceAtAThinSlotTakesThirtyOff() throws {
         // Without a second goalkeeper, cover in goal is thin.
         let players = try PlannerFixture.squad().filter { $0.name != named(.GK, "second") }
         let a = try advice(PlannerFixture.id(.GK, "first"), in: players)
         #expect(a.reasons.prefix(2) == [reason("In the first eleven at GK", -40),
                                          reason("First choice at GK, where cover is thin", -30)])
+        #expect(thinReasons(a).count == 1)
         #expect(a.basis == .derived)
         #expect(a.score == a.reasons.map(\.points).reduce(0, +))
     }
 
-    @Test func aSecondChoiceAtAThinSlotTakesThirtyOff() throws {
-        // An injured second-choice left back still holds his tier, but he does not count as cover, so left back is thin.
-        let id = PlannerFixture.id(.D_L, "second")
-        let players = try squad(changing: id) { $0.isInjured = true }
-        let second = try advice(id, in: players)
-        #expect(second.reasons.prefix(2) == [reason("In the second eleven at D (L)", -20),
-                                              reason("Second choice at D (L), where cover is thin", -30)])
-        #expect(second.basis == .derived)
-        let first = try advice(PlannerFixture.id(.D_L, "first"), in: players)
-        #expect(first.reasons.prefix(2) == [reason("In the first eleven at D (L)", -40),
-                                             reason("First choice at D (L), where cover is thin", -30)])
+    @Test func anInjuredFirstChoiceAtAThinSlotIsProtected() throws {
+        // The first-choice left back is injured, so he is not cover: only the second choice counts, and left back is thin.
+        let first = PlannerFixture.id(.D_L, "first"), second = PlannerFixture.id(.D_L, "second")
+        let players = try squad(changing: first) { $0.isInjured = true }
+        try #require(try depth(players, .D_L).cover == 1)
+        let a = try advice(first, in: players)
+        #expect(a.reasons.prefix(2) == [reason("In the first eleven at D (L)", -40),
+                                         reason("First choice at D (L), where cover is thin", -30)])
+        #expect(a.basis == .derived)
+        // The second choice is the one player who counts as cover there.
+        let b = try advice(second, in: players)
+        #expect(b.reasons.prefix(2) == [reason("In the second eleven at D (L)", -20),
+                                         reason("Counts as cover at D (L), where cover is thin", -30)])
+        #expect(b.basis == .derived)
         // The rule comes straight after the elevens row, after the contract row.
-        let contract = try advice(PlannerFixture.id(.D_L, "first"), in: players.map { p -> Player in
-            var p = p; if p.id == PlannerFixture.id(.D_L, "first") { p.contractType = .outOfContract }; return p
+        let contract = try advice(first, in: players.map { p -> Player in
+            var p = p; if p.id == first { p.contractType = .outOfContract }; return p
         })
         #expect(contract.reasons.prefix(3) == [reason("Not on a full-time contract", 50),
                                                reason("In the first eleven at D (L)", -40),
                                                reason("First choice at D (L), where cover is thin", -30)])
     }
 
-    @Test func noThinCoverRuleWhereTheSlotIsNotThin() throws {
+    @Test func coverAtTheLineIsProtected() throws {
+        // AM_L has two solid players, exactly the line: without either it would be thin.
         let players = try squad()
-        for id in [PlannerFixture.id(.GK, "first"), PlannerFixture.id(.D_L, "second")] {
+        try #require(try depth(players, .AM_L).cover == parameters.depthThinBelow.value)
+        for (id, row) in [(PlannerFixture.id(.AM_L, "first"), reason("In the first eleven at AM (L)", -40)),
+                          (PlannerFixture.id(.AM_L, "second"), reason("In the second eleven at AM (L)", -20))] {
             let a = try advice(id, in: players)
-            #expect(reasons(a.reasons, "First choice").isEmpty && reasons(a.reasons, "Second choice").isEmpty, "\(id.key)")
-            #expect(a.basis == .carriedOverFM26)
+            #expect(a.reasons.prefix(2) == [row, reason("Cover at AM (L) would be thin without him", -30)], "\(id.key)")
+            #expect(a.basis == .derived)
         }
-        // Where goal is thin, a player in neither eleven gets nothing for it.
-        let thin = try PlannerFixture.squad().filter { $0.name != named(.GK, "second") } + [target(), target("Other")]
-        let neither = try report(thin).advice.filter { $0.tier == .backup }
-        try #require(!neither.isEmpty)
-        for a in neither {
-            #expect(reasons(a.reasons, "First choice").isEmpty && reasons(a.reasons, "Second choice").isEmpty, "\(a.name)")
+    }
+
+    @Test func coverOneAboveTheLineGivesNothing() throws {
+        // The second-choice right centre-back counts at both centre-back slots, so each has cover 3.
+        let players = try squad()
+        try #require(try depth(players, .D_CL).cover == parameters.depthThinBelow.value + 1)
+        try #require(try depth(players, .D_CR).cover == parameters.depthThinBelow.value + 1)
+        for id in [PlannerFixture.id(.D_CL, "first"), PlannerFixture.id(.D_CL, "second"), PlannerFixture.id(.D_CR, "second")] {
+            let a = try advice(id, in: players)
+            #expect(thinReasons(a).isEmpty, "\(id.key)")
+            #expect(a.basis == .carriedOverFM26, "\(id.key)")
+        }
+    }
+
+    @Test func theRuleAppliesOnceAtTheFirstSlotInOrder() throws {
+        // Without the second-choice left centre-back, the right one counts as cover at both centre-back slots, each at
+        // the line. He is protected once, for D_CL, which comes first.
+        let players = try PlannerFixture.squad().filter { $0.name != named(.D_CL, "second") }
+        try #require(try depth(players, .D_CL).cover == 2 && depth(players, .D_CR).cover == 2)
+        let a = try advice(PlannerFixture.id(.D_CR, "second"), in: players)
+        #expect(thinReasons(a) == [reason("Cover at D (C) would be thin without him", -30)])
+    }
+
+    @Test func aSecondElevenFillInWhoIsNotSolidGetsNothing() throws {
+        // Without a second goalkeeper, or a second left back, the second eleven puts a spare player who is familiar
+        // nowhere there. He is second choice at a thin slot but not cover.
+        for slot in [SlotID.GK, .D_L] {
+            let players = try PlannerFixture.squad().filter { $0.name != named(slot, "second") } + [target("Spare")]
+            let a = try advice(target("Spare"), in: players)
+            try #require(a.tier == .second(slot))
+            try #require(try depth(players, slot).isThin)
+            #expect(thinReasons(a).isEmpty, "\(slot.rawValue)")
         }
     }
 
@@ -258,11 +301,12 @@ import Testing
                                    reason("First choice at D (L), where cover is thin", -30)])
         #expect(review.score == -60)
         #expect(review.basis == .derived)
-        // Where cover is not thin, nothing is added and the basis is the removal rules'.
-        let plain = try #require(try report(try squad(changing: first) { p in
+        // Where cover is above the line, nothing is added and the basis is the removal rules'.
+        let centre = PlannerFixture.id(.D_CL, "first")
+        let plain = try #require(try report(try squad(changing: centre) { p in
             p.club = "Other FC"; p.loanedTo = "Oxford City"
         }).loans.first)
-        #expect(plain.reasons == [reason("In the first eleven at D (L)", -30)])
+        #expect(plain.reasons == [reason("In the first eleven at D (C)", -30)])
         #expect(plain.basis == .carriedOverFM26)
     }
 
@@ -517,7 +561,8 @@ import Testing
     // MARK: Actions
 
     @Test func aPlayerNotOnAFullTimeContractAtHighIsReleasedAtNoCost() throws {
-        let id = PlannerFixture.id(.D_L, "first")
+        // A centre-back, where cover is above the line, so the thin-cover rule does not apply.
+        let id = PlannerFixture.id(.D_CL, "first")
         // −40 in the first eleven, +50, +15 for 12 months, +25 for Controversy 17.
         let a = try advice(id, in: try squad(changing: id) { p in
             p.contractType = .other("Non-Contract"); p.attributes[.controversy] = 17
@@ -577,7 +622,7 @@ import Testing
     @Test func mediumIsMonitoredAndKeepIsKept() throws {
         let medium = try advice(target { $0.monthsLeft = nil })
         #expect(medium.score == 45 && medium.level == .medium && medium.action == .monitor)
-        let id = PlannerFixture.id(.D_L, "first")
+        let id = PlannerFixture.id(.D_CL, "first")
         let keep = try advice(id, in: try squad(changing: id) { $0.monthsLeft = nil })
         #expect(keep.score == -40 && keep.level == .keep && keep.action == .keep)
     }
@@ -669,17 +714,18 @@ import Testing
         let plain = try review(loanee())
         #expect(plain.reasons == [reason(weakest, 30), reason("In neither eleven", 20)])
         #expect(plain.score == 50)
-        let first = PlannerFixture.id(.D_L, "first")
+        // Centre-backs, where cover is above the line, so the thin-cover rule does not apply.
+        let first = PlannerFixture.id(.D_CL, "first")
         let firstReview = try #require(try report(try squad(changing: first) { p in
             p.club = "Other FC"; p.loanedTo = "Oxford City"
         }).loans.first)
         #expect(firstReview.player == first)
-        #expect(firstReview.reasons == [reason("In the first eleven at D (L)", -30)])
-        let second = PlannerFixture.id(.D_L, "second")
+        #expect(firstReview.reasons == [reason("In the first eleven at D (C)", -30)])
+        let second = PlannerFixture.id(.D_CL, "second")
         let secondReview = try #require(try report(try squad(changing: second) { p in
             p.club = "Other FC"; p.loanedTo = "Oxford City"
         }).loans.first)
-        #expect(reasons(secondReview.reasons, "In") == [reason("In the second eleven at D (L)", -15)])
+        #expect(reasons(secondReview.reasons, "In") == [reason("In the second eleven at D (C)", -15)])
     }
 
     @Test func theLoanReviewScoresAbility() throws {
@@ -730,10 +776,11 @@ import Testing
                 p.club = "Other FC"; p.loanedTo = "Oxford City"; p.currentAbility = ability
             }).loans.first)
         }
-        #expect(try onLoan(PlannerFixture.id(.D_L, "first"), ability: 100).verdict == .makePermanent)
-        #expect(try onLoan(PlannerFixture.id(.D_L, "second"), ability: 100).verdict == .makePermanent)
+        // Centre-backs, where cover is above the line, so the thin-cover rule does not apply.
+        #expect(try onLoan(PlannerFixture.id(.D_CL, "first"), ability: 100).verdict == .makePermanent)
+        #expect(try onLoan(PlannerFixture.id(.D_CL, "second"), ability: 100).verdict == .makePermanent)
         // Below the average he is kept to the end.
-        let below = try onLoan(PlannerFixture.id(.D_L, "first"), ability: 99)
+        let below = try onLoan(PlannerFixture.id(.D_CL, "first"), ability: 99)
         #expect(below.score == -20 && below.verdict == .keepToEnd)
     }
 

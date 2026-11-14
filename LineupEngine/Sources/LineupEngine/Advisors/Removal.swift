@@ -81,8 +81,8 @@ public enum Removal {
         guard problems.isEmpty else { throw PlanError.badParameters(problems) }
         let tiers = try Elevens.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
                                        profile: profile, parameters: parameters).tiers
-        let thin = Set(try Depth.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
-                                        profile: profile, parameters: parameters).thin)
+        let depth = try Depth.report(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                     profile: profile, parameters: parameters).slots
 
         // Sorting by key makes every list, and the first error, independent of input order.
         var own: [Player] = []
@@ -101,7 +101,7 @@ public enum Removal {
             averageAbility: own.isEmpty ? nil : Double(own.map(\.currentAbility).reduce(0, +)) / Double(own.count),
             medianWage: median(own.map(\.wagePerWeek)),
             weakest: weakest(own + loanedIn, tiers: tiers, share: parameters.removalRules.value.weakestShare),
-            tiers: tiers, thin: thin)
+            tiers: tiers, depth: depth, thinBelow: parameters.depthThinBelow.value)
 
         var advice: [RemovalAdvice] = []
         var wagesAtStake = 0
@@ -138,7 +138,7 @@ public enum Removal {
         let tier = squad.tiers.tier(of: player.id)
         let inEither = reasons.addTier(tier, first: rules.firstElevenPoints, second: rules.secondElevenPoints,
                                        neither: rules.neitherElevenPoints)
-        if reasons.addThinCover(tier, thin: squad.thin, points: parameters.removalThinCoverPoints.value) {
+        if reasons.addThinCover(player.id, tier: tier, squad: squad, points: parameters.removalThinCoverPoints.value) {
             evidence.append(parameters.removalThinCoverPoints.evidence)
         }
         if squad.weakest.contains(player.id) { reasons.add(rules.weakestPoints, weakestReason(rules)) }
@@ -281,7 +281,7 @@ public enum Removal {
         let inEither = reasons.addTier(tier, first: loan.firstElevenPoints,
                                        second: loan.secondElevenPoints, neither: loan.neitherElevenPoints)
         var evidence = [parameters.removalRules.evidence]
-        if reasons.addThinCover(tier, thin: squad.thin, points: parameters.removalThinCoverPoints.value) {
+        if reasons.addThinCover(player.id, tier: tier, squad: squad, points: parameters.removalThinCoverPoints.value) {
             evidence.append(parameters.removalThinCoverPoints.evidence)
         }
         reasons.addAbility(player, squad: squad, share: rules.farBelowAverageShare,
@@ -340,8 +340,10 @@ public enum Removal {
         let medianWage: Double?
         let weakest: Set<PlayerID>
         let tiers: SquadTiers
-        /// The slots where Depth finds cover thin.
-        let thin: Set<SlotID>
+        /// Depth's report for each slot, in slot order.
+        let depth: [SlotDepth]
+        /// `depthThinBelow`: a slot whose cover is at most this would be thin without one of its cover.
+        let thinBelow: Int
     }
 
     private struct Reasons {
@@ -365,18 +367,24 @@ public enum Removal {
             }
         }
 
-        /// Adds the points for being first or second choice at a slot where cover is thin, and says whether it did.
-        mutating func addThinCover(_ tier: SquadTier?, thin: Set<SlotID>, points: Int) -> Bool {
-            switch tier {
-            case .first(let slot)? where thin.contains(slot):
-                add(points, "First choice at \(slot.position.rawValue), where cover is thin")
+        /// Adds the points for protecting real cover, once, at the first slot in slot order where he is first choice
+        /// and cover is thin (injured or not), or where he counts as cover by Depth's rule and the slot's cover is at
+        /// most the line; the first of the two is checked first at each slot. Says whether it added them.
+        mutating func addThinCover(_ player: PlayerID, tier: SquadTier?, squad: SquadFacts, points: Int) -> Bool {
+            for slot in squad.depth {
+                let position = slot.slot.position.rawValue
+                if case .first(let home)? = tier, home == slot.slot, slot.isThin {
+                    add(points, "First choice at \(position), where cover is thin")
+                    return true
+                }
+                guard slot.cover <= squad.thinBelow,
+                      let option = slot.options.first(where: { $0.player == player }),
+                      Depth.countsAsCover(option, at: slot.slot) else { continue }
+                add(points, slot.isThin ? "Counts as cover at \(position), where cover is thin"
+                                        : "Cover at \(position) would be thin without him")
                 return true
-            case .second(let slot)? where thin.contains(slot):
-                add(points, "Second choice at \(slot.position.rawValue), where cover is thin")
-                return true
-            case .first?, .second?, .backup?, nil:
-                return false
             }
+            return false
         }
 
         /// Of the two ability lines only the stronger applies; neither does without a squad average.
