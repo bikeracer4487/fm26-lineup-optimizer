@@ -33,6 +33,22 @@ public struct StartHistory: Sendable {
         return count
     }
 
+    /// How many lineups dated in the `days` days ending on `day` (that day included) he started.
+    public func starts(of player: PlayerID, inDays days: Int, endingOn day: Day) -> Int {
+        lineups(inDays: days, endingOn: day).filter { Self.slot(of: player, in: $0) != nil }.count
+    }
+
+    /// How many lineups are dated in that time.
+    public func matches(inDays days: Int, endingOn day: Day) -> Int {
+        lineups(inDays: days, endingOn: day).count
+    }
+
+    /// The lineups dated from `days − 1` days before `day` to `day`.
+    private func lineups(inDays days: Int, endingOn day: Day) -> [ConfirmedLineup] {
+        let first = day.adding(days: -(days - 1))
+        return lineups.filter { $0.date >= first && $0.date <= day }
+    }
+
     /// The slots he started in before `day`, newest first, at most `limit`.
     public func recentSlots(of player: PlayerID, before day: Day, limit: Int) -> [SlotID] {
         var slots: [SlotID] = []

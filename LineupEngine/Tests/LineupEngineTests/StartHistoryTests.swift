@@ -108,4 +108,19 @@ import Testing
         #expect(parameter.evidence == .derived)
         #expect(parameter.source.contains("player-rotation-guide.md"))
     }
+
+    // MARK: Starts and matches in a window
+
+    @Test func startsAndMatchesAreCountedInTheWindowWithItsLastDayIn() {
+        // A window of 10 days ending on day 20 holds days 11 to 20.
+        let history = StartHistory([lineup(10, [a]), lineup(11, [a]), lineup(15, [b]), lineup(20, [a]), lineup(21, [a])])
+        #expect(history.starts(of: a, inDays: 10, endingOn: day(20)) == 2)
+        #expect(history.matches(inDays: 10, endingOn: day(20)) == 3)
+        #expect(history.starts(of: b, inDays: 10, endingOn: day(20)) == 1)
+        // The day before the window and the day after it are out, the first and last days in.
+        #expect(history.starts(of: a, inDays: 1, endingOn: day(20)) == 1)
+        #expect(history.matches(inDays: 1, endingOn: day(10)) == 1)
+        #expect(history.matches(inDays: 0, endingOn: day(20)) == 0)
+        #expect(history.starts(of: PlayerID(key: "z"), inDays: 10, endingOn: day(20)) == 0)
+    }
 }

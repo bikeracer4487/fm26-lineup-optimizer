@@ -248,6 +248,14 @@ public enum FitnessModel {
                             ("youngestUpToAge", parameters.youngestUpToAge.value)] where age < 1 {
             found.append("\(name) is \(age), not 1 or more")
         }
+        let hereShare = parameters.matchesHereShare.value
+        if !(hereShare >= 0 && hereShare <= 1) {
+            found.append("matchesHereShare is \(hereShare), not between 0 and 1")
+        }
+        for (name, count) in [("matchesHereWindowDays", parameters.matchesHereWindowDays.value),
+                              ("matchesHereMinimumConfirmed", parameters.matchesHereMinimumConfirmed.value)] where count < 1 {
+            found.append("\(name) is \(count), not 1 or more")
+        }
         // Learnability is a weighted sum that should stay within 0 to 1.
         for (name, weight) in [("versatilityWeight", learnability.versatilityWeight), ("ageWeight", learnability.ageWeight),
                                ("professionalismWeight", learnability.professionalismWeight),

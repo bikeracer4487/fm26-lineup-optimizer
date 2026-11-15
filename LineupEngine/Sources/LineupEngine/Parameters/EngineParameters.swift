@@ -649,6 +649,13 @@ public struct EngineParameters: Sendable {
     public var markedlyLowerShareYoungest: Parameter<Double>
     /// The oldest age that has the youngest's share.
     public var youngestUpToAge: Parameter<Int>
+    // The numbers behind whether a young player is getting matches here (`Development.matchesHere`).
+    /// The share of the matches in the window a player who is not a first choice must start.
+    public var matchesHereShare: Parameter<Double>
+    /// The days, ending on the day the plan is made, whose confirmed lineups are counted.
+    public var matchesHereWindowDays: Parameter<Int>
+    /// The fewest confirmed matches in the window to judge by; with fewer, his place in the elevens decides.
+    public var matchesHereMinimumConfirmed: Parameter<Int>
     /// The numbers behind a fixture's suggested importance.
     public var importanceRules: Parameter<ImportanceSuggestionRules>
     /// What each attribute is worth, per point, when weighing what an arrow gives its target.
@@ -994,6 +1001,12 @@ public struct EngineParameters: Sendable {
                 source: "the young players' development design, 7.1: the estimate adds up the most seasons for the youngest "
                     + "and is least reliable for them, and a release cannot be undone"),
             youngestUpToAge: Parameter(16, .derived, source: "the young players' development design, 7.1"),
+            matchesHereShare: Parameter(
+                1.0 / 3, .derived,
+                source: "about the 15 full matches a season the research gives as the least for a player of 21 or over, of a season of about 46"),
+            matchesHereWindowDays: Parameter(60, .derived, source: "the young players' development design: about two months of fixtures"),
+            matchesHereMinimumConfirmed: Parameter(
+                6, .derived, source: "the young players' development design: fewer confirmed matches say too little about a share"),
             importanceRules: Parameter(
                 ImportanceSuggestionRules(
                     leagueBase: 80, cupBase: 60, minorCupBase: 30, friendlyBase: 10, unsetBase: 50,

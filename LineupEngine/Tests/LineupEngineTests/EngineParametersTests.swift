@@ -636,4 +636,33 @@ import Testing
             $0.markedlyLowerShareYoungest = Parameter(0, .derived, source: "test")
         }.isEmpty)
     }
+
+    @Test func theMatchesHereParametersAreListedAndTheirProblemsReported() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        for name in ["matchesHereShare", "matchesHereWindowDays", "matchesHereMinimumConfirmed"] {
+            #expect(listed[name]?.evidence == .derived, "\(name)")
+            #expect(listed[name]?.source.isEmpty == false, "\(name) source")
+        }
+        let q = EngineParameters.fm27
+        #expect(q.matchesHereShare.value == 1.0 / 3 && q.matchesHereWindowDays.value == 60
+            && q.matchesHereMinimumConfirmed.value == 6)
+        func problems(_ change: (inout EngineParameters) -> Void) -> [String] {
+            var q = EngineParameters.fm27
+            change(&q)
+            return FitnessModel.problems(in: q)
+        }
+        #expect(problems { $0.matchesHereShare = Parameter(1.2, .derived, source: "test") }
+            == ["matchesHereShare is 1.2, not between 0 and 1"])
+        #expect(problems { $0.matchesHereShare = Parameter(-0.1, .derived, source: "test") }
+            == ["matchesHereShare is -0.1, not between 0 and 1"])
+        #expect(problems { $0.matchesHereWindowDays = Parameter(0, .derived, source: "test") }
+            == ["matchesHereWindowDays is 0, not 1 or more"])
+        #expect(problems { $0.matchesHereMinimumConfirmed = Parameter(0, .derived, source: "test") }
+            == ["matchesHereMinimumConfirmed is 0, not 1 or more"])
+        #expect(problems {
+            $0.matchesHereShare = Parameter(0, .derived, source: "test")
+            $0.matchesHereWindowDays = Parameter(1, .derived, source: "test")
+            $0.matchesHereMinimumConfirmed = Parameter(1, .derived, source: "test")
+        }.isEmpty)
+    }
 }

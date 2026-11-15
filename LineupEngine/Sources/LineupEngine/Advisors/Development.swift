@@ -67,6 +67,15 @@ public struct Outlook: Equatable, Sendable {
     public var isMarkedlyLower: Bool { level == .markedlyLower }
 }
 
+/// Whether a young player is getting enough matches at this club.
+public struct MatchesHere: Equatable, Sendable {
+    public let starts: Int
+    public let matches: Int
+    /// False when too few matches were confirmed to judge by, and his place in the elevens decided it.
+    public let isCounted: Bool
+    public let isEnough: Bool
+}
+
 public enum Development {
     /// Comparisons allow for binary floating-point error, as `ImportanceRules.development` does.
     private static let roundingNoise = 1e-9
@@ -127,6 +136,27 @@ public enum Development {
             found[player.id] = outlook(player, estimate, slots, average: average, parameters: parameters)
         }
         return found
+    }
+
+    /// A first choice at any slot has enough, whatever he has started. Otherwise, with at least
+    /// `matchesHereMinimumConfirmed` matches confirmed in the last `matchesHereWindowDays` days up to and including
+    /// `asOf`, he has enough when he started `matchesHereShare` of them. With fewer, they are not counted: a second choice
+    /// has enough and anyone else, or a player the tiers did not rate, does not.
+    /// The parameters must have passed `FitnessModel.problems(in:)`.
+    public static func matchesHere(for player: PlayerID, tiers: SquadTiers, history: StartHistory, asOf: Day,
+                                   parameters: EngineParameters) -> MatchesHere {
+        let window = parameters.matchesHereWindowDays.value
+        let starts = history.starts(of: player, inDays: window, endingOn: asOf)
+        let matches = history.matches(inDays: window, endingOn: asOf)
+        let tier = tiers.tier(of: player)
+        if case .first = tier { return MatchesHere(starts: starts, matches: matches, isCounted: true, isEnough: true) }
+        guard matches >= parameters.matchesHereMinimumConfirmed.value else {
+            var isSecond = false
+            if case .second = tier { isSecond = true }
+            return MatchesHere(starts: starts, matches: matches, isCounted: false, isEnough: isSecond)
+        }
+        let enough = Double(starts) + roundingNoise >= parameters.matchesHereShare.value * Double(matches)
+        return MatchesHere(starts: starts, matches: matches, isCounted: true, isEnough: enough)
     }
 
     private static func isDeveloping(_ player: Player, ownClub: String?, parameters: EngineParameters) -> Bool {

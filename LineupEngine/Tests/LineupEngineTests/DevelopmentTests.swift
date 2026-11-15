@@ -300,4 +300,82 @@ import Testing
         #expect(try points(rating: 80, firstChoiceRating: 70) == 0)
         #expect(try points(rating: 0, firstChoiceRating: 70) == nil)
     }
+
+    // MARK: Matches here
+
+    /// `count` lineups on consecutive days ending the day before `day`, `player` starting `starts` of them (the first ones).
+    func history(starts: Int, of count: Int, player: Player) -> StartHistory {
+        let other = PlayerID(key: "other")
+        return StartHistory((0..<count).map { n in
+            ConfirmedLineup(fixture: FixtureID("m\(n)"), date: day.adding(days: -1 - n),
+                            starters: [.D_L: n < starts ? player.id : other])
+        })
+    }
+
+    func matchesHere(_ player: Player, _ tiers: SquadTiers, _ history: StartHistory) -> MatchesHere {
+        Development.matchesHere(for: player.id, tiers: tiers, history: history, asOf: day, parameters: parameters)
+    }
+
+    @Test func aFirstChoiceHasEnoughWhateverHeStarted() {
+        let p = player("First", slots: [.D_L])
+        let t = tiers(first: [.D_L: p], ratings: [(p, .D_L, 50)])
+        let result = matchesHere(p, t, history(starts: 0, of: 8, player: p))
+        #expect(result == MatchesHere(starts: 0, matches: 8, isCounted: true, isEnough: true))
+        // Even with nothing confirmed.
+        #expect(matchesHere(p, t, StartHistory([])).isEnough)
+    }
+
+    @Test func aThirdOfSixIsEnoughAndOneOfSixIsNot() {
+        let p = player("Backup", slots: [.D_L])
+        let t = tiers(ratings: [(p, .D_L, 50)])
+        #expect(matchesHere(p, t, history(starts: 2, of: 6, player: p))
+            == MatchesHere(starts: 2, matches: 6, isCounted: true, isEnough: true))
+        #expect(matchesHere(p, t, history(starts: 1, of: 6, player: p))
+            == MatchesHere(starts: 1, matches: 6, isCounted: true, isEnough: false))
+        // A second choice who started too little has not enough either, once the matches are counted.
+        let s = player("Second", slots: [.D_L])
+        let t2 = tiers(second: [.D_L: s], ratings: [(s, .D_L, 50)])
+        #expect(!matchesHere(s, t2, history(starts: 1, of: 6, player: s)).isEnough)
+        #expect(matchesHere(s, t2, history(starts: 2, of: 6, player: s)).isEnough)
+    }
+
+    @Test func matchesOutsideTheWindowAreNotCounted() {
+        let p = player("Backup", slots: [.D_L])
+        let t = tiers(ratings: [(p, .D_L, 50)])
+        let old = (0..<6).map { n in
+            ConfirmedLineup(fixture: FixtureID("old\(n)"), date: day.adding(days: -61 - n), starters: [.D_L: p.id])
+        }
+        let result = matchesHere(p, t, StartHistory(old))
+        #expect(result == MatchesHere(starts: 0, matches: 0, isCounted: false, isEnough: false))
+    }
+
+    @Test func withFewerThanSixConfirmedHisPlaceDecides() {
+        let second = player("Second", slots: [.D_L]), backup = player("Backup", slots: [.D_L])
+        let t = tiers(second: [.D_L: second], ratings: [(second, .D_L, 50), (backup, .D_L, 40)])
+        let none = StartHistory([])
+        #expect(matchesHere(second, t, none) == MatchesHere(starts: 0, matches: 0, isCounted: false, isEnough: true))
+        #expect(matchesHere(backup, t, none) == MatchesHere(starts: 0, matches: 0, isCounted: false, isEnough: false))
+        // Five confirmed and he started all five, but is a backup: not counted, not enough.
+        let five = matchesHere(backup, t, history(starts: 5, of: 5, player: backup))
+        #expect(five == MatchesHere(starts: 5, matches: 5, isCounted: false, isEnough: false))
+        // Six confirmed counts them: all six started is enough for the backup.
+        #expect(matchesHere(backup, t, history(starts: 6, of: 6, player: backup)).isCounted)
+        // A player the tiers did not rate has no place to decide it.
+        let unrated = player("Unrated", slots: [.D_L])
+        #expect(!matchesHere(unrated, t, none).isEnough)
+    }
+
+    @Test func theMinimumAndShareComeFromTheParameters() {
+        let p = player("Backup", slots: [.D_L])
+        let t = tiers(ratings: [(p, .D_L, 50)])
+        var q = parameters
+        q.matchesHereMinimumConfirmed = Parameter(3, .derived, source: "test")
+        q.matchesHereShare = Parameter(0.5, .derived, source: "test")
+        let h = history(starts: 1, of: 4, player: p)
+        #expect(!Development.matchesHere(for: p.id, tiers: t, history: h, asOf: day, parameters: q).isEnough)
+        #expect(Development.matchesHere(for: p.id, tiers: t, history: history(starts: 2, of: 4, player: p), asOf: day,
+                                        parameters: q).isEnough)
+        q.matchesHereWindowDays = Parameter(3, .derived, source: "test")
+        #expect(Development.matchesHere(for: p.id, tiers: t, history: h, asOf: day, parameters: q).matches == 2)
+    }
 }
