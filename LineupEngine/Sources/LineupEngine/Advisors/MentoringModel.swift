@@ -173,9 +173,32 @@ public enum Mentoring {
             ("mentoringMenteeMaxAge", parameters.mentoringMenteeMaxAge.value),
             ("mentoringSeniorityYears", parameters.mentoringSeniorityYears.value),
             ("mentoringStoppedAfterWeeks", parameters.mentoringStoppedAfterWeeks.value),
-            ("mentoringDynamicsStaleAfterDays", parameters.mentoringDynamicsStaleAfterDays.value)]
+            ("mentoringDynamicsStaleAfterDays", parameters.mentoringDynamicsStaleAfterDays.value),
+            ("mentoringTakesNothingAfter", parameters.mentoringTakesNothingAfter.value)]
         for (name, value) in positives where value <= 0 {
             found.append("\(name) is \(value), which is not above 0")
+        }
+        let guesses = parameters.mentoringGuess.value
+        for standing in Standing.allCases where guesses[standing] == nil {
+            found.append("mentoringGuess has no strength for \(standing.rawValue)")
+        }
+        let strengthWeights = parameters.mentoringStrengthWeights.value
+        for strength in ArrowStrength.allCases where strengthWeights[strength] == nil {
+            found.append("mentoringStrengthWeights has no weight for \(strength.rawValue)")
+        }
+        if let none = strengthWeights[.none], none != 0 {
+            found.append("mentoringStrengthWeights gives none a weight of \(none), which is not 0")
+        }
+        for strength in ArrowStrength.allCases {
+            if let weight = strengthWeights[strength], weight < 0 {
+                found.append("mentoringStrengthWeights gives \(strength.rawValue) a weight of \(weight), which is below 0")
+            }
+        }
+        let weighed = ArrowStrength.allCases.filter { strengthWeights[$0] != nil }
+        for (weaker, stronger) in zip(weighed, weighed.dropFirst()) {
+            if let low = strengthWeights[weaker], let high = strengthWeights[stronger], high < low {
+                found.append("mentoringStrengthWeights gives \(stronger.rawValue) (\(high)) less than \(weaker.rawValue) (\(low)), a weaker arrow")
+            }
         }
         return found
     }

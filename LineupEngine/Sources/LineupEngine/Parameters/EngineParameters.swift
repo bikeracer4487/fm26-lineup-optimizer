@@ -643,6 +643,12 @@ public struct EngineParameters: Sendable {
     public var mentoringStoppedAfterWeeks: Parameter<Int>
     /// The standings and social groups the owner entered are called stale after this many days.
     public var mentoringDynamicsStaleAfterDays: Parameter<Int>
+    /// The arrow guessed from a source at each level into a player young enough to be a mentee, when none is read.
+    public var mentoringGuess: Parameter<[Standing: ArrowStrength]>
+    /// What each strength of arrow counts for. Only the order in which groups are suggested depends on these.
+    public var mentoringStrengthWeights: Parameter<[ArrowStrength: Int]>
+    /// A player is taken to take nothing once this many different seniors (Influential or above) show him None.
+    public var mentoringTakesNothingAfter: Parameter<Int>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -959,12 +965,28 @@ public struct EngineParameters: Sendable {
                 [.professionalism: 20, .pressure: 6, .determination: 10, .ambition: 10], .carriedOverFM26,
                 source: "docs/Research/fm27-mentoring.md findings 9 to 11 and section 5: Pressure matters below about 6 "
                     + "(FM24 test; FM27 measured Pressure 1), Ambition and Determination little above 10 (FM24 and older)"),
-            mentoringMenteeMaxAge: Parameter(23, .derived, source: "this design's choice"),
+            mentoringMenteeMaxAge: Parameter(
+                23, .fm27Observation,
+                source: "the owner's readings of 14 November 2026: of four players of 24 and over, one took Light from two "
+                    + "seniors and the others nothing in eight tries; the line at 23 is this design's"),
             mentoringSeniorityYears: Parameter(5, .derived, source: "this design's choice"),
             mentoringOtherSocialGroupShare: Parameter(0.5, .derived, source: "this design's choice"),
             mentoringStoppedAfterWeeks: Parameter(
                 13, .derived, source: "this design's choice, from the research's three months, taken as thirteen weeks"),
-            mentoringDynamicsStaleAfterDays: Parameter(28, .derived, source: "this design's choice"))
+            mentoringDynamicsStaleAfterDays: Parameter(28, .derived, source: "this design's choice"),
+            mentoringGuess: Parameter(
+                [.teamLeader: .average, .highlyInfluential: .light, .influential: .light, .others: .none], .derived,
+                source: "the owner's readings of the game's mentoring arrows, 14 November 2026 "
+                    + "(Fixtures/mentoring/arrow-readings-2026-11-14.json): 6 of the 8 arrows his two Team Leaders gave were "
+                    + "Average or Significant, 1 of 18 from every other senior was, and a player at Others gave none; "
+                    + "the guess for a pair not read is this design's"),
+            mentoringStrengthWeights: Parameter(
+                [.none: 0, .light: 1, .average: 2, .significant: 3], .derived,
+                source: "this design's choice: they only order which group is suggested first"),
+            mentoringTakesNothingAfter: Parameter(
+                3, .derived,
+                source: "this design's choice; in the owner's readings of 14 November 2026 one player took nothing from four "
+                    + "seniors and another from four"))
     }()
 
     private static let removalSource = "ui/api/api_player_removal.py (branch customizable-tactics)"

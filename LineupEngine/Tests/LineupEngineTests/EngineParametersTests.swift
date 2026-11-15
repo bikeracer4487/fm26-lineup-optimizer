@@ -91,9 +91,10 @@ import Testing
     @Test func theMentoringParametersAreListedWithEvidenceAndSource() {
         let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
         let expected: [(String, Evidence)] = [
-            ("mentoringWeights", .derived), ("mentoringCeilings", .carriedOverFM26), ("mentoringMenteeMaxAge", .derived),
+            ("mentoringWeights", .derived), ("mentoringCeilings", .carriedOverFM26), ("mentoringMenteeMaxAge", .fm27Observation),
             ("mentoringSeniorityYears", .derived), ("mentoringOtherSocialGroupShare", .derived),
-            ("mentoringStoppedAfterWeeks", .derived), ("mentoringDynamicsStaleAfterDays", .derived)]
+            ("mentoringStoppedAfterWeeks", .derived), ("mentoringDynamicsStaleAfterDays", .derived),
+            ("mentoringGuess", .derived), ("mentoringStrengthWeights", .derived), ("mentoringTakesNothingAfter", .derived)]
         for (name, evidence) in expected {
             #expect(listed[name]?.evidence == evidence, "\(name)")
             #expect(!(listed[name]?.source.isEmpty ?? true), "\(name) has no source")
@@ -106,6 +107,9 @@ import Testing
         #expect(q.mentoringOtherSocialGroupShare.value == 0.5)
         #expect(q.mentoringStoppedAfterWeeks.value == 13)
         #expect(q.mentoringDynamicsStaleAfterDays.value == 28)
+        #expect(q.mentoringGuess.value == [.teamLeader: .average, .highlyInfluential: .light, .influential: .light, .others: .none])
+        #expect(q.mentoringStrengthWeights.value == [.none: 0, .light: 1, .average: 2, .significant: 3])
+        #expect(q.mentoringTakesNothingAfter.value == 3)
     }
 
     @Test func theDepthParametersAreListedWithEvidenceAndSource() {
