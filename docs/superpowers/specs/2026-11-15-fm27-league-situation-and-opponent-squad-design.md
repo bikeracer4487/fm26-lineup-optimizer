@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: league situation and the opponent's squad
 
 Date: 15 November 2026
-Status: approved by the owner on 15 November 2026 ("Keep the \"Use it\" button, design approved, write the build plan"). Revised the same day in two places, marked "revised" below, after the captured squads showed two faults; the revisions await the owner's word.
+Status: approved by the owner on 15 November 2026 ("Keep the \"Use it\" button, design approved, write the build plan"). Revised the same day in two places, marked "revised" below, after the captured squads showed two faults; the owner accepted both revisions that day ("Both revisions accepted, go with subagent-driven").
 
 ## Intent
 
@@ -114,8 +114,8 @@ The owner asked for the paste and left the measure to the builder. These are thi
 ## Evidence
 
 - League bases: carried over from FM26 (the old table, never called by the old app; nothing is published for FM27).
-- Strength lines (5% and 15%): the tool's own estimate. The game plan research asks what the game itself uses to judge a favourite; the lines may change when it arrives.
-- The measure (average ability of a best eleven): the tool's own choice.
+- Strength lines (5% and 15%): the tool's own estimate. The game plan research (`docs/Research/fm27-match-simulation-game-plans.md`, added 15 November 2026) found nothing on how the game judges a favourite, so the lines stay as they are.
+- The measure (average ability of a best eleven): the tool's own choice. The same research reports FM27 engine tests in which current ability had no measurable effect on results once attributes were held fixed: results come from attributes. Ability is therefore a stand-in for the attributes it summarises, not what the engine reads, and nobody has tested which measure a player can export predicts results best. A measure built from attributes is a possible later change.
 
 ## Testing
 
