@@ -638,6 +638,7 @@ Decisions:
 - Fitting rates from the kept readings, and comparing mentored with unmentored players (design, non-goals).
 - Career appearances for the mentee rules, if FMRTE's grid can show the career total (design, open item 2).
 - The clean-up plan, not yet written.
+- Its rules for who influences whom were replaced by `docs/superpowers/plans/2026-11-14-fm27-mentoring-arrows.md`.
 
 ## What the advice showed on the captured squads
 

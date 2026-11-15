@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: mentoring from the game's own arrows
 
 Date: 14 November 2026
-Status: approved by the owner on 14 November 2026 ("Yes, you can save my readings", in answer to the request to approve it with his answer on the fixture)
+Status: approved by the owner on 14 November 2026 ("Yes, you can save my readings", in answer to the request to approve it with his answer on the fixture); built, by `docs/superpowers/plans/2026-11-14-fm27-mentoring-arrows.md`
 
 This changes the mentoring advice built to `docs/superpowers/specs/2026-11-14-fm27-mentoring-design.md` ("the first design"). Where the two differ, this one wins. What is not mentioned here stays as the first design has it.
 

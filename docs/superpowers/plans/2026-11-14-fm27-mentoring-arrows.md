@@ -544,11 +544,28 @@ Documents only. If source code seems to need changing, stop and report it.
 
 ## What the advice showed on the owner's readings
 
-(Filled in by Task 3's report and Task 8.)
+Read with the first team of 14 November 2026, its levels and the owner's 124 pair readings (the fixture under `LineupEngine/Tests/LineupEngineTests/Fixtures/mentoring/`). The advice, worked from those readings, suggested three groups:
+
+- Deago Nelson (20), Ewan Clark (23) and Zac McEachran (30). It is a guess, because it rests on McEachran's arrow to Nelson, which was not read (expected Average). The other two arrows were read: McEachran to Clark is Significant and Clark to Nelson is Light.
+- Darnell Johnson (27), Ellis Brown (24) and Keegan Bloom (23). Every arrow it rests on was read: Johnson to each of the other two is Light.
+- Dejan Tetek (23), Evan Humphries (20) and Fernando Forestieri (36). Forestieri to Humphries was read (Light); Forestieri to Tetek is expected, not read.
+
+None of the three has a harmful arrow, read or guessed. Not placed: Dillon De Silva (24) and Samuel Onyekachukwu (18) take nothing; Jack Thompson (19) has his possible influencers already in the groups above; Alfie Potter, Canice Carroll, Jonny Maxted, Josh Ashby, Ludwig Francillette, Matty Taylor, Scott Pollock and Tyrone Marsh have nobody in the squad expected to influence them. The guess agrees exactly with 104 of the 124 readings, and is right about whether there is any influence at all in 111.
 
 ## Changes made while building
 
-(Filled in as the plan is built.)
+- Two reasons for not placing a player that the plan did not have. A player with a source of gain among the free players but fewer than three players free is now "there are not three players free to make a group with him", and a player whose sources of gain are not all in suggested groups, but who has no third player left, is now "no third player is left free to make a group with him and a player who could influence him". The plan's fall-through would have given the harmful-group sentence or "his possible influencers are already taken" where neither was true.
+- The harmful-arrow warning was reworded to name both players: "Ashby's influence on Nelson is Significant, and Ashby's Ambition is 6 against Nelson's 13." The sentence the design gave could be read as Nelson's Ambition, which turns it the wrong way round.
+- The count of arrows from Highly Influential and Influential players is 18, not 22, as the owner's readings give; the design and the parameter's source were corrected. Team Leaders gave 8 arrows, 6 of them Average or Significant, as before.
+- A suggested card carries its three members, so its "Record arrows" button can open the arrows sheet on them without the view working anything out.
+- The arrows draft keeps its identity for as long as the sheet is open. Changing its members goes through the model, which puts a member in or takes him out and fills the new pairs from the readings kept; the draft has no toggle of its own, because it holds no readings and a new identity would have presented the sheet again.
+- Core gives the arrows sheet's chooser: the squad's current players not out on loan, any three, including players already in a recorded group, since arrows can be read for any trio.
+- The arrows sheet has its own sentence, "Choose three players.", instead of the group editor's "A group is exactly three players."
+- An arrow's pair is spoken as "A to B" and drawn with an arrow sign.
+- The prompt that counts the guesses sits beside the buttons on both cards.
+- A read arrow is bold and a guess is muted, so the two cannot be taken for each other.
+- A reading is the latest for a pair when a pair was read twice; a hierarchy level missing from the guess table guesses None and is reported as a problem.
+- Task 5 brought up to date several app tests that the plan's list had left out, and replaced two unused measures in `Theme`.
 
 ## Known limits and small faults left
 
@@ -561,3 +578,15 @@ Known before building:
 - A reading is kept for a pair, not for a group, on the strength of two pairs read twice and every re-reading agreeing.
 - Whether an arrow changes with time is not known; the day each was read is shown, and nothing asks for a re-reading.
 - Social groups are still entered and kept, and change nothing.
+- Not placed lists every player of the club's own with something to gain, of any age, so players of 24 and over each show that nobody is expected to influence them. The design has it so, since age acts through the arrows; it makes a long list.
+- On a recorded card, "N of them are still guesses" counts all six arrows while the card lists only those above None, so it can read oddly beside a list of two.
+- Opening the arrows sheet straight after a new group is saved (the group editor gives way to the sheet) has not been checked in the running app. Only SwiftUI's own behaviour on replacing a presented sheet is unseen.
+- Once three players are chosen, the arrows sheet shows about three and a half players under its rows, which makes swapping a member awkward.
+- A pair of values can break across two lines on a card ("Determination 7, towards / 10").
+- The strength column is a fixed size, so the detail column starts at a different place on different cards, and the layout has no width below about 306 points (the window cannot be that narrow).
+- The arrow title is written in the app as well as in the engine's text; one engine function from names would keep a single format.
+- The group editor's `open` closure defaults to doing nothing, so a caller that leaves it out gets a Save that leaves the sheet open. The picture run is the only such caller, and it is harmless there.
+- The reason for a harmful group in "no third player free" is loose when a third player is free but every group with him holds a harmful arrow; no test covers it.
+- The review of a recorded group counts five parameters in its evidence where the suggestions count seven; both come out as derived, so nothing differs yet.
+- Two untested corners from the first tasks: a Team Leader's arrow to an Influential young player, and a reading from another squad leaving a takes-nothing judgement alone. The fixture check pins totals only, not each cell of the guess.
+- Neither the hands-on check nor the install has been done. Both are left to the owner and the controller: installing with `tools/build_app.sh`, opening the app on the real mentoring file, and trying the arrows sheet.
