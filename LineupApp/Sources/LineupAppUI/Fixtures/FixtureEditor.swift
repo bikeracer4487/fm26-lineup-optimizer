@@ -3,7 +3,8 @@ import LineupEngine
 import SwiftUI
 
 /// The card on the board that adds a fixture or changes one: its date, opponent, the competition and how strong the
-/// opponent is, importance and tactic. Under the importance, the importance the advice suggests for the fixture as it
+/// opponent is, with "Paste their squad" beside the strength and, under the two menus, what the last paste read or why
+/// it was refused; importance and tactic. Under the importance, the importance the advice suggests for the fixture as it
 /// is being edited, its reasons and evidence note, and "Use it" when it differs from the importance chosen.
 struct FixtureEditor: View {
     let model: AppModel
@@ -45,11 +46,26 @@ struct FixtureEditor: View {
                             }
                             GridRow {
                                 smallLabel(FixtureDraft.opponentStrengthLabel)
-                                menu(FixtureDraft.opponentStrengthLabel, FixtureDraft.opponentChoices,
-                                     selection: $draft.opponentStrength)
+                                HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
+                                    menu(FixtureDraft.opponentStrengthLabel, FixtureDraft.opponentChoices,
+                                         selection: $draft.opponentStrength)
+                                    Button(FixtureDraft.pasteButtonTitle) { model.pasteOpponentSquad(into: &draft) }
+                                        .buttonStyle(.secondary)
+                                        .fixedSize()
+                                }
                             }
                         }
                         .padding(.top, Theme.Spacing.xs)
+                        if let reading = draft.opponentReadingText {
+                            Text(reading)
+                                .font(Theme.Typeface.text(Theme.TypeSize.small))
+                                .foregroundStyle(Theme.Colour.mutedInk)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .textSelection(.enabled)
+                        }
+                        if let problem = draft.pasteProblem {
+                            CautionLine(problem)
+                        }
                     }
                 }
                 // Aligned at the top rather than by text baseline, which with the suggestion under the tabs leaves extra
@@ -106,6 +122,7 @@ struct FixtureEditor: View {
         Text(text)
             .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
             .foregroundStyle(Theme.Colour.mutedInk)
+            .fixedSize()
             .gridColumnAlignment(.leading)
     }
 

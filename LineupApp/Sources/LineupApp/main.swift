@@ -24,7 +24,13 @@
 //                                              with that suggestion's reasons shown ("fixtures-reasons-…", and
 //                                              "fixtures-reasons-small-…" in the smallest window); and
 //                                              the editor on its own for that fixture
-//                                              ("fixture-editor-suggestion-…").
+//                                              ("fixture-editor-suggestion-…"). The Fixtures screen is drawn
+//                                              again with the league situation "Nothing to play for", so its
+//                                              league fixtures' suggestions differ ("fixtures-situation-…"),
+//                                              and the editor on its own for the second fixture after its
+//                                              opponent's squad was pasted ("fixtures-editor-reading-…") and
+//                                              after the sample's own first team was pasted and refused
+//                                              ("fixtures-editor-refused-…").
 //                                              Match Selection ("match-…") is drawn on the first fixture with the
 //                                              left back selected; as starts ("match-starts-…"); with the owner's
 //                                              choices in the first fixture, in a taller window
@@ -291,6 +297,21 @@ let narrowWindow = CGSize(width: 800, height: 700)
     try ScreenPictures.writeFixtureEditor(model: model, draft: model.fixtureDraft(for: differing), to: directory,
                                           name: "fixture-editor-suggestion",
                                           size: Theme.Layout.fixtureEditorSuggestionPicture)
+
+    // Nothing to play for in the league, so the league fixtures' suggestions differ and "Use it" shows on them.
+    let situation = sampleModel(root)
+    situation.setLeagueSituation(.nothingToPlayFor)
+    try ScreenPictures.write(model: situation, to: directory, size: size, variant: "situation", screens: [.fixtures])
+
+    // The editor after the opponent's squad was pasted, and after the owner's own squad was pasted and refused.
+    let url = URL(fileURLWithPath: root, isDirectory: true)
+    for (name, make) in [("fixtures-editor-reading", SampleData.draftWithOpponentReading),
+                         ("fixtures-editor-refused", SampleData.draftWithRefusedPaste)] {
+        let pasted: (model: AppModel, draft: FixtureDraft)
+        do { pasted = try make(url) } catch { fail("\(error)") }
+        try ScreenPictures.writeFixtureEditor(model: pasted.model, draft: pasted.draft, to: directory, name: name,
+                                              size: Theme.Layout.fixtureEditorSuggestionPicture)
+    }
 }
 
 /// The Elevens screen's views: see the usage at the top.

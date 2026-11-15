@@ -994,6 +994,21 @@ import Testing
         #expect(cleared == before)
     }
 
+    @Test func theSampleDraftsForThePicturesHaveAReadingAndARefusal() throws {
+        let read = try SampleData.draftWithOpponentReading(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: read.model.store.directory) }
+        #expect(read.draft.id == read.model.fixtures[1].id)
+        #expect(read.draft.opponentReading?.club == read.model.fixtures[1].opponent)
+        #expect(read.draft.opponentReadingText != nil)
+        #expect(read.draft.pasteProblem == nil)
+
+        let refused = try SampleData.draftWithRefusedPaste(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: refused.model.store.directory) }
+        #expect(refused.draft.id == refused.model.fixtures[1].id)
+        #expect(refused.draft.pasteProblem == ErrorDescriptions.describe(OpponentReadingError.ownSquadPasted))
+        #expect(refused.draft.opponentReading == nil)
+    }
+
     @Test func withABlankOpponentThePasteIsRefused() throws {
         let t = try ready()
         var draft = draft(t, opponent: "   ")

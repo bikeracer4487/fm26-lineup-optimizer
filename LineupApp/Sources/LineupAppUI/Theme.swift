@@ -461,12 +461,14 @@ public enum Theme {
         public static let searchFieldWidth: CGFloat = 210
         /// The height of a row of controls, kept whether it holds menus or a sentence, so what is below it stays put.
         public static let controlRowHeight: CGFloat = 36
-        /// The fixture editor's card.
-        public static let fixtureEditorWidth: CGFloat = 480
+        /// The fixture editor's card: wide enough for the opponent's strength menu with "Paste their squad" beside it,
+        /// their label not cut short.
+        public static let fixtureEditorWidth: CGFloat = 520
         /// The picture of the fixture editor on its own.
-        public static let fixtureEditorPicture = CGSize(width: 560, height: 420)
-        /// The picture of the fixture editor with a suggestion, its reasons and "Use it".
-        public static let fixtureEditorSuggestionPicture = CGSize(width: 560, height: 600)
+        public static let fixtureEditorPicture = CGSize(width: 600, height: 440)
+        /// The picture of the fixture editor with a suggestion, its reasons and "Use it", or with a pasted squad's
+        /// reading or refusal.
+        public static let fixtureEditorSuggestionPicture = CGSize(width: 600, height: 620)
         /// The picture of a mentoring editor on its own: the editor and the board round it.
         public static let mentoringEditorPicture = CGSize(width: 740, height: 660)
         /// The picture of the two typefaces at each weight.

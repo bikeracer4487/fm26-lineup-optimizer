@@ -263,6 +263,44 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model and a draft of its second fixture, a league match, after its opponent's squad was pasted: the
+    /// capture of the same first team taken with FMRTE's `Id` column, which the sample, keyed by name, does not take for
+    /// its own players. The draft has a reading and the strength it set.
+    @MainActor public static func draftWithOpponentReading(repositoryRoot: URL) throws -> (model: AppModel, draft: FixtureDraft) {
+        let (model, draft) = try draftAfterPaste(repositoryRoot: repositoryRoot, paste: "first-team-with-id.tsv",
+                                                 grids: "first-team-with-id.grids.json")
+        guard draft.opponentReading != nil else {
+            throw SampleDataError(description: "The sample opponent squad was not read: \(draft.pasteProblem ?? "no reason given")")
+        }
+        return (model, draft)
+    }
+
+    /// The sample model and a draft of its second fixture after the owner's own first team was pasted as the opponent's,
+    /// which is refused: the draft says why and has no reading.
+    @MainActor public static func draftWithRefusedPaste(repositoryRoot: URL) throws -> (model: AppModel, draft: FixtureDraft) {
+        let (model, draft) = try draftAfterPaste(repositoryRoot: repositoryRoot, paste: "first-team.tsv",
+                                                 grids: "first-team.grids.json")
+        guard draft.pasteProblem != nil else {
+            throw SampleDataError(description: "Pasting the sample's own first team as the opponent's was not refused.")
+        }
+        return (model, draft)
+    }
+
+    /// The sample model and a draft of its second fixture after `paste`, with its grid layouts `grids`, was pasted as the
+    /// opponent's squad.
+    @MainActor private static func draftAfterPaste(repositoryRoot: URL, paste: String, grids: String) throws
+        -> (model: AppModel, draft: FixtureDraft) {
+        let (model, input) = try build(repositoryRoot: repositoryRoot)
+        guard model.fixtures.count >= 2 else {
+            throw SampleDataError(description: "The sample model has too few fixtures.")
+        }
+        input.clipboard = String(decoding: try fixture("captures/\(paste)", under: repositoryRoot), as: UTF8.self)
+        input.config = .data(try fixture("captures/\(grids)", under: repositoryRoot))
+        var draft = model.fixtureDraft(for: model.fixtures[1])
+        model.pasteOpponentSquad(into: &draft)
+        return (model, draft)
+    }
+
     /// The sample model with two first-team players' jadedness raised in its copy of the squads, so the rest advice has
     /// every level: Alfie Potter, whose limit is lowered for his age and Stamina, far enough over it for a holiday, and
     /// Ludwig Francillette over the standard limit for rest.

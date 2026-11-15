@@ -14,7 +14,8 @@ public struct FixturesStart: Sendable {
 /// The matches to plan for, in date order, as rows on the board with a small sticky note for each one's importance;
 /// the editor for adding or changing one is a card on the board above them, its draft kept in the window's navigation
 /// so it survives a change of screen. Under a fixture's note, the importance the advice suggests when it differs from
-/// the owner's; a click on it shows its reasons under the row, one fixture's at a time. The rows always fit the board:
+/// the owner's; a click on it shows its reasons under the row, one fixture's at a time, and "Use it" under it takes it.
+/// While there are fixtures, the league situation's menu sits at the heading's trailing edge. The rows always fit the board:
 /// the opponent, tactic, state and suggestion wrap, and when there is still no room, Edit and Delete go on a line of
 /// their own under each fixture.
 public struct FixturesScreen: View {
@@ -34,6 +35,10 @@ public struct FixturesScreen: View {
                 if !model.fixtures.isEmpty && navigation.fixtureEditing == nil {
                     Button("Add fixture", action: add)
                         .buttonStyle(.primary)
+                }
+                if !model.fixtures.isEmpty {
+                    Spacer(minLength: 0)
+                    situationMenu
                 }
             }
             if let editing = navigation.fixtureEditing {
@@ -57,6 +62,24 @@ public struct FixturesScreen: View {
             Button("Cancel", role: .cancel) {}
         } message: { _ in
             Text("Its confirmed lineup is deleted with it.")
+        }
+    }
+
+    /// Where the club stands in the league, as the editor's menus are drawn: a small muted label, then the menu.
+    private var situationMenu: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
+            Text(AppModel.leagueSituationLabel)
+                .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
+                .foregroundStyle(Theme.Colour.mutedInk)
+                .fixedSize()
+            Picker(AppModel.leagueSituationLabel,
+                   selection: Binding(get: { model.settings.situation }, set: { model.setLeagueSituation($0) })) {
+                ForEach(AppModel.leagueSituationChoices, id: \.value) { choice in
+                    Text(choice.title).tag(choice.value)
+                }
+            }
+            .labelsHidden()
+            .fixedSize()
         }
     }
 
@@ -161,9 +184,12 @@ private struct FixtureRow: View {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                     ImportanceNote(importance: fixture.importance, tilt: NoteTilt.degrees(at: index))
                     if let suggestion {
-                        SuggestionLine(note: suggestion, shown: showsReasons) {
-                            navigation.toggleReasons(of: fixture.id)
-                        }
+                        SuggestionLine(note: suggestion, shown: showsReasons,
+                                       offersUseIt: model.offersUseIt(for: fixture,
+                                                                      editing: navigation.fixtureEditing?.draft.id),
+                                       useItLabel: SuggestionNote.useItLabel(opponent: fixture.opponent),
+                                       toggle: { navigation.toggleReasons(of: fixture.id) },
+                                       use: { model.useSuggestion(for: fixture.id) })
                     }
                 }
                 .padding(.trailing, Theme.Spacing.s)
@@ -228,27 +254,54 @@ private struct FixtureRow: View {
     }
 }
 
-/// "Suggested: High" in muted ink with a mark saying whether its reasons are shown; a click shows or hides them.
+/// "Suggested: High" in muted ink with a mark saying whether its reasons are shown, a click on it showing or hiding
+/// them; then, when offered, "Use it" written in ink and underlined, a button of its own that takes the suggestion.
+/// "Use it" goes under the line, at its left edge: beside it there is no room in the importance column for even the
+/// shortest suggestion, and every row then shows it in the same place.
 private struct SuggestionLine: View {
     let note: SuggestionNote
     let shown: Bool
+    let offersUseIt: Bool
+    let useItLabel: String
     let toggle: () -> Void
+    let use: () -> Void
 
     var body: some View {
-        Button(action: toggle) {
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.xs) {
-                Text(note.text)
-                    .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-                Image(systemName: shown ? "chevron.down" : "chevron.right")
-                    .font(Theme.Typeface.text(Theme.TypeSize.caption, weight: .bold))
+        VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+            line
+            if offersUseIt {
+                useIt
             }
-            .foregroundStyle(Theme.Colour.mutedInk)
-            .contentShape(Rectangle())
+        }
+    }
+
+    private var useIt: some View {
+        Button(SuggestionNote.useItTitle, action: use)
+            .buttonStyle(.onNote)
+            .foregroundStyle(Theme.Colour.ink)
+            .fixedSize()
+            .accessibilityLabel(useItLabel)
+    }
+
+    private var line: some View {
+        Button(action: toggle) {
+            // The mark is part of the text, after a space that does not break, so when "Suggested: Sharpness" wraps
+            // the mark stays with the last word.
+            Text("\(note.text)\u{00A0}\(mark)")
+                .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(Theme.Colour.mutedInk)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(SuggestionNote.clickHelp(shown))
         .accessibilityHint(SuggestionNote.clickHelp(shown))
+    }
+
+    /// Whether the reasons are shown: a chevron down when they are, else right.
+    private var mark: Text {
+        Text(Image(systemName: shown ? "chevron.down" : "chevron.right"))
+            .font(Theme.Typeface.text(Theme.TypeSize.caption, weight: .bold))
     }
 }
 
