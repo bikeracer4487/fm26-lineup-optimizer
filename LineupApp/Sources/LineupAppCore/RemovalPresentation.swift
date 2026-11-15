@@ -139,6 +139,9 @@ public struct YoungRow: Identifiable, Equatable, Sendable {
     public let titleText: String
     /// The engine's name for his action: "Keep and develop".
     public let actionText: String
+    /// His action stamped in the tone of his level's stamp in the table (`RemovalPresentation.stamp`), so a player
+    /// advised to go stands out here as he does there.
+    public let stamp: StatusStamp
     /// The engine's sentences, as written and in its order (`AdvisorText.youngLines`).
     public let lines: [String]
     /// The row as said to assistive technology: "Tom Reed, Age 16, striker, Keep and develop. " and the lines.
@@ -154,6 +157,7 @@ public struct YoungRow: Identifiable, Equatable, Sendable {
         id = advice.player
         titleText = ([advice.name, String(age)] + [position].compactMap { $0 }).joined(separator: " · ")
         actionText = AdvisorText.name(advice.action)
+        stamp = StatusStamp(text: actionText, tone: RemovalPresentation.stamp(advice.level).tone)
         lines = AdvisorText.youngLines(advice, names: RemovalPresentation.positionName)
         let head = ([advice.name, "Age \(age)"] + [position].compactMap { $0 } + [actionText]).joined(separator: ", ")
         spokenText = "\(head). " + lines.joined(separator: " ")

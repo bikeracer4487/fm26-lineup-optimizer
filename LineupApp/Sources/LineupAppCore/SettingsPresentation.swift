@@ -51,11 +51,15 @@ extension AppSettings {
         value == 0 ? "Off" : String(format: "%.1f", value)
     }
 
-    /// The line under Development, with the oldest age the engine favours for development.
+    /// The line under Development, naming each importance as the app does, with the oldest age the engine favours for
+    /// development and how many successors it favours at most in a medium fixture.
     public static var developmentExplanation: String {
-        "Higher starts players of \(EngineParameters.fm27.developingUpToAge.value) or under more often in lesser "
-            + "fixtures, and those on course to pass your first choice at their slot a little in ordinary ones too, "
-            + "never in the biggest. Off leaves their growth out of every lineup."
+        let parameters = EngineParameters.fm27
+        let age = parameters.developingUpToAge.value, count = parameters.successorsFavouredAtMedium.value
+        return "Higher starts promising players of \(age) or under more often in \(Importance.low.displayName) and "
+            + "\(Importance.sharpness.displayName) fixtures, and up to \(count) who are likely to pass your first choice at "
+            + "their position a little in \(Importance.medium.displayName) ones too, never in "
+            + "\(Importance.high.displayName). Off leaves their growth out of every lineup."
     }
 
     /// "Off" for 0, else the share of each development favour that applies, in whole percent: "100%".

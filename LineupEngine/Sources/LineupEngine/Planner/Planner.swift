@@ -76,7 +76,8 @@ public struct Planner: Sendable {
     /// played matches or between the fixtures and the played matches, and the dates of every fixture given (`PlanError`). A fixture to plan may share its id with one
     /// confirmed lineup, which its planned lineup then replaces. Then plans the first `settings.horizon` fixtures, with
     /// the played matches in the fitness projection. Throws `TacticError` for an unusable tactic and `RatingError` for a player
-    /// with missing data.
+    /// with missing data; a young player's missing Professionalism, Ambition or Determination only when the Development
+    /// setting is above 0.
     public func plan(_ request: PlanRequest) throws -> Plan {
         let settingsProblems = request.settings.problems()
         guard settingsProblems.isEmpty else { throw PlanError.badSettings(settingsProblems) }
@@ -103,8 +104,11 @@ public struct Planner: Sendable {
         // For the development favours, each fixture's outlooks come from a second set of tiers with injured players
         // kept in, so an injury neither hides a young player nor moves whom he is compared with.
         // They depend on the fixture only through its tactic, so they are worked out once for each distinct tactic.
+        // With Development at 0 no favour reads them, so none is worked out: a young player missing a personality value
+        // does not stop a plan that development cannot change.
         var outlooksByTactic: [(tactic: Tactic, outlooks: [PlayerID: Outlook])] = []
-        let outlooksByFixture = try fixtures.map { fixture in
+        let outlooksByFixture = try fixtures.map { fixture -> [PlayerID: Outlook] in
+            if settings.development == 0 { return [:] }
             if let known = outlooksByTactic.first(where: { $0.tactic == fixture.tactic }) { return known.outlooks }
             let outlooks = try developmentOutlooks(for: fixture, players: players, ownClub: request.ownClub,
                                                    retraining: retraining)

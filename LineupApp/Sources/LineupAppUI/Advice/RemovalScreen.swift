@@ -355,7 +355,7 @@ private struct YoungRowView: View {
                     .foregroundStyle(Theme.Colour.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                StampView(stamp: StatusStamp(text: row.actionText, tone: .ink))
+                StampView(stamp: row.stamp)
                     .fixedSize()
             }
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {

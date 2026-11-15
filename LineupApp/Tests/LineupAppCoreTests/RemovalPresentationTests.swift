@@ -377,11 +377,11 @@ import Testing
     private func young(_ key: String, name: String, age: Int, action: RemovalAction = .play, slot: SlotID? = .ST_C,
                        basis: MatchesHereBasis = .startedTooFew, keepReason: KeepReason? = nil,
                        onYouthContract: Bool = false, score: Int = -20, firstAt: [SlotID] = [],
-                       tier: SquadTier? = nil) -> RemovalAdvice {
+                       tier: SquadTier? = nil, level: RemovalLevel = .keep) -> RemovalAdvice {
         let estimate = ReachEstimate(age: age, current: 55, potential: 140, professionalism: 15, ambition: 10,
                                      determination: 10, seasonGrowth: 13.3, bySeason: [55, 68, 140],
                                      reachesPotential: true, ambitionSlows: false, determinationSlows: false,
-                                     professionalismHoldsBack: false)
+                                     professionalismHoldsBack: false, growthFallsLater: true)
         let best = slot.map { slot in
             SlotOutlook(slot: slot, rating: 50, reachRating: 75, isFirstChoice: false,
                         firstChoice: Rival(player: PlayerID(key: "smith"), name: "Smith", age: 31, rating: 70,
@@ -395,7 +395,7 @@ import Testing
         }
         let outlook = Outlook(player: PlayerID(key: key), estimate: estimate, slots: home + (best.map { [$0] } ?? []),
                               best: best, level: .couldPassFirst, average: slot == nil ? 70 : nil)
-        return RemovalAdvice(player: PlayerID(key: key), name: name, level: .keep, action: action, score: score,
+        return RemovalAdvice(player: PlayerID(key: key), name: name, level: level, action: action, score: score,
                              reasons: [], tier: tier, outlook: outlook,
                              matchesHere: MatchesHere(starts: 1, matches: 9, basis: basis), keepReason: keepReason,
                              watchReason: nil, loanOnlyToStart: false, onYouthContract: onYouthContract,
@@ -462,6 +462,24 @@ import Testing
         #expect(unplaced.lines == [AdvisorText.reachWorking(try #require(cases[4].outlook).estimate),
                                    "He is second choice here, and too few matches are confirmed to count his starts."])
         #expect(unplaced.spokenText == "Nob, Age 18, Keep and play. " + unplaced.lines.joined(separator: " "))
+    }
+
+    @Test func aYoungRowStampsHisActionInHisLevelsTone() throws {
+        let cases: [(RemovalLevel, RemovalAction, StampTone)] = [
+            (.critical, .release, .red), (.high, .sell, .amber), (.medium, .monitor, .ink), (.keep, .develop, .muted),
+        ]
+        let given = cases.enumerated().map { index, item in
+            young("y\(index)", name: "Young \(index)", age: 19, action: item.1, level: item.0)
+        }
+        let sheet = RemovalPresentation.sheet(report(given), squads: [:], ages: [:])
+        for (advice, (level, action, tone)) in zip(given, cases) {
+            let row = try #require(sheet.young.first { $0.id == advice.player })
+            let tableRow = try #require(sheet.rows.first { $0.id == advice.player })
+            #expect(row.stamp == StatusStamp(text: AdvisorText.name(action), tone: tone), "\(level)")
+            // The same tone as his level's stamp in the table above, so a player advised to go stands out here too.
+            #expect(row.stamp.tone == tableRow.stamp.tone, "\(level)")
+            #expect(row.stamp.text == row.actionText, "\(level)")
+        }
     }
 
     @Test func aYoungRowNamesHisBestPositionInWordsAndNeverAKey() throws {

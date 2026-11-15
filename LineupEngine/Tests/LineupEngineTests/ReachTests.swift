@@ -42,6 +42,18 @@ import Testing
         #expect(try estimate(age: 26).bySeason.count == 2)
     }
 
+    @Test func growthFallsLaterOnlyWhenALaterSeasonsStepIsLower() throws {
+        // 18 a season to 18, 14 to 20, 12 to 26: a later season grows less up to 20, the same from 21 on.
+        for age in [16, 18, 19, 20] {
+            #expect(try estimate(age: age).growthFallsLater, "age \(age)")
+        }
+        for age in [21, 23, 25, 26, 27] {
+            #expect(try !estimate(age: age).growthFallsLater, "age \(age)")
+        }
+        // The cap at his potential is not a fall in his growth: at 21, a season from his potential, it still does not.
+        #expect(try !estimate(age: 21, ability: 130, potential: 135).growthFallsLater)
+    }
+
     @Test func professionalismIsReadOffStraightLines() throws {
         let rates: [Int: Double] = [1: 2.4, 5: 2.4 + 5.8 * 4 / 9, 10: 8.2, 15: 12.6, 20: 17]
         for (level, rate) in rates {

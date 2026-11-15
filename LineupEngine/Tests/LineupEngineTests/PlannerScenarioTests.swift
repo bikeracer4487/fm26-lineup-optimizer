@@ -184,6 +184,38 @@ import Testing
         #expect(off.fixtures.allSatisfy { $0.lineup.picks.allSatisfy { !$0.adjustments.contains { $0.kind == .development } } })
     }
 
+    @Test func withDevelopmentOffAYoungPlayerMissingAPersonalityValueDoesNotStopThePlan() throws {
+        var players = try PlannerFixture.squad(first: 14, second: 12)
+        var young = Player.fixture(name: "ST young", age: 19, all: 13, familiarity: [.striker: 15],
+                                   currentAbility: 100, potentialAbility: 130)
+        young.attributes[.ambition] = nil
+        players.append(young)
+        let fixtures = [fixture("m", .medium, day: 0), fixture("l", .low, day: 4), fixture("s", .sharpness, day: 8)]
+        // At 0 no outlook is worked out, so nothing reads his Ambition.
+        let off = try plan(fixtures, players, settings: PlanSettings(savingPlayers: 0, development: 0))
+        #expect(off.fixtures.count == 3)
+        #expect(off.fixtures.allSatisfy { planned in
+            planned.lineup.picks.allSatisfy { !$0.adjustments.contains { $0.kind == .development || $0.kind == .successor } }
+        })
+        // Without him, a plan at 0 is the plan of a planner with every development favour's factor at 1.
+        let others = players.filter { $0.id != young.id }
+        var without = parameters
+        without.successorFactorLow = Parameter(1, .derived, source: "test")
+        without.successorFactorMedium = Parameter(1, .derived, source: "test")
+        without.developmentFactors = Parameter([], .derived, source: "test")
+        without.developmentFactorLowProfessionalism = Parameter(1, .derived, source: "test")
+        let plain = try Planner(catalog: RoleCatalog.fm27(), profile: RatingProfile.standard(), parameters: without)
+            .plan(PlanRequest(fixtures: fixtures, players: others, ownClub: "Oxford City", asOf: day0, confirmed: [],
+                              retraining: [], settings: PlanSettings(savingPlayers: 0)))
+        #expect(try plan(fixtures, others, settings: PlanSettings(savingPlayers: 0, development: 0)) == plain)
+        // At any other setting his outlook is needed, and the missing value is an error naming him.
+        for development in [1.0, 0.5] {
+            #expect(throws: RatingError.missingAttribute(player: "ST young", attribute: .ambition)) {
+                try plan(fixtures, players, settings: PlanSettings(savingPlayers: 0, development: development))
+            }
+        }
+    }
+
     @Test func anInjuredYoungPlayersOutlookIsWhatItIsWhenFit() throws {
         var players = try PlannerFixture.squad(first: 14, second: 12)
         let young = Player.fixture(name: "ST young", age: 19, all: 13, familiarity: [.striker: 15],

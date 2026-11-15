@@ -26,11 +26,14 @@ public struct ReachEstimate: Equatable, Sendable {
     public let determinationSlows: Bool
     /// His Professionalism is under `professionalismHoldsBackBelow`.
     public let professionalismHoldsBack: Bool
+    /// A later season's growth, before the cap at his potential, is lower than this season's (`seasonGrowth`).
+    public let growthFallsLater: Bool
 }
 
 public enum Reach {
     /// Estimates his ability after each season up to the last age in `growthPerSeason`: the step for his age times a
-    /// factor for Professionalism, one for Ambition and one for Determination, never above his potential.
+    /// factor for Professionalism, one for Ambition and one for Determination, never above his potential. His growth
+    /// falls later when the step for a later age is lower than his own age's.
     /// Throws `RatingError.missingAttribute` for a player without Professionalism, Ambition or Determination.
     /// The parameters must have passed `FitnessModel.problems(in:)`.
     public static func estimate(for player: Player, parameters: EngineParameters) throws -> ReachEstimate {
@@ -52,6 +55,11 @@ public enum Reach {
             guard let step = steps.first(where: { $0.upToAge >= age }) else { return 0 }
             return step.points * personality
         }
+        let thisSeason = growth(atAge: player.age)
+        // The later ages that still have a step; the cap at his potential is not a fall in his growth.
+        let lastAge = steps.last?.upToAge ?? player.age
+        let growthFallsLater = stride(from: player.age + 1, through: lastAge, by: 1)
+            .contains { growth(atAge: $0) < thisSeason }
         let current = Double(player.currentAbility), potential = Double(player.potentialAbility)
         let ceiling = max(current, potential)
         var bySeason = [current]
@@ -63,11 +71,12 @@ public enum Reach {
         return ReachEstimate(
             age: player.age, current: player.currentAbility, potential: player.potentialAbility,
             professionalism: professionalism, ambition: ambition, determination: determination,
-            seasonGrowth: growth(atAge: player.age), bySeason: bySeason,
+            seasonGrowth: thisSeason, bySeason: bySeason,
             reachesPotential: potential > current && bySeason.last! == potential,
             ambitionSlows: ambition < parameters.growthPersonalityFullFrom.value,
             determinationSlows: determination < parameters.growthPersonalityFullFrom.value,
-            professionalismHoldsBack: professionalism < parameters.professionalismHoldsBackBelow.value)
+            professionalismHoldsBack: professionalism < parameters.professionalismHoldsBackBelow.value,
+            growthFallsLater: growthFallsLater)
     }
 
     /// His rate of growth over the rate at Professionalism 20, read off straight lines between the anchors.

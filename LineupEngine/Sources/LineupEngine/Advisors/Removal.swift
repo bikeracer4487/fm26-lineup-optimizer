@@ -424,7 +424,8 @@ public enum Removal {
     }
 
     /// The advice for a player with an outlook below the high level, the first rule that applies winning.
-    /// One not worth developing (his reach no more than cover) is never kept to develop or loaned for matches: in
+    /// One not worth developing (`isWorthDeveloping` false: first choice nowhere and his reach no more than cover) is
+    /// never kept to develop or loaned for matches: in
     /// either eleven and getting his matches here he is kept to play; otherwise he is watched, as needed for cover when
     /// he is, and as not worth developing when not. For anyone else: under `loanForMatchesFromAge` he is kept to
     /// develop; one getting his matches here is kept to play; one needed for cover is watched; a youth contract cannot
@@ -525,11 +526,12 @@ public enum Removal {
         }
     }
 
-    /// Whether a young player is worth developing: his reach could pass the first choice or make the second eleven, or
-    /// he has no level (no slot compares him with a first choice other than himself). One at cover level or markedly
-    /// lower is not.
+    /// Whether a young player is worth developing: he is first choice at a slot he can play, whatever his level at his
+    /// other slots; his reach could pass the first choice or make the second eleven; or he has no level (no slot compares
+    /// him with a first choice other than himself). Anyone else, at cover level or markedly lower, is not.
     static func isWorthDeveloping(_ outlook: Outlook) -> Bool {
-        switch outlook.level {
+        if outlook.isFirstChoiceAtASlot { return true }
+        return switch outlook.level {
         case .couldPassFirst?, .couldMakeSecond?, nil: true
         case .couldBeCover?, .markedlyLower?: false
         }

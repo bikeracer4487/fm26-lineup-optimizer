@@ -171,7 +171,9 @@ public enum AdvisorText {
         case .loanForMatches: whyLoanForMatches(advice.matchesHere?.basis, onlyToStart: advice.loanOnlyToStart)
         case .terminate: "His contract is nearly over and no fee is likely to beat the cost of ending it"
         case .sell: "Selling is the way left: nothing cheaper applies"
-        case .monitor: whyWatch(advice.watchReason, level: advice.outlook?.level)
+        case .monitor:
+            whyWatch(advice.watchReason, level: advice.outlook?.level,
+                     isWorthDeveloping: advice.outlook.map(Removal.isWorthDeveloping) ?? true)
         case .keep: "Nothing here says he should go"
         }
     }

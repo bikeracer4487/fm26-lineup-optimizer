@@ -33,12 +33,20 @@ import LineupEngine
             == "Players below this condition are left out of every match unless you pick them yourself.")
     }
 
-    @Test func developmentSaysWhatItDoesWithTheEnginesAge() {
-        let age = EngineParameters.fm27.developingUpToAge.value
+    @Test func developmentSaysWhatItDoesInTheAppsWordsWithTheEnginesNumbers() {
         #expect(AppSettings.developmentExplanation
-            == "Higher starts players of \(age) or under more often in lesser fixtures, and those on course to pass "
-            + "your first choice at their slot a little in ordinary ones too, never in the biggest. Off leaves their "
-            + "growth out of every lineup.")
+            == "Higher starts promising players of 23 or under more often in Low and Sharpness fixtures, and up to 2 who "
+            + "are likely to pass your first choice at their position a little in Medium ones too, never in High. Off "
+            + "leaves their growth out of every lineup.")
+        // The importance names are the app's, the age and the count the engine's.
+        let parameters = EngineParameters.fm27
+        let (age, count) = (parameters.developingUpToAge.value, parameters.successorsFavouredAtMedium.value)
+        let (low, sharpness) = (Importance.low.displayName, Importance.sharpness.displayName)
+        let (medium, high) = (Importance.medium.displayName, Importance.high.displayName)
+        #expect(AppSettings.developmentExplanation
+            == "Higher starts promising players of \(age) or under more often in \(low) and \(sharpness) fixtures, and up "
+            + "to \(count) who are likely to pass your first choice at their position a little in \(medium) ones too, "
+            + "never in \(high). Off leaves their growth out of every lineup.")
     }
 
     @Test func usingTheEnginesFloorAgainForgetsTheOwnersAndTurningItOffStartsFromTheEngines() {

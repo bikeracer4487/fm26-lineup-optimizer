@@ -54,7 +54,8 @@ extension AdvisorText {
     public static let youthContractNotMarked = "A player on a youth contract cannot be sold or loaned out, only released."
 
     /// How his reach was worked out, as a reach figure is never shown without it: "Ability 55, potential 140. At 16 with
-    /// Professionalism 15 this tool expects about 13 points a season now, fewer later: could reach his potential." An
+    /// Professionalism 15 this tool expects about 13 points a season now, fewer later: could reach his potential."
+    /// "now, fewer later" is said only when his estimate's growth falls in a later season (`growthFallsLater`). An
     /// Ambition or Determination that slows his growth is named after the Professionalism, and a Professionalism that
     /// holds him back is said to, as the estimate's flags say. Figures are whole numbers.
     public static func reachWorking(_ estimate: ReachEstimate) -> String {
@@ -66,7 +67,8 @@ extension AdvisorText {
         if estimate.determinationSlows { traits.append("Determination \(estimate.determination)") }
         let named = traits.count == 1 ? traits[0] : traits.dropLast().joined(separator: ", ") + " and " + traits.last!
         let rate = "about \(points(estimate.seasonGrowth)) a season"
-        let expects = "\(figures) At \(estimate.age) with \(named) this tool expects \(rate) now, fewer later"
+        let later = estimate.growthFallsLater ? " now, fewer later" : ""
+        let expects = "\(figures) At \(estimate.age) with \(named) this tool expects \(rate)\(later)"
         if Double(estimate.potential - estimate.current) < estimate.seasonGrowth {
             return "\(expects). His potential is the limit."
         }
@@ -189,19 +191,16 @@ extension AdvisorText {
         return isWorthDeveloping ? reason : reason + " He keeps the place until the squad has someone better there."
     }
 
-    /// Why a player is watched; a player without an outlook keeps the general sentence. One not worth developing is
-    /// told how far his reach goes, from `level`, his outlook's level; needed for cover, he is told he stays until the
-    /// squad has someone better, since he is never considered for a loan.
-    static func whyWatch(_ reason: WatchReason?, level: ReachLevel?) -> String {
+    /// Why a player is watched; a player without an outlook keeps the general sentence. One not worth developing
+    /// (`isWorthDeveloping` false) is told how far his reach goes, from `level`, his outlook's level; needed for cover, he
+    /// is told he stays until the squad has someone better, since he is never considered for a loan.
+    static func whyWatch(_ reason: WatchReason?, level: ReachLevel?, isWorthDeveloping: Bool) -> String {
         let general = "Not enough against him to act: watch how he does"
         switch reason {
         case .neededForCover?:
-            switch level {
-            case .couldBeCover?, .markedlyLower?:
-                return "He is needed as cover here: he stays until the squad has someone better there."
-            case .couldPassFirst?, .couldMakeSecond?, nil:
-                return "He is needed as cover here, so a loan would leave the squad short."
-            }
+            return isWorthDeveloping
+                ? "He is needed as cover here, so a loan would leave the squad short."
+                : "He is needed as cover here: he stays until the squad has someone better there."
         case .notWorthDeveloping?:
             switch level {
             case .couldBeCover?: return "This tool expects him to become cover at best: watch how he does."

@@ -69,7 +69,10 @@ public struct Outlook: Equatable, Sendable {
     public let level: ReachLevel?
     /// The first team's average ability he was compared with, when his level comes from it and there is one.
     public let average: Double?
-    public var isMarkedlyLower: Bool { level == .markedlyLower }
+    /// He is first choice at a slot he can play: having more positions never makes a first choice less worth developing.
+    public var isFirstChoiceAtASlot: Bool { slots.contains(where: \.isFirstChoice) }
+    /// His level is markedly lower and he is first choice at no slot he can play.
+    public var isMarkedlyLower: Bool { level == .markedlyLower && !isFirstChoiceAtASlot }
 }
 
 /// What decided whether a young player is getting enough matches here.

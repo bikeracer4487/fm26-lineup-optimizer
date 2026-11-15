@@ -1036,8 +1036,55 @@ import Testing
         try #require(first19.tier == .first(.D_L))
         try #require(first19.outlook?.level == .couldBeCover || first19.outlook?.level == .markedlyLower)
         #expect(first19.action == .play && first19.watchReason == nil)
-        #expect(AdvisorText.why(first19.action, for: first19)
-                == "He is first choice here. He keeps the place until the squad has someone better there.")
+        #expect(AdvisorText.why(first19.action, for: first19) == "He is first choice here.")
+    }
+
+    @Test func aYoungFirstChoiceIsWorthDevelopingWhateverHisOtherSlot() throws {
+        // First choice at left back, and retraining at left attacking midfield, where at familiarity 1 his reach is below
+        // the bar: his outlook's level is markedly lower, but a first choice is worth developing.
+        let rules = parameters.removalRules.value
+        try #require(10 > rules.contractEndingSoonUpTo && 10 <= rules.contractEndingUpTo)
+        let firstID = PlannerFixture.id(.D_L, "first")
+        let other = assignment(.AM_L)
+        let players = try squad(changing: firstID) { p in
+            p.age = 19; p.potentialAbility = 100; p.monthsLeft = 10
+            p.familiarity[other.ipPosition] = 1; p.familiarity[other.oopPosition] = 1
+        }
+        let retraining = [Retraining(player: firstID, position: other.ipPosition, acceptedOn: asOf)]
+        func advice(in players: [Player]) throws -> RemovalAdvice {
+            try #require(try report(players, retraining: retraining).advice.first { $0.player == firstID })
+        }
+        let a = try advice(in: players)
+        try #require(a.tier == .first(.D_L) && a.outlook?.level == .markedlyLower)
+        try #require(a.outlook?.slots.contains { $0.isFirstChoice && $0.slot == .D_L } == true)
+        let outlook = try #require(a.outlook)
+        #expect(Removal.isWorthDeveloping(outlook))
+        #expect(!outlook.isMarkedlyLower)
+        // His place line wins over his reach, as before; the contract says to renew it, at no points.
+        let thin = parameters.removalThinCoverPoints.value
+        #expect(a.reasons == [reason("In the first eleven at left back", rules.firstElevenPoints),
+                              reason("Cover at left back would be thin without him", thin),
+                              reason("Contract ends in 10 months: renew it", 0)])
+        #expect(a.score == rules.firstElevenPoints + thin)
+        #expect(a.action == .play && a.watchReason == nil && a.keepReason == nil)
+        #expect(AdvisorText.why(a.action, for: a) == "He is first choice here.")
+
+        // The same outlook first choice nowhere is not worth developing, as before.
+        let nowhere = Outlook(player: outlook.player, estimate: outlook.estimate,
+                              slots: outlook.slots.filter { !$0.isFirstChoice }, best: outlook.best,
+                              level: outlook.level, average: outlook.average)
+        #expect(!Removal.isWorthDeveloping(nowhere))
+        #expect(nowhere.isMarkedlyLower)
+        // So is the same player once a far better left back takes his place: the contract keeps its words and points.
+        let positions = [assignment(.D_L).ipPosition, assignment(.D_L).oopPosition]
+        let star = Player.fixture(name: "D L star", all: 20,
+                                  familiarity: Dictionary(positions.map { ($0, 20) }, uniquingKeysWith: { a, _ in a }),
+                                  currentAbility: 200, potentialAbility: 200)
+        let displaced = try advice(in: players + [star])
+        try #require(displaced.tier == .second(.D_L) && displaced.outlook?.level == .markedlyLower)
+        try #require(displaced.outlook?.slots.contains(where: \.isFirstChoice) == false)
+        #expect(!Removal.isWorthDeveloping(try #require(displaced.outlook)))
+        #expect(reasons(displaced.reasons, "Contract") == [reason("Contract ends in 10 months", rules.contractEndingPoints)])
     }
 
     /// The planner's squad with its second-choice left back aged `age`, at current ability 40 and potential `potential`,

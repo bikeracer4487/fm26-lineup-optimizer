@@ -273,7 +273,7 @@ import Testing
         let estimate = ReachEstimate(age: 19, current: 80, potential: 120, professionalism: 15, ambition: 10,
                                      determination: 10, seasonGrowth: 10, bySeason: [80, 90, 100, 110, 120],
                                      reachesPotential: true, ambitionSlows: false, determinationSlows: false,
-                                     professionalismHoldsBack: false)
+                                     professionalismHoldsBack: false, growthFallsLater: true)
         let best = slot.map { slot in
             SlotOutlook(slot: slot, rating: 50, reachRating: 75, isFirstChoice: false,
                         firstChoice: Rival(player: PlayerID(key: "smith"), name: "Smith", age: 28, rating: 70, compared: 70,
@@ -314,14 +314,14 @@ import Testing
     }
 
     /// An estimate as `Reach.estimate` would give it under the fm27 parameters, with `bySeason` running from `current`
-    /// to `reach`: a value under 10 slows growth or holds him back.
+    /// to `reach`: a value under 10 slows growth or holds him back, and growth falls later up to 20.
     func estimate(age: Int, current: Int, potential: Int, professionalism: Int, ambition: Int = 10,
                   determination: Int = 10, seasonGrowth: Double, reach: Double, reachesPotential: Bool) -> ReachEstimate {
         ReachEstimate(age: age, current: current, potential: potential, professionalism: professionalism,
                       ambition: ambition, determination: determination, seasonGrowth: seasonGrowth,
                       bySeason: [Double(current), reach], reachesPotential: reachesPotential,
                       ambitionSlows: ambition < 10, determinationSlows: determination < 10,
-                      professionalismHoldsBack: professionalism < 10)
+                      professionalismHoldsBack: professionalism < 10, growthFallsLater: age <= 20)
     }
 
     @Test func theReachWorkingForEachEnding() {
@@ -339,8 +339,8 @@ import Testing
         // Short of his potential at Professionalism 10 or over.
         #expect(AdvisorText.reachWorking(estimate(age: 21, current: 70, potential: 130, professionalism: 12,
                                                   seasonGrowth: 6.4, reach: 95.6, reachesPotential: false))
-                == "Ability 70, potential 130. At 21 with Professionalism 12 this tool expects about 6 points a season "
-                    + "now, fewer later: could reach about 96.")
+                == "Ability 70, potential 130. At 21 with Professionalism 12 this tool expects about 6 points a season: "
+                    + "could reach about 96.")
         // Less than a season's growth to his potential.
         #expect(AdvisorText.reachWorking(estimate(age: 20, current: 130, potential: 135, professionalism: 15,
                                                   seasonGrowth: 10.4, reach: 135, reachesPotential: true))
@@ -350,8 +350,36 @@ import Testing
         #expect(AdvisorText.reachWorking(ReachEstimate(age: 27, current: 90, potential: 95, professionalism: 15,
                                                        ambition: 10, determination: 10, seasonGrowth: 0, bySeason: [90],
                                                        reachesPotential: false, ambitionSlows: false,
-                                                       determinationSlows: false, professionalismHoldsBack: false))
+                                                       determinationSlows: false, professionalismHoldsBack: false,
+                                                       growthFallsLater: false))
                 == "Ability 90, potential 95. At 27 this tool expects no more growth.")
+    }
+
+    @Test func theReachWorkingSaysFewerLaterOnlyWhenHisGrowthFalls() throws {
+        func working(age: Int) throws -> String {
+            let player = Player.fixture(age: age, attributes: [.professionalism: 12, .ambition: 10, .determination: 10],
+                                        currentAbility: 70, potentialAbility: 130)
+            return AdvisorText.reachWorking(try Reach.estimate(for: player, parameters: .fm27))
+        }
+        // At 20 the next season's step is lower (14, then 12 a season).
+        #expect(try working(age: 20) == "Ability 70, potential 130. At 20 with Professionalism 12 this tool expects about "
+                + "8 points a season now, fewer later: could reach about 120.")
+        // From 21 every season's step is the same.
+        #expect(try working(age: 21) == "Ability 70, potential 130. At 21 with Professionalism 12 this tool expects about "
+                + "7 points a season: could reach about 112.")
+        #expect(try working(age: 23) == "Ability 70, potential 130. At 23 with Professionalism 12 this tool expects about "
+                + "7 points a season: could reach about 98.")
+        // The same before the other endings.
+        let atPotential = Player.fixture(age: 22, attributes: [.professionalism: 12, .ambition: 10, .determination: 10],
+                                         currentAbility: 70, potentialAbility: 74)
+        #expect(AdvisorText.reachWorking(try Reach.estimate(for: atPotential, parameters: .fm27))
+                == "Ability 70, potential 74. At 22 with Professionalism 12 this tool expects about 7 points a season. "
+                    + "His potential is the limit.")
+        let reaching = Player.fixture(age: 21, attributes: [.professionalism: 12, .ambition: 10, .determination: 10],
+                                      currentAbility: 70, potentialAbility: 100)
+        #expect(AdvisorText.reachWorking(try Reach.estimate(for: reaching, parameters: .fm27))
+                == "Ability 70, potential 100. At 21 with Professionalism 12 this tool expects about 7 points a season: "
+                    + "could reach his potential.")
     }
 
     @Test func theReachWorkingNamesAWeakAmbitionAndDetermination() {
@@ -375,7 +403,7 @@ import Testing
         #expect(AdvisorText.reachWorking(estimate(age: 22, current: 60, potential: 120, professionalism: 1, ambition: 1,
                                                   determination: 1, seasonGrowth: 0.8, reach: 64.8, reachesPotential: false))
                 == "Ability 60, potential 120. At 22 with Professionalism 1, Ambition 1 and Determination 1 this tool "
-                    + "expects about 1 point a season now, fewer later: could reach about 65. At his Professionalism this "
+                    + "expects about 1 point a season: could reach about 65. At his Professionalism this "
                     + "tool expects about 1 point a season; mentoring could change that.")
     }
 
@@ -385,7 +413,7 @@ import Testing
         let estimate = ReachEstimate(age: 19, current: 80, potential: 150, professionalism: 15, ambition: 10,
                                      determination: 10, seasonGrowth: 12.3, bySeason: [80, 92, 104],
                                      reachesPotential: false, ambitionSlows: false, determinationSlows: false,
-                                     professionalismHoldsBack: false)
+                                     professionalismHoldsBack: false, growthFallsLater: true)
         let best = smith.map { smith in
             SlotOutlook(slot: .D_L, rating: 50, reachRating: 75, isFirstChoice: false, firstChoice: smith,
                         secondChoice: nil, band: .onCourse, pointsNeeded: points, level: .couldPassFirst)

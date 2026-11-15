@@ -206,7 +206,8 @@ import Testing
             age: player.age, current: player.currentAbility, potential: player.potentialAbility,
             professionalism: player.attributes[.professionalism]!, ambition: 10, determination: 10, seasonGrowth: 10,
             bySeason: [Double(player.currentAbility), Double(player.potentialAbility)], reachesPotential: true,
-            ambitionSlows: false, determinationSlows: false, professionalismHoldsBack: false)
+            ambitionSlows: false, determinationSlows: false, professionalismHoldsBack: false,
+            growthFallsLater: true)
         return Outlook(player: player.id, estimate: estimate, slots: slots ?? playable(.D_L, .ST_C), best: nil,
                        level: level, average: nil)
     }
@@ -481,6 +482,19 @@ import Testing
         // A markedly lower outlook gets neither favour, whatever a slot says.
         let lower = run(p, .low, outlooks: outlooks(p, .markedlyLower, slots: [at(.D_L, .close)]))
         #expect(lower.bySlot.values.allSatisfy { $0.isEmpty })
+    }
+
+    @Test func aFirstChoiceWhoseOtherSlotIsMarkedlyLowerGetsTheFloor() {
+        let p = young(20)
+        // First choice at left back; at striker, his only other slot, below the bar, so his outlook's level is markedly
+        // lower. A first choice is never markedly lower: he gets the floor at both slots.
+        let below = SlotOutlook(slot: .ST_C, rating: 60, reachRating: 66, isFirstChoice: false, firstChoice: smith(),
+                                secondChoice: nil, band: .notExpected, pointsNeeded: 40, level: .markedlyLower)
+        let first = outlooks(p, .markedlyLower, slots: [at(.D_L, nil, isFirstChoice: true), below])
+        #expect(floorFactor(run(p, .low, outlooks: first)) == 1.07)
+        // First choice nowhere, the same outlook gets none.
+        let nowhere = outlooks(p, .markedlyLower, slots: [at(.D_L, .possible), below])
+        #expect(floorFactor(run(p, .low, outlooks: nowhere)) == nil)
     }
 
     @Test func theLargerOfRetrainingAndSuccessorIsKept() {
