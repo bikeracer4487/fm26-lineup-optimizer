@@ -210,7 +210,8 @@ import Testing
         let expected: [(String, Evidence)] = [
             ("mentoringWeights", .derived), ("mentoringCeilings", .carriedOverFM26), ("mentoringMenteeMaxAge", .fm27Observation),
             ("mentoringStoppedAfterWeeks", .derived), ("mentoringDynamicsStaleAfterDays", .derived),
-            ("mentoringGuess", .derived), ("mentoringStrengthWeights", .derived), ("mentoringTakesNothingAfter", .derived)]
+            ("mentoringGuess", .derived), ("mentoringStrengthWeights", .derived), ("mentoringTakesNothingAfter", .derived),
+            ("mentoringRegroupFactor", .derived)]
         for (name, evidence) in expected {
             #expect(listed[name]?.evidence == evidence, "\(name)")
             #expect(!(listed[name]?.source.isEmpty ?? true), "\(name) has no source")
@@ -226,6 +227,7 @@ import Testing
         #expect(q.mentoringGuess.value == [.teamLeader: .average, .highlyInfluential: .light, .influential: .light, .others: .none])
         #expect(q.mentoringStrengthWeights.value == [.none: 0, .light: 1, .average: 2, .significant: 3])
         #expect(q.mentoringTakesNothingAfter.value == 3)
+        #expect(q.mentoringRegroupFactor.value == 1.5)
     }
 
     @Test func theDepthParametersAreListedWithEvidenceAndSource() {

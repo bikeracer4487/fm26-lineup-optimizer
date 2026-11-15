@@ -2,9 +2,9 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// The Training screen's Mentoring tab for the squad the menu shows: the engine's standing note, then four parts down
-/// the screen (the hierarchy as entered, the suggested groups, the owner's own groups, and the players not placed when
-/// there are any), or, while the squad has not been imported, only that. A squad whose advice stopped shows the
+/// The Training screen's Mentoring tab for the squad the menu shows: the engine's standing note, then its parts down
+/// the screen (the hierarchy as entered, the suggested groups, the owner's own groups, a regrouping when the engine
+/// has one, and the players not placed when there are any), or, while the squad has not been imported, only that. A squad whose advice stopped shows the
 /// engine's sentences where the suggested groups would be.
 struct MentoringTab: View {
     let model: AppModel
@@ -30,6 +30,9 @@ struct MentoringTab: View {
                     navigation.mentoringEditing = .group(MentoringGroupDraft(squad: sheet.squad))
                 }, arrows: { openArrows(of: $0, in: sheet.squad) },
                 edit: { navigation.mentoringEditing = .group($0) }, end: { model.endGroup($0) })
+                if let heading = MentoringPresentation.regroupingHeading(sheet), let regrouping = sheet.regrouping {
+                    RegroupingPart(heading: heading, regrouping: regrouping)
+                }
                 if let heading = MentoringPresentation.notPlacedHeading(sheet) {
                     NotPlacedPart(heading: heading, lines: sheet.notPlaced)
                 }
@@ -188,6 +191,31 @@ private struct YourGroupsPart: View {
             ForEach(sheet.yours) { card in
                 RecordedGroupCardView(card: card, arrows: { arrows(card.arrowsDraftMembers) },
                                       edit: { edit(card.draft) }, end: { end(card.id) })
+            }
+        }
+    }
+}
+
+/// The engine's sentences on a regrouping, then a card for each group it would make. The cards have nothing to press:
+/// the groups to break up are ended on their own cards, and their players are then suggested.
+private struct RegroupingPart: View {
+    let heading: String
+    let regrouping: RegroupingBlock
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+            BoardHeading(heading, size: Theme.TypeSize.boardTitle)
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                ForEach(Array(regrouping.lines.enumerated()), id: \.offset) { line in
+                    Text(line.element)
+                        .font(Theme.Typeface.text(Theme.TypeSize.body))
+                        .foregroundStyle(Theme.Colour.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: Theme.Layout.readingWidth, alignment: .leading)
+            ForEach(regrouping.cards) { card in
+                SuggestedGroupCardView(card: card, recordArrows: {}, record: {})
             }
         }
     }

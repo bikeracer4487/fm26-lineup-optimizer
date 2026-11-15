@@ -158,6 +158,8 @@ public enum Mentoring {
         for (name, value) in positives where value <= 0 {
             found.append("\(name) is \(value), which is not above 0")
         }
+        let factor = parameters.mentoringRegroupFactor.value
+        if factor < 1 { found.append("mentoringRegroupFactor is \(factor), which is below 1") }
         let guesses = parameters.mentoringGuess.value
         for standing in Standing.allCases where guesses[standing] == nil {
             found.append("mentoringGuess has no strength for \(standing.rawValue)")

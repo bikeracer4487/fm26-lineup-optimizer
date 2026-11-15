@@ -35,7 +35,7 @@ import Testing
 
     func report(_ squad: Squad, isStale: Bool) -> MentoringReport {
         MentoringReport(squad: squad, needsHierarchy: false, isStale: isStale, suggestions: [], notPlaced: [], groups: [],
-                        basis: .derived)
+                        regrouping: nil, basis: .derived)
     }
 
     @Test func aStaleHierarchyPointsToWhereToCheckIt() {
@@ -119,10 +119,11 @@ import Testing
         #expect(AdvisorText.change(change(.pressure, nil, nil, weeks: 0, .noReading)) == nil)
     }
 
-    func review(harm: Bool = false, noInfluence: Bool = false, stopped: Bool = false, unread: Int = 0) -> GroupReview {
+    func review(harm: Bool = false, noInfluence: Bool = false, stopped: Bool = false, unread: Int = 0,
+                gain: GroupGain = .toAMember) -> GroupReview {
         let group = MentoringGroup(id: UUID(), squad: .firstTeam, startedOn: Day(year: 2026, month: 9, day: 1)!, members: [])
         return GroupReview(group: group, members: [], arrows: [], unreadArrows: unread, hasNoInfluence: noInfluence,
-                           warnings: [], isDoingHarm: harm, hasStoppedWorking: stopped, basis: .derived)
+                           gain: gain, warnings: [], isDoingHarm: harm, hasStoppedWorking: stopped, basis: .derived)
     }
 
     @Test func aGroupDoingHarmOrStoppedSaysSoAndOtherwiseNothing() {
@@ -140,6 +141,71 @@ import Testing
                 == "This group has stopped working: nobody it influences has changed in 8 weeks. Consider regrouping.")
         #expect(AdvisorText.state(of: review(), parameters: parameters) == nil)
         #expect(AdvisorText.state(of: review(unread: 4), parameters: parameters) == nil)
+    }
+
+    @Test func aGroupThatGivesNothingSaysToBreakItUp() {
+        let nobody = "Nobody in this group has anything to gain from it. Break it up."
+        #expect(AdvisorText.state(of: review(gain: .toNobody), parameters: parameters) == nobody)
+        #expect(AdvisorText.state(of: review(gain: .onlyToAMemberWhoWillGo), parameters: parameters)
+                == "Only a player on loan here or advised to leave gains from this group. Break it up.")
+        // While an arrow is still a guess it is what this tool expects, and reading the arrows comes first.
+        #expect(AdvisorText.state(of: review(unread: 2, gain: .toNobody), parameters: parameters)
+                == "Nobody in this group is expected to gain anything from it. Record its arrows to check, or break it up.")
+        #expect(AdvisorText.state(of: review(unread: 1, gain: .onlyToAMemberWhoWillGo), parameters: parameters)
+                == "Only a player on loan here or advised to leave is expected to gain from this group. "
+                + "Record its arrows to check, or break it up.")
+        // Doing harm and showing no influence are said first; that it has stopped is not said as well.
+        #expect(AdvisorText.state(of: review(harm: true, gain: .toNobody), parameters: parameters)
+                == "This group is doing harm: a member is worth less than when he joined. Consider regrouping.")
+        #expect(AdvisorText.state(of: review(noInfluence: true, gain: .toNobody), parameters: parameters)
+                == "The game shows no influence in this group: all six arrows are None. Consider regrouping.")
+        #expect(AdvisorText.state(of: review(stopped: true, gain: .toNobody), parameters: parameters) == nobody)
+        // Not known, with no hierarchy to guess from: nothing is said.
+        #expect(AdvisorText.state(of: review(unread: 6, gain: .notKnown), parameters: parameters) == nil)
+        // That it has stopped is still said of a group whose gain is not known.
+        #expect(AdvisorText.state(of: review(stopped: true, unread: 3, gain: .notKnown), parameters: parameters)
+                == "This group has stopped working: nobody it influences has changed in 13 weeks. Consider regrouping.")
+    }
+
+    func suggested(_ names: [String], isRead: Bool) -> SuggestedGroup {
+        SuggestedGroup(members: names.map { SuggestedMember(player: PlayerID(key: $0.lowercased()), name: $0, age: 18) },
+                       arrows: [], isRead: isRead, cautions: [], basis: .derived)
+    }
+
+    func regrouping(_ groups: [SuggestedGroup], breakUp: Int = 1, leftOut: [String] = [], isRead: Bool = true) -> Regrouping {
+        Regrouping(breakUp: (0..<breakUp).map { _ in UUID() }, groups: groups,
+                   leftOut: leftOut.map { SuggestedMember(player: PlayerID(key: $0.lowercased()), name: $0, age: 30) },
+                   isRead: isRead, basis: .derived)
+    }
+
+    @Test func aRegroupingSaysWhatToBreakUpAndWhatItRestsOn() {
+        let one = regrouping([suggested(["Hart", "Young", "Reid"], isRead: true)])
+        #expect(one.isRead)
+        #expect(AdvisorText.regrouping(one, breakingUp: [["Hart", "Okafor", "Lane"]])
+                == ["Breaking up Hart, Okafor and Lane's group and making this one may do more for your players."])
+
+        let two = regrouping([suggested(["Hart", "Young", "Reid"], isRead: true),
+                              suggested(["Okafor", "Pike", "Cole"], isRead: false)], breakUp: 2, leftOut: ["Lane"],
+                             isRead: false)
+        #expect(!two.isRead)
+        #expect(AdvisorText.regrouping(two, breakingUp: [["Hart", "Okafor", "Lane"], ["Young", "Reid", "Pike"]]) == [
+            "Breaking up Hart, Okafor and Lane's group and Young, Reid and Pike's and making these may do more for your "
+                + "players.",
+            "Lane would be left in no group.",
+            "It rests on arrows this tool expects and has not read: the game may show them differently."])
+
+        let more = regrouping([suggested(["Hart", "Young", "Reid"], isRead: true)], leftOut: ["Lane", "Vic", "Old"])
+        #expect(AdvisorText.regrouping(more, breakingUp: [["Hart", "Lane"]]) == [
+            "Breaking up Hart and Lane's group and making this one may do more for your players.",
+            "Lane, Vic and Old would be left in no group."])
+    }
+
+    @Test func aGroupToBreakUpSaysSoOnItsCard() {
+        #expect(AdvisorText.regroup(alongside: [])
+                == "These players may do more in other groups: this tool would break this group up.")
+        #expect(AdvisorText.regroup(alongside: ["Okafor", "Lane", "Pike"])
+                == "These players may do more in other groups: this tool would break this group up, and Okafor, Lane and "
+                + "Pike's with it.")
     }
 
     @Test func arrowsStillToReadAreCounted() {

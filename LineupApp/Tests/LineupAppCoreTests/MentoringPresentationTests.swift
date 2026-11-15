@@ -49,9 +49,10 @@ import Testing
     }
 
     private func pinned(suggestions: [SuggestedGroup] = [], notPlaced: [NotPlaced] = [], groups: [GroupReview] = [],
-                        needsHierarchy: Bool = false) -> MentoringAdvice {
+                        regrouping: Regrouping? = nil, needsHierarchy: Bool = false) -> MentoringAdvice {
         .ready(MentoringReport(squad: .firstTeam, needsHierarchy: needsHierarchy, isStale: false,
-                               suggestions: suggestions, notPlaced: notPlaced, groups: groups, basis: .carriedOverFM26))
+                               suggestions: suggestions, notPlaced: notPlaced, groups: groups, regrouping: regrouping,
+                               basis: .carriedOverFM26))
     }
 
     /// Enters each player's level and group for the squad, as its hierarchy editor would.
@@ -339,7 +340,7 @@ import Testing
     }
 
     private func review(doingHarm: Bool = true, stopped: Bool = false, noInfluence: Bool = false,
-                        unread: Int = 5) -> GroupReview {
+                        unread: Int = 5, gain: GroupGain = .toAMember) -> GroupReview {
         let none = Mentoring.counted(parameters).map { change($0, nil, nil, weeks: 0, .noReading) }
         return GroupReview(
             group: recorded,
@@ -349,7 +350,7 @@ import Testing
                 MemberReview(player: lane, name: "Lane", age: 20,
                              changes: [change(.professionalism, 9, 10, .improved), change(.pressure, 5, 5, .noChange)]),
                 MemberReview(player: pike, name: "Pike", age: 17, changes: none)],
-            arrows: noInfluence ? [] : recordedArrows, unreadArrows: unread, hasNoInfluence: noInfluence,
+            arrows: noInfluence ? [] : recordedArrows, unreadArrows: unread, hasNoInfluence: noInfluence, gain: gain,
             warnings: [.harmfulArrow(from: okafor, to: pike, strength: .light, isRead: false, attribute: .ambition,
                                      fromValue: 6, toValue: 9)],
             isDoingHarm: doingHarm, hasStoppedWorking: stopped, basis: .derived)
@@ -436,8 +437,8 @@ import Testing
         group.members[2].leftOn = asOf
         group.members.append(MentoringMember(player: young, joinedOn: asOf))
         let given = GroupReview(group: group, members: review().members, arrows: recordedArrows, unreadArrows: 4,
-                                hasNoInfluence: false, warnings: [], isDoingHarm: false, hasStoppedWorking: false,
-                                basis: .derived)
+                                hasNoInfluence: false, gain: .toAMember, warnings: [], isDoingHarm: false,
+                                hasStoppedWorking: false, basis: .derived)
         let card = try #require(try sheet([], advice: pinned(groups: [given])).yours.first)
         // The group's current members, by key, as Edit opens with them.
         #expect(card.arrowsDraftMembers == [okafor, young, lane])
@@ -465,11 +466,144 @@ import Testing
     @Test func aMemberNoLongerImportedIsShownByNameWithoutAnAge() throws {
         let gone = MemberReview(player: pike, name: "Pike", age: nil, changes: [])
         let given = GroupReview(group: recorded, members: [review().members[0], review().members[1], gone],
-                                arrows: [], unreadArrows: 2, hasNoInfluence: false, warnings: [.notInSquad(pike)],
-                                isDoingHarm: false, hasStoppedWorking: false, basis: .derived)
+                                arrows: [], unreadArrows: 2, hasNoInfluence: false, gain: .toAMember,
+                                warnings: [.notInSquad(pike)], isDoingHarm: false, hasStoppedWorking: false,
+                                basis: .derived)
         let card = try #require(try sheet([], advice: pinned(groups: [given])).yours.first)
         #expect(card.members[2].nameText == "Pike")
         #expect(card.warnings == ["Pike is no longer in the squad."])
+    }
+
+    // MARK: Breaking a group up
+
+    @Test func aGroupThatGivesNothingSaysToBreakItUp() throws {
+        let spent = review(doingHarm: false, unread: 0, gain: .toNobody)
+        let card = try #require(try sheet([], advice: pinned(groups: [spent])).yours.first)
+        #expect(card.stateText == AdvisorText.state(of: spent, parameters: parameters))
+        #expect(card.stateText == "Nobody in this group has anything to gain from it. Break it up.")
+        #expect(card.noticeTexts == ["Nobody in this group has anything to gain from it. Break it up."])
+        // One that gives a member something has no notice.
+        let healthy = try #require(try sheet([], advice: pinned(groups: [review(doingHarm: false)])).yours.first)
+        #expect(healthy.noticeTexts.isEmpty)
+    }
+
+    /// Hart with Lane and Pike, resting on a guess: what the regrouping would make of the recorded group.
+    private var regrouped: SuggestedGroup {
+        SuggestedGroup(
+            members: [SuggestedMember(player: hart, name: "Hart", age: 34),
+                      SuggestedMember(player: lane, name: "Lane", age: 20),
+                      SuggestedMember(player: pike, name: "Pike", age: 17)],
+            arrows: [arrow(hart, "Hart", lane, "Lane", .average,
+                           pulls: [Pull(attribute: .professionalism, value: 10, towards: 17)])],
+            isRead: false, cautions: [], basis: .derived)
+    }
+
+    private func regrouping(breakUp: [UUID]? = nil) -> Regrouping {
+        Regrouping(breakUp: breakUp ?? [recorded.id], groups: [regrouped],
+                   leftOut: [SuggestedMember(player: okafor, name: "Okafor", age: 30)], isRead: false, basis: .derived)
+    }
+
+    @Test func aRegroupingIsShownInTheEnginesWordsWithItsGroups() throws {
+        let healthy = review(doingHarm: false)
+        let shown = try sheet([], advice: pinned(groups: [healthy], regrouping: regrouping()))
+        let block = try #require(shown.regrouping)
+        #expect(block.lines == AdvisorText.regrouping(regrouping(), breakingUp: [["Okafor", "Lane", "Pike"]]))
+        #expect(block.lines == [
+            "Breaking up Okafor, Lane and Pike's group and making this one may do more for your players.",
+            "Okafor would be left in no group.",
+            "It rests on arrows this tool expects and has not read: the game may show them differently."])
+        #expect(block.cards.map(\.titleText) == ["Hart, Lane, Pike"])
+        #expect(block.cards.first?.arrows == regrouped.arrows.map(ArrowLine.init))
+        #expect(MentoringPresentation.regroupingHeading(shown) == "Regrouping to try")
+
+        // The group to break up says so on its card, under no state of its own.
+        let card = try #require(shown.yours.first)
+        #expect(card.stateText == nil)
+        #expect(card.regroupText == AdvisorText.regroup(alongside: []))
+        #expect(card.noticeTexts == ["These players may do more in other groups: this tool would break this group up."])
+        #expect(card.spokenText.contains("These players may do more in other groups: this tool would break this group up."))
+    }
+
+    @Test func aGroupOfARegroupingCannotBeRecordedFromItsCard() throws {
+        let shown = try sheet([], advice: pinned(suggestions: [suggestion], groups: [review(doingHarm: false)],
+                                                 regrouping: regrouping()))
+        let card = try #require(shown.regrouping?.cards.first)
+        // Its players are still in a recorded group: nothing to record and no arrows to read until that is ended.
+        #expect(card.recordTitle == nil)
+        #expect(card.recordArrowsTitle == nil)
+        #expect(card.promptText == nil)
+        #expect(card.noteText == "(this tool's estimate)")
+        // A suggested group is recorded as before.
+        let suggested = try #require(shown.suggested.first)
+        #expect(suggested.recordTitle == "Record as set")
+        #expect(suggested.recordArrowsTitle == "Record arrows")
+        #expect(suggested.promptText == AdvisorText.setAndRecordArrows)
+    }
+
+    @Test func aGroupWithAStateOfItsOwnShowsBothNotices() throws {
+        let spent = review(doingHarm: false, unread: 0, gain: .toNobody)
+        let card = try #require(try sheet([], advice: pinned(groups: [spent], regrouping: regrouping())).yours.first)
+        #expect(card.noticeTexts == ["Nobody in this group has anything to gain from it. Break it up.",
+                                     "These players may do more in other groups: this tool would break this group up."])
+    }
+
+    @Test func twoGroupsBrokenUpTogetherNameEachOther() throws {
+        let otherID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+        let other = GroupReview(
+            group: MentoringGroup(id: otherID, squad: .firstTeam, startedOn: started,
+                                  members: [MentoringMember(player: hart, joinedOn: started),
+                                            MentoringMember(player: young, joinedOn: started),
+                                            MentoringMember(player: reid, joinedOn: started)]),
+            members: [MemberReview(player: hart, name: "Hart", age: 34, changes: []),
+                      MemberReview(player: young, name: "Young", age: 18, changes: []),
+                      MemberReview(player: reid, name: "Reid", age: 19, changes: [])],
+            arrows: [], unreadArrows: 0, hasNoInfluence: false, gain: .toAMember, warnings: [], isDoingHarm: false,
+            hasStoppedWorking: false, basis: .derived)
+        let untouched = GroupReview(
+            group: MentoringGroup(id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!, squad: .firstTeam,
+                                  startedOn: started, members: [MentoringMember(player: mills, joinedOn: started)]),
+            members: [MemberReview(player: mills, name: "Mills", age: 28, changes: [])],
+            arrows: [], unreadArrows: 0, hasNoInfluence: false, gain: .toAMember, warnings: [], isDoingHarm: false,
+            hasStoppedWorking: false, basis: .derived)
+        let shown = try sheet([], advice: pinned(groups: [review(doingHarm: false), other, untouched],
+                                                 regrouping: regrouping(breakUp: [recorded.id, otherID])))
+        #expect(shown.yours.map(\.regroupText) == [
+            "These players may do more in other groups: this tool would break this group up, and Hart, Young and "
+                + "Reid's with it.",
+            "These players may do more in other groups: this tool would break this group up, and Okafor, Lane and "
+                + "Pike's with it.",
+            nil])
+        #expect(shown.regrouping?.lines.first
+                == "Breaking up Okafor, Lane and Pike's group and Hart, Young and Reid's and making this one may do more "
+                + "for your players.")
+    }
+
+    @Test func noRegroupingShowsNothing() throws {
+        let shown = try sheet([], advice: pinned(groups: [review(doingHarm: false)]))
+        #expect(shown.regrouping == nil)
+        #expect(MentoringPresentation.regroupingHeading(shown) == nil)
+        #expect(shown.yours.first?.regroupText == nil)
+        // Nor when the squad is not imported or its advice stopped.
+        #expect(try sheet([], advice: .needsSquad).regrouping == nil)
+        #expect(try sheet([], advice: .failed(["Something"])).regrouping == nil)
+    }
+
+    @Test func theEnginesRegroupingReachesTheSheet() throws {
+        // Hart, a Team Leader, is recorded with two players of 30 he gives nothing; Young and Reid, free, would gain.
+        let players = [player(hart, "Hart", age: 34, professionalism: 17), player(okafor, "Okafor", age: 30),
+                       player(mills, "Mills", age: 30), player(young, "Young", age: 18), player(reid, "Reid", age: 19)]
+        var state = MentoringState()
+        enter([hart: PlayerDynamics(standing: .teamLeader)], into: &state)
+        state.groups = [MentoringGroup(id: recorded.id, squad: .firstTeam, startedOn: started,
+                                       members: [hart, okafor, mills].map { MentoringMember(player: $0, joinedOn: started) })]
+        let shown = try sheet(players, state)
+        #expect(shown.regrouping?.cards.map(\.titleText) == ["Hart, Young, Reid"])
+        #expect(shown.regrouping?.lines.first
+                == "Breaking up Hart, Okafor and Mills's group and making this one may do more for your players.")
+        let card = try #require(shown.yours.first)
+        #expect(card.stateText == "Nobody in this group is expected to gain anything from it. "
+                + "Record its arrows to check, or break it up.")
+        #expect(card.regroupText != nil)
     }
 
     // MARK: Not ready and failed

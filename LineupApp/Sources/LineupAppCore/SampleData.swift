@@ -564,6 +564,55 @@ public enum SampleData {
         return model
     }
 
+    /// The hierarchy sample with its three seniors recorded by hand as a group today. Nobody is expected to influence a
+    /// player of their age, so the group is expected to give nobody anything; and the juniors, left with no senior
+    /// free, would gain from one, so the advice has a regrouping.
+    @MainActor public static func modelWithRegrouping(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithHierarchy(repositoryRoot: repositoryRoot)
+        try recordSeniors(in: model)
+        return model
+    }
+
+    /// As `modelWithRegrouping`, with the other two seniors given the Team Leader's values where they count before
+    /// the group was recorded, and its six arrows read today in the arrows sheet: Light from the Team Leader into each
+    /// of the other two and None for the rest. The arrows are the game's, and give nobody anything.
+    @MainActor public static func modelWithSpentGroup(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithHierarchy(repositoryRoot: repositoryRoot)
+        let levels = model.mentoring.dynamics(for: .firstTeam)
+        let players = model.squad.book.current[.firstTeam] ?? []
+        guard let leader = players.first(where: { levels[$0.id]?.standing == .teamLeader }) else {
+            throw SampleDataError(description: "The hierarchy sample has no Team Leader.")
+        }
+        let counted = Mentoring.counted(model.planParameters)
+        edit(model) { player in
+            guard let standing = levels[player.id]?.standing, standing > .others, player.id != leader.id else { return }
+            for attribute in counted { player.attributes[attribute] = leader.attributes[attribute] }
+        }
+        let members = try recordSeniors(in: model)
+        var draft = model.arrowsDraft(for: .firstTeam, members: members)
+        for pair in draft.pairs { draft.strengths[pair] = pair.from == leader.id ? .light : ArrowStrength.none }
+        try saveArrows(draft, in: model)
+        return model
+    }
+
+    /// Records the first team's players with a level above Others as a group, as the group editor's Save does, and
+    /// returns them; or says why the sample could not, or that the advice then has no regrouping.
+    @MainActor @discardableResult private static func recordSeniors(in model: AppModel) throws -> [PlayerID] {
+        let levels = model.mentoring.dynamics(for: .firstTeam)
+        let seniors = (model.squad.book.current[.firstTeam] ?? []).map(\.id).filter {
+            (levels[$0]?.standing ?? .others) > .others
+        }
+        let draft = MentoringGroupDraft(squad: .firstTeam, members: seniors)
+        if let problem = model.mentoringProblem(of: draft) {
+            throw SampleDataError(description: "The sample's seniors could not be recorded as a group: \(problem)")
+        }
+        model.saveGroup(draft)
+        guard case .ready(let report) = model.mentoringAdvice(for: .firstTeam), report.regrouping != nil else {
+            throw SampleDataError(description: "The sample's mentoring advice has no regrouping for its seniors' group.")
+        }
+        return seniors
+    }
+
     /// Saves the arrows as the sheet's Save does, or says why the sample could not.
     @MainActor private static func saveArrows(_ draft: ArrowsDraft, in model: AppModel) throws {
         if let problem = model.arrowsProblem(of: draft) {

@@ -134,13 +134,29 @@ extension AdvisorText {
 
     public static let noReadingYet = "No reading yet: values are read at each import"
 
-    /// What a recorded group is doing, when that is bad: doing harm, then no influence, then stopped; nil otherwise.
+    /// What a recorded group is doing, when that is bad: doing harm, then no influence, then giving nothing to a
+    /// player of the club's own who is staying, then stopped; nil otherwise. A group that gives nothing is to be broken
+    /// up; while any of its arrows is a guess that is what this tool expects, and recording them comes first. Nothing
+    /// is said of what it gives while that is not known.
     public static func state(of review: GroupReview, parameters: EngineParameters) -> String? {
         if review.isDoingHarm {
             return "This group is doing harm: a member is worth less than when he joined. Consider regrouping."
         }
         if review.hasNoInfluence {
             return "The game shows no influence in this group: all six arrows are None. Consider regrouping."
+        }
+        let isRead = review.unreadArrows == 0
+        switch review.gain {
+        case .toAMember, .notKnown: break
+        case .onlyToAMemberWhoWillGo:
+            return isRead
+                ? "Only a player on loan here or advised to leave gains from this group. Break it up."
+                : "Only a player on loan here or advised to leave is expected to gain from this group. "
+                    + "Record its arrows to check, or break it up."
+        case .toNobody:
+            return isRead
+                ? "Nobody in this group has anything to gain from it. Break it up."
+                : "Nobody in this group is expected to gain anything from it. Record its arrows to check, or break it up."
         }
         if review.hasStoppedWorking {
             let weeks = parameters.mentoringStoppedAfterWeeks.value
@@ -165,7 +181,34 @@ extension AdvisorText {
 
     /// "Hart, Young and Reid are recorded as a group from today. Set it in the game as well."
     public static func recorded(names: [String]) -> String {
-        let list = names.count <= 1 ? (names.first ?? "") : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
-        return "\(list) are recorded as a group from today. Set it in the game as well."
+        "\(list(names)) are recorded as a group from today. Set it in the game as well."
+    }
+
+    /// "Hart", "Hart and Young", "Hart, Young and Reid".
+    private static func list(_ names: [String]) -> String {
+        names.count <= 1 ? (names.first ?? "") : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
+    }
+
+    /// The sentences over the groups a regrouping would make: what to break up, who would be left in no group, and
+    /// that it rests on a guess when it does. `breakingUp` gives the members' names of each group to break up, in the
+    /// regrouping's order. No number is shown: the count behind it only orders groups.
+    public static func regrouping(_ regrouping: Regrouping, breakingUp groups: [[String]]) -> [String] {
+        let owners = groups.enumerated().map { index, names in index == 0 ? "\(list(names))'s group" : "\(list(names))'s" }
+        var sentences = ["Breaking up \(owners.joined(separator: " and ")) and making "
+            + "\(regrouping.groups.count == 1 ? "this one" : "these") may do more for your players."]
+        if !regrouping.leftOut.isEmpty {
+            sentences.append("\(list(regrouping.leftOut.map(\.name))) would be left in no group.")
+        }
+        if !regrouping.isRead {
+            sentences.append("It rests on arrows this tool expects and has not read: the game may show them differently.")
+        }
+        return sentences
+    }
+
+    /// On the card of a recorded group a regrouping would break up. `others` are the members' names of the group
+    /// broken up with it; empty when it is the only one.
+    public static func regroup(alongside others: [String]) -> String {
+        let start = "These players may do more in other groups: this tool would break this group up"
+        return others.isEmpty ? "\(start)." : "\(start), and \(list(others))'s with it."
     }
 }

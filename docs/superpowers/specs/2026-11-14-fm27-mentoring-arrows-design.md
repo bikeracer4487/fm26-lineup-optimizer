@@ -212,6 +212,16 @@ With them a test says how often the guess of section 8.2 agrees with what he rea
 6. UI: the arrows sheet, the cards, the pictures.
 7. Build; documents.
 
+## 13a. Added on 15 November 2026: when a recorded group should be broken up
+
+The owner's request, after using the built tab: "the app doesn't tell me when an existing mentoring group is no longer optimal. I like the ability to manually choose and save mentoring groups, but the app should still indicate when a mentoring group should be dismantled." Asked whether that meant a group that has run its course, or also players who would do better in other groups: "It should cover both cases." Built without a plan.
+
+**A group that gives nothing.** A recorded group is read for what it still gives (`GroupReview.gain`). A member gains when an arrow above None into him, read or guessed, comes from a member worth more than him over the counted attributes together, as a suggestion counts a gain. When no member of the club's own who is staying gains (none at all, or only a player on loan here or advised to leave), the card says to break the group up. While any of its six arrows is a guess it says that this is what the tool expects, and to record the arrows first. While no player of the squad has a level above Others every guess is None, so nothing is said until all six are read. Doing harm and no influence are said first; "stopped working" is said only for a group that still gives something, or of which that is not known.
+
+**A regrouping.** For each recorded group of the squad, and each two of them, the engine groups their present members with the free players in no suggested group, by the rule that forms the suggestions. The new groups' value is compared with the value of the groups broken up, where a recorded group with a harmful arrow or with no gain has none. A group of which it is not known what it gives (a guess among its arrows, in a squad with no level entered) is never broken up. A regrouping counts when the new value is greater and at least 1.5 times the old (`mentoringRegroupFactor`, this design's choice: a regrouping often rests on arrows not yet read, and the guess is wrong for about one pair in six). The one with the greatest difference is shown; of two the same, the one that breaks up fewer groups. It is shown under the owner's groups as "Regrouping to try": the engine's sentences (what to break up, who would be left in no group, and that it rests on a guess when an arrow the new groups rest on, or any arrow of a group to break up, has not been read), then the groups as cards with their arrows and nothing to press. Each group to break up says so on its card. Ending the group in the app frees its players, and the groups are then suggested in the ordinary way.
+
+Limits. The suggested groups are left as they are, so a free player in a suggestion is never taken for a regrouping. Three or more groups are never broken up together. The groups are found greedily, as the suggestions are, so a better regrouping can exist and not be shown. The count behind it is the one that orders suggestions; it predicts nothing, and no number is shown. What a group has already changed in its members is not weighed against breaking it up.
+
 ## 14. Left to the builder
 
 - The types' names, and how the readings are keyed and saved.

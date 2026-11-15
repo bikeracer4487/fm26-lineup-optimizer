@@ -553,6 +553,176 @@ import Testing
         #expect(throws: PlanError.badParameters(problems)) { try report([noPressure], parameters: bad) }
     }
 
+    // MARK: Regrouping
+
+    /// A player of 30 with every attribute 10: nobody is guessed to influence him, and he has nothing to give a
+    /// player left at 10.
+    func veteran(_ name: String) -> Player { player(name, 30) }
+
+    /// Each group the regrouping would make, as its three keys.
+    func regrouped(_ report: MentoringReport) -> [[String]]? {
+        report.regrouping?.groups.map { $0.members.map(\.player.key) }
+    }
+
+    @Test func aRecordedGroupWhosePlayersWouldDoClearlyMoreElsewhereIsRegrouped() throws {
+        // Lead sits with two veterans he gives nothing; the two juniors free would each gain from him.
+        let recorded = group(["lead", "old", "vet"])
+        let players = [senior("Lead"), veteran("Vet"), veteran("Old"), player("A", 18), player("B", 18)]
+        let result = try report(players, dynamics: leader, groups: [recorded])
+        #expect(result.suggestions.isEmpty)
+        let regrouping = try #require(result.regrouping)
+        #expect(regrouping.breakUp == [recorded.id])
+        #expect(regrouped(result) == [["a", "b", "lead"]])
+        #expect(regrouping.leftOut == [SuggestedMember(player: id("Old"), name: "Old", age: 30),
+                                       SuggestedMember(player: id("Vet"), name: "Vet", age: 30)])
+        #expect(!regrouping.isRead)
+        #expect(regrouping.basis == .derived)
+
+        // It is read once the arrows the new group rests on and the six of the group broken up are all read.
+        let six = ["Lead", "Old", "Vet"].flatMap { from in
+            ["Lead", "Old", "Vet"].filter { $0 != from }.map { reading(from, $0, .none) }
+        }
+        let read = try report(players, dynamics: leader, groups: [recorded],
+                              arrows: six + [reading("Lead", "A", .average), reading("Lead", "B", .average)])
+        #expect(read.regrouping?.isRead == true)
+    }
+
+    @Test func aRegroupingMustBeWorthHalfAsMuchAgain() throws {
+        // The recorded group gives A 60 and Near 24: 84. With B in Near's place it would give 120, under 1.5 times.
+        let recorded = group(["a", "lead", "near"])
+        let near = [senior("Lead"), player("A", 18), player("Near", 18, [.professionalism: 16]), player("B", 18)]
+        #expect(try report(near, dynamics: leader, groups: [recorded]).regrouping == nil)
+
+        // Near one higher gains 18: 78, and 120 is over 1.5 times that.
+        let further = [senior("Lead"), player("A", 18), player("Near", 18, [.professionalism: 17]), player("B", 18)]
+        let result = try report(further, dynamics: leader, groups: [recorded])
+        #expect(regrouped(result) == [["a", "b", "lead"]])
+        #expect(result.regrouping?.leftOut.map(\.player) == [id("Near")])
+
+        // The factor is the parameter's.
+        var looser = q
+        looser.mentoringRegroupFactor = Parameter(1.4, .derived, source: "test")
+        #expect(regrouped(try report(near, dynamics: leader, groups: [recorded], parameters: looser)) == [["a", "b", "lead"]])
+    }
+
+    @Test func aRecordedGroupAsGoodAsAnyOtherIsLeftAlone() throws {
+        let recorded = group(["a", "b", "lead"])
+        let players = [senior("Lead"), player("A", 18), player("B", 18), player("C", 18), veteran("Vet")]
+        #expect(try report(players, dynamics: leader, groups: [recorded]).regrouping == nil)
+        // With no group recorded there is nothing to regroup.
+        #expect(try report(players, dynamics: leader).regrouping == nil)
+    }
+
+    @Test func twoGroupsAreBrokenUpTogetherWhenNeitherAloneWouldDo() throws {
+        // The senior is in one group and the two juniors in the other; nobody is free.
+        let seniors = group(["lead", "vet", "vic"]), juniors = group(["a", "b", "old"])
+        let players = [senior("Lead"), veteran("Vet"), veteran("Vic"), player("A", 18), player("B", 18), veteran("Old")]
+        let result = try report(players, dynamics: leader, groups: [seniors, juniors])
+        let regrouping = try #require(result.regrouping)
+        #expect(Set(regrouping.breakUp) == [seniors.id, juniors.id])
+        #expect(regrouping.breakUp == result.groups.map(\.id))
+        #expect(regrouped(result) == [["a", "b", "lead"]])
+        #expect(regrouping.leftOut.map(\.player.key) == ["old", "vet", "vic"])
+    }
+
+    @Test func oneGroupIsBrokenUpRatherThanTwoForTheSameGain() throws {
+        // Lead's group gives nothing, and A and B are free: breaking up the veterans' group as well adds nothing.
+        let leads = group(["lead", "vet", "vic"]), others = group(["old", "olly", "otto"])
+        let players = [senior("Lead"), veteran("Vet"), veteran("Vic"), veteran("Old"), veteran("Olly"), veteran("Otto"),
+                       player("A", 18), player("B", 18)]
+        let result = try report(players, dynamics: leader, groups: [others, leads])
+        #expect(result.regrouping?.breakUp == [leads.id])
+        #expect(regrouped(result) == [["a", "b", "lead"]])
+    }
+
+    @Test func theRegroupingWithTheGreatestGainIsTheOneShown() throws {
+        // Either senior could take the two free juniors; Lead, at Professionalism 20, gives them more than Second at 15.
+        let first = group(["second", "vet", "vic"]), second = group(["lead", "old", "olly"])
+        let players = [senior("Lead"), senior("Second", 30, [.professionalism: 15]), veteran("Vet"), veteran("Vic"),
+                       veteran("Old"), veteran("Olly"), player("A", 18), player("B", 18)]
+        let result = try report(players, dynamics: levels(["Lead": .teamLeader, "Second": .teamLeader]),
+                                groups: [first, second])
+        #expect(result.regrouping?.breakUp == [second.id])
+        #expect(regrouped(result) == [["a", "b", "lead"]])
+    }
+
+    @Test func aGroupWithAHarmfulArrowCountsForNothing() throws {
+        // Lead's Ambition 6 is below Hale's: the arrow guessed into Hale is harmful, so the recorded group counts for
+        // nothing, though Kid in it gains. B, free, makes a group with Lead and Kid that harms nobody.
+        let recorded = group(["hale", "kid", "lead"])
+        let players = [senior("Lead", 30, [.ambition: 6]), player("Hale", 18, [.ambition: 13]),
+                       player("Kid", 18, [.ambition: 6]), player("B", 18, [.ambition: 6])]
+        let result = try report(players, dynamics: leader, groups: [recorded])
+        #expect(result.groups.first?.gain == .toAMember)
+        #expect(regrouped(result) == [["b", "kid", "lead"]])
+        #expect(result.regrouping?.leftOut.map(\.player) == [id("Hale")])
+    }
+
+    @Test func aRegroupingLeavesTheSuggestedGroupsAsTheyAre() throws {
+        // C and D are suggested with Second; Lead's group gives nothing, and nobody else is free to join him.
+        let recorded = group(["lead", "vet", "vic"])
+        let players = [senior("Lead"), veteran("Vet"), veteran("Vic"), senior("Second"), player("C", 18), player("D", 18)]
+        let both = levels(["Lead": .teamLeader, "Second": .teamLeader])
+        let taken = try report(players, dynamics: both, groups: [recorded])
+        #expect(shape(taken) == [["c", "d", "second"]])
+        #expect(taken.regrouping == nil)
+
+        // E is in no suggestion: he is free for Lead.
+        let spare = try report(players + [player("E", 18)], dynamics: both, groups: [recorded])
+        #expect(shape(spare) == [["c", "d", "second"]])
+        #expect(regrouped(spare) == [["e", "lead", "vet"]])
+        #expect(spare.regrouping?.leftOut.map(\.player) == [id("Vic")])
+    }
+
+    @Test func aGroupWhoseGainIsNotKnownIsNeverBrokenUp() throws {
+        // No level is entered, so the recorded group's unread arrows are all guessed None and say nothing. One arrow
+        // was read from its Lead into a free junior, who with another free player would make a group.
+        let recorded = group(["lead", "vet", "vic"])
+        let players = [senior("Lead"), veteran("Vet"), veteran("Vic"), player("A", 18), player("B", 18)]
+        let read = [reading("Lead", "A", .light)]
+        let unknown = try report(players, groups: [recorded], arrows: read)
+        #expect(unknown.groups.first?.gain == .notKnown)
+        #expect(unknown.regrouping == nil)
+
+        // Its six arrows read as None: it is known to give nothing, and is broken up.
+        let none = ["Lead", "Vet", "Vic"].flatMap { from in
+            ["Lead", "Vet", "Vic"].filter { $0 != from }.map { reading(from, $0, .none) }
+        }
+        let known = try report(players, groups: [recorded], arrows: read + none)
+        #expect(known.groups.first?.gain == .toNobody)
+        // A gains from Lead with either third player; Vet's arrows with Lead were read, B's were not.
+        #expect(regrouped(known) == [["a", "lead", "vet"]])
+        #expect(known.regrouping?.isRead == true)
+    }
+
+    @Test func aRegroupingRestsOnAGuessWhenTheGroupItBreaksUpDoes() throws {
+        // The new group rests on two read arrows; the recorded group's own six are still guesses.
+        let recorded = group(["lead", "old", "vet"])
+        let players = [senior("Lead"), veteran("Vet"), veteran("Old"), player("A", 18), player("B", 18)]
+        let arrows = [reading("Lead", "A", .average), reading("Lead", "B", .average)]
+        let guessed = try report(players, dynamics: leader, groups: [recorded], arrows: arrows)
+        #expect(guessed.regrouping?.groups.allSatisfy(\.isRead) == true)
+        #expect(guessed.regrouping?.isRead == false)
+    }
+
+    @Test func onlyThisSquadsGroupsAndPresentMembersAreRegrouped() throws {
+        let players = [senior("Lead"), veteran("Vet"), player("A", 18), player("B", 18)]
+        // A member no longer imported is neither regrouped nor listed as left out.
+        let recorded = group(["gone", "lead", "vet"])
+        let result = try report(players, dynamics: leader, groups: [recorded])
+        #expect(regrouped(result) == [["a", "b", "lead"]])
+        #expect(result.regrouping?.leftOut.map(\.player) == [id("Vet")])
+
+        // Another squad's group, though it holds this squad's players, is not this report's to break up.
+        let elsewhere = try report(players, dynamics: leader, groups: [group(["gone", "lead", "vet"], squad: .u21)])
+        #expect(elsewhere.regrouping == nil)
+        // Nor an ended one: its players are free, and are suggested.
+        let ended = try report(players, dynamics: leader,
+                               groups: [group(["gone", "lead", "vet"], endedOn: today.adding(days: -1))])
+        #expect(ended.regrouping == nil)
+        #expect(shape(ended) == [["a", "b", "lead"]])
+    }
+
     // MARK: Scope and order
 
     @Test func onlyTheSquadAskedForIsLookedAt() throws {

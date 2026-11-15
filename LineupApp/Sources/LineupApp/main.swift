@@ -80,8 +80,13 @@
 //                                              readings beside suggestions on guesses
 //                                              ("training-mentoring-arrows-read-…"), with the recorded group's
 //                                              harmful arrow read as Significant
-//                                              ("training-mentoring-arrows-harm-…"), and with its six arrows
-//                                              read as None ("training-mentoring-arrows-none-…").
+//                                              ("training-mentoring-arrows-harm-…"), with its six arrows
+//                                              read as None ("training-mentoring-arrows-none-…"), with the three
+//                                              seniors recorded as a group, which is expected to give nobody
+//                                              anything and which a regrouping would break up
+//                                              ("training-mentoring-regroup-…", and "…-regroup-small-…" in the
+//                                              smallest window's width), and the same with its arrows read
+//                                              ("training-mentoring-spent-…").
 //                                              Its editors are drawn on their own: the first team's hierarchy
 //                                              as entered ("training-mentoring-hierarchy-editor-…"), the U21s'
 //                                              ("training-mentoring-hierarchy-editor-u21-…"), a new group
@@ -168,7 +173,7 @@ enum SampleState {
     case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, nothingToRetrain, loanee
     case differingSuggestion
     case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
-    case arrowsRead, harmfulArrow, noInfluence, youngPlayers
+    case arrowsRead, harmfulArrow, noInfluence, regrouping, spentGroup, youngPlayers
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -204,6 +209,8 @@ enum SampleState {
         case .arrowsRead: return try SampleData.modelWithArrowsRead(repositoryRoot: url)
         case .harmfulArrow: return try SampleData.modelWithHarmfulArrow(repositoryRoot: url)
         case .noInfluence: return try SampleData.modelWithNoInfluence(repositoryRoot: url)
+        case .regrouping: return try SampleData.modelWithRegrouping(repositoryRoot: url)
+        case .spentGroup: return try SampleData.modelWithSpentGroup(repositoryRoot: url)
         case .youngPlayers: return try SampleData.modelWithYoungPlayers(repositoryRoot: url)
         }
     } catch {
@@ -357,6 +364,10 @@ let narrowWindow = CGSize(width: 800, height: 700)
         ("mentoring-arrows-read", sampleModel(root, .arrowsRead), tall, mentoring),
         ("mentoring-arrows-harm", sampleModel(root, .harmfulArrow), tall, mentoring),
         ("mentoring-arrows-none", sampleModel(root, .noInfluence), tall, mentoring),
+        ("mentoring-regroup", sampleModel(root, .regrouping), tall, mentoring),
+        ("mentoring-spent", sampleModel(root, .spentGroup), tall, mentoring),
+        ("mentoring-regroup-small", sampleModel(root, .regrouping),
+         CGSize(width: Theme.Layout.minimumWindow.width, height: Theme.Layout.minimumWindow.height * 4), mentoring),
     ]
     for (variant, model, window, start) in pictures {
         try ScreenPictures.write(model: model, to: directory, size: window, variant: variant, screens: [.training],

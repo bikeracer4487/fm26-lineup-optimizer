@@ -3,7 +3,7 @@ import SwiftUI
 
 /// A suggested group on a card: its members' names, each arrow on a line and the cautions; then, at the start of the
 /// last row, the prompt to record its arrows over the evidence note, with Record arrows (while it rests on a guess) and
-/// Record as set at the end of the row, or under them when narrow.
+/// Record as set at the end of the row, or under them when narrow. A group of a regrouping has neither button.
 struct SuggestedGroupCardView: View {
     let card: SuggestedGroupCard
     let recordArrows: () -> Void
@@ -28,8 +28,10 @@ struct SuggestedGroupCardView: View {
                         Button(title, action: recordArrows)
                             .buttonStyle(.secondary)
                     }
-                    Button(MentoringPresentation.recordTitle, action: record)
-                        .buttonStyle(.main)
+                    if let title = card.recordTitle {
+                        Button(title, action: record)
+                            .buttonStyle(.main)
+                    }
                 }
             }
         }
@@ -39,8 +41,8 @@ struct SuggestedGroupCardView: View {
     }
 }
 
-/// One of the owner's groups on a card: across the top, on a pink band, that it is doing harm, shows no influence or has
-/// stopped working when it is; its members and since when; each arrow on a line; each member with what has changed; the
+/// One of the owner's groups on a card: across the top, on a pink band, that it is doing harm, shows no influence, gives
+/// nobody anything or has stopped working when it is, and that a regrouping would break it up; its members and since when; each arrow on a line; each member with what has changed; the
 /// warnings, marked in red; then, at the start of the last row, the prompt to record its arrows over the evidence note,
 /// with Arrows, which opens all six, Edit and End group at the end of the row, or under them when narrow.
 struct RecordedGroupCardView: View {
@@ -51,15 +53,19 @@ struct RecordedGroupCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let state = card.stateText {
-                Text(state)
-                    .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, Theme.Card.padding + Theme.Spacing.xxs)
-                    .padding(.vertical, Theme.Sticky.verticalPadding)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .stickyNote(Theme.Mentoring.stateNote, tilt: 0)
-                    .accessibilityHidden(true)
+            if !card.noticeTexts.isEmpty {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    ForEach(Array(card.noticeTexts.enumerated()), id: \.offset) { notice in
+                        Text(notice.element)
+                            .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.horizontal, Theme.Card.padding + Theme.Spacing.xxs)
+                .padding(.vertical, Theme.Sticky.verticalPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .stickyNote(Theme.Mentoring.stateNote, tilt: 0)
+                .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 VStack(alignment: .leading, spacing: Theme.Spacing.s) {

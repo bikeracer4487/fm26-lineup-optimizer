@@ -705,6 +705,9 @@ public struct EngineParameters: Sendable {
     public var mentoringStrengthWeights: Parameter<[ArrowStrength: Int]>
     /// A player is taken to take nothing once this many different seniors (Influential or above) show him None.
     public var mentoringTakesNothingAfter: Parameter<Int>
+    /// A regrouping is shown only when the groups it would make count for at least this many times what the recorded
+    /// groups it breaks up count for, by the count that orders the suggestions.
+    public var mentoringRegroupFactor: Parameter<Double>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -1134,7 +1137,11 @@ public struct EngineParameters: Sendable {
             mentoringTakesNothingAfter: Parameter(
                 3, .derived,
                 source: "this design's choice; in the owner's readings of 14 November 2026 one player took nothing from four "
-                    + "seniors and another from four"))
+                    + "seniors and another from four"),
+            mentoringRegroupFactor: Parameter(
+                1.5, .derived,
+                source: "this design's choice: a regrouping often rests on arrows not yet read, and the guess agreed with "
+                    + "104 of the owner's 124 readings of 14 November 2026, so a small difference is not shown"))
     }()
 
     private static let removalSource = "ui/api/api_player_removal.py (branch customizable-tactics)"

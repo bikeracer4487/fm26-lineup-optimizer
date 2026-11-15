@@ -591,4 +591,85 @@ import Testing
         #expect(backward.isDoingHarm == forward.isDoingHarm)
         #expect(backward.hasStoppedWorking == forward.hasStoppedWorking)
     }
+
+    // MARK: What the group still gives
+
+    @Test func aGroupGivesNothingWhenNoMemberHasAnythingToGain() throws {
+        // Everyone at 10: Lead's two arrows are above None and give nothing.
+        let spent = review(group(["Lead", "Abel", "Brook"]), trio)
+        #expect(spent.arrows.count == 2)
+        #expect(spent.gain == .toNobody)
+
+        // Abel one below Lead in Professionalism: he has something to gain.
+        let working = review(group(["Lead", "Abel", "Brook"]),
+                             [player("Lead", 34), player("Abel", 18, [.professionalism: 9]), player("Brook", 18)])
+        #expect(working.gain == .toAMember)
+    }
+
+    @Test func aGainCountsOnlyThroughAnArrowAboveNone() throws {
+        let players = [player("Lead", 34), player("Abel", 18, [.professionalism: 5]), player("Brook", 18)]
+        let members = group(["Lead", "Abel", "Brook"])
+        // Abel is well below both, and the one arrow guessed into him was read as None.
+        #expect(review(members, players, arrows: [arrow("Lead", "Abel", .none)]).gain == .toNobody)
+        // Brook's arrow into him read as Light: Brook is worth more than him.
+        #expect(review(members, players, arrows: [arrow("Lead", "Abel", .none), arrow("Brook", "Abel", .light)]).gain
+                == .toAMember)
+    }
+
+    @Test func aGainIsJudgedOverTheCountedAttributesTogether() throws {
+        let members = group(["Lead", "Abel", "Brook"])
+        // Lead is 2 better in Determination (worth 2) and 1 worse in Professionalism (worth 3): worth less overall.
+        let worse = review(members, [player("Lead", 34, [.professionalism: 9]), player("Abel", 18, [.determination: 8]),
+                                     player("Brook", 18, [.determination: 8])])
+        #expect(worse.gain == .toNobody)
+        #expect(!worse.warnings.isEmpty)
+        // Level in Professionalism: the Determination is a gain.
+        let better = review(members, [player("Lead", 34), player("Abel", 18, [.determination: 8]), player("Brook", 18)])
+        #expect(better.gain == .toAMember)
+    }
+
+    @Test func aGainToAMemberWhoWillGoIsSaidApart() throws {
+        let members = group(["Lead", "Abel", "Brook"])
+        let lead = player("Lead", 34), brook = player("Brook", 18)
+        // The only member with something to gain is on loan here.
+        let onLoan = review(members, [lead, player("Abel", 18, [.professionalism: 8], club: "Banbury United"), brook])
+        #expect(onLoan.gain == .onlyToAMemberWhoWillGo)
+        // Or advised to leave.
+        let own = [lead, player("Abel", 18, [.professionalism: 8]), brook]
+        #expect(review(members, own, leaving: [id("Abel")]).gain == .onlyToAMemberWhoWillGo)
+        #expect(review(members, own).gain == .toAMember)
+        // A second member who gains and stays is a gain to a member.
+        let both = [lead, player("Abel", 18, [.professionalism: 8]), player("Brook", 18, [.professionalism: 8])]
+        #expect(review(members, both, leaving: [id("Abel")]).gain == .toAMember)
+    }
+
+    @Test func withNoHierarchyAGuessSaysNothingAboutWhatTheGroupGives() throws {
+        let players = [player("Lead", 34), player("Abel", 18, [.professionalism: 8]), player("Brook", 18)]
+        let members = group(["Lead", "Abel", "Brook"])
+        // Nobody in the squad has a level: every guess is None, which is no reason to break a group up.
+        #expect(review(members, players, dynamics: [:]).gain == .notKnown)
+        // Still not known with five of the six read as None.
+        let five = six(["Lead", "Abel", "Brook"]).dropLast()
+        #expect(review(members, players, dynamics: [:], arrows: Array(five)).gain == .notKnown)
+        // An arrow read above None with something to give is the game's own.
+        #expect(review(members, players, dynamics: [:], arrows: [arrow("Lead", "Abel", .light)]).gain == .toAMember)
+        // All six read, and the one above None gives nothing: nobody gains, hierarchy or not.
+        let read = six(["Lead", "Abel", "Brook"]).filter { !($0.from == id("Lead") && $0.to == id("Brook")) }
+            + [arrow("Lead", "Brook", .light)]
+        #expect(review(members, players, dynamics: [:], arrows: read).gain == .toNobody)
+        // A level entered for anyone in the squad makes the guesses count.
+        #expect(review(members, players + [player("Chief", 30)],
+                       dynamics: [id("Chief"): PlayerDynamics(standing: .influential)]).gain == .toNobody)
+    }
+
+    @Test func aMemberWhoHasGoneGivesNothing() throws {
+        // Abel had something to gain from Lead, who is no longer imported. Chief keeps a level in the squad.
+        let levels = leader.merging([id("Chief"): PlayerDynamics(standing: .influential)]) { first, _ in first }
+        let left = [player("Abel", 18, [.professionalism: 8]), player("Brook", 18)]
+        let result = review(group(["Lead", "Abel", "Brook"]), left + [player("Chief", 30)], dynamics: levels)
+        #expect(result.gain == .toNobody)
+        #expect(result.warnings == [.notInSquad(id("Lead"))])
+        // With Lead the only player who had a level, the guesses left say nothing.
+        #expect(review(group(["Lead", "Abel", "Brook"]), left).gain == .notKnown)
+    }
 }

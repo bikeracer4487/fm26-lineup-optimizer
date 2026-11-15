@@ -1263,6 +1263,50 @@ import LineupEngine
         #expect(model.notices.isEmpty)
     }
 
+    @Test func theRegroupingSampleHasAGroupExpectedToGiveNothingAndARegrouping() throws {
+        let model = try SampleData.modelWithRegrouping(repositoryRoot: Captures.repositoryRoot)
+        let advice = try report(model)
+        let review = try #require(advice.groups.first)
+        #expect(review.gain == .toNobody)
+        #expect(review.unreadArrows == 6)
+        #expect(!review.hasNoInfluence && !review.hasStoppedWorking && !review.isDoingHarm)
+        let regrouping = try #require(advice.regrouping)
+        #expect(regrouping.breakUp == [review.id])
+        #expect(!regrouping.isRead)
+
+        let sheet = model.mentoringSheet(for: .firstTeam)
+        let card = try #require(sheet.yours.first)
+        #expect(card.noticeTexts == [
+            "Nobody in this group is expected to gain anything from it. Record its arrows to check, or break it up.",
+            "These players may do more in other groups: this tool would break this group up."])
+        let block = try #require(sheet.regrouping)
+        #expect(block.cards.count == regrouping.groups.count)
+        #expect(block.cards.allSatisfy { $0.recordTitle == nil })
+        #expect(block.lines.last == "It rests on arrows this tool expects and has not read: the game may show them differently.")
+
+        // Ending the group frees its players: the regrouping's groups are then suggested, and can be recorded.
+        model.endGroup(review.id)
+        let after = model.mentoringSheet(for: .firstTeam)
+        #expect(after.regrouping == nil)
+        #expect(after.yours.isEmpty)
+        #expect(after.suggested.map(\.titleText) == block.cards.map(\.titleText))
+        #expect(after.suggested.allSatisfy { $0.recordTitle == "Record as set" })
+    }
+
+    @Test func theSpentSampleHasAGroupWhoseReadArrowsGiveNothing() throws {
+        let model = try SampleData.modelWithSpentGroup(repositoryRoot: Captures.repositoryRoot)
+        let advice = try report(model)
+        let review = try #require(advice.groups.first)
+        #expect(review.gain == .toNobody)
+        #expect(review.unreadArrows == 0)
+        #expect(review.arrows.count == 2)
+        #expect(review.arrows.allSatisfy { $0.arrow.strength == .light && $0.pulls.isEmpty })
+        #expect(!review.hasNoInfluence && review.warnings.isEmpty)
+        let card = try #require(model.mentoringSheet(for: .firstTeam).yours.first)
+        #expect(card.stateText == "Nobody in this group has anything to gain from it. Break it up.")
+        #expect(card.arrowsPromptText == nil)
+    }
+
     @Test func theStoppedSampleIsFourteenWeeksOldWithNoChange() throws {
         let model = try SampleData.modelWithStoppedGroup(repositoryRoot: Captures.repositoryRoot)
         let review = try #require(try report(model).groups.first)

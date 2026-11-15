@@ -34,6 +34,20 @@ public enum GroupWarning: Equatable, Sendable {
     case advisedToLeave(PlayerID)
 }
 
+/// What a recorded group still gives, by the arrows above None between its present members, read or guessed. A member
+/// gains when the source of such an arrow into him is worth more than him over the counted attributes together.
+public enum GroupGain: Equatable, Sendable {
+    /// A member of the club's own who is not advised to leave gains.
+    case toAMember
+    /// The only members who gain are on loan here or advised to leave.
+    case onlyToAMemberWhoWillGo
+    /// No member gains.
+    case toNobody
+    /// No member is seen to gain, but an arrow of the group is a guess and no player of the squad has a level above
+    /// Others, so every guess is None and says nothing.
+    case notKnown
+}
+
 public struct GroupReview: Identifiable, Equatable, Sendable {
     public var id: UUID { group.id }
     public let group: MentoringGroup
@@ -45,6 +59,8 @@ public struct GroupReview: Identifiable, Equatable, Sendable {
     public let unreadArrows: Int
     /// The group's three current members are all present, and all six arrows between them were read as None.
     public let hasNoInfluence: Bool
+    /// What the group still gives. A member without a value for every counted attribute neither gives nor gains.
+    public let gain: GroupGain
     /// In the order of `GroupWarning`'s cases. `harmfulArrow` by the source's key, then the target's, then in
     /// `Mentoring.counted` order; the others by player key.
     public let warnings: [GroupWarning]
@@ -127,6 +143,22 @@ extension Mentoring {
         let hasNoInfluence = members.count == Mentoring.groupSize && present.count == members.count
             && pairs.allSatisfy { $0.arrow.isRead && $0.arrow.strength == .none }
 
+        // As a suggestion counts a gain: the source's worth less the target's, over the counted attributes together.
+        var gain = GroupGain.toNobody
+        for pair in influencing where gain != .toAMember {
+            guard let source = pair.from.values, let target = pair.to.values else { continue }
+            let difference = counted.reduce(0) {
+                $0 + worth($1, source[$1]!, parameters: parameters) - worth($1, target[$1]!, parameters: parameters)
+            }
+            guard difference > 0 else { continue }
+            let willGo = LoanStatus.of(pair.to.imported!, ownClub: request.ownClub) != .own
+                || request.leaving.contains(pair.to.member.player)
+            gain = willGo ? .onlyToAMemberWhoWillGo : .toAMember
+        }
+        if gain != .toAMember, pairs.contains(where: { !$0.arrow.isRead }), !standings.values.contains(where: { $0 > .others }) {
+            gain = .notKnown
+        }
+
         var warnings: [GroupWarning] = []
         for pair in influencing {
             guard let source = pair.from.values, let target = pair.to.values else { continue }
@@ -162,7 +194,7 @@ extension Mentoring {
 
         return GroupReview(
             group: group, members: memberReviews, arrows: arrows, unreadArrows: pairs.filter { !$0.arrow.isRead }.count,
-            hasNoInfluence: hasNoInfluence, warnings: warnings, isDoingHarm: isDoingHarm,
+            hasNoInfluence: hasNoInfluence, gain: gain, warnings: warnings, isDoingHarm: isDoingHarm,
             hasStoppedWorking: hasStoppedWorking,
             basis: Evidence.weakest([parameters.mentoringWeights.evidence, parameters.mentoringCeilings.evidence,
                                      parameters.mentoringStrengthWeights.evidence, parameters.mentoringGuess.evidence,

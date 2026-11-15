@@ -121,6 +121,22 @@ public struct NotPlaced: Equatable, Sendable {
     public let reason: NotPlacedReason
 }
 
+/// Recorded groups this tool would break up, and the groups their players would make instead. It is this tool's
+/// count of what the arrows would give, read or guessed, and predicts nothing.
+public struct Regrouping: Equatable, Sendable {
+    /// The recorded groups to break up: one or two, in the report's order.
+    public let breakUp: [UUID]
+    /// The groups their present members would make, with the players in no group, recorded or suggested: in the order
+    /// formed. Each holds a member of a group to break up.
+    public let groups: [SuggestedGroup]
+    /// The present members of the groups to break up who would be in none of `groups`, by key.
+    public let leftOut: [SuggestedMember]
+    /// Every arrow the comparison rests on was read: those the new groups rest on, and every arrow between the present
+    /// members of each group to break up. False when any of them is a guess.
+    public let isRead: Bool
+    public let basis: Evidence
+}
+
 /// Mentoring advice for one squad.
 public struct MentoringReport: Equatable, Sendable {
     public let squad: Squad
@@ -134,6 +150,9 @@ public struct MentoringReport: Equatable, Sendable {
     public let notPlaced: [NotPlaced]
     /// The squad's live recorded groups: oldest first, then by id.
     public let groups: [GroupReview]
+    /// The one regrouping of the recorded groups that would count for most, when it counts for clearly more than they
+    /// do; nil otherwise.
+    public let regrouping: Regrouping?
     public let basis: Evidence
 }
 
@@ -147,6 +166,14 @@ extension Mentoring {
     /// value is formed, then the same again among the players left, until none is valid. Ties go to the group with
     /// fewer members above Others, then to the one with more of its six arrows read, then to the lowest keys. This does
     /// not prove that no other set of groups has a greater total. Injury, bans and fitness are not looked at.
+    ///
+    /// A regrouping is looked for among the squad's live recorded groups, one at a time and then two at a time: the
+    /// present members of the groups, with the free players in no suggested group, are grouped as the suggestions
+    /// are. It counts when the new groups' value is above the value of the groups broken up (a group with a harmful
+    /// arrow, or with no gain, has none) and at least `mentoringRegroupFactor` times it. The one with the greatest
+    /// difference is given; of two the same, the one that breaks up fewer groups, then the earlier in the report's
+    /// order. The suggested groups are left as they are, and three or more groups are never broken up together. A
+    /// group whose gain is `notKnown` is never broken up: nothing is known of what it gives.
     public static func report(_ request: MentoringRequest, parameters: EngineParameters) throws -> MentoringReport {
         let problems = problems(in: parameters)
         guard problems.isEmpty else { throw PlanError.badParameters(problems) }
@@ -204,12 +231,20 @@ extension Mentoring {
             $0.startedOn != $1.startedOn ? $0.startedOn < $1.startedOn : $0.id.uuidString < $1.id.uuidString
         }.map { review($0, request: request, parameters: parameters) }
 
+        let recordedHere = groups.filter { $0.gain != .notKnown }.map { review in
+            (id: review.id, members: people.indices.filter { index in
+                review.group.current.contains { $0.player == people[index].player.id }
+            })
+        }
+        let regrouping = judge.regrouping(of: recordedHere, spare: pool.filter { !used.contains($0) })
+
         let isStale = request.dynamicsUpdatedOn.map {
             $0.days(to: request.asOf) > parameters.mentoringDynamicsStaleAfterDays.value
         } ?? false
         return MentoringReport(
             squad: request.squad, needsHierarchy: !people.contains { $0.standing > .others },
-            isStale: isStale, suggestions: suggestions, notPlaced: notPlaced, groups: groups, basis: judge.basis)
+            isStale: isStale, suggestions: suggestions, notPlaced: notPlaced, groups: groups, regrouping: regrouping,
+            basis: judge.basis)
     }
 
     // MARK: Rules shared with the review of a recorded group
@@ -395,6 +430,52 @@ extension Mentoring {
                 if best.map({ option.isBetter(than: $0) }) ?? true { best = option }
             }
             return best
+        }
+
+        /// The regrouping of the recorded groups, each given as its present members, that would count for most; nil
+        /// when none counts for clearly more than the groups it breaks up. `spare` are the free players in no
+        /// suggested group, among whom no group is valid.
+        func regrouping(of recorded: [(id: UUID, members: [Int])], spare: [Int]) -> Regrouping? {
+            let ones = recorded.indices.map { [$0] }
+            let twos = recorded.indices.flatMap { first in recorded.indices.filter { $0 > first }.map { [first, $0] } }
+            let factor = parameters.mentoringRegroupFactor.value
+            // A group of three is judged once, however many of the sets it comes up in.
+            var judged: [[Int]: Option?] = [:]
+            var best: (set: [Int], formed: [Option], difference: Int)?
+            for set in ones + twos {
+                let members = set.flatMap { recorded[$0].members }
+                let old = set.reduce(0) { $0 + (option(recorded[$1].members)?.value ?? 0) }
+                // No group is valid among the spare players alone, so every group formed holds a member.
+                var options: [Option] = []
+                for trio in trios((spare + members).sorted()) where trio.contains(where: members.contains) {
+                    if judged[trio] == nil { judged[trio] = .some(option(trio)) }
+                    if let option = judged[trio] ?? nil { options.append(option) }
+                }
+                // Best first, each taken when its three are still unused, forms the groups the suggestions' rule would.
+                options.sort { $0.isBetter(than: $1) }
+                var taken: Set<Int> = [], formed: [Option] = []
+                for option in options where taken.isDisjoint(with: option.members) {
+                    formed.append(option)
+                    taken.formUnion(option.members)
+                }
+                let new = formed.reduce(0) { $0 + $1.value }
+                guard new > old, Double(new) >= factor * Double(old) else { continue }
+                if best.map({ new - old > $0.difference }) ?? true { best = (set, formed, new - old) }
+            }
+            guard let best else { return nil }
+            let grouped = Set(best.formed.flatMap(\.members))
+            let oldIsRead = best.set.allSatisfy { index in
+                let members = recorded[index].members
+                return members.allSatisfy { from in members.allSatisfy { $0 == from || arrows[from][$0].isRead } }
+            }
+            let newIsRead = best.formed.allSatisfy { $0.restsOn.allSatisfy { arrows[$0.from][$0.to].isRead } }
+            let leftOut = best.set.flatMap { recorded[$0].members }.filter { !grouped.contains($0) }.sorted()
+            return Regrouping(
+                breakUp: best.set.map { recorded[$0].id }, groups: best.formed.map { suggestion($0) },
+                leftOut: leftOut.map { SuggestedMember(player: people[$0].player.id, name: people[$0].player.name,
+                                                       age: people[$0].player.age) },
+                isRead: oldIsRead && newIsRead,
+                basis: Evidence.weakest([basis, parameters.mentoringRegroupFactor.evidence])!)
         }
 
         func suggestion(_ option: Option) -> SuggestedGroup {

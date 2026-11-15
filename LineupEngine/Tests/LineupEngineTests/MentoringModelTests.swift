@@ -92,6 +92,12 @@ import Testing
         var takes = q
         takes.mentoringTakesNothingAfter = Parameter(0, .derived, source: "test")
         #expect(Mentoring.problems(in: takes) == ["mentoringTakesNothingAfter is 0, which is not above 0"])
+
+        var factor = q
+        factor.mentoringRegroupFactor = Parameter(0.9, .derived, source: "test")
+        #expect(Mentoring.problems(in: factor) == ["mentoringRegroupFactor is 0.9, which is below 1"])
+        factor.mentoringRegroupFactor = Parameter(1, .derived, source: "test")
+        #expect(Mentoring.problems(in: factor).isEmpty)
     }
 
     @Test func groupsHaveLiveAndCurrentMembers() throws {

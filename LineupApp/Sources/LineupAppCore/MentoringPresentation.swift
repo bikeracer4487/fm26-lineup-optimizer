@@ -27,8 +27,18 @@ public struct MentoringSheet: Equatable, Sendable {
     public let noteText: String
     public let suggested: [SuggestedGroupCard]
     public let yours: [RecordedGroupCard]
+    /// The recorded groups this tool would break up and what their players would make instead; nil when there is none.
+    public let regrouping: RegroupingBlock?
     /// The engine's sentence for each player not placed.
     public let notPlaced: [String]
+}
+
+/// A regrouping as the tab shows it under the owner's groups.
+public struct RegroupingBlock: Equatable, Sendable {
+    /// The engine's sentences: what to break up, who would be left in no group, and that it rests on a guess.
+    public let lines: [String]
+    /// The groups it would make, in the engine's order. None can be recorded: its players are still in a group.
+    public let cards: [SuggestedGroupCard]
 }
 
 /// One arrow of a group as its card lists it: who to whom, its strength and whether it was read, and what it gives.
@@ -90,8 +100,11 @@ public struct SuggestedGroupCard: Identifiable, Equatable, Sendable {
     public let noteText: String?
     /// Its three members in the suggestion's order, for its Record arrows button.
     public let arrowsDraftMembers: [PlayerID]
-    /// "Record arrows" beside Record as set while the group rests on a guess; nil once it rests on readings.
+    /// "Record arrows" beside Record as set while the group rests on a guess; nil once it rests on readings, and for a
+    /// group of a regrouping.
     public let recordArrowsTitle: String?
+    /// "Record as set"; nil for a group of a regrouping, whose players are still in a recorded group.
+    public let recordTitle: String?
     private let spokenNote: String?
 
     /// The card as said to assistive technology: its title, each arrow, the prompt, the cautions and the note.
@@ -101,17 +114,20 @@ public struct SuggestedGroupCard: Identifiable, Equatable, Sendable {
             .joined(separator: ", ")
     }
 
-    init(_ suggestion: SuggestedGroup) {
+    /// A suggested group; or, with `isRegrouping`, a group a regrouping would make, which has no prompt and nothing
+    /// to press: the regrouping's own sentences say what it rests on.
+    init(_ suggestion: SuggestedGroup, isRegrouping: Bool = false) {
         self.suggestion = suggestion
         titleText = suggestion.members.map(\.name).joined(separator: ", ")
         arrows = suggestion.arrows.map(ArrowLine.init)
-        promptText = suggestion.isRead ? nil : AdvisorText.setAndRecordArrows
+        promptText = suggestion.isRead || isRegrouping ? nil : AdvisorText.setAndRecordArrows
         let names = Dictionary(suggestion.members.map { ($0.player, $0.name) }, uniquingKeysWith: { first, _ in first })
         cautions = suggestion.cautions.map { AdvisorText.caution($0, names: names) }
         spokenNote = AdvisorText.note(for: suggestion.basis)
         noteText = spokenNote.map { "(\($0))" }
         arrowsDraftMembers = suggestion.members.map(\.player)
-        recordArrowsTitle = suggestion.isRead ? nil : MentoringPresentation.recordArrowsTitle
+        recordArrowsTitle = suggestion.isRead || isRegrouping ? nil : MentoringPresentation.recordArrowsTitle
+        recordTitle = isRegrouping ? nil : MentoringPresentation.recordTitle
     }
 }
 
@@ -123,8 +139,13 @@ public struct RecordedGroupCard: Identifiable, Equatable, Sendable {
     public let titleText: String
     /// "since Mon 12 Oct".
     public let sinceText: String
-    /// The engine's sentence when the group is doing harm, shows no influence or has stopped working; nil otherwise.
+    /// The engine's sentence when the group is doing harm, shows no influence, gives nobody anything or has stopped
+    /// working; nil otherwise.
     public let stateText: String?
+    /// The engine's sentence when a regrouping would break the group up; nil otherwise.
+    public let regroupText: String?
+    /// What the band across the top of the card says: the state, then the regrouping; empty when there is neither.
+    public var noticeTexts: [String] { [stateText, regroupText].compactMap { $0 } }
     /// Each arrow above None between its present members, in the engine's order.
     public let arrows: [ArrowLine]
     /// The engine's prompt to record the group's arrows while any is a guess.
@@ -141,17 +162,18 @@ public struct RecordedGroupCard: Identifiable, Equatable, Sendable {
     private let spokenNote: String?
 
     /// The card as said to assistive technology: its title and since when, each arrow, the prompt, the warnings, the
-    /// state, each member with what has changed, and the note.
+    /// state and the regrouping, each member with what has changed, and the note.
     public var spokenText: String {
         ([titleText, sinceText] + arrows.flatMap(\.spokenParts) + [arrowsPromptText].compactMap { $0 }
-            + warnings.map { "Warning: \($0)" } + [stateText].compactMap { $0 } + members.flatMap(\.spokenParts)
+            + warnings.map { "Warning: \($0)" } + noticeTexts + members.flatMap(\.spokenParts)
             + [spokenNote].compactMap { $0 })
             .joined(separator: ", ")
     }
 
-    /// A group as the engine read it.
-    init(_ review: GroupReview, parameters: EngineParameters) {
+    /// A group as the engine read it; `regroupText` is the engine's sentence when a regrouping would break it up.
+    init(_ review: GroupReview, regroupText: String? = nil, parameters: EngineParameters) {
         id = review.id
+        self.regroupText = regroupText
         titleText = review.members.map(\.name).joined(separator: ", ")
         sinceText = MentoringPresentation.sinceText(review.group.startedOn)
         stateText = AdvisorText.state(of: review, parameters: parameters)
@@ -179,6 +201,7 @@ public struct RecordedGroupCard: Identifiable, Equatable, Sendable {
         titleText = group.current.map { names($0.player) }.joined(separator: ", ")
         sinceText = MentoringPresentation.sinceText(group.startedOn)
         stateText = nil
+        regroupText = nil
         arrows = []
         arrowsPromptText = nil
         members = []
@@ -227,8 +250,10 @@ public struct ArrowRow: Identifiable, Equatable, Sendable {
 }
 
 public enum MentoringPresentation {
-    public static let headings: (hierarchy: String, suggested: String, yours: String, notPlaced: String) =
-        (hierarchy: "Hierarchy", suggested: "Suggested groups", yours: "Your groups", notPlaced: "Not placed")
+    public static let headings: (hierarchy: String, suggested: String, yours: String, regrouping: String,
+                                 notPlaced: String) =
+        (hierarchy: "Hierarchy", suggested: "Suggested groups", yours: "Your groups", regrouping: "Regrouping to try",
+         notPlaced: "Not placed")
     public static let updateTitle = "Update"
     public static let recordTitle = "Record as set"
     public static let addTitle = "Add a group"
@@ -276,6 +301,11 @@ public enum MentoringPresentation {
         return noGroupRecorded
     }
 
+    /// The heading over a regrouping; nil when there is none, so the part is not drawn.
+    public static func regroupingHeading(_ sheet: MentoringSheet) -> String? {
+        sheet.regrouping == nil ? nil : headings.regrouping
+    }
+
     /// The heading over the players not placed; nil when there is nobody to list, so the part is not drawn.
     public static func notPlacedHeading(_ sheet: MentoringSheet) -> String? {
         sheet.notPlaced.isEmpty ? nil : headings.notPlaced
@@ -312,7 +342,8 @@ public enum MentoringPresentation {
         case .needsSquad:
             return MentoringSheet(squad: squad, notReady: notImported(squad), failures: [], hierarchyLines: [],
                                   socialGroupsLine: nil, updatedText: nil, staleText: nil, needsHierarchyText: nil,
-                                  noteText: AdvisorText.mentoringNote, suggested: [], yours: [], notPlaced: [])
+                                  noteText: AdvisorText.mentoringNote, suggested: [], yours: [], regrouping: nil,
+                                  notPlaced: [])
         case .failed(let sentences):
             report = nil
             failures = sentences
@@ -330,8 +361,22 @@ public enum MentoringPresentation {
         let updatedOn = state.dynamicsUpdatedOn[squad]
 
         let yours: [RecordedGroupCard]
+        var regrouping: RegroupingBlock?
         if let report {
-            yours = report.groups.map { RecordedGroupCard($0, parameters: parameters) }
+            // Each group to break up, in the regrouping's order, as its members' names.
+            let brokenUp = (report.regrouping?.breakUp ?? []).compactMap { id in
+                report.groups.first { $0.id == id }.map { (id: id, names: $0.members.map(\.name)) }
+            }
+            yours = report.groups.map { review in
+                let others = brokenUp.filter { $0.id != review.id }.flatMap(\.names)
+                let isBrokenUp = brokenUp.contains { $0.id == review.id }
+                return RecordedGroupCard(review, regroupText: isBrokenUp ? AdvisorText.regroup(alongside: others) : nil,
+                                         parameters: parameters)
+            }
+            regrouping = report.regrouping.map {
+                RegroupingBlock(lines: AdvisorText.regrouping($0, breakingUp: brokenUp.map(\.names)),
+                                cards: $0.groups.map { SuggestedGroupCard($0, isRegrouping: true) })
+            }
         } else {
             yours = state.groups.filter { $0.isLive && $0.squad == squad }.sorted(by: MentoringState.order).map {
                 RecordedGroupCard(saved: $0) { names[$0] ?? state.names[$0] ?? TrainingPresentation.unnamed }
@@ -348,8 +393,9 @@ public enum MentoringPresentation {
             },
             needsHierarchyText: needsHierarchy ? AdvisorText.mentoringNeedsHierarchy : nil,
             noteText: AdvisorText.mentoringNote,
-            suggested: report?.suggestions.map(SuggestedGroupCard.init) ?? [],
+            suggested: report?.suggestions.map { SuggestedGroupCard($0) } ?? [],
             yours: yours,
+            regrouping: regrouping,
             notPlaced: report?.notPlaced.map(AdvisorText.notPlaced) ?? [])
     }
 
