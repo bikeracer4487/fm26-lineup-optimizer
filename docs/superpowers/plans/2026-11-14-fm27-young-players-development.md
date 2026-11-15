@@ -583,7 +583,10 @@ Found while building:
 - With fewer than six confirmed matches the advice reads a player's place in the elevens in place of his starts, so a second choice at a slot he is not solid at reads as not getting matches until six are confirmed.
 - The favour by age can bring a young first choice back into a lesser fixture he would have been rested for, until four starts in thirty days are on record. The sample history holds only two confirmed matches; with a real history a regular starter has four.
 - A youth-contract player marked before this plan keeps the mark's label, with the refusal shown, until any squad is next imported (the app checks every mark after each import), and the planner ignores the mark meanwhile; the owner cannot clear it by hand before then.
-- A loaned-in young player of 21 or under no longer has the old floor in lesser fixtures.
+- A loaned-in young player gets no development favour. This is the owner's decision (see "After the owner read the result"), not a fault.
+- Each plan in the app now works Player Removal out to learn who is advised to leave, and the advice screens work it out again when they are read, so the primary tactic's elevens and depth are worked out twice. The app's tests went from about 212 to about 262 seconds for it.
+- A successor whose floor and retraining favour win at every slot still counts as a favoured successor for being got sharp in a sharpness fixture, though he takes no place among the two favoured in a medium one; no test says so.
+- Three cases of the owner's changes are right by reading the code and have no test of their own: a player advised to leave who is retraining keeps only the retraining favour; the larger-total rule with Development below 1 and after the monthly stop; and the command line's sentence when Player Removal cannot be worked out.
 - A medium fixture's cap of two can spend a place on a successor the owner has overridden into the lineup; the cap's test of who can be picked does not count the owner's overrides.
 - The planner still works out its tiers for each fixture, though they depend only on the tactic.
 - "First choice" is read from the outlook, so a stand-in first choice at a slot he cannot play (an outfield player in goal) is not seen as one.

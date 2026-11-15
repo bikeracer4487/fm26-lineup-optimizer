@@ -100,7 +100,7 @@ Build and test it with:
 
     cd LineupApp && swift build && swift test
 
-The tests take about three and a half minutes: each plan of the sample data takes most of a second in a debug build, and many tests plan.
+The tests take about four and a half minutes: each plan of the sample data takes most of a second in a debug build, and many tests plan.
 
 Run it:
 
