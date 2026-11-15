@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: young players judged on where they could reach
 
 Date: 14 November 2026
-Status: draft for the owner's approval. Not built.
+Status: approved by the owner on 14 November 2026 ("your young player development plan is approved, so please proceed"), with the defaults of section 12 as written. Not built.
 
 Research behind it: `docs/Research/fm27-development-matches-vs-training.md` (the owner's, added 14 November 2026), `docs/Research/fm27-selling-and-loans.md`, and the FM26 files `skill-potential-factors.md`, `player-retention-strategy.md` and `player-rotation-guide.md`. No test of attribute growth exists for FM27; every growth number here is carried over from FM24 and FM26 tests, on the owner's rule that growth research carries over.
 
@@ -196,7 +196,7 @@ Every word is the engine's.
 
 ## 12. Decisions made here that are the owner's to change
 
-These three were put to the owner and not yet answered; the design takes a default for each.
+These three were put to the owner; he approved the design with the default taken for each.
 
 1. **How much result to trade in an ordinary league match for a successor**: about 5% (the medium favour), scaled by the Development setting.
 2. **The bar for "markedly lower"**: 80% of today's first choice at his position, 70% for a player of 16 or under.
