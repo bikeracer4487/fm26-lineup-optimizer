@@ -389,11 +389,8 @@ import Testing
         #expect(r.controversyAbove == 16 && r.controversyPoints == 25)
         #expect(r.temperamentBelow == 8 && r.temperamentPoints == 15)
         #expect(r.falseProspectUpToAge == 20 && r.falseProspectTargetAge == 24 && r.falseProspectRateAbove == 15)
-        #expect(r.falseProspectProfessionalismBelow == 14 && r.falseProspectPoints == 35)
-        #expect(r.stallingFromAge == 23 && r.stallingUpToAge == 24 && r.stallingRoomBelow == 0.10 && r.stallingPoints == 20)
-        #expect(r.prospectUpToAge == 21)
-        #expect(r.strongProspectRoomFrom == 0.30 && r.strongProspectPoints == -30)
-        #expect(r.prospectRoomFrom == 0.15 && r.prospectPoints == -15)
+        #expect(r.falseProspectProfessionalismBelow == 14)
+        #expect(r.stallingFromAge == 24 && r.stallingUpToAge == 24 && r.stallingRoomBelow == 0.10 && r.stallingPoints == 20)
         #expect(r.mentorFromAge == 30 && r.mentorProfessionalismFrom == 16 && r.mentorDeterminationFrom == 15)
         #expect(r.mentorPoints == -40 && r.lesserMentorPoints == -20)
         #expect(r.noGrowthFromAge == 30 && r.noGrowthRoomBelow == 0.05 && r.noGrowthPoints == 10)
@@ -643,6 +640,8 @@ import Testing
             #expect(listed[name]?.evidence == .derived, "\(name)")
             #expect(listed[name]?.source.isEmpty == false, "\(name) source")
         }
+        #expect(listed["matchesHereShare"]?.source.contains("docs/Research/fm27-development-matches-vs-training.md") == true)
+        #expect(listed["matchesHereShare"]?.source.contains("46 league matches") == true)
         let q = EngineParameters.fm27
         #expect(q.matchesHereShare.value == 1.0 / 3 && q.matchesHereWindowDays.value == 60
             && q.matchesHereMinimumConfirmed.value == 6)

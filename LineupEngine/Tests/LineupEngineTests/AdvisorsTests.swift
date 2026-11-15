@@ -81,6 +81,7 @@ import Testing
         let rest = try Rest.advice(players: r.players, ownClub: r.ownClub, history: r.history, asOf: r.asOf,
                                    intensity: r.intensity, parameters: parameters)
         let removal = try Removal.report(tactic: r.primary, players: r.players, ownClub: r.ownClub, money: money,
+                                         history: r.history, asOf: r.asOf, retraining: r.accepted,
                                          catalog: catalog, profile: profile, parameters: parameters)
         var tactics = [r.primary]
         for t in r.tactics where !tactics.contains(t) { tactics.append(t) }
@@ -113,6 +114,29 @@ import Testing
         let needs = t.recommendations.flatMap(\.needs) + t.needsWithoutCandidates + t.needsBeingRetrained
         #expect(needs.contains(RetrainingNeed(tactic: other.name, slot: .ST_L)))
         #expect(!together.depth.thin.contains(.ST_C))
+    }
+
+    @Test func playerRemovalIsHandedTheHistoryTheDateAndTheAcceptedRetraining() throws {
+        // The right back, 20, cannot play left back (familiarity 8) until he is retraining there. Six confirmed
+        // matches in the last 60 days, two of them started by him.
+        let back = rightBack()
+        let days = ["2026-10-01", "2026-10-08", "2026-10-15", "2026-10-22", "2026-10-29", "2026-11-05"]
+        let history = days.enumerated().map { index, day in
+            ConfirmedLineup(fixture: FixtureID("f\(index)"), date: Day(iso: day)!,
+                            starters: index < 2 ? [.D_R: back.id] : [:])
+        }
+        let retraining = Retraining(player: back.id, position: .defenderLeft, acceptedOn: asOf)
+        func advice(_ request: AdvisorsRequest) throws -> RemovalAdvice {
+            try #require(try report(request).removal.advice.first { $0.player == back.id })
+        }
+        let players = try thinAtLeftBack([back])
+        let handed = try advice(request(players, history: history, accepted: [retraining]))
+        #expect(handed.outlook?.slots.map(\.slot).contains(.D_L) == true)
+        #expect(handed.matchesHere == MatchesHere(starts: 2, matches: 6, isCounted: true, isEnough: true))
+        // Without them: no left back among his slots, and no matches to count.
+        let without = try advice(request(players))
+        #expect(without.outlook?.slots.map(\.slot).contains(.D_L) == false)
+        #expect(without.matchesHere?.isCounted == false && without.matchesHere?.matches == 0)
     }
 
     @Test func trainingNeverRecommendsAPlayerRemovalWouldMoveOn() throws {

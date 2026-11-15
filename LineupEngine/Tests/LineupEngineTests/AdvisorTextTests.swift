@@ -83,7 +83,7 @@ import Testing
 
     func removal(action: RemovalAction = .sell, release: Int?, mutual: Int?) -> RemovalAdvice {
         RemovalAdvice(player: PlayerID(key: "p"), name: "P", level: .high, action: action, score: 10, reasons: [],
-                      tier: nil, isProspect: false, isFalseProspect: false, isMentor: false,
+                      tier: nil, outlook: nil, matchesHere: nil, isFalseProspect: false, isMentor: false,
                       releaseCost: release, mutualCost: mutual, basis: .derived)
     }
 
@@ -118,6 +118,51 @@ import Testing
         #expect(AdvisorText.why(.sell, for: advice) == "Selling is the way left: nothing cheaper applies")
         #expect(AdvisorText.why(.monitor, for: advice) == "Not enough against him to act: watch how he does")
         #expect(AdvisorText.why(.keep, for: advice) == "Nothing here says he should go")
+    }
+
+    // MARK: Development
+
+    /// A young player's outlook at `level`: best at `slot` behind Smith, or with no slot and compared with the first
+    /// team's average when `slot` is nil.
+    func outlook(_ level: ReachLevel?, at slot: SlotID? = .D_L) -> Outlook {
+        let estimate = ReachEstimate(age: 19, current: 80, potential: 120, professionalism: 15, ambition: 10,
+                                     determination: 10, seasonGrowth: 10, bySeason: [80, 90, 100, 110, 120],
+                                     reachesPotential: true)
+        let best = slot.map { slot in
+            SlotOutlook(slot: slot, rating: 50, reachRating: 75, isFirstChoice: false,
+                        firstChoice: Rival(player: PlayerID(key: "smith"), name: "Smith", age: 28, rating: 70, compared: 70),
+                        secondChoice: nil, band: .onCourse, pointsNeeded: 32, level: level)
+        }
+        return Outlook(player: PlayerID(key: "young"), estimate: estimate, slots: best.map { [$0] } ?? [], best: best,
+                       level: level, average: slot == nil ? 100 : nil)
+    }
+
+    @Test func aReachLineForEachLevelNamesHisBestSlot() {
+        let names: (SlotID) -> String = { PositionText.plain($0.position) }
+        #expect(AdvisorText.reachLine(outlook(.couldPassFirst), names: names) == "Could pass Smith at left back")
+        #expect(AdvisorText.reachLine(outlook(.couldMakeSecond), names: names) == "Could make the second eleven at left back")
+        #expect(AdvisorText.reachLine(outlook(.couldBeCover), names: names) == "Could become cover at left back, no more")
+        #expect(AdvisorText.reachLine(outlook(.markedlyLower), names: names)
+                == "Not expected to reach the level of the squad at any position")
+        // The slot is named by the function handed in, and it is the best slot's.
+        #expect(AdvisorText.reachLine(outlook(.couldPassFirst, at: .AM_L), names: names)
+                == "Could pass Smith at left attacking midfield")
+        #expect(AdvisorText.reachLine(outlook(.couldMakeSecond), names: { _ in "the wing" })
+                == "Could make the second eleven at the wing")
+    }
+
+    @Test func withNoSlotTheReachLineComparesWithTheFirstTeam() {
+        let names: (SlotID) -> String = { PositionText.plain($0.position) }
+        #expect(AdvisorText.reachLine(outlook(.couldMakeSecond, at: nil), names: names)
+                == "Could reach the level of the first team")
+        #expect(AdvisorText.reachLine(outlook(.couldBeCover, at: nil), names: names)
+                == "Could come close to the level of the first team, no more")
+        #expect(AdvisorText.reachLine(outlook(.markedlyLower, at: nil), names: names)
+                == "Not expected to reach the level of the first team")
+    }
+
+    @Test func eachReachBandHasItsName() {
+        #expect(ReachBand.allCases.map { AdvisorText.name($0) } == ["Close", "On course", "Possible", "Not expected"])
     }
 
     @Test func aReasonsPointsAreSignedWithATrueMinus() {
@@ -349,7 +394,9 @@ import Testing
         // A real Player Removal reason for the planner squad's first-choice left back.
         let players = try PlannerFixture.squad()
         let report = try Removal.report(tactic: try PlannerFixture.tactic(), players: players, ownClub: "Oxford City",
-                                        money: .weeklyPounds, catalog: try RoleCatalog.fm27(), profile: try RatingProfile.standard(),
+                                        money: .weeklyPounds, history: StartHistory([]),
+                                        asOf: Day(year: 2026, month: 11, day: 14)!, retraining: [],
+                                        catalog: try RoleCatalog.fm27(), profile: try RatingProfile.standard(),
                                         parameters: parameters)
         let advice = try #require(report.advice.first { $0.player == PlannerFixture.id(.D_L, "first") })
         let sentence = try #require(advice.reasons.map(\.text).first { $0.hasPrefix("In the first eleven") })

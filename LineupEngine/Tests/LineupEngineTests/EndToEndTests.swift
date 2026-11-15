@@ -313,6 +313,7 @@ import Testing
         // every recommendation is explained and names one of the club's own players, and none a player Player
         // Removal advises moving on.
         let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, money: .weeklyPounds,
+                                         history: StartHistory(history), asOf: asOf, retraining: [],
                                          catalog: catalog, profile: profile, parameters: parameters)
         let training = try Training.report(tactics: [tactic], players: players, ownClub: ownClub, accepted: [], rejected: [],
                                            leaving: removal.advisedToLeave, catalog: catalog, profile: profile,

@@ -28,7 +28,11 @@ public struct RemovalAdvice: Equatable, Sendable {
     /// In the order of the rules.
     public let reasons: [RemovalReason]
     public let tier: SquadTier?
-    public let isProspect: Bool
+    /// His reach against the first and second choice at each slot he can play: nil for a player of 24 or over, with
+    /// ability 0, or who is not developing at the club.
+    public let outlook: Outlook?
+    /// Whether he is getting enough matches here; with an outlook only.
+    public let matchesHere: MatchesHere?
     public let isFalseProspect: Bool
     public let isMentor: Bool
     /// Wages left on the contract, in whole units of the squads' currency: 0 for a player out of contract, or on a
@@ -79,11 +83,15 @@ public enum Removal {
     /// Advice for every player of the club's own and a review of every player on loan at the club; players out on loan
     /// get neither, and injured players are assessed. The squad average ability and the median wage are over the club's
     /// own first-team players, so a large youth squad on low wages does not move them; with no first-team player, the
-    /// rules that need them do not apply. Money is written in `money`, the style of the squads the players came from. Throws `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, what
+    /// rules that need them do not apply. Money is written in `money`, the style of the squads the players came from.
+    /// A player with an outlook (`Development.outlooks`, from `retraining` and the elevens with injured players kept in)
+    /// is scored on his reach, and whether he gets matches here is read from `history` up to `asOf`.
+    /// Throws `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, what
     /// `Elevens.report` throws, and `RatingError.missingAttribute` for an assessed player without Consistency, Important
     /// Matches, Injury Proneness, Professionalism, Ambition, Controversy, Temperament or Determination. Throws what
-    /// `Depth.report` throws.
+    /// `Depth.report`, `Tactic.assignments(catalog:)` and `Development.outlooks` throw.
     public static func report(tactic: Tactic, players: [Player], ownClub: String?, money: MoneyStyle,
+                              history: StartHistory, asOf: Day, retraining: [Retraining],
                               catalog: RoleCatalog, profile: RatingProfile,
                               parameters: EngineParameters) throws -> RemovalReport {
         let problems = FitnessModel.problems(in: parameters)
@@ -92,13 +100,17 @@ public enum Removal {
                                          profile: profile, parameters: parameters)
         let depth = try Depth.report(tactic: tactic, players: players, ownClub: ownClub, elevens: elevens, catalog: catalog,
                                      profile: profile, parameters: parameters)
-        return try report(players: players, ownClub: ownClub, money: money, elevens: elevens, depth: depth,
-                          parameters: parameters)
+        return try report(players: players, ownClub: ownClub, money: money, history: history, asOf: asOf,
+                          retraining: retraining, assignments: try tactic.assignments(catalog: catalog),
+                          elevens: elevens, depth: depth, parameters: parameters)
     }
 
-    /// The same, from `elevens` and `depth` already worked out for the tactic and these players. The caller has
-    /// checked the parameters with `FitnessModel.problems(in:)`. Throws `RatingError.missingAttribute` as above.
-    static func report(players: [Player], ownClub: String?, money: MoneyStyle, elevens: ElevensReport,
+    /// The same, from `elevens` and `depth` already worked out for the tactic and these players (`Elevens.report`
+    /// keeps injured players in), and the tactic's `assignments`. The caller has checked the parameters with
+    /// `FitnessModel.problems(in:)`. Throws `RatingError.missingAttribute` as above, and what `Development.outlooks`
+    /// throws.
+    static func report(players: [Player], ownClub: String?, money: MoneyStyle, history: StartHistory, asOf: Day,
+                       retraining: [Retraining], assignments: [SlotAssignment], elevens: ElevensReport,
                        depth depthReport: DepthReport, parameters: EngineParameters) throws -> RemovalReport {
         let tiers = elevens.tiers
         let depth = depthReport.slots
@@ -115,11 +127,12 @@ public enum Removal {
             }
             traits[player.id] = try Traits(player)
         }
+        let outlooks = try Development.outlooks(players: players, ownClub: ownClub, assignments: assignments, tiers: tiers,
+                                                retraining: retraining, parameters: parameters)
 
         let firstTeam = own.filter { $0.squad == .firstTeam }
         let squad = SquadFacts(
-            averageAbility: firstTeam.isEmpty ? nil
-                : Double(firstTeam.map(\.currentAbility).reduce(0, +)) / Double(firstTeam.count),
+            averageAbility: Development.averageAbility(of: players, ownClub: ownClub),
             medianWage: median(firstTeam.map(\.wagePerWeek)),
             weakest: weakest(own + loanedIn, tiers: tiers, share: parameters.removalRules.value.weakestShare),
             tiers: tiers, depth: depth, thinBelow: parameters.depthThinBelow.value)
@@ -128,7 +141,12 @@ public enum Removal {
         var wagesAtStake = 0.0
         var leaving: Set<PlayerID> = []
         for player in own {
-            let one = Self.advice(for: player, traits: traits[player.id]!, squad: squad, money: money, parameters: parameters)
+            let outlook = outlooks[player.id]
+            let matchesHere = outlook.map { _ in
+                Development.matchesHere(for: player.id, tiers: tiers, history: history, asOf: asOf, parameters: parameters)
+            }
+            let one = Self.advice(for: player, traits: traits[player.id]!, outlook: outlook, matchesHere: matchesHere,
+                                  squad: squad, money: money, parameters: parameters)
             switch one.level {
             case .critical, .high: wagesAtStake += player.wagePerWeek
             case .medium, .keep: break
@@ -153,8 +171,11 @@ public enum Removal {
 
     // MARK: Players of the club's own
 
-    private static func advice(for player: Player, traits: Traits, squad: SquadFacts, money: MoneyStyle,
-                               parameters: EngineParameters) -> RemovalAdvice {
+    /// A player with an outlook is scored on one line in place of the elevens, weakest and ability lines: the better of
+    /// his place in the elevens and his reach. His Professionalism and Ambition add no line, since his reach already
+    /// counts them, and a short contract on a player worth keeping says to renew it, at no points.
+    private static func advice(for player: Player, traits: Traits, outlook: Outlook?, matchesHere: MatchesHere?,
+                               squad: SquadFacts, money: MoneyStyle, parameters: EngineParameters) -> RemovalAdvice {
         let rules = parameters.removalRules.value
         var reasons = Reasons()
         var evidence = [parameters.removalRules.evidence, parameters.removalLevels.evidence]
@@ -180,14 +201,31 @@ public enum Removal {
         }
 
         let tier = squad.tiers.tier(of: player.id)
-        let inEither = reasons.addTier(tier, first: rules.firstElevenPoints, second: rules.secondElevenPoints,
-                                       neither: rules.neitherElevenPoints)
+        let place = tierLine(tier, first: rules.firstElevenPoints, second: rules.secondElevenPoints,
+                             neither: rules.neitherElevenPoints)
+        let inEither = place.inEither
+        // Whether the line added says he is worth keeping: in either eleven, or a reach that could take him there.
+        var worthKeeping = inEither
+        if let outlook, let level = outlook.level {
+            let reach = reachPoints(level, rules)
+            // Only a place in the elevens competes with his reach; on a tie, the place.
+            if inEither && place.reason.points <= reach.points {
+                reasons.list.append(place.reason)
+            } else {
+                reasons.add(reach.points, AdvisorText.reachLine(outlook, names: { PositionText.plain($0.position) }))
+                worthKeeping = reach.worthKeeping
+            }
+        } else {
+            reasons.list.append(place.reason)
+        }
         if reasons.addThinCover(player.id, tier: tier, squad: squad, points: parameters.removalThinCoverPoints.value) {
             evidence.append(parameters.removalThinCoverPoints.evidence)
         }
-        if squad.weakest.contains(player.id) { reasons.add(rules.weakestPoints, weakestReason(rules)) }
-        reasons.addAbility(player, squad: squad, share: rules.farBelowAverageShare,
-                           farBelow: rules.farBelowAveragePoints, below: rules.belowAveragePoints)
+        if outlook == nil {
+            if squad.weakest.contains(player.id) { reasons.add(rules.weakestPoints, weakestReason(rules)) }
+            reasons.addAbility(player, squad: squad, share: rules.farBelowAverageShare,
+                               farBelow: rules.farBelowAveragePoints, below: rules.belowAveragePoints)
+        }
 
         let wageRules = parameters.removalWageRules.value
         if let median = squad.medianWage, median > 0, !inEither {
@@ -204,7 +242,12 @@ public enum Removal {
         if let months = player.monthsLeft, months > 0 {
             let points: Int? = months <= rules.contractEndingSoonUpTo ? rules.contractEndingSoonPoints
                 : months <= rules.contractEndingUpTo ? rules.contractEndingPoints : nil
-            if let points { reasons.add(points, "Contract ends in \(months) \(months == 1 ? "month" : "months")") }
+            let ends = "Contract ends in \(months) \(months == 1 ? "month" : "months")"
+            if points != nil, outlook != nil, worthKeeping {
+                reasons.add(0, "\(ends): renew it")
+            } else if let points {
+                reasons.add(points, ends)
+            }
         }
 
         if traits.consistency < rules.consistencyLowBelow {
@@ -218,12 +261,14 @@ public enum Removal {
         if traits.injuryProneness > rules.injuryPronenessAbove {
             reasons.add(rules.injuryPronenessPoints, "Injury Proneness \(traits.injuryProneness)")
         }
-        if traits.professionalism < rules.professionalismLowBelow {
-            reasons.add(rules.professionalismLowPoints, "Professionalism \(traits.professionalism)")
-        } else if traits.professionalism <= rules.professionalismFairUpTo {
-            reasons.add(rules.professionalismFairPoints, "Professionalism \(traits.professionalism)")
+        if outlook == nil {
+            if traits.professionalism < rules.professionalismLowBelow {
+                reasons.add(rules.professionalismLowPoints, "Professionalism \(traits.professionalism)")
+            } else if traits.professionalism <= rules.professionalismFairUpTo {
+                reasons.add(rules.professionalismFairPoints, "Professionalism \(traits.professionalism)")
+            }
+            if traits.ambition < rules.ambitionBelow { reasons.add(rules.ambitionPoints, "Ambition \(traits.ambition)") }
         }
-        if traits.ambition < rules.ambitionBelow { reasons.add(rules.ambitionPoints, "Ambition \(traits.ambition)") }
         if traits.controversy > rules.controversyAbove {
             reasons.add(rules.controversyPoints, "Controversy \(traits.controversy)")
         }
@@ -237,29 +282,17 @@ public enum Removal {
         let room: Double? = player.currentAbility > 0 ? Double(gap) / Double(player.currentAbility) : nil
 
         // `FitnessModel.problems` keeps the target age above every false prospect's age, so the years left are above 0.
+        // A false prospect is marked and adds no line.
         var isFalseProspect = false
         if age <= rules.falseProspectUpToAge {
             let rate = Double(gap) / Double(rules.falseProspectTargetAge - age)
-            if rate > rules.falseProspectRateAbove && traits.professionalism < rules.falseProspectProfessionalismBelow {
-                isFalseProspect = true
-                reasons.add(rules.falseProspectPoints, "Would need \(Int(rate.rounded())) ability points a year to reach his "
-                            + "potential by \(rules.falseProspectTargetAge), with Professionalism \(traits.professionalism)")
-            }
+            isFalseProspect = rate > rules.falseProspectRateAbove
+                && traits.professionalism < rules.falseProspectProfessionalismBelow
         }
 
         if let room, let average = squad.averageAbility, age >= rules.stallingFromAge, age <= rules.stallingUpToAge,
            Double(player.currentAbility) < average, room < rules.stallingRoomBelow {
             reasons.add(rules.stallingPoints, "Aged \(age) with little room to grow")
-        }
-
-        var isProspect = false
-        if let room, age <= rules.prospectUpToAge {
-            let points: Int? = room >= rules.strongProspectRoomFrom ? rules.strongProspectPoints
-                : room >= rules.prospectRoomFrom ? rules.prospectPoints : nil
-            if let points {
-                isProspect = true
-                reasons.add(points, "Aged \(age) with \(Display.percent(room)) room to grow")
-            }
         }
 
         let isMentor = age >= rules.mentorFromAge && traits.professionalism >= rules.mentorProfessionalismFrom
@@ -301,8 +334,6 @@ public enum Removal {
         case .high, .critical:
             if outOfContract {
                 action = .release
-            } else if isProspect && !isFalseProspect {
-                action = .loan
             } else if level == .critical, let months = player.monthsLeft, months <= rules.terminateWithinMonths,
                       let mutualCost, player.askingPrice.map({ $0 < mutualCost }) ?? true {
                 action = .terminate
@@ -312,7 +343,8 @@ public enum Removal {
         }
 
         return RemovalAdvice(player: player.id, name: player.name, level: level, action: action, score: score,
-                             reasons: reasons.list, tier: tier, isProspect: isProspect, isFalseProspect: isFalseProspect,
+                             reasons: reasons.list, tier: tier, outlook: outlook, matchesHere: matchesHere,
+                             isFalseProspect: isFalseProspect,
                              isMentor: isMentor, releaseCost: releaseCost, mutualCost: mutualCost,
                              basis: Evidence.weakest(evidence)!)
     }
@@ -326,8 +358,10 @@ public enum Removal {
         var reasons = Reasons()
         if squad.weakest.contains(player.id) { reasons.add(loan.weakestPoints, weakestReason(rules)) }
         let tier = squad.tiers.tier(of: player.id)
-        let inEither = reasons.addTier(tier, first: loan.firstElevenPoints,
-                                       second: loan.secondElevenPoints, neither: loan.neitherElevenPoints)
+        let place = tierLine(tier, first: loan.firstElevenPoints, second: loan.secondElevenPoints,
+                             neither: loan.neitherElevenPoints)
+        reasons.list.append(place.reason)
+        let inEither = place.inEither
         var evidence = [parameters.removalRules.evidence]
         if reasons.addThinCover(player.id, tier: tier, squad: squad, points: parameters.removalThinCoverPoints.value) {
             evidence.append(parameters.removalThinCoverPoints.evidence)
@@ -357,6 +391,30 @@ public enum Removal {
 
     private static func weakestReason(_ rules: RemovalRules) -> String {
         "Among the weakest \(Display.percent(rules.weakestShare)) of the squad for this tactic"
+    }
+
+    /// The line for his tier, and whether he is in either eleven.
+    private static func tierLine(_ tier: SquadTier?, first: Int, second: Int,
+                                 neither: Int) -> (reason: RemovalReason, inEither: Bool) {
+        switch tier {
+        case .first(let slot)?:
+            (RemovalReason(text: "In the first eleven at \(PositionText.plain(slot.position))", points: first), true)
+        case .second(let slot)?:
+            (RemovalReason(text: "In the second eleven at \(PositionText.plain(slot.position))", points: second), true)
+        case .backup?, nil:
+            (RemovalReason(text: "In neither eleven", points: neither), false)
+        }
+    }
+
+    /// The points for his reach at `level`, from the rules for the elevens, the weakest and far below the average, and
+    /// whether that level says he is worth keeping.
+    private static func reachPoints(_ level: ReachLevel, _ rules: RemovalRules) -> (points: Int, worthKeeping: Bool) {
+        switch level {
+        case .couldPassFirst: (rules.firstElevenPoints, true)
+        case .couldMakeSecond: (rules.secondElevenPoints, true)
+        case .couldBeCover: (rules.neitherElevenPoints, false)
+        case .markedlyLower: (rules.neitherElevenPoints + rules.weakestPoints + rules.farBelowAveragePoints, false)
+        }
     }
 
     /// The attributes the rules read, each required.
@@ -400,21 +458,6 @@ public enum Removal {
         var score: Int { list.map(\.points).reduce(0, +) }
 
         mutating func add(_ points: Int, _ text: String) { list.append(RemovalReason(text: text, points: points)) }
-
-        /// Adds the points for his tier and says whether he is in either eleven.
-        mutating func addTier(_ tier: SquadTier?, first: Int, second: Int, neither: Int) -> Bool {
-            switch tier {
-            case .first(let slot)?:
-                add(first, "In the first eleven at \(PositionText.plain(slot.position))")
-                return true
-            case .second(let slot)?:
-                add(second, "In the second eleven at \(PositionText.plain(slot.position))")
-                return true
-            case .backup?, nil:
-                add(neither, "In neither eleven")
-                return false
-            }
-        }
 
         /// Adds the points for protecting real cover, once, at the first slot in slot order where he is first choice
         /// and cover is thin (injured or not), or where he counts as cover by Depth's rule and the slot's cover is at

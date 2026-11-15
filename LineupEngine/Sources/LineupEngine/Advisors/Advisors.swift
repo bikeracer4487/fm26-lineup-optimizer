@@ -42,7 +42,8 @@ public enum Advisors {
     /// Every advisor at once, each giving what it gives when called alone. The squad's elevens are solved once for the
     /// primary tactic and once for each other saved tactic, and shared. Player Removal runs before Training, and Training
     /// is handed `advisedToLeave`. Training's tactics are the primary first, then the saved tactics in the order given,
-    /// each once. Player Removal writes money in `money`, the style of the squads the players came from. Throws
+    /// each once. Player Removal writes money in `money`, the style of the squads the players came from, and is handed
+    /// the history, the date and the accepted retrainings for the young players' outlooks and matches. Throws
     /// `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, before anything else, and otherwise
     /// what the advisors throw.
     public static func report(_ request: AdvisorsRequest, money: MoneyStyle, catalog: RoleCatalog, profile: RatingProfile,
@@ -63,8 +64,10 @@ public enum Advisors {
         let primary = try solve(request.primary)
         let rest = try Rest.advice(players: players, ownClub: ownClub, history: request.history, asOf: request.asOf,
                                    intensity: request.intensity, parameters: parameters)
-        let removal = try Removal.report(players: players, ownClub: ownClub, money: money, elevens: primary.elevens,
-                                         depth: primary.depth, parameters: parameters)
+        let removal = try Removal.report(players: players, ownClub: ownClub, money: money, history: request.history,
+                                         asOf: request.asOf, retraining: request.accepted,
+                                         assignments: try request.primary.assignments(catalog: catalog),
+                                         elevens: primary.elevens, depth: primary.depth, parameters: parameters)
 
         var tactics = [request.primary]
         for tactic in request.tactics where !tactics.contains(tactic) { tactics.append(tactic) }

@@ -235,7 +235,9 @@ public struct LoanReviewRules: Sendable, Equatable {
 
 /// The points Player Removal gives a player of the club's own for each rule that applies, apart from the wage rules,
 /// and the loan review's. Of a pair of lines ("under 8 / exactly 8") only the stronger applies. "Room to grow" is
-/// potential ability minus current ability over current ability.
+/// potential ability minus current ability over current ability. A player with an outlook (`Development.outlooks`) is
+/// scored on one line from his reach in place of the elevens, weakest and ability lines, from the points for the
+/// elevens, the weakest and far below the average; the Professionalism and Ambition lines do not apply to him.
 public struct RemovalRules: Sendable, Equatable {
     /// A player out of contract, or on a full-time or youth contract with 0 months left: reading 0 months as no contract is the
     /// owner's decision of 13 November 2026, to be double checked against the game. Unknown months left take no points
@@ -283,26 +285,17 @@ public struct RemovalRules: Sendable, Equatable {
     public var temperamentPoints: Int
     /// A false prospect: aged `falseProspectUpToAge` or under, needing more than `falseProspectRateAbove` ability points
     /// a year to reach his potential by `falseProspectTargetAge`, with Professionalism below `falseProspectProfessionalismBelow`.
+    /// It is marked on the advice and carries no points.
     public var falseProspectUpToAge: Int
     public var falseProspectTargetAge: Int
     public var falseProspectRateAbove: Double
     public var falseProspectProfessionalismBelow: Int
-    public var falseProspectPoints: Int
     /// Aged `stallingFromAge` to `stallingUpToAge`, current ability under the squad average, room to grow under
     /// `stallingRoomBelow`.
     public var stallingFromAge: Int
     public var stallingUpToAge: Int
     public var stallingRoomBelow: Double
     public var stallingPoints: Int
-    /// A prospect: aged `prospectUpToAge` or under with room to grow of at least `strongProspectRoomFrom`
-    /// (`strongProspectPoints`) or at least `prospectRoomFrom` (`prospectPoints`). Separate from the planner's
-    /// `EngineParameters.prospectMaxAge` and `prospectHeadroom` on purpose, because Removal has two steps of room to
-    /// grow where the planner has one; change them together.
-    public var prospectUpToAge: Int
-    public var strongProspectRoomFrom: Double
-    public var strongProspectPoints: Int
-    public var prospectRoomFrom: Double
-    public var prospectPoints: Int
     /// A mentor: aged `mentorFromAge` or over with Professionalism `mentorProfessionalismFrom` or over; `mentorPoints`
     /// with Determination `mentorDeterminationFrom` or over, `lesserMentorPoints` with less.
     public var mentorFromAge: Int
@@ -332,10 +325,8 @@ public struct RemovalRules: Sendable, Equatable {
                 ambitionBelow: Int, ambitionPoints: Int, controversyAbove: Int, controversyPoints: Int,
                 temperamentBelow: Int, temperamentPoints: Int,
                 falseProspectUpToAge: Int, falseProspectTargetAge: Int, falseProspectRateAbove: Double,
-                falseProspectProfessionalismBelow: Int, falseProspectPoints: Int,
+                falseProspectProfessionalismBelow: Int,
                 stallingFromAge: Int, stallingUpToAge: Int, stallingRoomBelow: Double, stallingPoints: Int,
-                prospectUpToAge: Int, strongProspectRoomFrom: Double, strongProspectPoints: Int,
-                prospectRoomFrom: Double, prospectPoints: Int,
                 mentorFromAge: Int, mentorProfessionalismFrom: Int, mentorDeterminationFrom: Int,
                 mentorPoints: Int, lesserMentorPoints: Int,
                 noGrowthFromAge: Int, noGrowthRoomBelow: Double, noGrowthPoints: Int, oldFromAge: Int, oldPoints: Int,
@@ -359,12 +350,9 @@ public struct RemovalRules: Sendable, Equatable {
         self.temperamentBelow = temperamentBelow; self.temperamentPoints = temperamentPoints
         self.falseProspectUpToAge = falseProspectUpToAge; self.falseProspectTargetAge = falseProspectTargetAge
         self.falseProspectRateAbove = falseProspectRateAbove
-        self.falseProspectProfessionalismBelow = falseProspectProfessionalismBelow; self.falseProspectPoints = falseProspectPoints
+        self.falseProspectProfessionalismBelow = falseProspectProfessionalismBelow
         self.stallingFromAge = stallingFromAge; self.stallingUpToAge = stallingUpToAge
         self.stallingRoomBelow = stallingRoomBelow; self.stallingPoints = stallingPoints
-        self.prospectUpToAge = prospectUpToAge
-        self.strongProspectRoomFrom = strongProspectRoomFrom; self.strongProspectPoints = strongProspectPoints
-        self.prospectRoomFrom = prospectRoomFrom; self.prospectPoints = prospectPoints
         self.mentorFromAge = mentorFromAge; self.mentorProfessionalismFrom = mentorProfessionalismFrom
         self.mentorDeterminationFrom = mentorDeterminationFrom
         self.mentorPoints = mentorPoints; self.lesserMentorPoints = lesserMentorPoints
@@ -545,12 +533,9 @@ public struct EngineParameters: Sendable {
     public var sharpnessNeedStrengthBuild: Parameter<Double>
     /// Factor on a first or second eleven player who is already fully sharp in a sharpness fixture.
     public var fullySharpFactor: Parameter<Double>
-    /// The oldest age counted as a prospect by the planner. Separate from Player Removal's prospect numbers
-    /// (`RemovalRules.prospectUpToAge`, `prospectRoomFrom`, `strongProspectRoomFrom`) on purpose, because Removal has two
-    /// steps of room to grow where the planner has one; change them together.
+    /// The oldest age counted as a prospect by the planner.
     public var prospectMaxAge: Parameter<Int>
-    /// A prospect's potential ability is at least this multiple of his current ability. Change it together with
-    /// `RemovalRules.prospectRoomFrom`, as `prospectMaxAge` says.
+    /// A prospect's potential ability is at least this multiple of his current ability.
     public var prospectHeadroom: Parameter<Double>
     /// Factor on a prospect's value in a lesser fixture.
     public var developmentFactor: Parameter<Double>
@@ -935,10 +920,8 @@ public struct EngineParameters: Sendable {
                     ambitionBelow: 6, ambitionPoints: 25, controversyAbove: 16, controversyPoints: 25,
                     temperamentBelow: 8, temperamentPoints: 15,
                     falseProspectUpToAge: 20, falseProspectTargetAge: 24, falseProspectRateAbove: 15,
-                    falseProspectProfessionalismBelow: 14, falseProspectPoints: 35,
-                    stallingFromAge: 23, stallingUpToAge: 24, stallingRoomBelow: 0.10, stallingPoints: 20,
-                    prospectUpToAge: 21, strongProspectRoomFrom: 0.30, strongProspectPoints: -30,
-                    prospectRoomFrom: 0.15, prospectPoints: -15,
+                    falseProspectProfessionalismBelow: 14,
+                    stallingFromAge: 24, stallingUpToAge: 24, stallingRoomBelow: 0.10, stallingPoints: 20,
                     mentorFromAge: 30, mentorProfessionalismFrom: 16, mentorDeterminationFrom: 15,
                     mentorPoints: -40, lesserMentorPoints: -20,
                     noGrowthFromAge: 30, noGrowthRoomBelow: 0.05, noGrowthPoints: 10, oldFromAge: 32, oldPoints: 5,
@@ -949,7 +932,8 @@ public struct EngineParameters: Sendable {
                         injuryPronenessPoints: 25, endEarlyFrom: 50, doNotExtendFrom: 25)),
                 .carriedOverFM26,
                 source: "\(removalSource); a full-time contract with 0 months left is read as no contract, the owner's "
-                    + "decision of 13 November 2026, to be double checked against the game"),
+                    + "decision of 13 November 2026, to be double checked against the game; stalling from 24, not 23, and "
+                    + "no prospect points, from the young players' development design, 7.1"),
             removalWageRules: Parameter(
                 RemovalWageRules(highMultiple: 1.5, highPoints: 35, abovePoints: 20),
                 .derived,
@@ -1003,7 +987,9 @@ public struct EngineParameters: Sendable {
             youngestUpToAge: Parameter(16, .derived, source: "the young players' development design, 7.1"),
             matchesHereShare: Parameter(
                 1.0 / 3, .derived,
-                source: "about the 15 full matches a season the research gives as the least for a player of 21 or over, of a season of about 46"),
+                source: "derived: docs/Research/fm27-development-matches-vs-training.md gives 15 full matches a season as the least "
+                    + "a player of 21 or over needs (carried over from FM26); of a League Two season's 46 league matches that is "
+                    + "about a third"),
             matchesHereWindowDays: Parameter(60, .derived, source: "the young players' development design: about two months of fixtures"),
             matchesHereMinimumConfirmed: Parameter(
                 6, .derived, source: "the young players' development design: fewer confirmed matches say too little about a share"),
