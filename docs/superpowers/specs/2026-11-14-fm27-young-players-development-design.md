@@ -72,7 +72,7 @@ From 19 the bases assume he gets his matches, here or on loan. That is deliberat
 
 The older rule that an Ambition under 6 stops growth at 21 is not used: the measured figure (73% at Ambition 1) replaces it.
 
-**As a rating at a slot.** Reach rating = his full-fitness rating at the slot × reach ÷ current ability. The slots considered are those where he is at least an option (familiarity 10 or over in both phases) or is retraining. His **best slot** is the one where his reach rating is the greatest share of the first choice's rating, leaving out any slot where he is the first choice himself. A player with no such slot is compared in ability points with the first team's average (section 7.1).
+**As a rating at a slot.** Reach rating = his full-fitness rating at the slot × (offset + reach) ÷ (offset + current ability). The offset is a number of ability points fitted on the captured squads: a rating here behaves like suitability × (offset + ability), not like a multiple of ability. (Changed during the build, 14 November 2026. The design first scaled in proportion, reach ÷ current ability; on the real squad that called a 19-year-old of ability 25 and potential 41 a player who could pass a first choice of far greater ability. With an offset of 0 the first formula returns.) Every other place a rating is scaled by ability, and the ability points a player needs to match the first choice, use the same formula. The slots considered are those where he is at least an option (familiarity 10 or over in both phases) or is retraining. His **best slot** is the one where his reach rating is the greatest share of the first choice's rating, leaving out any slot where he is the first choice himself. A player with no such slot is compared in ability points with the first team's average (section 7.1).
 
 **Whom he is compared with.** The first and second choice at a slot are the engine's, with injured players kept in, in Player Removal and in the planner alike, so a player has the same band on both screens. Where the player he is compared with is himself 23 or under, that player's own reach rating is used in place of his rating today, everywhere: a youngster behind a young first choice is not said to be passing him when both will grow.
 
@@ -188,7 +188,7 @@ Every word is the engine's.
 - The growth numbers come from FM24 and FM26 tests whose conditions are mostly not stated. If the bases were measured on average players and not on the most professional, reach is underestimated for everyone below Professionalism 20, which errs toward release. The lower bar for 16 and under and the working on every row are the guard.
 - The estimate is weakest for the youngest, who have the most seasons to add up.
 - Professionalism can be raised by mentoring; a low reach caused by it is softer than one caused by a low potential.
-- A rating is assumed to rise in proportion to ability. Pace arrives early and stops near 21, so a slow 20-year-old is overrated.
+- A rating is assumed to rise with ability along one straight line fitted on the captured squads, the same at every position. Pace arrives early and stops near 21, so a slow 20-year-old is overrated.
 - The bar is today's squad. After a promotion a "could become cover" player becomes "markedly lower".
 - Depth is counted by familiarity, not quality, so a weak player who is the only cover is kept.
 - The tool cannot see youth-team matches, loan offers, or the level of a club that would take a loanee.
