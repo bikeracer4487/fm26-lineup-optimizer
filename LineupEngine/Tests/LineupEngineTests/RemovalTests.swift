@@ -108,9 +108,16 @@ import Testing
     }
 
     /// The least potential that takes a player of current ability `current`, rated `his` at a slot today, to a reach
-    /// rating of at least `rating` there.
+    /// rating of at least `rating` there: a rating scales by the offset plus the ability.
     func potential(reaching rating: Double, his: Double, current: Int = 80) -> Int {
-        Int((Double(current) * rating / his).rounded(.up))
+        let offset = parameters.ratingAbilityOffset.value
+        return Int(((offset + Double(current)) * rating / his - offset).rounded(.up))
+    }
+
+    /// His reach rating at a slot where he is rated `his` today at current ability `current`, with this potential.
+    func reachRating(his: Double, potential: Int, current: Int = 80) -> Double {
+        let offset = parameters.ratingAbilityOffset.value
+        return his * (offset + Double(potential)) / (offset + Double(current))
     }
 
     // MARK: Contract type
@@ -664,7 +671,8 @@ import Testing
         let passing = potential(reaching: first, his: his)
         let making = potential(reaching: second, his: his)
         let cover = potential(reaching: 0.8 * first, his: his)
-        try #require(Double(cover) * his / 80 < second && Double(making) * his / 80 < first && passing <= 80 + 136)
+        try #require(reachRating(his: his, potential: cover) < second && reachRating(his: his, potential: making) < first
+                     && passing <= 80 + 136)
         let cases: [(potential: Int, line: RemovalReason, level: ReachLevel)] = [
             (passing, reason("Could pass D_L first at left back", -40), .couldPassFirst),
             (making, reason("Could make the second eleven at left back", -20), .couldMakeSecond),
@@ -727,7 +735,7 @@ import Testing
         let firstID = PlannerFixture.id(.D_L, "first"), secondID = PlannerFixture.id(.D_L, "second")
         let (r2, r1, _) = try ratings(of: secondID, at: .D_L, in: try squad())
         // In the second eleven, aged 19, with a reach past the first choice's: the reach line, −40, in its place.
-        let passing = Int((100 * r1 / r2).rounded(.up))
+        let passing = potential(reaching: r1, his: r2, current: 100)
         let rising = try advice(secondID, in: try squad(changing: secondID) { $0.age = 19; $0.potentialAbility = passing })
         #expect(rising.tier == .second(.D_L))
         #expect(rising.outlook?.level == .couldPassFirst)

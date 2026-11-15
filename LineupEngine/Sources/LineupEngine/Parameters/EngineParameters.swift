@@ -634,6 +634,9 @@ public struct EngineParameters: Sendable {
     public var markedlyLowerShareYoungest: Parameter<Double>
     /// The oldest age that has the youngest's share.
     public var youngestUpToAge: Parameter<Int>
+    /// A rating is taken to grow with ability as (this + ability), not in proportion to ability: a rating at one ability
+    /// is scaled to another by (this + other) ÷ (this + current).
+    public var ratingAbilityOffset: Parameter<Double>
     // The numbers behind whether a young player is getting matches here (`Development.matchesHere`).
     /// The share of the matches in the window a player who is not a first choice must start.
     public var matchesHereShare: Parameter<Double>
@@ -985,6 +988,12 @@ public struct EngineParameters: Sendable {
                 source: "the young players' development design, 7.1: the estimate adds up the most seasons for the youngest "
                     + "and is least reliable for them, and a release cannot be undone"),
             youngestUpToAge: Parameter(16, .derived, source: "the young players' development design, 7.1"),
+            ratingAbilityOffset: Parameter(
+                70, .derived,
+                source: "a least squares line, rating = a + b x ability, through the best rating of each of 20 outfield players "
+                    + "of the captured first-team and U21 squads (not out on loan) at the slots of the sample 4-2-3-1 where he is "
+                    + "solid in both phases, under the FM27 profile: a = 57.0, b = 0.798, R² 0.82; the offset a ÷ b is 71.5, "
+                    + "rounded to the nearest 5 (EndToEndTests.theRatingOffsetIsCloseToTheCapturedSquadsFit)"),
             matchesHereShare: Parameter(
                 1.0 / 3, .derived,
                 source: "derived: docs/Research/fm27-development-matches-vs-training.md gives 15 full matches a season as the least "

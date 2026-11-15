@@ -244,6 +244,11 @@ public enum FitnessModel {
         if youngestShare > lowerShare {
             found.append("markedlyLowerShareYoungest (\(youngestShare)) is above markedlyLowerShare (\(lowerShare))")
         }
+        // A rating is scaled by (offset + ability): a negative offset could divide by zero.
+        let offset = parameters.ratingAbilityOffset.value
+        if !usable(offset) {
+            found.append("ratingAbilityOffset is \(offset), \(notUsable)")
+        }
         for (name, age) in [("onCourseBeforeAge", parameters.onCourseBeforeAge.value),
                             ("youngestUpToAge", parameters.youngestUpToAge.value)] where age < 1 {
             found.append("\(name) is \(age), not 1 or more")

@@ -24,7 +24,8 @@ public struct Rival: Equatable, Sendable {
     public let age: Int
     /// His rating at the slot today.
     public let rating: Double
-    /// What the young player must reach: the rival's own reach rating when he is developing too, `rating` otherwise.
+    /// What the young player must reach: when the rival is developing too, his own reach rating (`rating` scaled from
+    /// his ability to his reach, as `SlotOutlook.reachRating` is); `rating` otherwise.
     public let compared: Double
 }
 
@@ -33,7 +34,8 @@ public struct SlotOutlook: Equatable, Sendable {
     public let slot: SlotID
     /// His full-fitness rating there today.
     public let rating: Double
-    /// `rating` × his reach ÷ his current ability.
+    /// `rating` scaled from his current ability to his reach: `rating` × (offset + reach) ÷ (offset + current ability),
+    /// the offset being `ratingAbilityOffset`, since a rating grows with ability from an offset, not in proportion.
     public let reachRating: Double
     /// He is the first choice at this slot.
     public let isFirstChoice: Bool
@@ -43,8 +45,9 @@ public struct SlotOutlook: Equatable, Sendable {
     public let secondChoice: Rival?
     /// nil when `firstChoice` is nil.
     public let band: ReachBand?
-    /// The ability points he needs to match the first choice today, rounded up; nil with no first choice or a rating of
-    /// 0 here, 0 when already level.
+    /// The ability points that would bring his rating level with the first choice's today under the same scaling:
+    /// (offset + current ability) × (the first choice's rating ÷ his − 1), rounded up; nil with no first choice or a
+    /// rating of 0 here, 0 when already level.
     public let pointsNeeded: Int?
     /// nil when `firstChoice` is nil.
     public let level: ReachLevel?
@@ -114,7 +117,7 @@ public enum Development {
 
         func rival(_ id: PlayerID?, at slot: SlotID) -> Rival? {
             guard let id, let player = byID[id], let rating = tiers.ratings[id]?[slot] else { return nil }
-            let compared = estimates[id].map { rating * $0.reach / Double($0.current) } ?? rating
+            let compared = estimates[id].map { scaled(rating, from: Double($0.current), to: $0.reach, parameters) } ?? rating
             return Rival(player: id, name: player.name, age: player.age, rating: rating, compared: compared)
         }
 
@@ -186,13 +189,14 @@ public enum Development {
                                     isFirstChoice: Bool, firstChoice: Rival?, secondChoice: Rival?,
                                     firstChoiceEstimate: ReachEstimate?, parameters: EngineParameters) -> SlotOutlook {
         let current = Double(estimate.current)
-        let reachRating = rating * estimate.reach / current
+        let reachRating = scaled(rating, from: current, to: estimate.reach, parameters)
         guard let firstChoice else {
             return SlotOutlook(slot: slot, rating: rating, reachRating: reachRating, isFirstChoice: isFirstChoice,
                                firstChoice: nil, secondChoice: secondChoice, band: nil, pointsNeeded: nil, level: nil)
         }
         let pointsNeeded: Int? = rating > 0
-            ? max(0, Int((current * (firstChoice.rating / rating - 1) - roundingNoise).rounded(.up)))
+            ? max(0, Int(((parameters.ratingAbilityOffset.value + current) * (firstChoice.rating / rating - 1)
+                          - roundingNoise).rounded(.up)))
             : nil
         return SlotOutlook(
             slot: slot, rating: rating, reachRating: reachRating, isFirstChoice: isFirstChoice,
@@ -202,6 +206,14 @@ public enum Development {
             pointsNeeded: pointsNeeded,
             level: level(player, reachRating: reachRating, firstChoice: firstChoice, secondChoice: secondChoice,
                          parameters: parameters))
+    }
+
+    /// A rating at ability `current` taken to ability `ability`: a rating grows as (offset + ability), not in proportion
+    /// to ability, so a low ability is not multiplied into a high rating. With an offset of 0 it is in proportion.
+    private static func scaled(_ rating: Double, from current: Double, to ability: Double,
+                               _ parameters: EngineParameters) -> Double {
+        let offset = parameters.ratingAbilityOffset.value
+        return rating * (offset + ability) / (offset + current)
     }
 
     private static func level(_ player: Player, reachRating: Double, firstChoice: Rival, secondChoice: Rival?,
@@ -222,16 +234,16 @@ public enum Development {
         func theirs(_ k: Int) -> Double {
             guard let rivalEstimate = firstChoiceEstimate else { return firstChoice.rating }
             let ability = rivalEstimate.bySeason[min(k, rivalEstimate.bySeason.count - 1)]
-            return firstChoice.rating * ability / Double(rivalEstimate.current)
+            return scaled(firstChoice.rating, from: Double(rivalEstimate.current), to: ability, parameters)
         }
         let ahead = estimate.bySeason.indices.first { k in
-            rating * estimate.bySeason[k] / current + roundingNoise >= theirs(k)
+            scaled(rating, from: current, to: estimate.bySeason[k], parameters) + roundingNoise >= theirs(k)
         }
         if let ahead {
             if ahead <= 1 { return .close }
             if player.age + ahead < parameters.onCourseBeforeAge.value { return .onCourse }
         }
-        let atPotential = rating * Double(estimate.potential) / current
+        let atPotential = scaled(rating, from: current, to: Double(estimate.potential), parameters)
         return atPotential + roundingNoise >= firstChoice.compared ? .possible : .notExpected
     }
 

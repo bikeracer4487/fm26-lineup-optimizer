@@ -664,4 +664,26 @@ import Testing
             $0.matchesHereMinimumConfirmed = Parameter(1, .derived, source: "test")
         }.isEmpty)
     }
+
+    @Test func theRatingOffsetIsListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        #expect(listed["ratingAbilityOffset"]?.evidence == .derived)
+        let source = listed["ratingAbilityOffset"]?.source ?? ""
+        for quoted in ["least squares", "57.0", "0.798", "71.5", "0.82", "20 outfield players"] {
+            #expect(source.contains(quoted), "\(quoted)")
+        }
+        #expect(EngineParameters.fm27.ratingAbilityOffset.value == 70)
+    }
+
+    @Test func ratingOffsetProblemsAreReported() {
+        func problems(_ value: Double) -> [String] {
+            var q = EngineParameters.fm27
+            q.ratingAbilityOffset = Parameter(value, .derived, source: "test")
+            return FitnessModel.problems(in: q)
+        }
+        #expect(problems(-1) == ["ratingAbilityOffset is -1.0, not a finite number of 0 or more"])
+        #expect(problems(.infinity) == ["ratingAbilityOffset is inf, not a finite number of 0 or more"])
+        #expect(problems(.nan).count == 1)
+        #expect(problems(0).isEmpty)
+    }
 }

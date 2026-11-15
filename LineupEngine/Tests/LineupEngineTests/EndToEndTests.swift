@@ -426,4 +426,47 @@ import Testing
         for group in led.suggestions { #expect(Set(group.members.map(\.player)).count == Mentoring.groupSize) }
         #expect(Set(members).isDisjoint(with: led.notPlaced.map(\.player)))
     }
+
+    /// A straight line, rating = a + b × ability, fitted by least squares to each outfield player's best rating over the
+    /// slots where he is solid in both phases, with injured players kept in: the fit `ratingAbilityOffset` is set from.
+    private func capturedRatingFit() throws -> (a: Double, b: Double, rSquared: Double, count: Int) {
+        let book = try realBook()
+        let players = book.allPlayers
+        let ownClub = book.ownClub(override: ownClubName)
+        let tactic = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
+        let catalog = try RoleCatalog.fm27()
+        let parameters = EngineParameters.fm27
+        let assignments = try tactic.assignments(catalog: catalog)
+        let tiers = try SquadTiers.compute(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                           profile: try RatingProfile.standard(), parameters: parameters,
+                                           ignoringInjuries: true)
+        let solid = parameters.depthSolidFamiliarity.value
+        var points: [(ability: Double, rating: Double)] = []
+        for player in players.sorted(by: { $0.id.key < $1.id.key }) {
+            if case .loanedOut = LoanStatus.of(player, ownClub: ownClub) { continue }
+            if (player.familiarity[.goalkeeper] ?? 0) >= solid { continue }
+            let best = assignments
+                .filter { $0.slot != .GK && (player.familiarity[$0.ipPosition] ?? 0) >= solid
+                    && (player.familiarity[$0.oopPosition] ?? 0) >= solid }
+                .compactMap { tiers.ratings[player.id]?[$0.slot] }
+                .max()
+            guard let best else { continue }
+            points.append((Double(player.currentAbility), best))
+        }
+        let n = Double(points.count)
+        let meanX = points.map(\.ability).reduce(0, +) / n, meanY = points.map(\.rating).reduce(0, +) / n
+        let sxy = points.map { ($0.ability - meanX) * ($0.rating - meanY) }.reduce(0, +)
+        let sxx = points.map { ($0.ability - meanX) * ($0.ability - meanX) }.reduce(0, +)
+        let syy = points.map { ($0.rating - meanY) * ($0.rating - meanY) }.reduce(0, +)
+        let b = sxy / sxx, a = meanY - b * meanX
+        return (a, b, sxy * sxy / (sxx * syy), points.count)
+    }
+
+    @Test func theRatingOffsetIsCloseToTheCapturedSquadsFit() throws {
+        let fit = try capturedRatingFit()
+        // On the captures: a = 57.0, b = 0.798, an offset of 71.5, R² 0.82 over 20 players.
+        #expect(fit.b > 0)
+        #expect(fit.rSquared >= 0.6)
+        #expect(abs(EngineParameters.fm27.ratingAbilityOffset.value - fit.a / fit.b) <= 10)
+    }
 }

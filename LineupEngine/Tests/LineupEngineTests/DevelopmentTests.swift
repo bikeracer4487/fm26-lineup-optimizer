@@ -2,7 +2,13 @@ import Testing
 @testable import LineupEngine
 
 @Suite struct DevelopmentTests {
-    let parameters = EngineParameters.fm27
+    /// The standard parameters with the rating offset the numbers below are worked out for: a rating scales by
+    /// (70 + ability), so at a current ability of 30 a reach rating is his rating × (70 + reach) ÷ 100.
+    let parameters: EngineParameters = {
+        var q = EngineParameters.fm27
+        q.ratingAbilityOffset = Parameter(70, .derived, source: "test")
+        return q
+    }()
     let assignments: [SlotAssignment]
     let day = Day(year: 2026, month: 11, day: 14)!
 
@@ -73,46 +79,47 @@ import Testing
 
     @Test func eachLevelAtAndBesideItsBoundary() throws {
         let first = veteran("First Choice"), second = veteran("Second Choice")
-        // Rated 50 at an ability of 100, so his reach rating is half his potential.
+        // Rated 50 at an ability of 30, so his reach rating is (70 + his potential) ÷ 2: the first choice's 100 at 130,
+        // the second's 90 at 110, the bar of 80 at 90.
         let cases: [(potential: Int, level: ReachLevel)] = [
-            (140, .couldPassFirst), (139, .couldMakeSecond), (120, .couldMakeSecond), (119, .couldBeCover),
-            (112, .couldBeCover), (111, .markedlyLower)]
-        let young = cases.map { player("Young \($0.potential)", potential: $0.potential, slots: [.D_L]) }
+            (130, .couldPassFirst), (129, .couldMakeSecond), (110, .couldMakeSecond), (109, .couldBeCover),
+            (90, .couldBeCover), (89, .markedlyLower)]
+        let young = cases.map { player("Young \($0.potential)", age: 18, current: 30, potential: $0.potential, slots: [.D_L]) }
         let t = tiers(first: [.D_L: first], second: [.D_L: second],
-                      ratings: [(first, .D_L, 70), (second, .D_L, 60)] + young.map { ($0, .D_L, 50) })
+                      ratings: [(first, .D_L, 100), (second, .D_L, 90)] + young.map { ($0, .D_L, 50) })
         let found = try outlooks([first, second] + young, t)
         for (player, expected) in zip(young, cases) {
             let outlook = found[player.id]
             #expect(slot(outlook, .D_L)?.level == expected.level, "\(player.name)")
             #expect(outlook?.level == expected.level, "\(player.name)")
             #expect(outlook?.isMarkedlyLower == (expected.level == .markedlyLower), "\(player.name)")
-            #expect(slot(outlook, .D_L)?.reachRating == Double(expected.potential) / 2, "\(player.name)")
+            #expect(slot(outlook, .D_L)?.reachRating == Double(70 + expected.potential) / 2, "\(player.name)")
         }
         let row = try #require(slot(found[young[0].id], .D_L))
         #expect(row.rating == 50 && !row.isFirstChoice)
-        #expect(row.firstChoice == Rival(player: first.id, name: "First Choice", age: 28, rating: 70, compared: 70))
-        #expect(row.secondChoice == Rival(player: second.id, name: "Second Choice", age: 28, rating: 60, compared: 60))
+        #expect(row.firstChoice == Rival(player: first.id, name: "First Choice", age: 28, rating: 100, compared: 100))
+        #expect(row.secondChoice == Rival(player: second.id, name: "Second Choice", age: 28, rating: 90, compared: 90))
         #expect(found[young[0].id]?.best == row)
         #expect(found[young[0].id]?.average == nil)
     }
 
     @Test func thePlayerOfSixteenHasTheLowerBarAndThePlayerOfSeventeenDoesNot() throws {
         let first = veteran("First Choice"), second = veteran("Second Choice")
-        // Rated 40 at 100 with a reach of 125: 50, under the bar of 56 (80% of 70) and over the youngest's 49 (70%).
-        let sixteen = player("Sixteen", age: 16, potential: 125, slots: [.D_L])
-        let seventeen = player("Seventeen", age: 17, potential: 125, slots: [.D_L])
+        // Rated 50 at 30 with a reach of 80: 75, under the bar of 80 (80% of 100) and over the youngest's 70 (70%).
+        let sixteen = player("Sixteen", age: 16, current: 30, potential: 80, slots: [.D_L])
+        let seventeen = player("Seventeen", age: 17, current: 30, potential: 80, slots: [.D_L])
         let t = tiers(first: [.D_L: first], second: [.D_L: second],
-                      ratings: [(first, .D_L, 70), (second, .D_L, 60), (sixteen, .D_L, 40), (seventeen, .D_L, 40)])
+                      ratings: [(first, .D_L, 100), (second, .D_L, 90), (sixteen, .D_L, 50), (seventeen, .D_L, 50)])
         let found = try outlooks([first, second, sixteen, seventeen], t)
-        #expect(slot(found[sixteen.id], .D_L)?.reachRating == 50)
+        #expect(slot(found[sixteen.id], .D_L)?.reachRating == 75)
         #expect(found[sixteen.id]?.level == .couldBeCover)
         #expect(found[seventeen.id]?.level == .markedlyLower)
     }
 
     @Test func aMissingSecondChoiceCountsAsReached() throws {
         let first = veteran("First Choice"), second = veteran("Second Choice")
-        // A reach rating of 56: over the bar, under the second choice's 60.
-        let young = player("Young", potential: 112, slots: [.D_L])
+        // Rated 50 at 30 with a reach of 42: a reach rating of 56, over the bar, under the second choice's 60.
+        let young = player("Young", current: 30, potential: 42, slots: [.D_L])
         let ratings: [(Player, SlotID, Double)] = [(first, .D_L, 70), (second, .D_L, 60), (young, .D_L, 50)]
         let none = try outlooks([first, second, young], tiers(first: [.D_L: first], ratings: ratings))
         #expect(slot(none[young.id], .D_L)?.secondChoice == nil)
@@ -161,19 +168,19 @@ import Testing
     }
 
     @Test func aYoungFirstChoiceIsComparedAtHisOwnReach() throws {
-        // Rated 50 at 100 with a reach of 140: a reach rating of 70.
+        // Rated 70 at 100 with a reach of 140: a reach rating of 70 × 210 ÷ 170, about 86.5.
         let young = player("Young", age: 18, potential: 140, slots: [.D_L])
         let old = player("Old", age: 28, current: 100, potential: 100)
-        let behindOld = try outlooks([old, young], tiers(first: [.D_L: old], ratings: [(old, .D_L, 60), (young, .D_L, 50)]))
-        #expect(slot(behindOld[young.id], .D_L)?.firstChoice?.compared == 60)
+        let behindOld = try outlooks([old, young], tiers(first: [.D_L: old], ratings: [(old, .D_L, 85), (young, .D_L, 70)]))
+        #expect(slot(behindOld[young.id], .D_L)?.firstChoice?.compared == 85)
         #expect(behindOld[young.id]?.level == .couldPassFirst)
 
-        // Of equal rating, growing as fast: his own reach rating is 60 × 140 ÷ 100.
+        // Of equal rating, growing as fast: his own reach rating is 85 × 210 ÷ 170, 105.
         let rising = player("Rising", age: 20, current: 100, potential: 140)
-        let behindRising = try outlooks([rising, young], tiers(first: [.D_L: rising], ratings: [(rising, .D_L, 60), (young, .D_L, 50)]))
+        let behindRising = try outlooks([rising, young], tiers(first: [.D_L: rising], ratings: [(rising, .D_L, 85), (young, .D_L, 70)]))
         let row = try #require(slot(behindRising[young.id], .D_L))
-        #expect(row.firstChoice?.rating == 60)
-        #expect(abs((row.firstChoice?.compared ?? 0) - 84) < 1e-9)
+        #expect(row.firstChoice?.rating == 85)
+        #expect(abs((row.firstChoice?.compared ?? 0) - 105) < 1e-9)
         #expect(row.level != .couldPassFirst)
     }
 
@@ -186,37 +193,39 @@ import Testing
                                                            ratings: [(first, .D_L, firstChoiceRating), (young, .D_L, rating)]))
             return slot(found[young.id], .D_L)?.band
         }
-        // Aged 20 at 100, potential 200: 100, 114, 126, 138, 150 over the coming seasons; rated 50: 50, 57, 63, 69, 75.
+        // Aged 20 at 100, potential 200: 100, 114, 126, 138, 150 over the coming seasons; rated 85, so (70 + ability) ÷ 2:
+        // 85, 92, 98, 104, 110.
         let rising = player("Rising", age: 20, current: 100, potential: 200, slots: [.D_L])
-        #expect(try band(rising, rating: 50, firstChoiceRating: 50) == .close)
-        #expect(try band(rising, rating: 50, firstChoiceRating: 56) == .close)
-        #expect(try band(rising, rating: 50, firstChoiceRating: 57.5) == .onCourse)
+        #expect(try band(rising, rating: 85, firstChoiceRating: 85) == .close)
+        #expect(try band(rising, rating: 85, firstChoiceRating: 92) == .close)
+        #expect(try band(rising, rating: 85, firstChoiceRating: 92.5) == .onCourse)
         // Ahead at 23 (three seasons on) is on course; at 24 it is only possible.
-        #expect(try band(rising, rating: 50, firstChoiceRating: 69) == .onCourse)
-        #expect(try band(rising, rating: 50, firstChoiceRating: 70) == .possible)
+        #expect(try band(rising, rating: 85, firstChoiceRating: 104) == .onCourse)
+        #expect(try band(rising, rating: 85, firstChoiceRating: 105) == .possible)
         // His reach falls short, but his potential does not.
         let slow = player("Slow", age: 20, current: 100, potential: 200, slots: [.D_L], professionalism: 1)
-        #expect(try band(slow, rating: 50, firstChoiceRating: 70) == .possible)
-        // His potential as a rating, 65, is below the first choice's 70.
+        #expect(try band(slow, rating: 85, firstChoiceRating: 105) == .possible)
+        // His potential as a rating, 100, is below the first choice's 105.
         let capped = player("Capped", age: 20, current: 100, potential: 130, slots: [.D_L])
-        #expect(try band(capped, rating: 50, firstChoiceRating: 70) == .notExpected)
-        #expect(try band(capped, rating: 50, firstChoiceRating: 65) == .onCourse)
+        #expect(try band(capped, rating: 85, firstChoiceRating: 105) == .notExpected)
+        #expect(try band(capped, rating: 85, firstChoiceRating: 100) == .onCourse)
     }
 
     @Test func theBandWalksAYoungFirstChoiceForwardToo() throws {
-        // Aged 18 at 100, potential 200, rated 70: 70, 82.6, 92.4, 102.2, 110.6, 119 over the coming seasons.
+        // Aged 18 at 100, potential 200 (100, 118, 132, 146, 158, 170), rated 85: 85, 94, 101, 108, 114, 120.
         let young = player("Young", age: 18, current: 100, potential: 200, slots: [.D_L])
         func band(_ first: Player, rating: Double) throws -> ReachBand? {
-            let found = try outlooks([first, young], tiers(first: [.D_L: first], ratings: [(first, .D_L, rating), (young, .D_L, 70)]))
+            let found = try outlooks([first, young], tiers(first: [.D_L: first], ratings: [(first, .D_L, rating), (young, .D_L, 85)]))
             return slot(found[young.id], .D_L)?.band
         }
-        // Today's 79 is passed in one season, but walked forward he is 88.5, 98.0, 107.4, 116.9: passed at 23.
-        #expect(try band(player("Old", age: 28, current: 100, potential: 100), rating: 79) == .close)
-        #expect(try band(player("Rising", age: 22, current: 100, potential: 148), rating: 79) == .onCourse)
-        // Walked forward from 73 he is 81.8 a season on, and passed then; his reach rating, 108, only at 22.
-        #expect(try band(player("Rising", age: 22, current: 100, potential: 148), rating: 73) == .close)
-        // His seasons run out four on, at 26: his last value, 116.9, is held, and passed five seasons on, at 23.
-        #expect(try band(player("Older", age: 23, current: 100, potential: 148), rating: 79) == .onCourse)
+        // Today's 92 is passed in one season, but walked forward (100, 112, 124, 136, 148) he is 98.5, 105.0, 111.5,
+        // 118.0: passed five seasons on, at 23.
+        #expect(try band(player("Old", age: 28, current: 100, potential: 100), rating: 92) == .close)
+        #expect(try band(player("Rising", age: 22, current: 100, potential: 148), rating: 92) == .onCourse)
+        // Walked forward from 87 he is 93.1 a season on, and passed then; his reach rating, 111.6, only at 22.
+        #expect(try band(player("Rising", age: 22, current: 100, potential: 148), rating: 87) == .close)
+        // His seasons run out four on, at 26: his last value, 118.0, is held, and passed five seasons on, at 23.
+        #expect(try band(player("Older", age: 23, current: 100, potential: 148), rating: 92) == .onCourse)
     }
 
     // MARK: His best slot
@@ -286,8 +295,9 @@ import Testing
 
     @Test func pointsNeededIsRoundedUpAndNeverNegative() throws {
         let first = veteran("First Choice")
+        // At an ability of 30, (70 + 30) × (his rating ÷ the first choice's − 1).
         func points(rating: Double, firstChoiceRating: Double) throws -> Int? {
-            let young = player("Young", slots: [.D_L])
+            let young = player("Young", current: 30, potential: 30, slots: [.D_L])
             let found = try outlooks([first, young], tiers(first: [.D_L: first],
                                                            ratings: [(first, .D_L, firstChoiceRating), (young, .D_L, rating)]))
             return slot(found[young.id], .D_L)?.pointsNeeded
@@ -299,6 +309,75 @@ import Testing
         #expect(try points(rating: 70, firstChoiceRating: 70) == 0)
         #expect(try points(rating: 80, firstChoiceRating: 70) == 0)
         #expect(try points(rating: 0, firstChoiceRating: 70) == nil)
+    }
+
+    // MARK: Scaling from the offset
+
+    @Test func ratingsScaleFromTheOffsetNotInProportion() throws {
+        // Two centre-backs equally suited to the slot: a rating is 0.5 × (offset + ability).
+        let offset = parameters.ratingAbilityOffset.value
+        let first = player("First Choice", age: 28, current: 66, potential: 66)
+        func outlook(potential: Int) throws -> SlotOutlook? {
+            let young = player("Young", age: 19, current: 25, potential: potential, slots: [.D_CL])
+            let found = try outlooks([first, young], tiers(first: [.D_CL: first],
+                                                           ratings: [(first, .D_CL, 0.5 * (offset + 66)),
+                                                                     (young, .D_CL, 0.5 * (offset + 25))]))
+            return slot(found[young.id], .D_CL)
+        }
+        // A potential of 41, below the first choice's ability: in proportion, 47.5 × 41 ÷ 25 would be 77.9, past his 68.
+        let low = try #require(try outlook(potential: 41))
+        #expect(abs(low.reachRating - 0.5 * (offset + 41)) < 1e-9)
+        #expect(low.level != .couldPassFirst)
+        #expect(low.band == .notExpected)
+        // A potential of 70, above it.
+        let high = try #require(try outlook(potential: 70))
+        #expect(high.level == .couldPassFirst)
+        #expect(high.band != .notExpected)
+    }
+
+    @Test func anOffsetOfZeroScalesInProportion() throws {
+        var q = parameters
+        q.ratingAbilityOffset = Parameter(0, .derived, source: "test")
+        // His reach rating 50 × 140 ÷ 100, a developing first choice's 60 × 120 ÷ 100, and the points 100 × (60 ÷ 50 − 1).
+        let young = player("Young", age: 20, current: 100, potential: 140, slots: [.D_L])
+        let rising = player("Rising", age: 20, current: 100, potential: 120)
+        let row = try #require(slot(try outlooks([rising, young], tiers(first: [.D_L: rising],
+                                                                         ratings: [(rising, .D_L, 60), (young, .D_L, 50)]),
+                                                 parameters: q)[young.id], .D_L))
+        #expect(abs(row.reachRating - 70) < 1e-9)
+        #expect(abs((row.firstChoice?.compared ?? 0) - 72) < 1e-9)
+        #expect(row.pointsNeeded == 20)
+        // The walk: rated 50 at 100 with potential 200 he is 50, 57, 63, 69, so passes 69 at 23. With the offset he
+        // would be 50, 52.1, 53.8, 55.6 and not pass it in time.
+        let first = veteran("First Choice")
+        func band(_ young: Player, firstChoiceRating: Double, _ parameters: EngineParameters) throws -> ReachBand? {
+            let found = try outlooks([first, young], tiers(first: [.D_L: first],
+                                                           ratings: [(first, .D_L, firstChoiceRating), (young, .D_L, 50)]),
+                                     parameters: parameters)
+            return slot(found[young.id], .D_L)?.band
+        }
+        let rising200 = player("Rising 200", age: 20, current: 100, potential: 200, slots: [.D_L])
+        #expect(try band(rising200, firstChoiceRating: 69, q) == .onCourse)
+        #expect(try band(rising200, firstChoiceRating: 69, parameters) == .possible)
+        // His potential as a rating: 50 × 130 ÷ 100 = 65 reaches 64; 50 × 200 ÷ 170, about 58.8, does not.
+        let slow = player("Slow", age: 20, current: 100, potential: 130, slots: [.D_L], professionalism: 1)
+        #expect(try band(slow, firstChoiceRating: 64, q) == .possible)
+        #expect(try band(slow, firstChoiceRating: 64, parameters) == .notExpected)
+    }
+
+    @Test func pointsNeededUsesTheOffset() throws {
+        let first = veteran("First Choice")
+        let young = player("Young", slots: [.D_L])
+        func points(_ parameters: EngineParameters) throws -> Int? {
+            let found = try outlooks([first, young], tiers(first: [.D_L: first], ratings: [(first, .D_L, 90), (young, .D_L, 80)]),
+                                     parameters: parameters)
+            return slot(found[young.id], .D_L)?.pointsNeeded
+        }
+        // (70 + 100) × (90 ÷ 80 − 1) = 21.25, rounded up; in proportion it would be 12.5, so 13.
+        #expect(try points(parameters) == 22)
+        var q = parameters
+        q.ratingAbilityOffset = Parameter(0, .derived, source: "test")
+        #expect(try points(q) == 13)
     }
 
     // MARK: Matches here
