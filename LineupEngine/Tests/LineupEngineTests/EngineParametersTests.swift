@@ -78,7 +78,9 @@ import Testing
         let names = ["loanedInFactor", "consecutiveStartSteps", "sharpnessNeedFull", "sharpnessNeedMost", "sharpnessNeedStrengthLow",
                      "sharpnessNeedStrengthBuild", "fullySharpFactor", "prospectHeadroom", "developmentFactors",
                      "developmentFactorLowProfessionalism", "developmentLowProfessionalismUpTo",
-                     "developmentLowProfessionalismUpToAge", "developmentStartsPerMonth", "developmentMonthDays", "shopWindowFactor",
+                     "developmentLowProfessionalismUpToAge", "developmentStartsPerMonth", "developmentMonthDays",
+                     "successorFactorLow", "successorFactorMedium", "successorsFavouredAtMedium", "successorCloseOnlyUpToAge",
+                     "shopWindowFactor",
                      "retrainingFromFamiliarity", "retrainingFromFamiliarityMedium", "retrainingUntilFamiliarity",
                      "retrainingFactorLow", "retrainingFactorMedium", "stabilityAnchorRun", "stabilityAnchorBonus", "stabilityRecentBonus"]
         for name in names {
@@ -155,6 +157,52 @@ import Testing
             $0.developmentStartsPerMonth = Parameter(1, .derived, source: "test")
         }.isEmpty)
         #expect(problems { $0.developmentFactors = Parameter([], .derived, source: "test") }.isEmpty)
+    }
+
+    @Test func theSuccessorParametersAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        let expected: [(String, String)] = [
+            ("successorFactorLow", "retrainingFactorLow"),
+            ("successorFactorMedium", "section 8"),
+            ("successorsFavouredAtMedium", "section 8"),
+            ("successorCloseOnlyUpToAge", "section 8")]
+        for (name, quoted) in expected {
+            #expect(listed[name]?.evidence == .derived, "\(name)")
+            #expect(listed[name]?.source.contains(quoted) == true, "\(name) source")
+        }
+        let q = EngineParameters.fm27
+        #expect(q.successorFactorLow.value == 1.15)
+        #expect(q.successorFactorLow.value == q.retrainingFactorLow.value)
+        #expect(q.successorFactorMedium.value == 1.05)
+        #expect(q.successorsFavouredAtMedium.value == 2)
+        #expect(q.successorCloseOnlyUpToAge.value == 17)
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func successorParameterProblemsAreReported() {
+        func problems(_ change: (inout EngineParameters) -> Void) -> [String] {
+            var q = EngineParameters.fm27
+            change(&q)
+            return FitnessModel.problems(in: q)
+        }
+        for bad in [0.99, -1, Double.nan, .infinity] {
+            #expect(problems { $0.successorFactorLow = Parameter(bad, .derived, source: "test") }
+                == ["successorFactorLow is \(bad), not a finite number of 1 or more"])
+            #expect(problems { $0.successorFactorMedium = Parameter(bad, .derived, source: "test") }
+                == ["successorFactorMedium is \(bad), not a finite number of 1 or more"])
+        }
+        #expect(problems { $0.successorsFavouredAtMedium = Parameter(-1, .derived, source: "test") }
+            == ["successorsFavouredAtMedium is -1, not 0 or more"])
+        #expect(problems { $0.successorCloseOnlyUpToAge = Parameter(-1, .derived, source: "test") }
+            == ["successorCloseOnlyUpToAge is -1, not 0 or more"])
+        // The edges that are allowed: factors of exactly 1 (the rule off), nobody favoured at medium, and no age that
+        // needs to be close.
+        #expect(problems {
+            $0.successorFactorLow = Parameter(1, .derived, source: "test")
+            $0.successorFactorMedium = Parameter(1, .derived, source: "test")
+            $0.successorsFavouredAtMedium = Parameter(0, .derived, source: "test")
+            $0.successorCloseOnlyUpToAge = Parameter(0, .derived, source: "test")
+        }.isEmpty)
     }
 
     @Test func theMentoringParametersAreListedWithEvidenceAndSource() {

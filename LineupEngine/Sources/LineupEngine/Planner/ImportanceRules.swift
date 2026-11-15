@@ -16,13 +16,17 @@ public struct RuleContext: Sendable {
     public var outlooks: [PlayerID: Outlook] = [:]
     /// The manager's Development setting, 0 (no development favour) to 1 (in full).
     public var development: Double = 1
+    /// The only successors who may be favoured (`ImportanceRules.successors`), which the planner sets for a medium
+    /// fixture; nil means no cap applies.
+    public var successorsFavoured: Set<PlayerID>? = nil
 
     public init(importance: Importance, date: Day, assignments: [SlotAssignment], ownClub: String?, history: StartHistory,
                 tiers: SquadTiers, retraining: [Retraining], marks: [PlayerID: SaleMark] = [:], stability: Double,
-                outlooks: [PlayerID: Outlook] = [:], development: Double = 1) {
+                outlooks: [PlayerID: Outlook] = [:], development: Double = 1, successorsFavoured: Set<PlayerID>? = nil) {
         self.importance = importance; self.date = date; self.assignments = assignments; self.ownClub = ownClub
         self.history = history; self.tiers = tiers; self.retraining = retraining; self.marks = marks
         self.stability = stability; self.outlooks = outlooks; self.development = development
+        self.successorsFavoured = successorsFavoured
     }
 }
 
@@ -32,10 +36,12 @@ public enum ImportanceRules {
     /// Both lists are in `Adjustment.Kind` order; `bySlot` covers only the slots in `context.assignments`.
     public static func adjustments(for player: Player, context: RuleContext, parameters: EngineParameters)
         -> (everySlot: [Adjustment], bySlot: [SlotID: [Adjustment]]) {
+        let successor = successorFavour(player, context, parameters)
+
         var everySlot: [Adjustment] = []
         everySlot += loanedIn(player, context, parameters)
         everySlot += consecutiveStarts(player, context, parameters)
-        everySlot += needsSharpness(player, context, parameters)
+        everySlot += needsSharpness(player, context, parameters, isFavouredSuccessor: !successor.isEmpty)
         everySlot += shopWindow(player, context, parameters)
 
         let recent = context.history.recentSlots(
@@ -45,13 +51,43 @@ public enum ImportanceRules {
         var bySlot: [SlotID: [Adjustment]] = [:]
         for assignment in context.assignments {
             var found: [Adjustment] = []
-            // The same at every slot; kept in each slot's own list so a larger favour can take its place at one.
-            found += floor
-            found += retraining(player, assignment, context, parameters)
+            let retrained = retraining(player, assignment, context, parameters)
+            if let favour = successor[assignment.slot] {
+                // The successor's favour takes the floor's place. It and retraining both reward matches at this slot,
+                // so only the larger is kept, retraining on a tie.
+                if let retrainingFavour = retrained.first, retrainingFavour.factor >= favour.factor {
+                    found += retrained
+                } else {
+                    found.append(favour)
+                }
+            } else {
+                // The floor is the same at every slot; it is kept in each slot's own list so the successor's favour
+                // can take its place at one. It and retraining multiply.
+                found += floor
+                found += retrained
+            }
             found += stability(recent, assignment, context, parameters)
             bySlot[assignment.slot] = found.sorted(by: inKindOrder)
         }
         return (everySlot.sorted(by: inKindOrder), bySlot)
+    }
+
+    /// The successors a medium fixture may favour: among `players` who are a successor at some slot of the fixture's
+    /// tactic and have not had their matches this month, the `successorsFavouredAtMedium` closest to their first choice.
+    /// Closest is the greatest of his rating ÷ the first choice's rating over his successor slots, where a first choice
+    /// rated 0 counts as already passed (infinitely close); ties go to the lower key. The planner puts the result in
+    /// `RuleContext.successorsFavoured` for a medium fixture; low and sharpness fixtures have no cap.
+    public static func successors(players: [Player], context: RuleContext, parameters: EngineParameters) -> Set<PlayerID> {
+        let ranked: [(id: PlayerID, closeness: Double)] = players.compactMap { player in
+            let slots = successorSlots(player, context, parameters)
+            guard !slots.isEmpty, !hasHadHisMatches(player, context, parameters) else { return nil }
+            let closeness = slots.map { $0.rival.rating > 0 ? $0.slot.rating / $0.rival.rating : .infinity }.max()!
+            return (player.id, closeness)
+        }
+        let closestFirst = ranked.sorted { a, b in
+            a.closeness != b.closeness ? a.closeness > b.closeness : a.id.key < b.id.key
+        }
+        return Set(closestFirst.prefix(max(0, parameters.successorsFavouredAtMedium.value)).map(\.id))
     }
 
     private static func inKindOrder(_ a: Adjustment, _ b: Adjustment) -> Bool {
@@ -99,7 +135,10 @@ public enum ImportanceRules {
         return (starts, factor)
     }
 
-    private static func needsSharpness(_ player: Player, _ context: RuleContext, _ parameters: EngineParameters) -> [Adjustment] {
+    /// In a sharpness fixture only the elevens are favoured or marked down. A successor this fixture favours counts as in
+    /// them for the favour, so he can be got sharp, and not for the mark-down of a player who is already sharp.
+    private static func needsSharpness(_ player: Player, _ context: RuleContext, _ parameters: EngineParameters,
+                                       isFavouredSuccessor: Bool) -> [Adjustment] {
         let full = parameters.sharpnessNeedFull.value
         let need = min(max((full - player.sharpness) / (full - parameters.sharpnessNeedMost.value), 0), 1)
         let strength: Double
@@ -109,7 +148,8 @@ public enum ImportanceRules {
         case .low:
             strength = parameters.sharpnessNeedStrengthLow.value
         case .sharpness:
-            guard context.tiers.slot(of: player.id) != nil else { return [] }
+            let inElevens = context.tiers.slot(of: player.id) != nil
+            guard inElevens || (isFavouredSuccessor && player.sharpness < full) else { return [] }
             if player.sharpness >= full {
                 let factor = parameters.fullySharpFactor.value
                 guard factor != 1 else { return [] }
@@ -127,9 +167,8 @@ public enum ImportanceRules {
     /// The floor every developing prospect gets in a low or sharpness fixture: aged `developingUpToAge` or under, with
     /// potential at least `prospectHeadroom` times his ability and an outlook that is not markedly lower. Its size is
     /// what a match is worth to his growth at his age (`developmentFactors`, or `developmentFactorLowProfessionalism`
-    /// for a young teenager with low Professionalism), scaled by the Development setting. He has none once he has
-    /// started `developmentStartsPerMonth` matches in the `developmentMonthDays` days before the fixture, planned
-    /// starts included, since the game reads only so much match time a month.
+    /// for a young teenager with low Professionalism), scaled by the Development setting. He has none once he has had
+    /// his matches for the month (`hasHadHisMatches`).
     private static func developmentFloor(_ player: Player, _ context: RuleContext,
                                          _ parameters: EngineParameters) -> [Adjustment] {
         switch context.importance {
@@ -139,11 +178,9 @@ public enum ImportanceRules {
         // The margin absorbs binary floating-point error: 1.10 × 100 is 110.00000000000001.
         guard context.development > 0, player.age <= parameters.developingUpToAge.value,
               Double(player.potentialAbility) + 1e-9 >= parameters.prospectHeadroom.value * Double(player.currentAbility),
-              let outlook = context.outlooks[player.id], !outlook.isMarkedlyLower
+              let outlook = context.outlooks[player.id], !outlook.isMarkedlyLower,
+              !hasHadHisMatches(player, context, parameters)
         else { return [] }
-        let started = context.history.starts(of: player.id, inDays: parameters.developmentMonthDays.value,
-                                             endingOn: context.date.adding(days: -1))
-        guard started < parameters.developmentStartsPerMonth.value else { return [] }
         let base: Double
         // His Professionalism as his outlook's estimate read it, so a missing value was already an error there.
         if player.age <= parameters.developmentLowProfessionalismUpToAge.value,
@@ -157,6 +194,63 @@ public enum ImportanceRules {
         let factor = 1 + (base - 1) * context.development
         guard factor != 1 else { return [] }
         return [Adjustment(kind: .development, factor: factor, reason: AdvisorText.developmentFloor(factor))]
+    }
+
+    /// The successor's favour at each slot of the fixture's tactic where he is a successor (`successorSlots`):
+    /// `successorFactorLow` in a low or sharpness fixture, `successorFactorMedium` in a medium one and nothing in a high
+    /// one, scaled by the Development setting as the floor is. None once he has had his matches for the month, nor in a
+    /// fixture whose cap (`RuleContext.successorsFavoured`) leaves him out.
+    private static func successorFavour(_ player: Player, _ context: RuleContext,
+                                        _ parameters: EngineParameters) -> [SlotID: Adjustment] {
+        let base: Double
+        switch context.importance {
+        case .high: return [:]
+        case .medium: base = parameters.successorFactorMedium.value
+        case .low, .sharpness: base = parameters.successorFactorLow.value
+        }
+        guard context.development > 0, context.successorsFavoured?.contains(player.id) ?? true,
+              !hasHadHisMatches(player, context, parameters) else { return [:] }
+        let factor = 1 + (base - 1) * context.development
+        guard factor != 1 else { return [:] }
+        var found: [SlotID: Adjustment] = [:]
+        for (slot, rival, isClose) in successorSlots(player, context, parameters) {
+            found[slot.slot] = Adjustment(
+                kind: .successor, factor: factor,
+                reason: AdvisorText.successor(isClose: isClose, passing: rival.name, at: PositionText.plain(slot.slot),
+                                              factor: factor))
+        }
+        return found
+    }
+
+    /// The slots of the fixture's tactic where he is a successor, in his outlook's order, each with the first choice he
+    /// is expected to pass and whether he is close. He is aged `developingUpToAge` or under with an outlook that is not
+    /// markedly lower; he is not the first choice at the slot; and his band against its first choice is close, or on
+    /// course for a player older than `successorCloseOnlyUpToAge`. The band already compares a first choice who is
+    /// developing too at his own reach.
+    private static func successorSlots(_ player: Player, _ context: RuleContext, _ parameters: EngineParameters)
+        -> [(slot: SlotOutlook, rival: Rival, isClose: Bool)] {
+        guard player.age <= parameters.developingUpToAge.value,
+              let outlook = context.outlooks[player.id], !outlook.isMarkedlyLower else { return [] }
+        let inTactic = Set(context.assignments.map(\.slot))
+        return outlook.slots.compactMap { slot in
+            guard inTactic.contains(slot.slot), !slot.isFirstChoice, let rival = slot.firstChoice,
+                  let band = slot.band else { return nil }
+            switch band {
+            case .close:
+                return (slot, rival, true)
+            case .onCourse:
+                return player.age > parameters.successorCloseOnlyUpToAge.value ? (slot, rival, false) : nil
+            case .possible, .notExpected:
+                return nil
+            }
+        }
+    }
+
+    /// He has started `developmentStartsPerMonth` matches in the `developmentMonthDays` days before the fixture, planned
+    /// starts included: the game reads only so much match time a month, so neither development favour applies.
+    private static func hasHadHisMatches(_ player: Player, _ context: RuleContext, _ parameters: EngineParameters) -> Bool {
+        context.history.starts(of: player.id, inDays: parameters.developmentMonthDays.value,
+                               endingOn: context.date.adding(days: -1)) >= parameters.developmentStartsPerMonth.value
     }
 
     /// The owner's belief that minutes bring offers is untested, so the factor only breaks near-ties, and only where

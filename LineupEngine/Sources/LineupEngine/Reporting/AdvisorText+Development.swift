@@ -42,6 +42,14 @@ extension AdvisorText {
         "Young player with room to grow: favoured for minutes (×\(Display.twoDecimals(factor)))"
     }
 
+    /// The reason on the planner's successor favour, at a slot where he is expected to pass the first choice: "On course
+    /// to pass Smith at left back: favoured for matches there (×1.05)", or "Close to passing Smith at left back: …" when
+    /// he is close. `position` is the slot in words; the factor is to two decimals, as the floor's is.
+    public static func successor(isClose: Bool, passing rival: String, at position: String, factor: Double) -> String {
+        let passing = isClose ? "Close to passing" : "On course to pass"
+        return "\(passing) \(rival) at \(position): favoured for matches there (×\(Display.twoDecimals(factor)))"
+    }
+
     /// Said where a player on a youth contract would be marked to sell or to loan out.
     public static let youthContractNotMarked = "A player on a youth contract cannot be sold or loaned out, only released."
 

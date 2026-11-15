@@ -559,6 +559,14 @@ public struct EngineParameters: Sendable {
     /// matches for the month: no development favour.
     public var developmentStartsPerMonth: Parameter<Int>
     public var developmentMonthDays: Parameter<Int>
+    /// The successor's favour, in place of the floor at a slot where a young player is expected to pass the first
+    /// choice: the factor in a low or sharpness fixture, and in a medium one.
+    public var successorFactorLow: Parameter<Double>
+    public var successorFactorMedium: Parameter<Double>
+    /// In a medium fixture only this many successors are favoured, those closest to their first choices.
+    public var successorsFavouredAtMedium: Parameter<Int>
+    /// A player of this age or under is a successor only where he is close, not merely on course.
+    public var successorCloseOnlyUpToAge: Parameter<Int>
     /// Factor on the value, in a low or sharpness fixture, of a player the owner has marked to sell or to loan out;
     /// 1 switches the rule off.
     public var shopWindowFactor: Parameter<Double>
@@ -841,6 +849,22 @@ public struct EngineParameters: Sendable {
             developmentMonthDays: Parameter(
                 30, .carriedOverFM26,
                 source: "\(developmentSource) finding 5: at most 150 match points a month, read once a month"),
+            successorFactorLow: Parameter(
+                1.15, .derived,
+                source: "the size of retrainingFactorLow, the favour a player learning a position gets for match experience "
+                    + "there (the young players' development design, section 8)"),
+            successorFactorMedium: Parameter(
+                1.05, .derived,
+                source: "the young players' development design, section 8: about 5% of the result traded in an ordinary "
+                    + "league match for a successor, approved by the owner"),
+            successorsFavouredAtMedium: Parameter(
+                2, .derived,
+                source: "the young players' development design, section 8: at most two successors favoured in one lineup at "
+                    + "medium importance"),
+            successorCloseOnlyUpToAge: Parameter(
+                17, .derived,
+                source: "the young players' development design, section 8: a player of 17 or under gets the successor's "
+                    + "favour only when he is already close"),
             shopWindowFactor: Parameter(
                 1.03, .derived,
                 source: "this design's size, a tie-breaker: no test in any version shows that playing a player brings offers "

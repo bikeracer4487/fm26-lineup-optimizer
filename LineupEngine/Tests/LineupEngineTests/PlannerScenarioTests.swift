@@ -151,10 +151,11 @@ import Testing
 
     @Test func youngProspectsGetTheLowFixture() throws {
         // A 19-year-old with room to grow, 5% below the first-choice striker (familiarity 15 against 20): within what
-        // the floor at his age (×1.07) can overturn.
+        // the floor at his age (×1.07) can overturn. Professionalism 1 slows his growth so that he is not expected to pass
+        // the first choice soon: he is no successor, and the floor alone favours him.
         var players = try PlannerFixture.squad(first: 14, second: 12)
-        let prospect = Player.fixture(name: "ST prospect", age: 19, all: 14, familiarity: [.striker: 15],
-                                      currentAbility: 100, potentialAbility: 130)
+        let prospect = Player.fixture(name: "ST prospect", age: 19, all: 14, attributes: [.professionalism: 1],
+                                      familiarity: [.striker: 15], currentAbility: 100, potentialAbility: 130)
         players.append(prospect)
         let gap = try rating(prospect.id, at: .ST_C, in: players) / rating(id(.ST_C), at: .ST_C, in: players)
         try #require(gap > 1 / 1.07 && gap < 1)
@@ -215,6 +216,151 @@ import Testing
         let fromThose = try Development.outlooks(players: injured, ownClub: "Oxford City", assignments: assignments,
                                                  tiers: withoutInjured, retraining: [], parameters: parameters)
         #expect(fromThose[young.id]?.slots.isEmpty == true)
+    }
+
+    @Test func thePlanHandsTheRulesOutlooksWithInjuredPlayersKeptIn() throws {
+        // Both strikers of the elevens are injured, so the young striker is the only one fit to play there. Compared
+        // with them, as when they are fit, his reach is markedly lower and he gets no floor; tiers that left them out
+        // would make him first choice, with nobody to be markedly lower than, and favour him.
+        var players = try PlannerFixture.squad(first: 14, second: 12)
+        players = changing(players, .ST_C) { $0.isInjured = true }
+        players = changing(players, .ST_C, "second") { $0.isInjured = true }
+        let young = Player.fixture(name: "ST young", age: 19, all: 9, familiarity: [.striker: 20],
+                                   currentAbility: 100, potentialAbility: 115)
+        players.append(young)
+        let low = fixture("l", .low, day: 0)
+        let outlook = try #require(try planner.developmentOutlooks(for: low, players: players, ownClub: "Oxford City",
+                                                                   retraining: [])[young.id])
+        try #require(outlook.isMarkedlyLower)
+        try #require(try tiers(players).tier(of: young.id) == .first(.ST_C))
+
+        let planned = try plan([low], players, settings: PlanSettings(savingPlayers: 0)).fixtures[0]
+        let pick = try #require(pick(planned, .ST_C))
+        #expect(pick.player == young.id)
+        #expect(!pick.adjustments.contains { $0.kind == .development || $0.kind == .successor })
+    }
+
+    @Test func plannedStartsCountTowardsTheMonthlyStop() throws {
+        // A 19-year-old with room to grow, 5% below the first-choice striker, whom the floor (×1.07) puts ahead in a low
+        // fixture. Professionalism 1 slows his growth, so he is no successor and is favoured by the floor alone. Five low
+        // fixtures a week apart: the plan starts him in the first four, and by the fifth he has had four starts in the
+        // thirty days before it.
+        var players = try PlannerFixture.squad(first: 14, second: 12)
+        let prospect = Player.fixture(name: "ST prospect", age: 19, all: 14, attributes: [.professionalism: 1],
+                                      familiarity: [.striker: 15], currentAbility: 100, potentialAbility: 130)
+        players.append(prospect)
+        let fixtures = (0..<5).map { fixture("l\($0)", .low, day: 7 * $0) }
+        let result = try plan(fixtures, players, settings: PlanSettings(savingPlayers: 0))
+        for planned in result.fixtures.prefix(4) {
+            let striker = try #require(pick(planned, .ST_C))
+            #expect(striker.player == prospect.id, "\(planned.fixture.raw)")
+            #expect(striker.adjustments.contains { $0.kind == .development }, "\(planned.fixture.raw)")
+        }
+        let fifth = try #require(pick(result.fixtures[4], .ST_C))
+        #expect(fifth.player == id(.ST_C))
+        #expect(result.fixtures[4].lineup.picks.allSatisfy { pick in
+            !pick.adjustments.contains { $0.kind == .development || $0.kind == .successor }
+        })
+
+        // With room for a fifth start in the month he would have been favoured and started the fifth too.
+        var roomy = parameters
+        roomy.developmentStartsPerMonth = Parameter(5, .derived, source: "test")
+        let unstopped = try Planner(catalog: RoleCatalog.fm27(), profile: RatingProfile.standard(), parameters: roomy)
+            .plan(PlanRequest(fixtures: fixtures, players: players, ownClub: "Oxford City", asOf: day0, confirmed: [],
+                              retraining: [], settings: PlanSettings(savingPlayers: 0)))
+        let favoured = try #require(pick(unstopped.fixtures[4], .ST_C))
+        #expect(favoured.player == prospect.id)
+        #expect(favoured.adjustments.contains { $0.kind == .development })
+    }
+
+    // MARK: - A successor
+
+    /// A 19-year-old striker, natural there, a little below the first-choice striker and expected to pass him within a
+    /// season or a few: a successor at striker.
+    func successor(_ attributes: [Attribute: Int]) -> Player {
+        Player.fixture(name: "ST young", age: 19, all: 13, attributes: attributes, familiarity: [.striker: 20],
+                       currentAbility: 100, potentialAbility: 130)
+    }
+
+    /// His rating at striker as a share of the first choice's, after checking that he is a successor there.
+    func successorShare(_ young: Player, in players: [Player]) throws -> Double {
+        let outlooks = try planner.developmentOutlooks(for: fixture("m", .medium, day: 0), players: players,
+                                                       ownClub: "Oxford City", retraining: [])
+        let striker = try #require(outlooks[young.id]?.slots.first { $0.slot == .ST_C })
+        try #require(striker.firstChoice?.player == id(.ST_C))
+        try #require(striker.band == .close || striker.band == .onCourse)
+        return try rating(young.id, at: .ST_C, in: players) / rating(id(.ST_C), at: .ST_C, in: players)
+    }
+
+    @Test func aSuccessorAtOneHundredAgainstOneHundredAndFourStartsAMediumFixture() throws {
+        // On the day of the import, so fitness is level and the match-day values are the ratings.
+        let young = successor([.finishing: 15, .composure: 15])
+        let players = try PlannerFixture.squad(first: 14, second: 12) + [young]
+        let share = try successorShare(young, in: players)
+        try #require(abs(share - 100.0 / 104) < 0.005)
+
+        let planned = try plan([fixture("m", .medium, day: 0)], players, settings: PlanSettings(savingPlayers: 0)).fixtures[0]
+        let striker = try #require(pick(planned, .ST_C))
+        #expect(striker.player == young.id)
+        #expect(striker.reasons.contains("Close to passing ST_C first at striker: favoured for matches there (×1.05)"))
+        #expect(striker.adjustments.map(\.kind) == [.successor])
+        let omitted = try #require(planned.lineup.omissions.first { $0.player == id(.ST_C) })
+        guard case .preferred(let by, let kinds) = omitted.cause else {
+            Issue.record("expected preferred, got \(omitted.cause)"); return
+        }
+        #expect(by == [young.id])
+        #expect(kinds == [.successor])
+    }
+
+    @Test func atNinetyEightHeDoesNot() throws {
+        let young = successor([.finishing: 11, .composure: 12])
+        let players = try PlannerFixture.squad(first: 14, second: 12) + [young]
+        let share = try successorShare(young, in: players)
+        try #require(abs(share - 98.0 / 104) < 0.005)
+
+        let planned = try plan([fixture("m", .medium, day: 0)], players, settings: PlanSettings(savingPlayers: 0)).fixtures[0]
+        #expect(pick(planned, .ST_C)?.player == id(.ST_C))
+        #expect(!starters(planned).contains(young.id))
+    }
+
+    @Test func heDoesNotStartAHighFixtureOnIt() throws {
+        let young = successor([.finishing: 15, .composure: 15])
+        let players = try PlannerFixture.squad(first: 14, second: 12) + [young]
+        try #require(abs(try successorShare(young, in: players) - 100.0 / 104) < 0.005)
+        let planned = try plan([fixture("h", .high, day: 0)], players, settings: PlanSettings(savingPlayers: 0)).fixtures[0]
+        let striker = try #require(pick(planned, .ST_C))
+        #expect(striker.player == id(.ST_C))
+        #expect(planned.lineup.picks.allSatisfy { $0.adjustments.isEmpty })
+    }
+
+    @Test func withDevelopmentAtZeroTheLineupIsTheOneWithoutTheRule() throws {
+        // The successor of the medium example, short of sharpness, in a medium, a low and a sharpness fixture, so that
+        // each part of the rule has something to change.
+        var players = try PlannerFixture.squad(first: 14, second: 12)
+        let young = successor([.finishing: 15, .composure: 15])
+        players.append(young)
+        players = players.map { player in
+            var player = player
+            if player.id == young.id { player.sharpness = 0.75 }
+            return player
+        }
+        let fixtures = [fixture("m", .medium, day: 0), fixture("l", .low, day: 4), fixture("s", .sharpness, day: 8)]
+        let off = try plan(fixtures, players, settings: PlanSettings(savingPlayers: 0, development: 0))
+
+        // Without the rule: the same planner with every development favour's factor at 1.
+        var without = parameters
+        without.successorFactorLow = Parameter(1, .derived, source: "test")
+        without.successorFactorMedium = Parameter(1, .derived, source: "test")
+        without.developmentFactors = Parameter([], .derived, source: "test")
+        without.developmentFactorLowProfessionalism = Parameter(1, .derived, source: "test")
+        let plain = try Planner(catalog: RoleCatalog.fm27(), profile: RatingProfile.standard(), parameters: without)
+            .plan(PlanRequest(fixtures: fixtures, players: players, ownClub: "Oxford City", asOf: day0, confirmed: [],
+                              retraining: [], settings: PlanSettings(savingPlayers: 0)))
+        #expect(off == plain)
+        // And the rule changes it at 1.
+        let on = try plan(fixtures, players, settings: PlanSettings(savingPlayers: 0))
+        #expect(on != off)
+        #expect(on.fixtures.contains { planned in planned.lineup.picks.contains { $0.adjustments.contains { $0.kind == .successor } } })
     }
 
     // MARK: - Marked to sell or loan out

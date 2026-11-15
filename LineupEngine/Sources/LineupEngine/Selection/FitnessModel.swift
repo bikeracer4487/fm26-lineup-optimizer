@@ -154,6 +154,16 @@ public enum FitnessModel {
                               ("developmentMonthDays", parameters.developmentMonthDays.value)] where count < 1 {
             found.append("\(name) is \(count), not 1 or more")
         }
+        // The successor's favour takes the floor's place, so it too favours and never holds back. Nobody favoured at
+        // medium, and no age that needs to be close, are allowed.
+        for (name, value) in [("successorFactorLow", parameters.successorFactorLow.value),
+                              ("successorFactorMedium", parameters.successorFactorMedium.value)] where !favouring(value) {
+            found.append("\(name) is \(value), \(notFavouring)")
+        }
+        for (name, count) in [("successorsFavouredAtMedium", parameters.successorsFavouredAtMedium.value),
+                              ("successorCloseOnlyUpToAge", parameters.successorCloseOnlyUpToAge.value)] where count < 0 {
+            found.append("\(name) is \(count), not 0 or more")
+        }
         let weights = parameters.importanceWeights.value
         for importance in Importance.allCases {
             if let weight = weights[importance] {

@@ -138,10 +138,18 @@ public struct Planner: Sendable {
             let later = fixtures.indices.dropFirst(index + 1).map {
                 LaterFixture(fixture: fixtures[$0], tiers: tiersByFixture[$0])
             }
-            let context = RuleContext(importance: fixture.importance, date: fixture.date, assignments: assignments,
+            var context = RuleContext(importance: fixture.importance, date: fixture.date, assignments: assignments,
                                       ownClub: request.ownClub, history: history, tiers: tiersByFixture[index], retraining: retraining,
                                       marks: request.marks, stability: settings.stability,
                                       outlooks: outlooksByFixture[index], development: settings.development)
+            // In an ordinary match only the closest successors are favoured; in a lesser one any successor is.
+            switch fixture.importance {
+            case .medium:
+                context.successorsFavoured = ImportanceRules.successors(players: onTheDay, context: context,
+                                                                        parameters: parameters)
+            case .high, .low, .sharpness:
+                break
+            }
 
             var everySlot: [PlayerID: [Adjustment]] = [:]
             var bySlot: [PlayerID: [SlotID: [Adjustment]]] = [:]
