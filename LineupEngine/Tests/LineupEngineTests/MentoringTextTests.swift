@@ -18,16 +18,23 @@ import Testing
     }
 
     @Test func theStandingSentences() {
-        #expect(AdvisorText.mentoringNote == "How fast mentoring works in FM27 has not been measured. "
-                + "These groups follow the rules of earlier versions.")
-        #expect(AdvisorText.mentoringByAgeAlone == "No hierarchy entered for this squad: these groups go by age alone.")
+        #expect(AdvisorText.mentoringNote == "How fast mentoring works in FM27 has not been measured. An arrow is the "
+                + "game's own where it has been read, and this tool's guess where it says expected.")
+        #expect(AdvisorText.mentoringNeedsHierarchy == "Enter this squad's hierarchy first: mentoring needs each "
+                + "player's level, and age alone creates no influence.")
         #expect(AdvisorText.noGroupToSuggest == "No group to suggest.")
-        #expect(AdvisorText.makingUpTheGroup == "Making up the group")
+        #expect(AdvisorText.expectedNotRead == "expected, not read")
+        #expect(AdvisorText.nothingToGain == "nothing to gain")
+        #expect(AdvisorText.setAndRecordArrows == "Set this group in the game and record its arrows.")
         #expect(AdvisorText.noReadingYet == "No reading yet: values are read at each import")
     }
 
+    @Test func strengthsHaveTheGamesWords() {
+        #expect(ArrowStrength.allCases.map { AdvisorText.name($0) } == ["None", "Light", "Average", "Significant"])
+    }
+
     func report(_ squad: Squad, isStale: Bool) -> MentoringReport {
-        MentoringReport(squad: squad, byAgeAlone: false, isStale: isStale, suggestions: [], notPlaced: [], groups: [],
+        MentoringReport(squad: squad, needsHierarchy: false, isStale: isStale, suggestions: [], notPlaced: [], groups: [],
                         basis: .derived)
     }
 
@@ -48,27 +55,29 @@ import Testing
     }
 
     @Test func aSuggestedGroupSentences() {
-        let group = SuggestedGroup(lead: hart, leadName: "Hart", leadAge: 34, leadStanding: .teamLeader, members: [],
-                                   cautions: [], basis: .derived)
-        #expect(AdvisorText.lead(group) == "Led by Hart (34, Team Leader)")
+        let arrow = GroupArrow(arrow: Arrow(from: PlayerID(key: "mceachran"), to: PlayerID(key: "clark"), strength: .light,
+                                            readOn: nil),
+                               fromName: "McEachran", toName: "Clark", pulls: [])
+        #expect(AdvisorText.arrowTitle(arrow) == "McEachran → Clark")
         #expect(AdvisorText.pull(Pull(attribute: .professionalism, value: 8, towards: 17))
                 == "Professionalism 8, towards 17")
-        #expect(AdvisorText.caution(.onLoanHere, leadName: "Hart") == "Hart is on loan here: the group ends when he goes back.")
-        #expect(AdvisorText.caution(.advisedToLeave, leadName: "Hart") == "Hart is advised to leave: the group ends when he goes.")
-        #expect(AdvisorText.otherSocialGroup(leadName: "Hart")
-                == "In a different social group from Hart: likely a weaker influence")
+        #expect(AdvisorText.caution(.onLoanHere(hart), names: names) == "Hart is on loan here: the group ends when he goes back.")
+        #expect(AdvisorText.caution(.advisedToLeave(hart), names: names) == "Hart is advised to leave: the group ends when he goes.")
+        #expect(AdvisorText.caution(.onLoanHere(PlayerID(key: "fmrte:123")), names: names)
+                == "A player is on loan here: the group ends when he goes back.")
+        #expect(AdvisorText.caution(.advisedToLeave(PlayerID(key: "fmrte:123")), names: [:])
+                == "A player is advised to leave: the group ends when he goes.")
     }
 
     @Test func eachNotPlacedReasonHasItsOwnSentence() {
         func sentence(_ reason: NotPlacedReason) -> String {
             AdvisorText.notPlaced(NotPlaced(player: PlayerID(key: "dunn"), name: "Dunn", age: 17, reason: reason))
         }
-        #expect(sentence(.nobodyAbove) == "Dunn (17): nobody in this squad stands above him.")
-        #expect(sentence(.nobodyBetter) == "Dunn (17): nobody who stands above him in this squad is better where it counts.")
-        #expect(sentence(.wouldHarm(.pressure))
-                == "Dunn (17): those who are better where it counts would do him harm in Pressure.")
-        #expect(sentence(.leadsTaken) == "Dunn (17): the players who could lead him are already in a group.")
-        #expect(sentence(.noThird) == "Dunn (17): no third player could be found to make up a group with him and his lead.")
+        #expect(sentence(.takesNothing) == "Dunn (17): he has taken nothing from the players tried with him so far.")
+        #expect(sentence(.noInfluence) == "Dunn (17): nobody in this squad is expected to influence him.")
+        #expect(sentence(.nothingToGain) == "Dunn (17): nobody who influences him is better where it counts.")
+        #expect(sentence(.wouldHarm) == "Dunn (17): every group that would help him would pull a player down.")
+        #expect(sentence(.influencersTaken) == "Dunn (17): the players who could influence him are already in a group.")
     }
 
     @Test func eachWarningHasItsOwnSentence() {

@@ -13,6 +13,9 @@ public struct MentoringRequest: Sendable {
     /// Every recorded group, of any squad.
     public var groups: [MentoringGroup]
     public var readings: [PlayerID: [PersonalityReading]]
+    /// Every arrow the owner has read, of any squad. Only this squad's, between two of its players not out on loan,
+    /// are used.
+    public var arrows: [ArrowReading]
     /// Names for members no longer imported.
     public var names: [PlayerID: String]
     /// Player Removal's `advisedToLeave`, or empty when that advice has not been worked out.
@@ -22,7 +25,7 @@ public struct MentoringRequest: Sendable {
 
     public init(squad: Squad, players: [Player], ownClub: String?, dynamics: [PlayerID: PlayerDynamics],
                 dynamicsUpdatedOn: Day?, groups: [MentoringGroup], readings: [PlayerID: [PersonalityReading]],
-                names: [PlayerID: String], leaving: Set<PlayerID>, asOf: Day) {
+                arrows: [ArrowReading], names: [PlayerID: String], leaving: Set<PlayerID>, asOf: Day) {
         self.squad = squad
         self.players = players
         self.ownClub = ownClub
@@ -30,15 +33,16 @@ public struct MentoringRequest: Sendable {
         self.dynamicsUpdatedOn = dynamicsUpdatedOn
         self.groups = groups
         self.readings = readings
+        self.arrows = arrows
         self.names = names
         self.leaving = leaving
         self.asOf = asOf
     }
 }
 
-/// One counted attribute in which a member's worth differs from the lead's: the member's value and the lead's, which he
-/// is pulled towards. In a suggested group a pull only ever goes upward, because no member is worth more than the lead
-/// in a counted attribute; in a recorded group it may go either way.
+/// One counted attribute in which a player's worth differs from another's: his value and the other's, which he is
+/// pulled towards. On a suggested group's arrow a pull only ever goes upward, because no arrow there is harmful; in a
+/// recorded group it may go either way.
 public struct Pull: Equatable, Sendable {
     public let attribute: Attribute
     public let value: Int
@@ -51,46 +55,55 @@ public struct Pull: Equatable, Sendable {
     }
 }
 
-/// Why a suggested group may not last: it ends when the lead goes.
-public enum LeadCaution: Equatable, Sendable { case onLoanHere, advisedToLeave }
+
+/// An arrow of a group, with what its target would gain.
+public struct GroupArrow: Equatable, Sendable {
+    public let arrow: Arrow
+    public let fromName: String
+    public let toName: String
+    /// The counted attributes in which the target is worth less than the source, in `Mentoring.counted` order; empty:
+    /// nothing to gain.
+    public let pulls: [Pull]
+}
+
+/// Why a suggested group may not last: a member whose arrow it rests on will go.
+public enum MemberCaution: Equatable, Sendable {
+    case onLoanHere(PlayerID)
+    case advisedToLeave(PlayerID)
+}
 
 public struct SuggestedMember: Equatable, Sendable {
     public let player: PlayerID
     public let name: String
     public let age: Int
-    /// The third player who makes up a group of a lead and one mentee.
-    public let isMakingUp: Bool
-    /// In `Mentoring.counted` order; empty for one making up with nothing to gain.
-    public let pulls: [Pull]
-    /// Known to be in a different social group from the lead's, or either is in `.others`.
-    public let inDifferentSocialGroup: Bool
 }
 
-public struct SuggestedGroup: Equatable, Sendable {
-    public let lead: PlayerID
-    public let leadName: String
-    public let leadAge: Int
-    public let leadStanding: Standing
-    /// Two: the mentees first, most to gain first, then any player making up the group.
+public struct SuggestedGroup: Identifiable, Equatable, Sendable {
+    public var id: String { members.map(\.player.key).joined(separator: "|") }
+    /// Three, by key.
     public let members: [SuggestedMember]
-    /// On loan here first, then advised to leave.
-    public let cautions: [LeadCaution]
+    /// Those above None: greatest gain first, then by the source's key, then by the target's.
+    public let arrows: [GroupArrow]
+    /// Every arrow the group rests on was read; false when any of them is a guess.
+    public let isRead: Bool
+    /// On loan here first, then advised to leave; within each by key.
+    public let cautions: [MemberCaution]
     public let basis: Evidence
 }
 
-/// Why a young player has no suggested group: the first of these that applies.
+/// Why a candidate has no suggested group: the first of these that applies.
 public enum NotPlacedReason: Equatable, Sendable {
-    /// Nobody in the squad stands above him.
-    case nobodyAbove
-    /// Nobody who stands above him is better where it counts.
-    case nobodyBetter
-    /// Those better where it counts would pull him down in this attribute: the first counted one in which the one he
-    /// would gain most from is worth less.
-    case wouldHarm(Attribute)
-    /// Every lead who suits him is in a suggested group with others who gain more, or in a recorded group.
-    case leadsTaken
-    /// No third player could be found to make up a group with him and his lead.
-    case noThird
+    /// He takes nothing, by his readings.
+    case takesNothing
+    /// No arrow into him, read or guessed, is above None.
+    case noInfluence
+    /// No arrow into him above None has anything to give him.
+    case nothingToGain
+    /// A player free to be grouped has an arrow into him with something to give, but every group of free players that
+    /// would give it holds a harmful arrow.
+    case wouldHarm
+    /// The players who could influence him are in a suggested or recorded group.
+    case influencersTaken
 }
 
 public struct NotPlaced: Equatable, Sendable {
@@ -103,9 +116,8 @@ public struct NotPlaced: Equatable, Sendable {
 /// Mentoring advice for one squad.
 public struct MentoringReport: Equatable, Sendable {
     public let squad: Squad
-    /// No player of the squad who is not out on loan has a standing above `.others`: who stands above whom then rests
-    /// on age alone.
-    public let byAgeAlone: Bool
+    /// No player of the squad who is not out on loan has a level above `.others`: every guess is then None.
+    public let needsHierarchy: Bool
     /// The standings were entered more than `mentoringDynamicsStaleAfterDays` before `asOf`; false if never entered.
     public let isStale: Bool
     /// In the order they were formed.
@@ -118,42 +130,40 @@ public struct MentoringReport: Equatable, Sendable {
 }
 
 extension Mentoring {
-    /// Suggests groups of three for the squad's young players and says why any of them has none. Throws
-    /// `PlanError.badParameters` for `problems(in:)`, before anything else, and `RatingError.missingAttribute` for the
-    /// first player of the squad, by key, not out on loan, with no value for a counted attribute (in `counted` order).
+    /// Suggests groups of three from the arrows between the squad's players, read or guessed, and says why any
+    /// candidate is in none. Throws `PlanError.badParameters` for `problems(in:)`, before anything else, and
+    /// `RatingError.missingAttribute` for the first player of the squad, by key, not out on loan, with no value for a
+    /// counted attribute (in `counted` order).
     ///
-    /// The groups are found greedily: of every valid group among the players not yet used, the one with the greatest
-    /// gain is formed, then the same again among the players left, until none is valid. Ties go to a group of a lead and
-    /// two mentees before one made up with a third player, then to the lowest lead key, then to the lowest member keys.
-    /// This gives the pair with most to gain first call on a lead; it does not prove that no other set of groups has a
-    /// greater total. Injury, bans and fitness are not looked at.
+    /// The groups are found greedily: of every valid group among the free players not yet used, the one of greatest
+    /// value is formed, then the same again among the players left, until none is valid. Ties go to the group with
+    /// fewer members above Others, then to the one with more of its six arrows read, then to the lowest keys. This does
+    /// not prove that no other set of groups has a greater total. Injury, bans and fitness are not looked at.
     public static func report(_ request: MentoringRequest, parameters: EngineParameters) throws -> MentoringReport {
         let problems = problems(in: parameters)
         guard problems.isEmpty else { throw PlanError.badParameters(problems) }
-        let judge = Judge(parameters: parameters)
+        let counted = Mentoring.counted(parameters)
 
         // Sorting by key makes every list, every tie and the first error independent of input order; an index into
-        // `present` is then in key order too.
+        // `people` is then in key order too.
         let recorded = Set(request.groups.filter(\.isLive).flatMap(\.current).map(\.player))
-        var present: [Person] = []
+        var people: [Person] = []
         for player in request.players.filter({ $0.squad == request.squad }).sorted(by: { $0.id.key < $1.id.key }) {
-            let status = LoanStatus.of(player, ownClub: request.ownClub)
             let isLoanedIn: Bool
-            switch status {
+            switch LoanStatus.of(player, ownClub: request.ownClub) {
             case .loanedOut: continue
             case .loanedIn: isLoanedIn = true
             case .own: isLoanedIn = false
             }
             var values: [Attribute: Int] = [:]
-            for attribute in judge.counted {
+            for attribute in counted {
                 guard let value = player.attributes[attribute] else {
                     throw RatingError.missingAttribute(player: player.name, attribute: attribute)
                 }
                 values[attribute] = value
             }
-            let dynamics = request.dynamics[player.id] ?? PlayerDynamics()
-            present.append(Person(
-                player: player, standing: dynamics.standing, socialGroup: dynamics.socialGroup,
+            people.append(Person(
+                player: player, standing: request.dynamics[player.id]?.standing ?? .others,
                 isOwn: !isLoanedIn, isLeaving: request.leaving.contains(player.id),
                 inRecordedGroup: recorded.contains(player.id), values: values,
                 worth: Dictionary(uniqueKeysWithValues: values.map { attribute, value in
@@ -161,21 +171,32 @@ extension Mentoring {
                 })))
         }
 
-        let pool = present.indices.filter { !present[$0].inRecordedGroup }
-        let candidates = pool.filter { judge.isCandidate(present[$0]) }
+        // A reading counts only between two players of this squad not out on loan. Sorted so that, of two readings of
+        // one pair on one day, the same one counts whatever the input order.
+        let ids = Set(people.map(\.player.id))
+        let readings = request.arrows
+            .filter { $0.squad == request.squad && ids.contains($0.from) && ids.contains($0.to) }
+            .sorted { a, b in
+                (a.from.key, a.to.key, a.readOn, a.strength) < (b.from.key, b.to.key, b.readOn, b.strength)
+            }
+        let judge = Judge(people: people, squad: request.squad, readings: readings, counted: counted,
+                          parameters: parameters)
+
+        let pool = people.indices.filter { !people[$0].inRecordedGroup }
+        let candidates = pool.filter { judge.isCandidate[$0] }
 
         var used: Set<Int> = []
         var formed: [Option] = []
-        while let best = judge.bestOption(present, pool: pool, candidates: candidates, used: used) {
+        while let best = judge.bestOption(among: pool.filter { !used.contains($0) }) {
             formed.append(best)
-            used.formUnion([best.lead] + best.memberIndices)
+            used.formUnion(best.members)
         }
 
-        let suggestions = formed.map { judge.suggestion($0, present) }
+        let suggestions = formed.map { judge.suggestion($0) }
         let notPlaced = candidates.filter { !used.contains($0) }.map { index in
-            let person = present[index]
+            let person = people[index]
             return NotPlaced(player: person.player.id, name: person.player.name, age: person.player.age,
-                             reason: judge.reason(for: index, present, used: used))
+                             reason: judge.reason(for: index, pool: pool))
         }
 
         let groups = request.groups.filter { $0.isLive && $0.squad == request.squad }.sorted {
@@ -186,10 +207,8 @@ extension Mentoring {
             $0.days(to: request.asOf) > parameters.mentoringDynamicsStaleAfterDays.value
         } ?? false
         return MentoringReport(
-            squad: request.squad,
-            byAgeAlone: !present.contains { $0.standing > .others },
-            isStale: isStale, suggestions: suggestions, notPlaced: notPlaced, groups: groups,
-            basis: Evidence.weakest(judge.evidence + [parameters.mentoringDynamicsStaleAfterDays.evidence])!)
+            squad: request.squad, needsHierarchy: !people.contains { $0.standing > .others },
+            isStale: isStale, suggestions: suggestions, notPlaced: notPlaced, groups: groups, basis: judge.basis)
     }
 
     // MARK: Working
@@ -198,7 +217,6 @@ extension Mentoring {
     private struct Person {
         let player: Player
         let standing: Standing
-        let socialGroup: SocialGroup?
         /// Belongs to the club: not on loan here.
         let isOwn: Bool
         let isLeaving: Bool
@@ -210,163 +228,187 @@ extension Mentoring {
         let worth: [Attribute: Int]
     }
 
-    /// One valid group: a lead, one or two mentees, and the third player when there is one mentee.
+    /// One valid group of three.
     private struct Option {
-        let lead: Int
-        /// Most to gain first, then by key.
-        let mentees: [Int]
-        let third: Int?
-        let gain: Double
+        /// Ascending, so in key order.
+        let members: [Int]
+        /// The sum over its candidates of the greatest gain of any one arrow into him.
+        let value: Int
+        /// Members with a level above Others.
+        let seniors: Int
+        /// Of its six arrows, those read.
+        let read: Int
+        /// For each candidate with a gain, the source and target of the arrow that gives it.
+        let restsOn: [(from: Int, to: Int)]
 
-        var isFull: Bool { third == nil }
-        /// The two members' indices, ascending.
-        var memberIndices: [Int] { (mentees + (third.map { [$0] } ?? [])).sorted() }
-
-        /// Greater gain first; then a full group; then the lowest lead key; then the lowest member keys.
+        /// Greater value first; then fewer seniors; then more arrows read; then the lowest keys.
         func isBetter(than other: Option) -> Bool {
-            if gain != other.gain { return gain > other.gain }
-            if isFull != other.isFull { return isFull }
-            if lead != other.lead { return lead < other.lead }
-            return memberIndices.lexicographicallyPrecedes(other.memberIndices)
+            if value != other.value { return value > other.value }
+            if seniors != other.seniors { return seniors < other.seniors }
+            if read != other.read { return read > other.read }
+            return members.lexicographicallyPrecedes(other.members)
         }
     }
 
-    /// The rules, with the parameters they read.
+    /// The rules, with every arrow between the squad's players worked out once.
     private struct Judge {
-        let parameters: EngineParameters
+        let people: [Person]
         let counted: [Attribute]
-        /// The evidence of every parameter a suggestion rests on.
-        let evidence: [Evidence]
+        /// `arrows[from][to]`, read or guessed; the diagonal is never used.
+        let arrows: [[Arrow]]
+        /// The strength's weight times the sum over the counted attributes of the source's worth less the target's.
+        let gains: [[Int]]
+        /// Above None, and the source is worth less than the target in a counted attribute.
+        let harmful: [[Bool]]
+        let takesNothing: [Bool]
+        /// Belongs to the club, not advised to leave, and below the ceiling in a counted attribute. Only players in no
+        /// recorded group are ever asked about.
+        let isCandidate: [Bool]
+        /// The weakest evidence of every parameter a suggestion rests on.
+        let basis: Evidence
 
-        init(parameters: EngineParameters) {
-            self.parameters = parameters
-            counted = Mentoring.counted(parameters)
-            evidence = [parameters.mentoringWeights.evidence, parameters.mentoringCeilings.evidence,
-                        parameters.mentoringMenteeMaxAge.evidence, parameters.mentoringSeniorityYears.evidence,
-                        parameters.mentoringOtherSocialGroupShare.evidence]
-        }
-
-        /// Belongs to the club, young enough, not advised to leave, and below the ceiling in a counted attribute.
-        /// The caller has left out players in recorded groups.
-        func isCandidate(_ person: Person) -> Bool {
+        init(people: [Person], squad: Squad, readings: [ArrowReading], counted: [Attribute],
+             parameters: EngineParameters) {
+            self.people = people
+            self.counted = counted
+            let standings = Dictionary(uniqueKeysWithValues: people.map { ($0.player.id, $0.standing) })
+            let parties = people.map { Party(id: $0.player.id, standing: $0.standing, age: $0.player.age) }
+            // `problems(in:)` has made sure every strength has a weight.
+            let weights = parameters.mentoringStrengthWeights.value
+            var arrows: [[Arrow]] = [], gains: [[Int]] = [], harmful: [[Bool]] = []
+            for (i, source) in people.enumerated() {
+                var arrowRow: [Arrow] = [], gainRow: [Int] = [], harmRow: [Bool] = []
+                for (j, target) in people.enumerated() {
+                    let arrow = Mentoring.arrow(from: parties[i], to: parties[j], in: squad, readings: readings,
+                                                standings: standings, parameters: parameters)
+                    let difference = counted.reduce(0) { $0 + source.worth[$1]! - target.worth[$1]! }
+                    arrowRow.append(arrow)
+                    gainRow.append(i == j ? 0 : weights[arrow.strength]! * difference)
+                    harmRow.append(i != j && arrow.strength > .none
+                                   && counted.contains { source.worth[$0]! < target.worth[$0]! })
+                }
+                arrows.append(arrowRow)
+                gains.append(gainRow)
+                harmful.append(harmRow)
+            }
+            self.arrows = arrows
+            self.gains = gains
+            self.harmful = harmful
+            takesNothing = people.map {
+                Mentoring.takesNothing($0.player.id, in: squad, readings: readings, standings: standings,
+                                       parameters: parameters)
+            }
             let ceilings = parameters.mentoringCeilings.value
-            return person.isOwn && !person.isLeaving && person.player.age <= parameters.mentoringMenteeMaxAge.value
-                && counted.contains { attribute in
+            isCandidate = people.map { person in
+                person.isOwn && !person.isLeaving && counted.contains { attribute in
                     // `problems(in:)` has made sure every counted attribute has a ceiling.
                     person.values[attribute]! < ceilings[attribute]!
                 }
-        }
-
-        func standsAbove(_ a: Person, _ b: Person) -> Bool {
-            Mentoring.standsAbove((a.standing, a.player.age), (b.standing, b.player.age), parameters: parameters)
-        }
-
-        /// The first counted attribute in which `above` is worth less than `below`; nil when he is worth no less in any.
-        func harm(from above: Person, to below: Person) -> Attribute? {
-            counted.first { above.worth[$0]! < below.worth[$0]! }
-        }
-
-        /// Rule 1 between two members: whichever stands above the other is worth no less in any counted attribute.
-        func noHarmBetween(_ a: Person, _ b: Person) -> Bool {
-            if standsAbove(a, b) { return harm(from: a, to: b) == nil }
-            if standsAbove(b, a) { return harm(from: b, to: a) == nil }
-            return true
-        }
-
-        func inDifferentSocialGroup(_ lead: Person, _ member: Person) -> Bool {
-            Mentoring.sameSocialGroup(lead.socialGroup, member.socialGroup) == false
-        }
-
-        /// The sum over the counted attributes of the lead's worth less the mentee's, kept at
-        /// `mentoringOtherSocialGroupShare` when they are known to be in different social groups.
-        func gain(from lead: Person, to mentee: Person) -> Double {
-            let total = Double(counted.reduce(0) { $0 + lead.worth[$1]! - mentee.worth[$1]! })
-            return inDifferentSocialGroup(lead, mentee) ? total * parameters.mentoringOtherSocialGroupShare.value : total
-        }
-
-        /// Stands above him, gives him a gain above 0, and is worth no less in any counted attribute. Whether the lead
-        /// is free to lead is the caller's question.
-        func suits(_ lead: Person, _ mentee: Person) -> Bool {
-            standsAbove(lead, mentee) && gain(from: lead, to: mentee) > 0 && harm(from: lead, to: mentee) == nil
-        }
-
-        /// The best valid group among the pool players not yet used; nil when there is none.
-        func bestOption(_ present: [Person], pool: [Int], candidates: [Int], used: Set<Int>) -> Option? {
-            var best: Option?
-            func consider(_ option: Option) {
-                if best.map({ option.isBetter(than: $0) }) ?? true { best = option }
             }
-            for lead in pool where !used.contains(lead) {
-                let suited = candidates.filter { $0 != lead && !used.contains($0) && suits(present[lead], present[$0]) }
-                let gains = Dictionary(uniqueKeysWithValues: suited.map { ($0, gain(from: present[lead], to: present[$0])) })
-                for (i, first) in suited.enumerated() {
-                    for second in suited[(i + 1)...] where noHarmBetween(present[first], present[second]) {
-                        let pair = [first, second].sorted { gains[$0]! != gains[$1]! ? gains[$0]! > gains[$1]! : $0 < $1 }
-                        consider(Option(lead: lead, mentees: pair, third: nil, gain: gains[first]! + gains[second]!))
-                    }
-                    if let third = third(present, lead: lead, mentee: first, pool: pool, suited: suited, used: used) {
-                        consider(Option(lead: lead, mentees: [first], third: third, gain: gains[first]!))
-                    }
+            // The guess reads `mentoringMenteeMaxAge` as its age line.
+            basis = Evidence.weakest([parameters.mentoringWeights.evidence, parameters.mentoringCeilings.evidence,
+                                      parameters.mentoringStrengthWeights.evidence, parameters.mentoringGuess.evidence,
+                                      parameters.mentoringMenteeMaxAge.evidence,
+                                      parameters.mentoringTakesNothingAfter.evidence])!
+        }
+
+        /// The group of three as an option; nil when it is not valid: an arrow among its six is harmful, or no
+        /// candidate in it has an arrow into him with a gain above 0.
+        func option(_ members: [Int]) -> Option? {
+            for from in members {
+                for to in members where to != from && harmful[from][to] { return nil }
+            }
+            var value = 0
+            var restsOn: [(from: Int, to: Int)] = []
+            for target in members where isCandidate[target] {
+                // Greatest gain; of two the same, a read arrow before a guess, then the lower source key.
+                let best = members.filter { $0 != target && gains[$0][target] > 0 }.min { a, b in
+                    if gains[a][target] != gains[b][target] { return gains[a][target] > gains[b][target] }
+                    if arrows[a][target].isRead != arrows[b][target].isRead { return arrows[a][target].isRead }
+                    return a < b
                 }
+                if let best {
+                    value += gains[best][target]
+                    restsOn.append((best, target))
+                }
+            }
+            guard value > 0 else { return nil }
+            var read = 0
+            for from in members {
+                for to in members where to != from && arrows[from][to].isRead { read += 1 }
+            }
+            let seniors = members.filter { people[$0].standing > .others }.count
+            return Option(members: members, value: value, seniors: seniors, read: read, restsOn: restsOn)
+        }
+
+        /// Every group of three among `free`, ascending, in order.
+        func trios(_ free: [Int]) -> [[Int]] {
+            var found: [[Int]] = []
+            for (i, a) in free.enumerated() {
+                for (j, b) in free.enumerated() where j > i {
+                    for c in free[(j + 1)...] { found.append([a, b, c]) }
+                }
+            }
+            return found
+        }
+
+        /// The best valid group among `free`; nil when there is none.
+        func bestOption(among free: [Int]) -> Option? {
+            var best: Option?
+            for trio in trios(free) {
+                guard let option = option(trio) else { continue }
+                if best.map({ option.isBetter(than: $0) }) ?? true { best = option }
             }
             return best
         }
 
-        /// The youngest, then lowest-key, pool player not yet used who belongs to the club, is not advised to leave, is
-        /// not a candidate the lead suits, is one the lead stands above, and meets rule 1 with both.
-        private func third(_ present: [Person], lead: Int, mentee: Int, pool: [Int], suited: [Int],
-                           used: Set<Int>) -> Int? {
-            let leader = present[lead], mentored = present[mentee]
-            return pool.filter { index in
-                let person = present[index]
-                return index != lead && index != mentee && !used.contains(index) && !suited.contains(index)
-                    && person.isOwn && !person.isLeaving && standsAbove(leader, person)
-                    && noHarmBetween(leader, person) && noHarmBetween(mentored, person)
-            }.min { a, b in
-                present[a].player.age != present[b].player.age ? present[a].player.age < present[b].player.age : a < b
+        func suggestion(_ option: Option) -> SuggestedGroup {
+            let members = option.members
+            var listed: [(arrow: GroupArrow, gain: Int)] = []
+            for from in members {
+                for to in members where to != from && arrows[from][to].strength > .none {
+                    let source = people[from], target = people[to]
+                    listed.append((GroupArrow(
+                        arrow: arrows[from][to], fromName: source.player.name, toName: target.player.name,
+                        pulls: counted.filter { target.worth[$0]! < source.worth[$0]! }.map {
+                            Pull(attribute: $0, value: target.values[$0]!, towards: source.values[$0]!)
+                        }), gains[from][to]))
+                }
             }
-        }
-
-        func suggestion(_ option: Option, _ present: [Person]) -> SuggestedGroup {
-            let lead = present[option.lead]
-            func member(_ index: Int, isMakingUp: Bool) -> SuggestedMember {
-                let person = present[index]
-                return SuggestedMember(
-                    player: person.player.id, name: person.player.name, age: person.player.age, isMakingUp: isMakingUp,
-                    pulls: counted.filter { person.worth[$0]! != lead.worth[$0]! }.map {
-                        Pull(attribute: $0, value: person.values[$0]!, towards: lead.values[$0]!)
-                    },
-                    inDifferentSocialGroup: inDifferentSocialGroup(lead, person))
+            listed.sort { a, b in
+                if a.gain != b.gain { return a.gain > b.gain }
+                let x = a.arrow.arrow, y = b.arrow.arrow
+                return (x.from.key, x.to.key) < (y.from.key, y.to.key)
             }
-            var cautions: [LeadCaution] = []
-            if !lead.isOwn { cautions.append(.onLoanHere) }
-            if lead.isLeaving { cautions.append(.advisedToLeave) }
+            let sources = Set(option.restsOn.map(\.from)).sorted()
+            let cautions = sources.filter { !people[$0].isOwn }.map { MemberCaution.onLoanHere(people[$0].player.id) }
+                + sources.filter { people[$0].isLeaving }.map { MemberCaution.advisedToLeave(people[$0].player.id) }
             return SuggestedGroup(
-                lead: lead.player.id, leadName: lead.player.name, leadAge: lead.player.age, leadStanding: lead.standing,
-                members: option.mentees.map { member($0, isMakingUp: false) }
-                    + (option.third.map { [member($0, isMakingUp: true)] } ?? []),
-                cautions: cautions, basis: Evidence.weakest(evidence)!)
+                members: members.map { SuggestedMember(player: people[$0].player.id, name: people[$0].player.name,
+                                                        age: people[$0].player.age) },
+                arrows: listed.map(\.arrow),
+                isRead: option.restsOn.allSatisfy { arrows[$0.from][$0.to].isRead },
+                cautions: cautions, basis: basis)
         }
 
         /// The first reason that applies, judged against every squad player not out on loan, members of recorded
         /// groups included. It never changes which groups are formed.
-        func reason(for index: Int, _ present: [Person], used: Set<Int>) -> NotPlacedReason {
-            let mentee = present[index]
-            let above = present.indices.filter { $0 != index && standsAbove(present[$0], mentee) }
-            if above.isEmpty { return .nobodyAbove }
-            let better = above.filter { gain(from: present[$0], to: mentee) > 0 }
-            if better.isEmpty { return .nobodyBetter }
-            let suiting = better.filter { harm(from: present[$0], to: mentee) == nil }
-            if suiting.isEmpty {
-                // Greatest gain first, then lowest key; every one of them does harm somewhere.
-                let most = better.min { a, b in
-                    let ga = gain(from: present[a], to: mentee), gb = gain(from: present[b], to: mentee)
-                    return ga != gb ? ga > gb : a < b
-                }!
-                return .wouldHarm(harm(from: present[most], to: mentee)!)
+        func reason(for index: Int, pool: [Int]) -> NotPlacedReason {
+            if takesNothing[index] { return .takesNothing }
+            let others = people.indices.filter { $0 != index }
+            let influencing = others.filter { arrows[$0][index].strength > .none }
+            if influencing.isEmpty { return .noInfluence }
+            if !influencing.contains(where: { gains[$0][index] > 0 }) { return .nothingToGain }
+            let free = pool.filter { $0 != index }
+            if free.contains(where: { gains[$0][index] > 0 }) {
+                let helped = free.indices.contains { i in
+                    free[(i + 1)...].contains { other in
+                        option([index, free[i], other].sorted())?.restsOn.contains { $0.to == index } == true
+                    }
+                }
+                if !helped { return .wouldHarm }
             }
-            if suiting.allSatisfy({ used.contains($0) || present[$0].inRecordedGroup }) { return .leadsTaken }
-            return .noThird
+            return .influencersTaken
         }
     }
 }

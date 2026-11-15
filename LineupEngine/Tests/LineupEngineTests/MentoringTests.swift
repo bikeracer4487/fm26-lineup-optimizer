@@ -14,32 +14,45 @@ import Testing
         .fixture(name: name, squad: squad, age: age, attributes: values, isInjured: isInjured, club: club, loanedTo: loanedTo)
     }
 
-    /// A lead aged 34 with Professionalism 20: every player left at 10 gains 30 from him.
-    func lead(_ values: [Attribute: Int] = [:], name: String = "Lead", age: Int = 34, club: String? = "Oxford City",
-              loanedTo: String? = nil, isInjured: Bool = false) -> Player {
+    /// A senior with Professionalism 20 and every other attribute 10, at every ceiling: a player of 23 or younger left
+    /// at 10 is worth 30 less than him, and gains 60 from an Average arrow.
+    func senior(_ name: String = "Lead", _ age: Int = 30, _ values: [Attribute: Int] = [:], club: String? = "Oxford City",
+                loanedTo: String? = nil, isInjured: Bool = false) -> Player {
         player(name, age, [.professionalism: 20].merging(values) { _, new in new }, club: club, loanedTo: loanedTo,
                isInjured: isInjured)
     }
 
     func id(_ name: String) -> PlayerID { PlayerID(key: PlayerID.normalise(name)) }
 
+    func levels(_ entries: [String: Standing]) -> [PlayerID: PlayerDynamics] {
+        Dictionary(uniqueKeysWithValues: entries.map { (id($0.key), PlayerDynamics(standing: $0.value)) })
+    }
+
+    var leader: [PlayerID: PlayerDynamics] { levels(["Lead": .teamLeader]) }
+
+    /// An arrow read in the first team today.
+    func reading(_ from: String, _ to: String, _ strength: ArrowStrength) -> ArrowReading {
+        ArrowReading(from: id(from), to: id(to), squad: .firstTeam, strength: strength, readOn: today)
+    }
+
     func request(_ players: [Player], squad: Squad = .firstTeam, dynamics: [PlayerID: PlayerDynamics] = [:],
-                 updatedOn: Day? = nil, groups: [MentoringGroup] = [], leaving: Set<PlayerID> = []) -> MentoringRequest {
+                 updatedOn: Day? = nil, groups: [MentoringGroup] = [], arrows: [ArrowReading] = [],
+                 leaving: Set<PlayerID> = []) -> MentoringRequest {
         MentoringRequest(squad: squad, players: players, ownClub: "Oxford City", dynamics: dynamics,
-                         dynamicsUpdatedOn: updatedOn, groups: groups, readings: [:], names: [:], leaving: leaving,
-                         asOf: today)
+                         dynamicsUpdatedOn: updatedOn, groups: groups, readings: [:], arrows: arrows, names: [:],
+                         leaving: leaving, asOf: today)
     }
 
     func report(_ players: [Player], squad: Squad = .firstTeam, dynamics: [PlayerID: PlayerDynamics] = [:],
-                updatedOn: Day? = nil, groups: [MentoringGroup] = [], leaving: Set<PlayerID> = [],
-                parameters: EngineParameters? = nil) throws -> MentoringReport {
+                updatedOn: Day? = nil, groups: [MentoringGroup] = [], arrows: [ArrowReading] = [],
+                leaving: Set<PlayerID> = [], parameters: EngineParameters? = nil) throws -> MentoringReport {
         try Mentoring.report(request(players, squad: squad, dynamics: dynamics, updatedOn: updatedOn, groups: groups,
-                                     leaving: leaving), parameters: parameters ?? q)
+                                     arrows: arrows, leaving: leaving), parameters: parameters ?? q)
     }
 
-    /// The suggested groups as names: the lead's key, then the members' keys in their order.
+    /// Each suggestion's three keys.
     func shape(_ report: MentoringReport) -> [[String]] {
-        report.suggestions.map { [$0.lead.key] + $0.members.map(\.player.key) }
+        report.suggestions.map { $0.members.map(\.player.key) }
     }
 
     /// The not-placed list as (key, reason).
@@ -55,257 +68,352 @@ import Testing
         })
     }
 
+    func guessed(_ from: String, _ to: String, _ strength: ArrowStrength) -> Arrow {
+        Arrow(from: id(from), to: id(to), strength: strength, readOn: nil)
+    }
+
+    func read(_ from: String, _ to: String, _ strength: ArrowStrength) -> Arrow {
+        Arrow(from: id(from), to: id(to), strength: strength, readOn: today)
+    }
+
     // MARK: Groups
 
-    @Test func aLeadAndTwoYoungPlayersMakeAGroup() throws {
+    @Test func aTeamLeaderAndTwoYoungPlayersMakeAGroup() throws {
         let players = [
-            player("Lead", 34, [.professionalism: 17, .pressure: 12, .determination: 15, .ambition: 10]),
-            player("Older", 19, [.professionalism: 11, .pressure: 12, .determination: 7, .ambition: 10]),
-            player("Younger", 18, [.professionalism: 8, .pressure: 4, .determination: 10, .ambition: 10])]
-        let result = try report(players, dynamics: [id("Lead"): PlayerDynamics(standing: .teamLeader)])
+            player("Lead", 30, [.professionalism: 17, .pressure: 12, .determination: 15, .ambition: 10]),
+            player("Younger", 18, [.professionalism: 8, .pressure: 4, .determination: 10, .ambition: 10]),
+            player("Older", 19, [.professionalism: 11, .pressure: 12, .determination: 7, .ambition: 10])]
+        let result = try report(players, dynamics: leader)
         #expect(result.suggestions.count == 1)
         let suggestion = try #require(result.suggestions.first)
-        #expect(suggestion.lead == id("Lead"))
-        #expect(suggestion.leadName == "Lead")
-        #expect(suggestion.leadAge == 34)
-        #expect(suggestion.leadStanding == .teamLeader)
+        #expect(suggestion.members == [SuggestedMember(player: id("Lead"), name: "Lead", age: 30),
+                                       SuggestedMember(player: id("Older"), name: "Older", age: 19),
+                                       SuggestedMember(player: id("Younger"), name: "Younger", age: 18)])
+        #expect(suggestion.id == "lead|older|younger")
+        #expect(suggestion.arrows == [
+            GroupArrow(arrow: guessed("Lead", "Younger", .average), fromName: "Lead", toName: "Younger",
+                       pulls: [Pull(attribute: .professionalism, value: 8, towards: 17),
+                               Pull(attribute: .pressure, value: 4, towards: 12)]),
+            GroupArrow(arrow: guessed("Lead", "Older", .average), fromName: "Lead", toName: "Older",
+                       pulls: [Pull(attribute: .professionalism, value: 11, towards: 17),
+                               Pull(attribute: .determination, value: 7, towards: 15)])])
+        #expect(!suggestion.isRead)
         #expect(suggestion.cautions.isEmpty)
         #expect(suggestion.basis == .derived)
-        #expect(suggestion.members.map(\.player) == [id("Younger"), id("Older")])
-        #expect(suggestion.members.map(\.age) == [18, 19])
-        #expect(suggestion.members.map(\.name) == ["Younger", "Older"])
-        #expect(suggestion.members.allSatisfy { !$0.isMakingUp && !$0.inDifferentSocialGroup })
-        #expect(suggestion.members[0].pulls == [Pull(attribute: .professionalism, value: 8, towards: 17),
-                                                 Pull(attribute: .pressure, value: 4, towards: 12)])
-        #expect(suggestion.members[1].pulls == [Pull(attribute: .professionalism, value: 11, towards: 17),
-                                                 Pull(attribute: .determination, value: 7, towards: 15)])
         #expect(result.notPlaced.isEmpty)
+        #expect(!result.needsHierarchy)
         #expect(result.squad == .firstTeam)
         #expect(result.basis == .derived)
     }
 
-    @Test func aPlayerOver23IsNotACandidate() throws {
-        // At 24 "Elder" stands five years above "Young" and would drag his Professionalism down, so he cannot make up.
-        let at24 = try report([lead(), player("Young", 19), player("Elder", 24, [.professionalism: 5])])
-        #expect(at24.suggestions.isEmpty)
-        #expect(notPlaced(at24) == [id("Young").key: .noThird])
+    @Test func aReadingStandsInForTheGuess() throws {
+        let players = [
+            player("Lead", 30, [.professionalism: 17, .pressure: 12, .determination: 15, .ambition: 10]),
+            player("Younger", 18, [.professionalism: 8, .pressure: 4, .determination: 10, .ambition: 10]),
+            player("Older", 19, [.professionalism: 11, .pressure: 12, .determination: 7, .ambition: 10])]
+        let significant = try report(players, dynamics: leader, arrows: [reading("Lead", "Younger", .significant)])
+        let arrows = try #require(significant.suggestions.first?.arrows)
+        #expect(arrows.map(\.arrow) == [read("Lead", "Younger", .significant), guessed("Lead", "Older", .average)])
+        #expect(arrows.first?.pulls == [Pull(attribute: .professionalism, value: 8, towards: 17),
+                                        Pull(attribute: .pressure, value: 4, towards: 12)])
 
-        let at23 = try report([lead(), player("Young", 19), player("Elder", 23, [.professionalism: 5])])
-        #expect(shape(at23) == [["lead", "elder", "young"]])
-        #expect(at23.notPlaced.isEmpty)
+        let none = try report(players, dynamics: leader, arrows: [reading("Lead", "Younger", .none)])
+        #expect(shape(none) == [["lead", "older", "younger"]])
+        #expect(none.suggestions.first?.arrows.map(\.arrow) == [guessed("Lead", "Older", .average)])
+        #expect(none.notPlaced.isEmpty)
+    }
+
+    @Test func anInfluentialPlayerIsGuessedLightAndOthersNothing() throws {
+        let players = [senior("Senior"), player("A", 20), player("B", 20)]
+        let influential = try report(players, dynamics: levels(["Senior": .influential]))
+        #expect(shape(influential) == [["a", "b", "senior"]])
+        #expect(influential.suggestions.first?.arrows.map(\.arrow)
+                == [guessed("Senior", "A", .light), guessed("Senior", "B", .light)])
+        #expect(!influential.needsHierarchy)
+
+        let others = try report(players, dynamics: levels(["Senior": .others]))
+        #expect(others.suggestions.isEmpty)
+        #expect(notPlaced(others) == ["a": .noInfluence, "b": .noInfluence])
+        #expect(others.needsHierarchy)
+    }
+
+    @Test func aPlayerOf24ComesInOnlyByAReading() throws {
+        let players = [senior("Lead"), player("Elder", 24), player("Young", 20)]
+        let guessedOnly = try report(players, dynamics: leader)
+        #expect(shape(guessedOnly) == [["elder", "lead", "young"]])
+        #expect(guessedOnly.suggestions.first?.arrows.map(\.arrow) == [guessed("Lead", "Young", .average)])
+
+        let withReading = try report(players, dynamics: leader, arrows: [reading("Lead", "Elder", .light)])
+        #expect(withReading.suggestions.first?.arrows == [
+            GroupArrow(arrow: guessed("Lead", "Young", .average), fromName: "Lead", toName: "Young",
+                       pulls: [Pull(attribute: .professionalism, value: 10, towards: 20)]),
+            GroupArrow(arrow: read("Lead", "Elder", .light), fromName: "Lead", toName: "Elder",
+                       pulls: [Pull(attribute: .professionalism, value: 10, towards: 20)])])
+    }
+
+    @Test func aCandidatesGainIsHisGreatestArrowNotTheSum() throws {
+        let seniors = levels(["Lead": .teamLeader, "Second": .influential])
+        let equal = try report([senior("Lead"), senior("Second"), player("A", 20), player("B", 20)], dynamics: seniors)
+        #expect(shape(equal) == [["a", "b", "lead"]])
+
+        // Low gains 96 from Lead and 48 from Second; High gains 12 from Lead. Adding Low's two arrows (144) would put
+        // the two seniors with Low ahead of Lead with both juniors (108); his greatest (96) does not.
+        let uneven = try report([senior("Lead"), senior("Second"), player("Low", 20, [.professionalism: 4]),
+                                 player("High", 20, [.professionalism: 18])], dynamics: seniors)
+        #expect(shape(uneven) == [["high", "lead", "low"]])
+        #expect(uneven.notPlaced.isEmpty)
+    }
+
+    @Test func noGroupHoldsAHarmfulArrow() throws {
+        let harming = try report([senior("Lead", 30, [.ambition: 6]), player("A", 18, [.ambition: 9]),
+                                  player("B", 18, [.ambition: 9])], dynamics: leader)
+        #expect(harming.suggestions.isEmpty)
+        #expect(notPlaced(harming) == ["a": .wouldHarm, "b": .wouldHarm, "lead": .noInfluence])
+
+        // Both values are past the ceiling of 10, so neither is worth more than the other there.
+        let pastTheCeiling = try report([senior("Lead", 30, [.ambition: 11]), player("A", 18, [.ambition: 14]),
+                                         player("B", 18, [.ambition: 14])], dynamics: leader)
+        #expect(shape(pastTheCeiling) == [["a", "b", "lead"]])
+        #expect(pastTheCeiling.suggestions.first?.arrows.first?.pulls
+                == [Pull(attribute: .professionalism, value: 10, towards: 20)])
+    }
+
+    @Test func aHarmfulArrowBetweenTheOtherTwoAlsoStopsTheGroup() throws {
+        // Inf would be guessed Light into either junior, and is worth less than both in Pressure.
+        let players = [senior("Lead"), player("Inf", 23, [.pressure: 3]), player("Junior", 18, [.pressure: 5]),
+                       player("Second", 19)]
+        let dynamics = levels(["Lead": .teamLeader, "Inf": .influential])
+        let guessedOnly = try report(players, dynamics: dynamics)
+        #expect(shape(guessedOnly) == [["junior", "lead", "second"]])
+        #expect(notPlaced(guessedOnly) == ["inf": .wouldHarm])
+
+        let readNone = try report(players, dynamics: dynamics, arrows: [reading("Inf", "Junior", .none)])
+        #expect(shape(readNone) == [["inf", "junior", "lead"]])
+        #expect(notPlaced(readNone) == ["second": .influencersTaken])
+    }
+
+    @Test func theMostValuableGroupIsFormedFirst() throws {
+        // Gains from Lead: Cole 72, Baker 48, Adams 24; by key Adams would come first.
+        let players = [senior("Lead"), player("Adams", 18, [.professionalism: 16]),
+                       player("Baker", 18, [.professionalism: 12]), player("Cole", 18, [.professionalism: 8])]
+        let result = try report(players, dynamics: leader)
+        #expect(shape(result) == [["baker", "cole", "lead"]])
+        #expect(result.notPlaced == [NotPlaced(player: id("Adams"), name: "Adams", age: 18, reason: .influencersTaken)])
+    }
+
+    @Test func tiesGoToFewerSeniorsThenMoreArrowsReadThenTheLowestKeys() throws {
+        // Kid gains 60 from Lead, and Abel's 32 adds nothing beside it; Zane, at Others, gives and gains nothing. Lead
+        // would harm K1 and K2 in Ambition; Abel leads them.
+        let players = [senior("Lead", 34, [.ambition: 8]), senior("Abel", 30), player("Zane", 28, [.professionalism: 20]),
+                       player("Kid", 18, [.ambition: 8]), player("K1", 18, [.professionalism: 15]),
+                       player("K2", 18, [.professionalism: 15])]
+        let seniors = try report(players, dynamics: levels(["Lead": .teamLeader, "Abel": .influential]))
+        #expect(shape(seniors) == [["kid", "lead", "zane"], ["abel", "k1", "k2"]])
+
+        // Ash and Bell are alike: at every ceiling, at Others and 28, they give and gain nothing.
+        let thirds = [senior("Lead"), player("Kid", 18), player("Ash", 28, [.professionalism: 20]),
+                      player("Bell", 28, [.professionalism: 20])]
+        let byKey = try report(thirds, dynamics: leader)
+        #expect(shape(byKey) == [["ash", "kid", "lead"]])
+        let byReading = try report(thirds, dynamics: leader, arrows: [reading("Lead", "Bell", .none)])
+        #expect(shape(byReading) == [["bell", "kid", "lead"]])
+    }
+
+    @Test func aSuggestionIsReadOnlyWhenEveryArrowItRestsOnWasRead() throws {
+        let players = [senior("Lead"), player("A", 18), player("B", 18)]
+        let both = try report(players, dynamics: leader,
+                              arrows: [reading("Lead", "A", .average), reading("Lead", "B", .average)])
+        #expect(both.suggestions.first?.isRead == true)
+        let one = try report(players, dynamics: leader, arrows: [reading("Lead", "A", .average)])
+        #expect(one.suggestions.first?.isRead == false)
+
+        let bothAndNone = try report(players, dynamics: leader, arrows: [
+            reading("Lead", "A", .average), reading("Lead", "B", .average), reading("A", "B", .none)])
+        #expect(bothAndNone.suggestions == both.suggestions)
+        let oneAndNone = try report(players, dynamics: leader,
+                                    arrows: [reading("Lead", "A", .average), reading("A", "B", .none)])
+        #expect(oneAndNone.suggestions == one.suggestions)
+    }
+
+    @Test func aSourceWhoWillGoCarriesTheCaution() throws {
+        let juniors = [player("A", 18), player("B", 18)]
+        let onLoan = try report([senior("Lead", club: "Banbury United")] + juniors, dynamics: leader)
+        #expect(shape(onLoan) == [["a", "b", "lead"]])
+        #expect(onLoan.suggestions.first?.cautions == [.onLoanHere(id("Lead"))])
+
+        let going = try report([senior("Lead")] + juniors, dynamics: leader, leaving: [id("Lead")])
+        #expect(going.suggestions.first?.cautions == [.advisedToLeave(id("Lead"))])
+
+        let both = try report([senior("Lead", club: "Banbury United")] + juniors, dynamics: leader, leaving: [id("Lead")])
+        #expect(both.suggestions.first?.cautions == [.onLoanHere(id("Lead")), .advisedToLeave(id("Lead"))])
+
+        let thirdGoing = try report([senior("Lead"), player("Kid", 18), player("Going", 28, [.professionalism: 20])],
+                                    dynamics: leader, leaving: [id("Going")])
+        #expect(shape(thirdGoing) == [["going", "kid", "lead"]])
+        #expect(thirdGoing.suggestions.first?.cautions == [])
+    }
+
+    @Test func aLoaneeOrALeaverIsNeverACandidateAndALoanedOutPlayerIsNowhere() throws {
+        let loanee = player("Loanee", 18, club: "Banbury United"), leaver = player("Leaver", 18)
+        let noCandidate = try report([senior("Lead"), loanee, leaver], dynamics: leader, leaving: [id("Leaver")])
+        #expect(noCandidate.suggestions.isEmpty)
+        #expect(noCandidate.notPlaced.isEmpty)
+
+        let withKid = try report([senior("Lead"), loanee, leaver, player("Kid", 18)], dynamics: leader,
+                                 leaving: [id("Leaver")])
+        #expect(shape(withKid) == [["kid", "lead", "leaver"]])
+        #expect(withKid.notPlaced.isEmpty)
+
+        let leadAway = try report([senior("Lead", loanedTo: "Banbury United"), player("A", 18), player("B", 18)],
+                                  dynamics: leader)
+        #expect(leadAway.suggestions.isEmpty)
+        #expect(notPlaced(leadAway) == ["a": .noInfluence, "b": .noInfluence])
+        #expect(leadAway.needsHierarchy)
+
+        let youngAway = try report([senior("Lead"), player("Away", 18, loanedTo: "Banbury United"), player("A", 18),
+                                    player("B", 18)], dynamics: leader)
+        #expect(shape(youngAway) == [["a", "b", "lead"]])
+        #expect(youngAway.notPlaced.isEmpty)
+    }
+
+    @Test func aPlayerWhoTakesNothingSaysSo() throws {
+        let players = [senior("Lead", 34), senior("S1"), senior("S2"), senior("S3"), player("Kid", 18)]
+        let arrows = [reading("S1", "Kid", .none), reading("S2", "Kid", .none), reading("S3", "Kid", .none)]
+        let three = try report(players, dynamics: levels(["Lead": .teamLeader, "S1": .influential,
+                                                          "S2": .highlyInfluential, "S3": .influential]), arrows: arrows)
+        #expect(three.suggestions.isEmpty)
+        #expect(notPlaced(three) == ["kid": .takesNothing])
+
+        let two = try report(players, dynamics: levels(["Lead": .teamLeader, "S1": .influential,
+                                                        "S2": .highlyInfluential, "S3": .others]), arrows: arrows)
+        #expect(shape(two) == [["kid", "lead", "s3"]])
+        #expect(two.suggestions.first?.arrows.map(\.arrow) == [guessed("Lead", "Kid", .average)])
+        #expect(two.notPlaced.isEmpty)
+    }
+
+    @Test func eachNotPlacedReason() throws {
+        let takesNothing = try report(
+            [senior("S1"), senior("S2"), senior("S3"), player("Kid", 18)],
+            dynamics: levels(["S1": .influential, "S2": .influential, "S3": .influential]),
+            arrows: [reading("S1", "Kid", .none), reading("S2", "Kid", .none), reading("S3", "Kid", .none)])
+        #expect(notPlaced(takesNothing) == ["kid": .takesNothing])
+
+        let noInfluence = try report([senior("Old"), player("A", 18), player("B", 18)])
+        #expect(notPlaced(noInfluence) == ["a": .noInfluence, "b": .noInfluence])
+
+        // Lead is guessed Average into both, and is worth no more than either anywhere.
+        let nothingToGain = try report([player("Lead", 30), player("A", 18), player("B", 18)], dynamics: leader)
+        #expect(nothingToGain.suggestions.isEmpty)
+        #expect(notPlaced(nothingToGain) == ["a": .nothingToGain, "b": .nothingToGain, "lead": .noInfluence])
+
+        let wouldHarm = try report([senior("Lead", 30, [.ambition: 6]), player("A", 18, [.ambition: 9]),
+                                    player("B", 18, [.ambition: 9])], dynamics: leader)
+        #expect(notPlaced(wouldHarm)["a"] == .wouldHarm)
+
+        let taken = try report([senior("Lead"), player("A", 18), player("B", 18),
+                                player("C", 18, [.professionalism: 15])], dynamics: leader)
+        #expect(notPlaced(taken) == ["c": .influencersTaken])
+    }
+
+    @Test func aSquadWithNoLevelsNeedsItsHierarchyButArrowsReadStillCount() throws {
+        let players = [senior("Eldest"), player("Kid", 18), player("Other", 19)]
+        let none = try report(players)
+        #expect(none.suggestions.isEmpty)
+        #expect(none.needsHierarchy)
+
+        let withReading = try report(players, arrows: [reading("Eldest", "Kid", .light)])
+        #expect(withReading.needsHierarchy)
+        #expect(shape(withReading) == [["eldest", "kid", "other"]])
+        #expect(withReading.suggestions.first?.arrows == [
+            GroupArrow(arrow: read("Eldest", "Kid", .light), fromName: "Eldest", toName: "Kid",
+                       pulls: [Pull(attribute: .professionalism, value: 10, towards: 20)])])
+        #expect(withReading.suggestions.first?.isRead == true)
+    }
+
+    @Test func aReadingForAnotherSquadOrAPlayerWhoHasGoneIsNotUsed() throws {
+        let players = [senior("Lead", 34), senior("S1"), senior("S2"), senior("S3"), player("Kid", 18),
+                       player("Kid Two", 18), senior("Away", 30, loanedTo: "Banbury United")]
+        let dynamics = levels(["Lead": .teamLeader, "S1": .influential, "S2": .influential, "S3": .influential,
+                               "Away": .influential, "Ghost": .influential])
+        let base = [reading("S1", "Kid", .none), reading("S2", "Kid", .none)]
+        let baseline = try report(players, dynamics: dynamics, arrows: base)
+        func arrowsIntoKid(_ report: MentoringReport) -> [Arrow] {
+            report.suggestions.flatMap(\.arrows).map(\.arrow).filter { $0.to == id("Kid") }
+        }
+        #expect(arrowsIntoKid(baseline) == [guessed("Lead", "Kid", .average)])
+
+        // A third senior of the squad makes Kid one who takes nothing, so nothing is guessed into him: the readings
+        // below would do the same if they were used.
+        let third = try report(players, dynamics: dynamics, arrows: base + [reading("S3", "Kid", .none)])
+        #expect(arrowsIntoKid(third).isEmpty)
+
+        let otherSquad = ArrowReading(from: id("Lead"), to: id("Kid"), squad: .u21, strength: .none, readOn: today)
+        for extra in [otherSquad, reading("Away", "Kid", .none), reading("Ghost", "Kid", .none)] {
+            #expect(try report(players, dynamics: dynamics, arrows: base + [extra]) == baseline, "\(extra)")
+        }
+    }
+
+    @Test func arrowsBothWaysAndARingOfThree() throws {
+        // Ann is better in Professionalism, Ben in Ambition.
+        let pair = try report([player("Ann", 20, [.professionalism: 20, .ambition: 5]), player("Ben", 20),
+                               player("Cal", 18)],
+                              arrows: [reading("Ann", "Ben", .light), reading("Ben", "Ann", .light)])
+        #expect(pair.suggestions.isEmpty)
+        #expect(notPlaced(pair) == ["ann": .nothingToGain, "ben": .wouldHarm, "cal": .noInfluence])
+
+        let ring = try report([player("A", 18), player("B", 18), player("C", 18)],
+                              arrows: [reading("A", "B", .light), reading("B", "C", .light), reading("C", "A", .light)])
+        #expect(ring.suggestions.isEmpty)
+        #expect(notPlaced(ring) == ["a": .nothingToGain, "b": .nothingToGain, "c": .nothingToGain])
+    }
+
+    @Test func fewerThanThreeFreePlayers() throws {
+        let two = try report([senior("Lead"), player("Kid", 18)], dynamics: leader)
+        #expect(two.suggestions.isEmpty)
+        #expect(notPlaced(two) == ["kid": .wouldHarm])
+
+        let oneRecorded = try report([senior("Lead"), player("A", 18), player("B", 18)], dynamics: leader,
+                                     groups: [group(["lead", "x", "y"])])
+        #expect(oneRecorded.suggestions.isEmpty)
+        #expect(notPlaced(oneRecorded) == ["a": .influencersTaken, "b": .influencersTaken])
+
+        let oneAway = try report([senior("Lead"), player("A", 18), player("B", 18, loanedTo: "Banbury United")],
+                                 dynamics: leader)
+        #expect(oneAway.suggestions.isEmpty)
+        #expect(notPlaced(oneAway) == ["a": .wouldHarm])
     }
 
     @Test func aPlayerAtEveryCeilingAppearsNowhere() throws {
         let atCeiling: [Attribute: Int] = [.professionalism: 20, .pressure: 6, .determination: 10, .ambition: 10]
-        let full = try report([lead(), player("Done", 19, atCeiling)])
+        let third = player("Other", 28, [.professionalism: 20])
+        let full = try report([senior("Lead"), player("Done", 19, atCeiling), third], dynamics: leader)
         #expect(full.suggestions.isEmpty)
         #expect(full.notPlaced.isEmpty)
 
-        let oneShort = try report([lead(), player("Done", 19, atCeiling.merging([.professionalism: 19]) { _, new in new })])
-        #expect(notPlaced(oneShort) == ["done": .noThird])
-    }
-
-    @Test func aPlayerAdvisedToLeaveIsNotMentored() throws {
-        let players = [lead(), player("Going", 18), player("Staying", 18)]
-        let advised = try report(players, leaving: [id("Going")])
-        #expect(advised.suggestions.isEmpty)
-        #expect(notPlaced(advised) == ["staying": .noThird])
-
-        let notAdvised = try report(players)
-        #expect(shape(notAdvised) == [["lead", "going", "staying"]])
-    }
-
-    @Test func canStillLeadWithTheCaution() throws {
-        let result = try report([lead(), player("A", 18), player("B", 18)], leaving: [id("Lead")])
-        #expect(shape(result) == [["lead", "a", "b"]])
-        #expect(result.suggestions.first?.cautions == [.advisedToLeave])
-    }
-
-    @Test func aLoaneeIsNotMentoredButCanLeadWithTheCaution() throws {
-        let asMentee = try report([lead(), player("Loanee", 18, club: "Banbury United"), player("A", 18)])
-        #expect(asMentee.suggestions.isEmpty)
-        #expect(notPlaced(asMentee) == ["a": .noThird])
-
-        let asLead = try report([lead(club: "Banbury United"), player("A", 18), player("B", 18)])
-        #expect(shape(asLead) == [["lead", "a", "b"]])
-        #expect(asLead.suggestions.first?.cautions == [.onLoanHere])
-
-        let both = try report([lead(club: "Banbury United"), player("A", 18), player("B", 18)], leaving: [id("Lead")])
-        #expect(both.suggestions.first?.cautions == [.onLoanHere, .advisedToLeave])
-    }
-
-    @Test func aPlayerOutOnLoanIsNeitherLeadNorMentee() throws {
-        let leadAway = try report([lead(loanedTo: "Banbury United"), player("A", 18), player("B", 18)])
-        #expect(leadAway.suggestions.isEmpty)
-        #expect(notPlaced(leadAway) == ["a": .nobodyAbove, "b": .nobodyAbove])
-
-        let youngAway = try report([lead(), player("Away", 18, loanedTo: "Banbury United"), player("A", 18)])
-        #expect(youngAway.suggestions.isEmpty)
-        #expect(notPlaced(youngAway) == ["a": .noThird])
-    }
-
-    @Test func aLeadWhoWouldHarmIsNotSuggested() throws {
-        let harming = try report([lead([.ambition: 6]), player("A", 18, [.ambition: 9]), player("B", 18, [.ambition: 9])])
-        #expect(harming.suggestions.isEmpty)
-        #expect(notPlaced(harming) == ["a": .wouldHarm(.ambition), "b": .wouldHarm(.ambition)])
-
-        // Both values are past the ceiling of 10, so neither is worth more than the other there.
-        let pastTheCeiling = try report([lead([.ambition: 11]), player("A", 18, [.ambition: 14]),
-                                         player("B", 18, [.ambition: 14])])
-        #expect(shape(pastTheCeiling) == [["lead", "a", "b"]])
-        #expect(pastTheCeiling.suggestions.first?.members.first?.pulls
-                == [Pull(attribute: .professionalism, value: 10, towards: 20)])
-    }
-
-    @Test func twoMenteesMustNotHarmEachOther() throws {
-        // Five years apart, "Elder" stands above "Young" and is worth less in Pressure.
-        let fiveYears = try report([lead(), player("Elder", 23, [.pressure: 3]), player("Young", 18, [.pressure: 5])])
-        #expect(fiveYears.suggestions.isEmpty)
-        #expect(notPlaced(fiveYears) == ["elder": .noThird, "young": .noThird])
-
-        let fourYears = try report([lead(), player("Elder", 22, [.pressure: 3]), player("Young", 18, [.pressure: 5])])
-        #expect(shape(fourYears) == [["lead", "elder", "young"]])
-    }
-
-    @Test func mostToGainGetsFirstCallOnTheLead() throws {
-        // Gains from the lead: Cole 30, Baker 20, Adams 10; by key Adams would come first.
-        let players = [lead(), player("Adams", 19, [.professionalism: 17, .ambition: 9]),
-                       player("Baker", 20, [.professionalism: 14, .ambition: 8]), player("Cole", 18)]
-        let result = try report(players)
-        #expect(shape(result) == [["lead", "cole", "baker"]])
-        #expect(notPlaced(result) == ["adams": .leadsTaken])
-    }
-
-    @Test func aDifferentSocialGroupCountsForHalf() throws {
-        // Abel and Brook each gain 30 from the lead; Cole gains 21.
-        let lead = lead(), abel = player("Abel", 18), brook = player("Brook", 18)
-        let cole = player("Cole", 18, [.professionalism: 13])
-        let apart: [PlayerID: PlayerDynamics] = [id("Lead"): PlayerDynamics(socialGroup: .core),
-                                                 id("Abel"): PlayerDynamics(socialGroup: .secondary("A"))]
-
-        let noGroups = try report([lead, abel, brook])
-        #expect(shape(noGroups) == [["lead", "abel", "brook"]])
-        #expect(noGroups.suggestions.first?.members.map(\.inDifferentSocialGroup) == [false, false])
-
-        let halved = try report([lead, abel, brook], dynamics: apart)
-        #expect(shape(halved) == [["lead", "brook", "abel"]])
-        #expect(halved.suggestions.first?.members.map(\.inDifferentSocialGroup) == [false, true])
-
-        let sameGroup = try report([lead, abel, brook], dynamics: [id("Lead"): PlayerDynamics(socialGroup: .core),
-                                                                   id("Abel"): PlayerDynamics(socialGroup: .core)])
-        #expect(sameGroup == noGroups)
-        let onlyOneEntered = try report([lead, abel, brook], dynamics: [id("Abel"): PlayerDynamics(socialGroup: .core)])
-        #expect(shape(onlyOneEntered) == shape(noGroups))
-
-        let threeNoGroups = try report([lead, abel, brook, cole])
-        #expect(shape(threeNoGroups) == [["lead", "abel", "brook"]])
-        #expect(notPlaced(threeNoGroups) == ["cole": .leadsTaken])
-
-        let threeHalved = try report([lead, abel, brook, cole], dynamics: apart)
-        #expect(shape(threeHalved) == [["lead", "brook", "cole"]])
-        #expect(notPlaced(threeHalved) == ["abel": .leadsTaken])
-    }
-
-    @Test func aLeadWithOneMenteeNeedsAThird() throws {
-        let lead = lead(), young = player("Young", 18)
-        // "Senior" is Influential: the lead does not stand above him, so he cannot make up although he is youngest.
-        let senior = player("Senior", 24)
-        let standings = [id("Senior"): PlayerDynamics(standing: .influential)]
-        // "Aaron" would drag Young's Professionalism down; "Loanee" is not the club's; "Going" is advised to leave.
-        let aaron = player("Aaron", 25, [.professionalism: 8])
-        let loanee = player("Loanee", 25, club: "Banbury United")
-        let going = player("Going", 25)
-        let adams = player("Adams", 29), baker = player("Baker", 27)
-
-        let result = try report([lead, young, senior, aaron, loanee, going, adams, baker], dynamics: standings,
-                                leaving: [id("Going")])
-        #expect(shape(result) == [["lead", "young", "baker"]])
-        let members = try #require(result.suggestions.first?.members)
-        #expect(members.map(\.isMakingUp) == [false, true])
-        #expect(members[1].pulls == [Pull(attribute: .professionalism, value: 10, towards: 20)])
-        #expect(result.notPlaced.isEmpty)
-
-        let onlyAdams = try report([lead, young, senior, adams], dynamics: standings)
-        #expect(shape(onlyAdams) == [["lead", "young", "adams"]])
-
-        let noThird = try report([lead, young, senior, aaron, loanee, going], dynamics: standings,
-                                 leaving: [id("Going")])
-        #expect(noThird.suggestions.isEmpty)
-        #expect(notPlaced(noThird) == ["young": .noThird])
-    }
-
-    @Test func tiesGoToAFullGroupThenTheLowestKeys() throws {
-        // Abe (made up with Old) and Zed (with A and B) offer the same gain, 30; the full group is formed first although
-        // Abe's key is lower. Abe would drag A and B's Ambition down; Zed does not stand above C.
-        let fullFirst = try report([
-            player("Abe", 34, [.professionalism: 20, .ambition: 9]), player("Zed", 25, [.professionalism: 15]),
-            player("A", 18), player("B", 18), player("C", 21, [.ambition: 9]), player("Old", 28, [.ambition: 9])])
-        #expect(shape(fullFirst) == [["zed", "a", "b"], ["abe", "c", "old"]])
-        #expect(fullFirst.suggestions.map { $0.members.map(\.isMakingUp) } == [[false, false], [false, true]])
-
-        let equalLeads = try report([lead(name: "Lead B"), lead(name: "Lead A"),
-                                     player("D", 18), player("C", 18), player("B", 18), player("A", 18)])
-        #expect(shape(equalLeads) == [["lead a", "a", "b"], ["lead b", "c", "d"]])
-
-        let equalThirds = try report([lead(), player("Young", 18), player("Bee", 28), player("Ace", 28)])
-        #expect(shape(equalThirds) == [["lead", "young", "ace"]])
-    }
-
-    @Test func aThirdWithNothingToGainHasNoPulls() throws {
-        let result = try report([lead(), player("Young", 18), player("Equal", 28, [.professionalism: 20])])
-        #expect(shape(result) == [["lead", "young", "equal"]])
-        #expect(result.suggestions.first?.members.last?.pulls == [])
-        #expect(result.suggestions.first?.members.last?.isMakingUp == true)
-    }
-
-    @Test func aCandidateCanLead() throws {
-        // By age alone: Leader is 21, five years above the two 16-year-olds, and below the Ambition ceiling himself.
-        let result = try report([player("Leader", 21, [.professionalism: 20, .ambition: 9]),
-                                 player("Kid A", 16, [.ambition: 9]), player("Kid B", 16, [.ambition: 9])])
-        #expect(result.byAgeAlone)
-        #expect(shape(result) == [["leader", "kid a", "kid b"]])
-        #expect(result.notPlaced.isEmpty)
+        let oneShort = try report([senior("Lead"), player("Done", 19, atCeiling.merging([.professionalism: 19]) { _, new in new }),
+                                   third], dynamics: leader)
+        #expect(shape(oneShort) == [["done", "lead", "other"]])
     }
 
     @Test func membersOfARecordedGroupAreLeftOut() throws {
-        let players = [lead(), player("A", 18), player("B", 18)]
-        let live = try report(players, groups: [group(["lead", "x", "y"])])
+        let players = [senior("Lead"), player("A", 18), player("B", 18)]
+        let live = try report(players, dynamics: leader, groups: [group(["lead", "x", "y"])])
         #expect(live.suggestions.isEmpty)
-        #expect(notPlaced(live) == ["a": .leadsTaken, "b": .leadsTaken])
+        #expect(notPlaced(live) == ["a": .influencersTaken, "b": .influencersTaken])
 
-        let otherSquad = try report(players, groups: [group(["lead", "x", "y"], squad: .u21)])
+        let otherSquad = try report(players, dynamics: leader, groups: [group(["lead", "x", "y"], squad: .u21)])
         #expect(otherSquad.suggestions.isEmpty)
 
-        let recordedMentee = try report(players + [player("C", 18)], groups: [group(["c", "x", "y"])])
-        #expect(shape(recordedMentee) == [["lead", "a", "b"]])
-        #expect(recordedMentee.notPlaced.isEmpty)
+        let recordedJunior = try report(players + [player("C", 18)], dynamics: leader, groups: [group(["c", "x", "y"])])
+        #expect(shape(recordedJunior) == [["a", "b", "lead"]])
+        #expect(recordedJunior.notPlaced.isEmpty)
 
-        let ended = try report(players, groups: [group(["lead", "x", "y"], endedOn: today.adding(days: -1))])
-        #expect(shape(ended) == [["lead", "a", "b"]])
+        let ended = try report(players, dynamics: leader, groups: [group(["lead", "x", "y"], endedOn: today.adding(days: -1))])
+        #expect(shape(ended) == [["a", "b", "lead"]])
 
-        let left = try report(players, groups: [group(["lead", "x", "y"], leftOn: ["lead": today.adding(days: -1)])])
-        #expect(shape(left) == [["lead", "a", "b"]])
-    }
-
-    @Test func notPlacedReasons() throws {
-        let nobodyAbove = try report([player("A", 18), player("B", 20)])
-        #expect(notPlaced(nobodyAbove) == ["a": .nobodyAbove, "b": .nobodyAbove])
-
-        let nobodyBetter = try report([player("Old", 34), player("A", 18)])
-        #expect(notPlaced(nobodyBetter) == ["a": .nobodyBetter])
-
-        // Zed gives the greater gain (25, against Abe's 7), so his harm is named although Abe's key is lower and
-        // Pressure comes before Ambition.
-        let wouldHarm = try report([player("Zed", 34, [.professionalism: 20, .ambition: 5]),
-                                    player("Abe", 34, [.professionalism: 15, .pressure: 2]), player("A", 18)])
-        #expect(notPlaced(wouldHarm) == ["a": .wouldHarm(.ambition)])
-
-        let leadsTaken = try report([lead(), player("A", 18), player("B", 18), player("C", 18, [.professionalism: 15])])
-        #expect(notPlaced(leadsTaken) == ["c": .leadsTaken])
-
-        let noThird = try report([lead(), player("A", 18)])
-        #expect(notPlaced(noThird) == ["a": .noThird])
-        #expect(noThird.notPlaced.first == NotPlaced(player: id("A"), name: "A", age: 18, reason: .noThird))
+        let left = try report(players, dynamics: leader,
+                              groups: [group(["lead", "x", "y"], leftOn: ["lead": today.adding(days: -1)])])
+        #expect(shape(left) == [["a", "b", "lead"]])
     }
 
     @Test func notPlacedIsByKey() throws {
@@ -313,31 +421,11 @@ import Testing
         #expect(result.notPlaced.map(\.player.key) == ["abe", "bo", "cid"])
     }
 
-    @Test func byAgeAloneAndStale() throws {
-        let players = [lead(), player("A", 18)]
-        #expect(try report(players).byAgeAlone)
-        #expect(try report(players, dynamics: [id("A"): PlayerDynamics(standing: .others)]).byAgeAlone)
-        #expect(try report(players, dynamics: [id("Elsewhere"): PlayerDynamics(standing: .teamLeader)]).byAgeAlone)
-        #expect(try !report(players, dynamics: [id("A"): PlayerDynamics(standing: .influential)]).byAgeAlone)
-
+    @Test func staleAfterFourWeeks() throws {
+        let players = [senior("Lead"), player("A", 18)]
         #expect(try report(players, updatedOn: today.adding(days: -29)).isStale)
         #expect(try !report(players, updatedOn: today.adding(days: -28)).isStale)
         #expect(try !report(players, updatedOn: nil).isStale)
-    }
-
-    @Test func aSquadWithNobodyOlderHasNoSuggestions() throws {
-        let five = try report([player("A", 16), player("B", 16), player("C", 17), player("D", 18), player("E", 18)])
-        #expect(five.suggestions.isEmpty)
-        #expect(notPlaced(five) == ["a": .nobodyAbove, "b": .nobodyAbove, "c": .nobodyAbove, "d": .nobodyAbove,
-                                    "e": .nobodyAbove])
-
-        let two = try report([player("A", 16), player("B", 18)])
-        #expect(two.suggestions.isEmpty)
-        #expect(notPlaced(two) == ["a": .nobodyAbove, "b": .nobodyAbove])
-
-        let none = try report([])
-        #expect(none.suggestions.isEmpty)
-        #expect(none.notPlaced.isEmpty)
     }
 
     // MARK: Errors
@@ -346,20 +434,20 @@ import Testing
         var noPressure = player("Bravo", 18)
         noPressure.attributes[.pressure] = nil
         #expect(throws: RatingError.missingAttribute(player: "Bravo", attribute: .pressure)) {
-            try report([lead(), noPressure])
+            try report([senior(), noPressure])
         }
 
         var away = noPressure
         away.loanedTo = "Banbury United"
-        _ = try report([lead(), away])
+        _ = try report([senior(), away])
 
         var noLoyalty = player("Bravo", 18)
         noLoyalty.attributes[.loyalty] = nil
-        _ = try report([lead(), noLoyalty])
+        _ = try report([senior(), noLoyalty])
 
         var otherSquad = noPressure
         otherSquad.squad = .u21
-        _ = try report([lead(), otherSquad])
+        _ = try report([senior(), otherSquad])
 
         var alsoMissing = player("Alpha", 18)
         alsoMissing.attributes[.ambition] = nil
@@ -377,7 +465,7 @@ import Testing
         bad.mentoringCeilings = Parameter(ceilings, .derived, source: "test")
         let problems = Mentoring.problems(in: bad)
         #expect(!problems.isEmpty)
-        #expect(throws: PlanError.badParameters(problems)) { try report([lead(), player("A", 18)], parameters: bad) }
+        #expect(throws: PlanError.badParameters(problems)) { try report([senior(), player("A", 18)], parameters: bad) }
 
         // Bad parameters are found before any player is read.
         var noPressure = player("A", 18)
@@ -388,38 +476,44 @@ import Testing
     // MARK: Scope and order
 
     @Test func onlyTheSquadAskedForIsLookedAt() throws {
-        let players = [lead(), player("A", 18, squad: .u21), player("B", 18, squad: .u21)]
-        let u21 = try report(players, squad: .u21)
+        let players = [senior("Lead"), player("A", 18, squad: .u21), player("B", 18, squad: .u21)]
+        let u21 = try report(players, squad: .u21, dynamics: leader)
         #expect(u21.squad == .u21)
         #expect(u21.suggestions.isEmpty)
-        #expect(notPlaced(u21) == ["a": .nobodyAbove, "b": .nobodyAbove])
+        #expect(notPlaced(u21) == ["a": .noInfluence, "b": .noInfluence])
+        #expect(u21.needsHierarchy)
 
-        let firstTeam = try report(players)
+        let firstTeam = try report(players, dynamics: leader)
         #expect(firstTeam.suggestions.isEmpty)
         #expect(firstTeam.notPlaced.isEmpty)
+        #expect(!firstTeam.needsHierarchy)
     }
 
     @Test func inputOrderDoesNotMatter() throws {
-        let players = [lead(), lead([.pressure: 3], name: "Second", age: 33), player("Leader", 21, [.professionalism: 20, .ambition: 9]),
+        let players = [senior("Lead", 34), senior("Second", 33, [.pressure: 3]), senior("Abel", 30),
                        player("Kid A", 16, [.ambition: 9]), player("Kid B", 16, [.ambition: 9]),
                        player("A", 18), player("B", 19, [.professionalism: 12]), player("C", 20, [.pressure: 2]),
                        player("D", 18, [.determination: 4]), player("E", 22), player("Making Up", 28),
                        player("Recorded", 18), player("Loanee", 19, club: "Banbury United")]
         let groups = [group(["recorded", "x", "y"]), group(["second", "z", "w"], endedOn: today)]
-        let dynamics = [id("Lead"): PlayerDynamics(standing: .teamLeader, socialGroup: .core),
-                        id("B"): PlayerDynamics(socialGroup: .secondary("A"))]
-        let forward = try report(players, dynamics: dynamics, groups: groups)
-        #expect(!forward.suggestions.isEmpty)
+        let dynamics = levels(["Lead": .teamLeader, "Second": .highlyInfluential, "Abel": .influential])
+        let arrows = [reading("Abel", "Kid A", .significant), reading("Lead", "E", .none), reading("Second", "C", .light),
+                      reading("Lead", "Making Up", .light), reading("Abel", "D", .average)]
+        let forward = try report(players, dynamics: dynamics, groups: groups, arrows: arrows)
+        #expect(forward.suggestions.count >= 2)
         #expect(!forward.notPlaced.isEmpty)
-        #expect(try report(Array(players.reversed()), dynamics: dynamics, groups: Array(groups.reversed())) == forward)
+        #expect(try report(Array(players.reversed()), dynamics: dynamics, groups: Array(groups.reversed()),
+                           arrows: Array(arrows.reversed())) == forward)
         let shuffled = [7, 2, 11, 0, 9, 4, 12, 1, 6, 3, 10, 5, 8].map { players[$0] }
-        #expect(try report(shuffled, dynamics: dynamics, groups: groups) == forward)
+        let shuffledArrows = [3, 0, 4, 2, 1].map { arrows[$0] }
+        #expect(try report(shuffled, dynamics: dynamics, groups: groups, arrows: shuffledArrows) == forward)
     }
 
     @Test func anInjuredPlayerIsTreatedLikeAnyOther() throws {
-        let fit = try report([lead(), player("A", 18), player("B", 18)])
-        let injured = try report([lead(isInjured: true), player("A", 18, isInjured: true), player("B", 18)])
-        #expect(shape(fit) == [["lead", "a", "b"]])
+        let fit = try report([senior("Lead"), player("A", 18), player("B", 18)], dynamics: leader)
+        let injured = try report([senior("Lead", isInjured: true), player("A", 18, isInjured: true), player("B", 18)],
+                                 dynamics: leader)
+        #expect(shape(fit) == [["a", "b", "lead"]])
         #expect(injured == fit)
     }
 }

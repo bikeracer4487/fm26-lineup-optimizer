@@ -86,9 +86,6 @@ import Testing
         var high = q
         high.mentoringCeilings = Parameter(q.mentoringCeilings.value.mapValues { _ in 21 }, .derived, source: "test")
         #expect(!Mentoring.problems(in: high).isEmpty)
-        var share = q
-        share.mentoringOtherSocialGroupShare = Parameter(1.5, .derived, source: "test")
-        #expect(Mentoring.problems(in: share).contains { $0.contains("mentoringOtherSocialGroupShare") })
         var negative = q
         negative.mentoringWeights = Parameter(q.mentoringWeights.value.mapValues { _ in -1 }, .derived, source: "test")
         #expect(!Mentoring.problems(in: negative).isEmpty)

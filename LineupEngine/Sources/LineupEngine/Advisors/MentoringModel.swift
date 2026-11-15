@@ -165,10 +165,6 @@ public enum Mentoring {
         for (attribute, ceiling) in ceilings.sorted(by: { $0.key.rawValue < $1.key.rawValue }) where !(1...20).contains(ceiling) {
             found.append("mentoringCeilings gives \(attribute.rawValue) a ceiling of \(ceiling), which is not from 1 to 20")
         }
-        let share = parameters.mentoringOtherSocialGroupShare.value
-        if !(0...1).contains(share) {
-            found.append("mentoringOtherSocialGroupShare is \(share), which is not from 0 to 1")
-        }
         let positives: [(String, Int)] = [
             ("mentoringMenteeMaxAge", parameters.mentoringMenteeMaxAge.value),
             ("mentoringSeniorityYears", parameters.mentoringSeniorityYears.value),

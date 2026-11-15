@@ -59,4 +59,33 @@ import Testing
         #expect(exact == 104)
         #expect(sameSideOfNone == 111)
     }
+
+    @Test func theFirstTeamsSuggestionsFromTheReadingsHaveNoHarmfulArrow() throws {
+        let (players, dynamics) = try MentoringFixture.squad()
+        let readings = try MentoringFixture.readings()
+        let q = EngineParameters.fm27
+        let report = try Mentoring.report(MentoringRequest(
+            squad: .firstTeam, players: players, ownClub: "Oxford City", dynamics: dynamics, dynamicsUpdatedOn: nil,
+            groups: [], readings: [:], arrows: readings, names: [:], leaving: [], asOf: MentoringFixture.readOn),
+            parameters: q)
+        #expect(!report.suggestions.isEmpty)
+        let members = report.suggestions.flatMap { $0.members.map(\.player) }
+        #expect(Set(members).count == members.count, "no player is in two groups")
+        let byID = Dictionary(uniqueKeysWithValues: players.map { ($0.id, $0) })
+        let counted = Mentoring.counted(q)
+        for suggestion in report.suggestions {
+            for from in suggestion.members {
+                for to in suggestion.members where to.player != from.player {
+                    guard let read = readings.first(where: { $0.from == from.player && $0.to == to.player }),
+                          read.strength > .none else { continue }
+                    for attribute in counted {
+                        let source = Mentoring.worth(attribute, byID[from.player]!.attributes[attribute]!, parameters: q)
+                        let target = Mentoring.worth(attribute, byID[to.player]!.attributes[attribute]!, parameters: q)
+                        #expect(source >= target, "\(from.name) → \(to.name) in \(attribute.rawValue)")
+                    }
+                }
+            }
+            #expect(suggestion.arrows.contains { !$0.pulls.isEmpty }, "\(suggestion.id) has no arrow with a pull")
+        }
+    }
 }

@@ -39,7 +39,7 @@ import Testing
         MentoringRequest(squad: .firstTeam, players: players, ownClub: "Oxford City", dynamics: dynamics,
                          dynamicsUpdatedOn: nil, groups: groups,
                          readings: Dictionary(uniqueKeysWithValues: readings.map { (id($0.key), $0.value) }),
-                         names: names, leaving: leaving, asOf: day(asOf))
+                         arrows: [], names: names, leaving: leaving, asOf: day(asOf))
     }
 
     func review(_ group: MentoringGroup, _ players: [Player], dynamics: [PlayerID: PlayerDynamics] = [:],

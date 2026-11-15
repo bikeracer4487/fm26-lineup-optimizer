@@ -628,17 +628,15 @@ public struct EngineParameters: Sendable {
     public var removalThinCoverPoints: Parameter<Int>
     /// The numbers behind a fixture's suggested importance.
     public var importanceRules: Parameter<ImportanceSuggestionRules>
-    /// What each attribute is worth, per point, when picking who a young player should learn from.
-    /// Only the order of who gets first call on a lead depends on these.
+    /// What each attribute is worth, per point, when weighing what an arrow gives its target.
+    /// Only the order in which groups are suggested depends on these.
     public var mentoringWeights: Parameter<[Attribute: Int]>
-    /// The value past which an attribute adds nothing to what it is worth as a lead's trait.
+    /// The value past which an attribute adds nothing to what it is worth.
     public var mentoringCeilings: Parameter<[Attribute: Int]>
-    /// A player this age or younger can be a mentee.
+    /// The guess gives an arrow above None only into a player this age or younger.
     public var mentoringMenteeMaxAge: Parameter<Int>
     /// A player this many years older than another of the same standing stands above him.
     public var mentoringSeniorityYears: Parameter<Int>
-    /// The share of a mentee's gain kept when the lead is in a different social group.
-    public var mentoringOtherSocialGroupShare: Parameter<Double>
     /// A recorded group that has had no personality change in this many weeks is reviewed as not working.
     public var mentoringStoppedAfterWeeks: Parameter<Int>
     /// The standings and social groups the owner entered are called stale after this many days.
@@ -960,7 +958,7 @@ public struct EngineParameters: Sendable {
                     + "cup lies between its early round and quarter-final"),
             mentoringWeights: Parameter(
                 [.professionalism: 3, .pressure: 2, .determination: 1, .ambition: 1], .derived,
-                source: "this design's choice: they only order who gets first call on a lead"),
+                source: "this design's choice: they only order which group is suggested first"),
             mentoringCeilings: Parameter(
                 [.professionalism: 20, .pressure: 6, .determination: 10, .ambition: 10], .carriedOverFM26,
                 source: "docs/Research/fm27-mentoring.md findings 9 to 11 and section 5: Pressure matters below about 6 "
@@ -970,7 +968,6 @@ public struct EngineParameters: Sendable {
                 source: "the owner's readings of 14 November 2026: of four players of 24 and over, one took Light from two "
                     + "seniors and the others nothing in eight tries; the line at 23 is this design's"),
             mentoringSeniorityYears: Parameter(5, .derived, source: "this design's choice"),
-            mentoringOtherSocialGroupShare: Parameter(0.5, .derived, source: "this design's choice"),
             mentoringStoppedAfterWeeks: Parameter(
                 13, .derived, source: "this design's choice, from the research's three months, taken as thirteen weeks"),
             mentoringDynamicsStaleAfterDays: Parameter(28, .derived, source: "this design's choice"),

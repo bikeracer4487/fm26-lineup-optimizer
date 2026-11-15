@@ -31,7 +31,8 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        the mentoring groups suggested and the players left without one.
        --standings is a JSON object from a player's key to {"standing": "teamLeader|highlyInfluential|influential|others",
        "socialGroup"?: "core|others|secondary:<name>"}: the hierarchy as the game's Dynamics screen shows it. Without it
-       the groups go by age alone.
+       nobody stands above Others and no group is suggested. The command line takes no arrow readings: every arrow it
+       shows is this tool's guess from the levels, and says so.
        --fixtures is a JSON array of {"id", "date", "opponent", "importance", "overrides"?: {"<slot>": "<player key>"},
        "rejected"?: ["<player key>"], "competition"?: "league|cup|minorCup|friendly",
        "opponentStrength"?: "muchStronger|stronger|similar|weaker|muchWeaker"}. plan ignores competition and
@@ -281,7 +282,8 @@ do {
         let mentoring = imports.map { imported in
             let request = MentoringRequest(
                 squad: imported.squad, players: players, ownClub: ownClub, dynamics: dynamics, dynamicsUpdatedOn: nil,
-                groups: [], readings: [:], names: names, leaving: advisors.removal.advisedToLeave, asOf: options.asOf!)
+                groups: [], readings: [:], arrows: [], names: names, leaving: advisors.removal.advisedToLeave,
+                asOf: options.asOf!)
             return (squad: imported.squad, result: Result { try Mentoring.report(request, parameters: parameters) })
         }
         output = Report.render(header, advice: Report.Advice(

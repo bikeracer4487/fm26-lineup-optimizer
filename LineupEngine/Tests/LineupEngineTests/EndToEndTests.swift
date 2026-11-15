@@ -381,43 +381,48 @@ import Testing
     @Test func mentoringRunsOnTheCapturedSquads() throws {
         let book = try realBook()
         let asOf = Day(year: 2026, month: 11, day: 13)!
-        func report(_ squad: Squad) throws -> (report: MentoringReport, players: [Player]) {
-            let players = book.allPlayers.filter { $0.squad == squad }
-            let request = MentoringRequest(
-                squad: squad, players: book.allPlayers, ownClub: book.ownClub(override: ownClubName), dynamics: [:],
-                dynamicsUpdatedOn: nil, groups: [], readings: [:], names: [:], leaving: [], asOf: asOf)
-            return (try Mentoring.report(request, parameters: .fm27), players)
-        }
-        for squad in [Squad.firstTeam, .u21] {
-            let (result, players) = try report(squad)
-            #expect(result.byAgeAlone)
-            let keys = Set(players.map(\.id))
-            let members = result.suggestions.flatMap { [$0.lead] + $0.members.map(\.player) }
-            #expect(Set(members).count == members.count, "no player is in two groups")
-            #expect(members.allSatisfy(keys.contains), "every member is of the squad asked for")
-            for group in result.suggestions {
-                #expect(Set([group.lead] + group.members.map(\.player)).count == Mentoring.groupSize)
-                #expect(group.members.count == Mentoring.groupSize - 1)
-            }
-        }
-        let firstTeam = try report(.firstTeam).report
-        #expect(!firstTeam.suggestions.isEmpty)
-        let u21 = try report(.u21).report
-        let placed = Set(u21.suggestions.flatMap { [$0.lead] + $0.members.map(\.player) })
-        let unplaced = Set(u21.notPlaced.map(\.player))
-        #expect(!placed.isEmpty || !unplaced.isEmpty)
-        #expect(placed.isDisjoint(with: unplaced))
-        // Every own, young player with something to gain is placed or listed.
         let q = EngineParameters.fm27
-        let candidates = book.allPlayers.filter { player in
-            guard player.squad == .u21, player.age <= q.mentoringMenteeMaxAge.value else { return false }
-            guard case .own = book.loanStatus(of: player, override: ownClubName) else { return false }
-            return Mentoring.counted(q).contains { attribute in
-                (player.attributes[attribute] ?? 0) < (q.mentoringCeilings.value[attribute] ?? 0)
-            }
+        let ownClub = book.ownClub(override: ownClubName)
+        func report(_ squad: Squad, dynamics: [PlayerID: PlayerDynamics] = [:]) throws -> MentoringReport {
+            let request = MentoringRequest(
+                squad: squad, players: book.allPlayers, ownClub: ownClub, dynamics: dynamics,
+                dynamicsUpdatedOn: nil, groups: [], readings: [:], arrows: [], names: [:], leaving: [], asOf: asOf)
+            return try Mentoring.report(request, parameters: q)
         }
-        for player in candidates {
-            #expect(placed.contains(player.id) || unplaced.contains(player.id), "\(player.name) is neither placed nor listed")
+        /// The squad's players not out on loan who belong to the club and are below a ceiling.
+        func candidates(_ squad: Squad) -> Set<PlayerID> {
+            Set(book.allPlayers.filter { player in
+                guard player.squad == squad, case .own = book.loanStatus(of: player, override: ownClubName) else { return false }
+                return Mentoring.counted(q).contains { attribute in
+                    (player.attributes[attribute] ?? 0) < (q.mentoringCeilings.value[attribute] ?? 0)
+                }
+            }.map(\.id))
         }
+
+        // With no levels and no readings every guess is None.
+        for squad in [Squad.firstTeam, .u21] {
+            let result = try report(squad)
+            #expect(result.needsHierarchy)
+            #expect(result.suggestions.isEmpty)
+            #expect(Set(result.notPlaced.map(\.player)) == candidates(squad))
+            #expect(result.notPlaced.allSatisfy { $0.reason == .noInfluence })
+        }
+
+        let present = book.allPlayers.filter { player in
+            guard player.squad == .firstTeam else { return false }
+            if case .loanedOut = book.loanStatus(of: player, override: ownClubName) { return false }
+            return true
+        }
+        let eldest = present.sorted { $0.age != $1.age ? $0.age > $1.age : $0.id.key < $1.id.key }.prefix(3)
+        let leaders = Dictionary(uniqueKeysWithValues: eldest.map { ($0.id, PlayerDynamics(standing: .teamLeader)) })
+        let led = try report(.firstTeam, dynamics: leaders)
+        #expect(!led.needsHierarchy)
+        #expect(!led.suggestions.isEmpty)
+        let keys = Set(present.map(\.id))
+        let members = led.suggestions.flatMap { $0.members.map(\.player) }
+        #expect(Set(members).count == members.count, "no player is in two groups")
+        #expect(members.allSatisfy(keys.contains), "every member is of the first team")
+        for group in led.suggestions { #expect(Set(group.members.map(\.player)).count == Mentoring.groupSize) }
+        #expect(Set(members).isDisjoint(with: led.notPlaced.map(\.player)))
     }
 }

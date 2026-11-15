@@ -1,7 +1,8 @@
 import Foundation
 
-/// The words mentoring advice uses, written once here: level and group names, the standing notes, and the sentences
-/// built from the groups' numbers. No number that reads like a forecast is ever shown, only the two values.
+/// The words mentoring advice uses, written once here: level, group and strength names, the standing notes, and the
+/// sentences built from the groups' arrows and numbers. No number that reads like a forecast is ever shown, only the
+/// two values.
 extension AdvisorText {
     public static func name(_ standing: Standing) -> String {
         switch standing {
@@ -20,11 +21,23 @@ extension AdvisorText {
         }
     }
 
+    /// The game's word for each strength of arrow.
+    public static func name(_ strength: ArrowStrength) -> String {
+        switch strength {
+        case .none: "None"
+        case .light: "Light"
+        case .average: "Average"
+        case .significant: "Significant"
+        }
+    }
+
     /// The one standing note on mentoring advice.
     public static let mentoringNote = "How fast mentoring works in FM27 has not been measured. "
-        + "These groups follow the rules of earlier versions."
+        + "An arrow is the game's own where it has been read, and this tool's guess where it says expected."
 
-    public static let mentoringByAgeAlone = "No hierarchy entered for this squad: these groups go by age alone."
+    /// When no player of the squad has a level above Others.
+    public static let mentoringNeedsHierarchy = "Enter this squad's hierarchy first: mentoring needs each player's "
+        + "level, and age alone creates no influence."
 
     /// "No group to suggest." when the report has none.
     public static let noGroupToSuggest = "No group to suggest."
@@ -41,38 +54,41 @@ extension AdvisorText {
         return "The hierarchy was last updated \(weeks) \(weeks == 1 ? "week" : "weeks") ago. Check it against \(place)."
     }
 
-    /// "Led by Hart (34, Team Leader)".
-    public static func lead(_ group: SuggestedGroup) -> String {
-        "Led by \(group.leadName) (\(group.leadAge), \(name(group.leadStanding)))"
+    /// "McEachran → Clark".
+    public static func arrowTitle(_ arrow: GroupArrow) -> String {
+        "\(arrow.fromName) → \(arrow.toName)"
     }
+
+    /// Beside an arrow that is this tool's guess.
+    public static let expectedNotRead = "expected, not read"
+
+    /// Beside an arrow with no pull.
+    public static let nothingToGain = "nothing to gain"
+
+    /// Under a suggestion that rests on a guess.
+    public static let setAndRecordArrows = "Set this group in the game and record its arrows."
 
     /// "Professionalism 8, towards 17".
     public static func pull(_ pull: Pull) -> String {
         "\(pull.attribute.rawValue) \(pull.value), towards \(pull.towards)"
     }
 
-    public static let makingUpTheGroup = "Making up the group"
-
-    public static func caution(_ caution: LeadCaution, leadName: String) -> String {
+    /// `names` gives each player's name; a player it lacks is "A player", never his key.
+    public static func caution(_ caution: MemberCaution, names: [PlayerID: String]) -> String {
         switch caution {
-        case .onLoanHere: "\(leadName) is on loan here: the group ends when he goes back."
-        case .advisedToLeave: "\(leadName) is advised to leave: the group ends when he goes."
+        case .onLoanHere(let id): "\(names[id] ?? "A player") is on loan here: the group ends when he goes back."
+        case .advisedToLeave(let id): "\(names[id] ?? "A player") is advised to leave: the group ends when he goes."
         }
-    }
-
-    public static func otherSocialGroup(leadName: String) -> String {
-        "In a different social group from \(leadName): likely a weaker influence"
     }
 
     public static func notPlaced(_ player: NotPlaced) -> String {
         let who = "\(player.name) (\(player.age))"
         return switch player.reason {
-        case .nobodyAbove: "\(who): nobody in this squad stands above him."
-        case .nobodyBetter: "\(who): nobody who stands above him in this squad is better where it counts."
-        case .wouldHarm(let attribute):
-            "\(who): those who are better where it counts would do him harm in \(attribute.rawValue)."
-        case .leadsTaken: "\(who): the players who could lead him are already in a group."
-        case .noThird: "\(who): no third player could be found to make up a group with him and his lead."
+        case .takesNothing: "\(who): he has taken nothing from the players tried with him so far."
+        case .noInfluence: "\(who): nobody in this squad is expected to influence him."
+        case .nothingToGain: "\(who): nobody who influences him is better where it counts."
+        case .wouldHarm: "\(who): every group that would help him would pull a player down."
+        case .influencersTaken: "\(who): the players who could influence him are already in a group."
         }
     }
 

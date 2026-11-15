@@ -92,7 +92,7 @@ import Testing
         let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
         let expected: [(String, Evidence)] = [
             ("mentoringWeights", .derived), ("mentoringCeilings", .carriedOverFM26), ("mentoringMenteeMaxAge", .fm27Observation),
-            ("mentoringSeniorityYears", .derived), ("mentoringOtherSocialGroupShare", .derived),
+            ("mentoringSeniorityYears", .derived),
             ("mentoringStoppedAfterWeeks", .derived), ("mentoringDynamicsStaleAfterDays", .derived),
             ("mentoringGuess", .derived), ("mentoringStrengthWeights", .derived), ("mentoringTakesNothingAfter", .derived)]
         for (name, evidence) in expected {
@@ -104,7 +104,7 @@ import Testing
         #expect(q.mentoringCeilings.value == [.professionalism: 20, .pressure: 6, .determination: 10, .ambition: 10])
         #expect(q.mentoringMenteeMaxAge.value == 23)
         #expect(q.mentoringSeniorityYears.value == 5)
-        #expect(q.mentoringOtherSocialGroupShare.value == 0.5)
+        #expect(!listed.keys.contains("mentoringOtherSocialGroupShare"))
         #expect(q.mentoringStoppedAfterWeeks.value == 13)
         #expect(q.mentoringDynamicsStaleAfterDays.value == 28)
         #expect(q.mentoringGuess.value == [.teamLeader: .average, .highlyInfluential: .light, .influential: .light, .others: .none])

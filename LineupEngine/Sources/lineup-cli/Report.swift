@@ -246,18 +246,20 @@ enum Report {
             case .success(let value): report = value
             }
             out.append("  " + AdvisorText.mentoringNote)
-            if report.byAgeAlone { out.append("  " + AdvisorText.mentoringByAgeAlone) }
+            if report.needsHierarchy { out.append("  " + AdvisorText.mentoringNeedsHierarchy) }
             if report.suggestions.isEmpty { out.append("  " + AdvisorText.noGroupToSuggest) }
             for group in report.suggestions {
-                out.append("  " + AdvisorText.lead(group) + mark(group.basis))
-                for caution in group.cautions { out.append("      ! " + AdvisorText.caution(caution, leadName: group.leadName)) }
-                for member in group.members {
-                    let pulls = member.pulls.map(AdvisorText.pull).joined(separator: " · ")
-                    out.append("    \(member.name) (\(member.age))   " + (member.isMakingUp ? AdvisorText.makingUpTheGroup + (pulls.isEmpty ? "" : ": ") : "") + pulls)
-                    if member.inDifferentSocialGroup {
-                        out.append("        " + AdvisorText.otherSocialGroup(leadName: group.leadName))
-                    }
+                out.append("  " + group.members.map(\.name).joined(separator: ", ") + mark(group.basis))
+                for arrow in group.arrows {
+                    let seen = arrow.arrow.readOn.map { "read \($0.iso)" } ?? AdvisorText.expectedNotRead
+                    let pulls = arrow.pulls.isEmpty
+                        ? AdvisorText.nothingToGain : arrow.pulls.map(AdvisorText.pull).joined(separator: " · ")
+                    out.append("    " + AdvisorText.arrowTitle(arrow) + "   " + AdvisorText.name(arrow.arrow.strength)
+                               + " · " + seen + "   " + pulls)
                 }
+                if !group.isRead { out.append("    " + AdvisorText.setAndRecordArrows) }
+                let names = Dictionary(uniqueKeysWithValues: group.members.map { ($0.player, $0.name) })
+                for caution in group.cautions { out.append("    ! " + AdvisorText.caution(caution, names: names)) }
             }
             if !report.notPlaced.isEmpty {
                 out += ["", "  Not placed"]
