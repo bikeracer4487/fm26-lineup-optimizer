@@ -58,6 +58,11 @@ public enum OpponentAdvisor {
         let ownIDs = Set(own.map(\.id))
         let shared = theirs.filter { ownIDs.contains($0.id) }.count
         guard shared * 2 <= theirs.count else { throw OpponentReadingError.ownSquadPasted }
+        // Rows that carry the owner's own club are his squad, whatever keys they have.
+        if let ownClub, let rowsClub = SquadBook.commonClub(among: theirs),
+           PlayerID.normalise(rowsClub) == PlayerID.normalise(ownClub) {
+            throw OpponentReadingError.ownSquadPasted
+        }
 
         let trimmedName = named.trimmingCharacters(in: .whitespacesAndNewlines)
         let club: String

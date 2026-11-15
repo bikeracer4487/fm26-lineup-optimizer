@@ -42,6 +42,7 @@ public struct FixtureDraft: Equatable, Sendable {
     public var opponent: String {
         didSet {
             if !Self.isBlank(oldValue) && Self.isBlank(opponent) { problemIsDue = true }
+            if oldValue != opponent { pasteProblem = nil }
         }
     }
     public var importance: Importance

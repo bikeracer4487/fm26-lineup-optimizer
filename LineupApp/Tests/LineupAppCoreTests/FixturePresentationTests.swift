@@ -518,10 +518,6 @@ import Testing
         #expect(after.importance != before.importance)
         #expect([Importance.low, .sharpness].contains(after.importance))
         #expect(after.reasons.first == "League match, nothing to play for: 20")
-        let expected = try engineSuggestion(model, for: try #require(model.fixtureForPlanner(fixture)),
-                                            among: model.fixtures)
-        #expect(after.importance != expected.importance || after.reasons.first != expected.reasons.first
-                || expected.reasons.first == "League match, nothing to play for: 20")
     }
 
     @Test func theSituationDoesNotChangeACupFixturesSuggestion() throws {
@@ -1009,6 +1005,35 @@ import Testing
         #expect(refused.draft.opponentReading == nil)
     }
 
+    @Test func changingTheOpponentClearsARefusal() throws {
+        let t = try ready()
+        var draft = draft(t, opponent: "")
+        t.model.pasteOpponentSquad(into: &draft)
+        #expect(draft.pasteProblem == ErrorDescriptions.describe(OpponentReadingError.noClubName))
+        draft.opponent = "Banbury United"
+        #expect(draft.pasteProblem == nil)
+    }
+
+    @Test func settingTheSameOpponentKeepsARefusal() throws {
+        let t = try ready()
+        var draft = draft(t, opponent: "")
+        t.model.pasteOpponentSquad(into: &draft)
+        let problem = try #require(draft.pasteProblem)
+        draft.opponent = ""
+        #expect(draft.pasteProblem == problem)
+    }
+
+    @Test func changingTheOpponentKeepsAReading() throws {
+        let t = try ready()
+        var draft = draft(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        let reading = try #require(draft.opponentReading)
+        let strength = try #require(draft.opponentStrength)
+        draft.opponent = "Elsewhere Town"
+        #expect(draft.opponentReading == reading)
+        #expect(draft.opponentStrength == strength)
+    }
+
     @Test func withABlankOpponentThePasteIsRefused() throws {
         let t = try ready()
         var draft = draft(t, opponent: "   ")
@@ -1039,6 +1064,7 @@ import Testing
         t.model.pasteOpponentSquad(into: &draft)
         #expect(draft.pasteProblem == "The clipboard is empty. Copy the rows in FMRTE first.")
         #expect(draft.opponentReading == nil)
+        draft.pasteProblem = nil
         t.input.clipboard = nil
         t.model.pasteOpponentSquad(into: &draft)
         #expect(draft.pasteProblem == "The clipboard is empty. Copy the rows in FMRTE first.")

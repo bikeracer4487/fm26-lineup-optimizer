@@ -560,6 +560,7 @@ Expected: all pass, no warnings.
 - **Task 6: "Use it" sits under a row's suggestion line, not beside it**, since the importance column has no room. The fixture editor's card went from 480 to 520 points wide so "Paste their squad" fits beside the strength menu. The suggestion line's mark now stays with its last word when the line wraps. Two sample-data builders give the pictures a draft with a reading and one with a refused paste.
 - **The game plan research arrived during the build** (`docs/Research/fm27-match-simulation-game-plans.md`). It found nothing on how the game judges a favourite, and reports FM27 engine tests in which current ability had no measurable effect on results once attributes were held fixed. The design's Evidence section records this; the measure was built as approved.
 - **The pictures were checked** in `LineupApp/.build/pictures-opponent`: `fixtures-*`, `fixtures-situation-*`, `fixtures-editor-reading-*` and `fixtures-editor-refused-*`. Light and dark are the same by design.
+- **After the whole-branch review, a paste whose rows carry the owner's own club is refused as his own squad, and a refusal line goes when the opponent is changed.**
 - **The app was not clicked through by hand, and was not installed** (Step 5 of this task is the owner's).
 
 ## Known limits and small faults left
@@ -574,6 +575,13 @@ Expected: all pass, no warnings.
 - Home or away is not recorded on a fixture.
 - The league situation is one choice for every league fixture; cups have no stage.
 - Small faults: the list of clubs in a reading sorts capitals before lower case, and "as first spelt" follows the order of the pasted rows; the league reason lines repeat the situations' names in lower case rather than building on them; the command line's `--league-situation` has no test; `setLeagueSituation` saves even when the value is unchanged; a few tests assert less than their names say (the nil-clipboard case, which refusal the too-few-own-players test gets, the no-`Id` test, the half-second boundary resting on floating-point sums); VoiceOver may read the suggestion line's mark; the look of "Use it" in the live window has not been checked by hand, since pictures draw an inactive window.
+- An own-squad paste is caught by identity, or by club when the rows carry one. The owner's squad copied from the team grid (no club column) and keyed differently from the squad he holds reads as an opponent; the sentence shows near-equal averages and the name typed.
+- "More than half the rows" in that check is a number in the code, not in `EngineParameters`: it guards a refusal, not a rating or selection rule.
+- "Use it" ignores a second click within half a second of the end of the last replan, so taking several suggestions quickly may drop one; for the owner's hands-on check.
+- The editor's card is taller with a reading or a refusal and the Fixtures screen does not scroll, so in a short window Cancel and Save may fall below the edge (Return and Escape still work); no picture draws the editor open inside the smallest window; for the owner's hands-on check.
+- Opening another fixture's editor discards an unsaved paste without asking, as it discards any unsaved change.
+- With no club of the owner's known (team-grid squads and no club set in Settings), his loanees read as away and are left out of his eleven, as the planner leaves them out; the Squad screen warns, the reading's sentence does not.
+- `--league-situation` without `--fixtures` does nothing and says nothing.
 
 ## For the owner
 

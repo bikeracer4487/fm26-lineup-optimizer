@@ -164,6 +164,31 @@ import Testing
         }
     }
 
+    @Test func rowsCarryingTheOwnersClubAreRefused() throws {
+        let rows = side(club: "oxford city", abilities: Array(repeating: 100, count: 11))
+        #expect(throws: OpponentReadingError.ownSquadPasted) { try read(theirs: rows, ownClub: "Oxford City") }
+    }
+
+    @Test func rowsCarryingAnotherClubAreNotRefusedByClub() throws {
+        let rows = side(club: "Banbury United", abilities: Array(repeating: 100, count: 11))
+        #expect(try read(theirs: rows, ownClub: "Oxford City").club == "Banbury United")
+    }
+
+    @Test func withNoOwnClubKnownRowsCarryingAClubAreRead() throws {
+        let rows = side(club: "Oxford City", abilities: Array(repeating: 100, count: 11))
+        #expect(try read(theirs: rows, ownClub: nil).club == "Oxford City")
+    }
+
+    @Test func aNameTypedAsTheOwnersClubIsNotRefusedByClub() throws {
+        // Only a club on the rows refuses; the typed name is the owner's to get wrong, and the sentence shows it.
+        let reading = try read(theirs: eleven(all: 100), named: "Oxford City", ownClub: "Oxford City")
+        #expect(reading.club == "Oxford City")
+    }
+
+    @Test func theOwnSquadRefusalComesBeforeTheClubName() throws {
+        #expect(throws: OpponentReadingError.ownSquadPasted) { try read(theirs: own, named: "") }
+    }
+
     @Test func halfTheRowsBeingTheOwnersIsNotRefused() throws {
         let twelveWithSix = side(abilities: Array(repeating: 100, count: 6)) + Array(own.prefix(6))
         #expect(try read(theirs: twelveWithSix).theirTotal == 1100)

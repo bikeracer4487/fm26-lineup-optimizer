@@ -10,7 +10,7 @@ The suggested importance of a fixture rests on two things the tool cannot see to
 - **What the league match is worth.** Every league match starts from one value, the one for a club in contention. A match after the title is won is worth far less, and is the place to start young players; a match in a title race or a relegation fight is worth more. The owner asked for a way to say where the club stands.
 - **How strong the opponent is.** "Their strength" is a menu of five steps the owner picks by judgement, and nothing helps him pick. He asked to paste the opponent's squad from FMRTE and have the tool set it.
 
-A third request, a recommended game plan for a simulated match on Match Selection, waits for its research (`docs/Research/fm27-match-simulation-game-plans.md`, not yet written) and has its own design after it. It is expected to read the opponent's strength this design records.
+A third request, a recommended game plan for a simulated match on Match Selection, had its research added on 15 November 2026 (`docs/Research/fm27-match-simulation-game-plans.md`) and has its own design to come. It is expected to read the opponent's strength this design records.
 
 ## Goals
 
@@ -103,7 +103,7 @@ The owner asked for the paste and left the measure to the builder. These are thi
 - **Refusals.** Each is a plain sentence from the engine, shown in the editor, and none changes the draft:
   - the clipboard is empty, or the importer refuses the rows (its own sentences, as on the Squad screen);
   - the owner has no squad imported;
-  - the pasted players are the owner's own: more than half of them are players of his squads, by identity (revised: with no club column there is no club to compare);
+  - the pasted players are the owner's own: more than half of them are players of his squads, by identity (revised: with no club column there is no club to compare), or rows that carry the owner's own club (added after the whole-branch review);
   - the pasted rows carry no club and the fixture's opponent is still blank, so there is no name to tell a loan there from a loan away (revised);
   - either side has fewer than eleven fit players who are not away on loan (revised).
 - **The evidence note on a suggestion.** Unchanged. Once the fixture is saved the strength is the owner's choice, whether he picked it or took the paste's, so the engine's fixture does not record where it came from. The reading's own sentence carries the tool's-estimate label (this design's call).
