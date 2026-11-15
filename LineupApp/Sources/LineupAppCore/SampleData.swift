@@ -389,15 +389,17 @@ public enum SampleData {
     static let youngToDevelopName = "Brayden Daniel"
     /// The U21 player `modelWithYoungPlayers` makes a 16-year-old on a youth contract markedly below the squad.
     static let youngToReleaseName = "Kauan Bitencourt de Oliveira"
-    /// The U21 player of 19 `modelWithYoungPlayers` gives two years left on his contract.
+    /// The U21 player of 19 `modelWithYoungPlayers` gives two years left on his contract and a potential worth
+    /// developing.
     static let youngToLoanName = "Tyrae Njogu"
 
     /// The sample model with three U21 players changed in its copy of the squads, as an import of the changed squads
     /// would change them, and four more matches confirmed before the import, so each young player's starts are counted:
     /// a 16-year-old on a youth contract worth developing, kept to develop; a 16-year-old on a youth contract markedly
     /// below the squad (ability 20, potential 30, and every attribute but his personality halved), released; and a
-    /// 19-year-old worth developing with two years left who has not started, loaned for matches. The first team's first
-    /// choices are kept to play.
+    /// 19-year-old with two years left who has not started, loaned for matches: his potential is raised from 48 to 85,
+    /// so his reach could pass the first choice at his best slot, since a player whose reach is markedly lower than the
+    /// squad's is not worth developing. The first team's first choices are kept to play.
     @MainActor public static func modelWithYoungPlayers(repositoryRoot: URL) throws -> AppModel {
         let model = try build(repositoryRoot: repositoryRoot).model
         let changed = [youngToDevelopName, youngToReleaseName, youngToLoanName]
@@ -433,6 +435,7 @@ public enum SampleData {
                 }
             case youngToLoanName:
                 player.monthsLeft = 24
+                player.potentialAbility = 85
             default: break
             }
         }

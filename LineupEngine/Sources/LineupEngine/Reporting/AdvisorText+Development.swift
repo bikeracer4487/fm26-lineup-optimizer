@@ -111,10 +111,10 @@ extension AdvisorText {
 
     /// The lines that show a young player's outlook and advice, in order: how his reach was worked out, where he stands
     /// at his best slot when he has a standing, whether he gets matches here when that line adds something, and why the
-    /// action. The matches line is shown for a player kept to play, loaned for matches or kept to develop, except where
-    /// the why already says his starts were not counted (a second choice kept to play, or too few matches confirmed) or
-    /// where matches do not come into it (kept to develop at his age). Positions are named through `names`. Empty for a
-    /// player without an outlook.
+    /// action, each ending with a full stop. The matches line is shown for a player kept to play, loaned for matches or
+    /// kept to develop, except where the why already says his starts were not counted (a second choice kept to play, or
+    /// too few matches confirmed) or where matches do not come into it (kept to develop at his age). Positions are named
+    /// through `names`. Empty for a player without an outlook.
     public static func youngLines(_ advice: RemovalAdvice, names: (SlotID) -> String) -> [String] {
         guard let outlook = advice.outlook else { return [] }
         var lines = [reachWorking(outlook.estimate)]
@@ -128,7 +128,9 @@ extension AdvisorText {
         case .release, .terminate, .sell, .monitor, .keep: showsMatches = false
         }
         if showsMatches, let matches = advice.matchesHere { lines.append(matchesHere(matches)) }
-        lines.append(why(advice.action, for: advice))
+        // Every line here is a sentence; a why written for the table without a full stop gains one.
+        let reason = why(advice.action, for: advice)
+        lines.append(reason.hasSuffix(".") ? reason : reason + ".")
         return lines
     }
 
@@ -183,12 +185,21 @@ extension AdvisorText {
         }
     }
 
-    /// Why a player is watched; a player without an outlook keeps the general sentence.
-    static func whyWatch(_ reason: WatchReason?) -> String {
+    /// Why a player is watched; a player without an outlook keeps the general sentence. One not worth developing is
+    /// told how far his reach goes, from `level`, his outlook's level.
+    static func whyWatch(_ reason: WatchReason?, level: ReachLevel?) -> String {
+        let general = "Not enough against him to act: watch how he does"
         switch reason {
-        case .notWorthDeveloping?: "This tool does not expect him to reach the second eleven: watch how he does."
-        case .neededForCover?: "He is needed as cover here, so a loan would leave the squad short."
-        case nil: "Not enough against him to act: watch how he does"
+        case .notWorthDeveloping?:
+            switch level {
+            case .couldBeCover?: return "This tool expects him to become cover at best: watch how he does."
+            case .markedlyLower?: return "This tool does not expect him to reach the level of the squad: watch how he does."
+            // Player Removal watches a player for this reason only at the two levels above; one built otherwise is said
+            // plainly.
+            case .couldPassFirst?, .couldMakeSecond?, nil: return general
+            }
+        case .neededForCover?: return "He is needed as cover here, so a loan would leave the squad short."
+        case nil: return general
         }
     }
 

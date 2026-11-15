@@ -829,8 +829,8 @@ import Testing
         #expect(a.reasons == [reason("Not expected to reach the level of the squad at any position", 70),
                               reason("Cover at left back would be thin without him", -30)])
         #expect(a.score == 40 && a.level == .medium && a.action == .monitor)
-        // Step 1 decides it before the cover: not worth developing.
-        #expect(a.watchReason == .notWorthDeveloping)
+        // Not worth developing, and needed for cover: watched for that.
+        #expect(a.watchReason == .neededForCover)
     }
 
     @Test func oneNotNeededScoresSeventy() throws {
@@ -1019,8 +1019,7 @@ import Testing
             #expect(a.level == .keep)
             #expect(a.action == .monitor && a.keepReason == nil, "\(age)")
             #expect(a.watchReason == .notWorthDeveloping, "\(age)")
-            #expect(AdvisorText.why(a.action, for: a)
-                    == "This tool does not expect him to reach the second eleven: watch how he does.")
+            #expect(AdvisorText.why(a.action, for: a) == "This tool expects him to become cover at best: watch how he does.")
         }
         // Worth developing, the same player is loaned for matches.
         #expect(try advice(try prospect(age: 19, months: 24)).action == .loanForMatches)
@@ -1036,6 +1035,105 @@ import Testing
         try #require(first19.outlook?.level == .couldBeCover || first19.outlook?.level == .markedlyLower)
         #expect(first19.action == .play && first19.watchReason == nil)
         #expect(AdvisorText.why(first19.action, for: first19) == "He is first choice here.")
+    }
+
+    /// The planner's squad with its second-choice left back aged `age`, at current ability 40 and potential `potential`,
+    /// with 24 months left and every attribute `all` but Professionalism 20 and Ambition and Determination 10 (so he
+    /// grows at the table's full rate) and Consistency, Important Matches and Temperament 10 (so no rule reads them). With
+    /// `spare`, a solid left back of 28 rated below him joins, so cover there is not thin without him. Left back is the
+    /// only slot he can play: he is second choice there, behind "D L first", with no second choice of his own.
+    func weakSecond(age: Int, potential: Int, all: Int = 8, spare: Bool = true) throws -> (players: [Player], id: PlayerID) {
+        let id = PlannerFixture.id(.D_L, "second")
+        let positions = [assignment(.D_L).ipPosition, assignment(.D_L).oopPosition]
+        var players = try squad(changing: id) { p in
+            p.age = age; p.currentAbility = 40; p.potentialAbility = potential; p.monthsLeft = 24
+            p.attributes = p.attributes.mapValues { _ in all }
+            p.attributes[.professionalism] = 20; p.attributes[.ambition] = 10; p.attributes[.determination] = 10
+            for attribute in [Attribute.consistency, .importantMatches, .temperament] { p.attributes[attribute] = 10 }
+        }
+        if spare {
+            players.append(Player.fixture(name: "Spare", age: 28, all: 3,
+                                          familiarity: Dictionary(positions.map { ($0, 20) }, uniquingKeysWith: { a, _ in a }),
+                                          currentAbility: 100, potentialAbility: 100))
+        }
+        return (players, id)
+    }
+
+    /// The weak second choice's potential that takes his reach at left back to `share` of the first choice's rating.
+    func weakSecondPotential(reaching share: Double, age: Int) throws -> Int {
+        let probe = try weakSecond(age: age, potential: 40)
+        let (his, first, _) = try ratings(of: probe.id, at: .D_L, in: probe.players)
+        return potential(reaching: share * first, his: his, current: 40)
+    }
+
+    @Test func aPlayerNotWorthDevelopingIsNeverDevelopedOrLoaned() throws {
+        // In the second eleven, not getting matches (none of six started), 24 months left, not needed for cover, and with
+        // no growth markedly lower: below even the youngest's bar of 70%.
+        let probe = try weakSecond(age: 19, potential: 40)
+        let (his, first, _) = try ratings(of: probe.id, at: .D_L, in: probe.players)
+        try #require(his < 0.7 * first)
+        for age in [19, 16] {
+            let (players, id) = try weakSecond(age: age, potential: 40)
+            let a = try #require(try report(players, history: sixMatches(starting: id, starts: 0)).advice
+                .first { $0.player == id })
+            try #require(a.tier == .second(.D_L) && a.matchesHere?.basis == .startedTooFew)
+            try #require(thinReasons(a).isEmpty)
+            #expect(a.outlook?.level == .markedlyLower, "\(age)")
+            #expect(a.outlook?.best?.secondChoice == nil, "\(age)")
+            #expect(a.level == .keep || a.level == .medium, "\(age)")
+            #expect(a.action == .monitor && a.watchReason == .notWorthDeveloping && a.keepReason == nil, "\(age)")
+            #expect(AdvisorText.why(a.action, for: a)
+                    == "This tool does not expect him to reach the level of the squad: watch how he does.")
+        }
+        // The same player worth developing (his reach at the bar, so he could make the second eleven): loaned for
+        // matches at 19, kept to develop at 16.
+        let expected: [Int: RemovalAction] = [19: .loanForMatches, 16: .develop]
+        for age in [19, 16] {
+            let bar = age <= parameters.youngestUpToAge.value
+                ? parameters.markedlyLowerShareYoungest.value : parameters.markedlyLowerShare.value
+            let (players, id) = try weakSecond(age: age, potential: try weakSecondPotential(reaching: bar, age: age))
+            let a = try #require(try report(players, history: sixMatches(starting: id, starts: 0)).advice
+                .first { $0.player == id })
+            try #require(a.tier == .second(.D_L) && a.matchesHere?.basis == .startedTooFew)
+            #expect(a.outlook?.level == .couldMakeSecond, "\(age)")
+            #expect(a.action == expected[age], "\(age)")
+        }
+    }
+
+    @Test func aPlayerNotWorthDevelopingWhoPlaysIsKeptToPlay() throws {
+        // Markedly lower, in the second eleven: getting his matches (two of six started, or a solid second choice with
+        // none confirmed) he is kept to play, at 16 as at 19.
+        for age in [19, 16] {
+            let (players, id) = try weakSecond(age: age, potential: 40)
+            for history in [sixMatches(starting: id, starts: 2), []] {
+                let a = try #require(try report(players, history: history).advice.first { $0.player == id })
+                try #require(a.outlook?.level == .markedlyLower && a.tier == .second(.D_L))
+                #expect(a.matchesHere?.isEnough == true, "\(age)")
+                #expect(a.action == .play && a.watchReason == nil && a.keepReason == nil, "\(age)")
+            }
+        }
+        // Getting his matches but in neither eleven: watched, not kept to play.
+        let probe = youngster(potentialAbility: 80)
+        let (his, first, _) = try ratings(of: probe.id, at: .D_L, in: try squad([probe]))
+        let cover = youngster(age: 19, potentialAbility: potential(reaching: 0.8 * first, his: his)) { $0.monthsLeft = 24 }
+        let started = try advice(cover, history: sixMatches(starting: cover.id, starts: 2))
+        try #require(started.tier == .backup && started.outlook?.level == .couldBeCover)
+        try #require(started.matchesHere?.isEnough == true)
+        #expect(started.action == .monitor && started.watchReason == .notWorthDeveloping)
+    }
+
+    @Test func aPlayerNotWorthDevelopingWhoIsNeededForCoverIsWatchedForThat() throws {
+        // Without the spare left back, cover there would be thin without him.
+        for age in [19, 16] {
+            let (players, id) = try weakSecond(age: age, potential: 40, spare: false)
+            let a = try #require(try report(players, history: sixMatches(starting: id, starts: 0)).advice
+                .first { $0.player == id })
+            try #require(a.outlook?.level == .markedlyLower && a.tier == .second(.D_L))
+            try #require(a.matchesHere?.isEnough == false)
+            #expect(thinReasons(a) == [reason("Cover at left back would be thin without him", -30)], "\(age)")
+            #expect(a.action == .monitor && a.watchReason == .neededForCover, "\(age)")
+            #expect(AdvisorText.why(a.action, for: a) == "He is needed as cover here, so a loan would leave the squad short.")
+        }
     }
 
     @Test func aFalseProspectIsSoldNotTerminated() throws {

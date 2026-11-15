@@ -133,8 +133,9 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
 /// on how far he could grow, where he stands, whether he gets matches here and why that action.
 public struct YoungRow: Identifiable, Equatable, Sendable {
     public let id: PlayerID
-    /// "Tom Reed · 16 · striker": his name, his age and his best slot's position in words, the position left out when
-    /// he has no best slot.
+    /// "Tom Reed · 16 · striker": his name, his age and, in words, the position of the slot he is first choice at (the
+    /// first in the tactic's order, as his standing line names it, else his slot in the first eleven), or of his best
+    /// slot when he is first choice nowhere; the position is left out when he has neither.
     public let titleText: String
     /// The engine's name for his action: "Keep and develop".
     public let actionText: String
@@ -147,7 +148,9 @@ public struct YoungRow: Identifiable, Equatable, Sendable {
     init?(_ advice: RemovalAdvice) {
         guard let outlook = advice.outlook else { return nil }
         let age = outlook.estimate.age
-        let position = outlook.best.map { RemovalPresentation.positionName($0.slot) }
+        var home = outlook.slots.first(where: \.isFirstChoice)?.slot
+        if home == nil, case .first(let slot)? = advice.tier { home = slot }
+        let position = (home ?? outlook.best?.slot).map(RemovalPresentation.positionName)
         id = advice.player
         titleText = ([advice.name, String(age)] + [position].compactMap { $0 }).joined(separator: " · ")
         actionText = AdvisorText.name(advice.action)

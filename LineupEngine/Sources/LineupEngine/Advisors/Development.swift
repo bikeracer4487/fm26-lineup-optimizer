@@ -265,14 +265,17 @@ public enum Development {
         return rating * (offset + ability) / (offset + current)
     }
 
+    /// Below the bar (a share of the first choice's compared rating) he is markedly lower whoever the second choice is,
+    /// so a weak second choice, or none, does not lift a weak young player; at or above it, he could make the second
+    /// eleven when he reaches the second choice or there is none, and could become cover otherwise.
     private static func level(_ player: Player, reachRating: Double, firstChoice: Rival, secondChoice: Rival?,
                               parameters: EngineParameters) -> ReachLevel {
         if reachRating + roundingNoise >= firstChoice.compared { return .couldPassFirst }
-        // No second choice, or he is the second choice himself: there is nobody else to make the second eleven past.
-        if secondChoice.map({ reachRating + roundingNoise >= $0.compared }) ?? true { return .couldMakeSecond }
         let bar = player.age <= parameters.youngestUpToAge.value
             ? parameters.markedlyLowerShareYoungest.value : parameters.markedlyLowerShare.value
-        return reachRating + roundingNoise >= bar * firstChoice.compared ? .couldBeCover : .markedlyLower
+        if reachRating + roundingNoise < bar * firstChoice.compared { return .markedlyLower }
+        // No second choice, or he is the second choice himself: there is nobody else to make the second eleven past.
+        return secondChoice.map({ reachRating + roundingNoise >= $0.compared }) ?? true ? .couldMakeSecond : .couldBeCover
     }
 
     /// Walks both players forward a season at a time: index k of `bySeason` is k seasons on. A first choice who is

@@ -376,7 +376,8 @@ import Testing
     /// `basis`, with `action`, `keepReason` and whether he is on a youth contract.
     private func young(_ key: String, name: String, age: Int, action: RemovalAction = .play, slot: SlotID? = .ST_C,
                        basis: MatchesHereBasis = .startedTooFew, keepReason: KeepReason? = nil,
-                       onYouthContract: Bool = false, score: Int = -20) -> RemovalAdvice {
+                       onYouthContract: Bool = false, score: Int = -20, firstAt: [SlotID] = [],
+                       tier: SquadTier? = nil) -> RemovalAdvice {
         let estimate = ReachEstimate(age: age, current: 55, potential: 140, professionalism: 15, ambition: 10,
                                      determination: 10, seasonGrowth: 13.3, bySeason: [55, 68, 140],
                                      reachesPotential: true, ambitionSlows: false, determinationSlows: false,
@@ -387,10 +388,15 @@ import Testing
                                            compared: 70, isAgeNamed: true),
                         secondChoice: nil, band: .onCourse, pointsNeeded: 14, level: .couldPassFirst)
         }
-        let outlook = Outlook(player: PlayerID(key: key), estimate: estimate, slots: best.map { [$0] } ?? [], best: best,
-                              level: .couldPassFirst, average: slot == nil ? 70 : nil)
+        // Slots he is first choice at, then his best, as given: the tests give them in the tactic's order.
+        let home = firstAt.map { slot in
+            SlotOutlook(slot: slot, rating: 70, reachRating: 90, isFirstChoice: true, firstChoice: nil, secondChoice: nil,
+                        band: nil, pointsNeeded: nil, level: nil)
+        }
+        let outlook = Outlook(player: PlayerID(key: key), estimate: estimate, slots: home + (best.map { [$0] } ?? []),
+                              best: best, level: .couldPassFirst, average: slot == nil ? 70 : nil)
         return RemovalAdvice(player: PlayerID(key: key), name: name, level: .keep, action: action, score: score,
-                             reasons: [], tier: nil, outlook: outlook,
+                             reasons: [], tier: tier, outlook: outlook,
                              matchesHere: MatchesHere(starts: 1, matches: 9, basis: basis), keepReason: keepReason,
                              watchReason: nil, loanOnlyToStart: false, onYouthContract: onYouthContract,
                              isFalseProspect: false, isMentor: false, releaseCost: nil, mutualCost: nil, basis: .derived)
@@ -478,6 +484,22 @@ import Testing
         }
     }
 
+    @Test func aYoungRowsTitleNamesTheSlotHeIsFirstChoiceAtElseHisBest() throws {
+        let cases = [young("first", name: "Deago", age: 20, slot: .AM_R, firstAt: [.D_R], tier: .first(.D_R)),
+                     young("nowhere", name: "Brayden", age: 20, slot: .AM_R, tier: .second(.AM_R)),
+                     // First choice by the elevens at a slot he is not counted as able to play: that slot still.
+                     young("unfamiliar", name: "Stand In", age: 19, slot: .AM_R, tier: .first(.D_L))]
+        let sheet = RemovalPresentation.sheet(report(cases), squads: [:], ages: [:])
+        func row(_ key: String) throws -> YoungRow { try #require(sheet.young.first { $0.id.key == key }) }
+        #expect(try row("first").titleText == "Deago · 20 · right back")
+        #expect(try row("first").spokenText.hasPrefix("Deago, Age 20, right back, Keep and play. "))
+        // His lines still compare him at his best slot.
+        #expect(try row("first").lines[1].hasPrefix("First choice at right back. Needs about 14 more ability points to "
+                                                    + "match Smith at right attacking midfield;"))
+        #expect(try row("nowhere").titleText == "Brayden · 20 · right attacking midfield")
+        #expect(try row("unfamiliar").titleText == "Stand In · 19 · left back")
+    }
+
     @Test func aRowsActionIsTheEnginesNameForEachNewAction() throws {
         let given = [young("d", name: "Dev", age: 16, action: .develop, keepReason: .age),
                      young("p", name: "Pla", age: 20, action: .play, basis: .firstChoice),
@@ -521,6 +543,13 @@ import Testing
         let loan = try advice(SampleData.youngToLoanName)
         #expect(loan.action == .loanForMatches && !loan.onYouthContract && loan.outlook?.estimate.age == 19)
         #expect(loan.matchesHere?.isCounted == true && loan.matchesHere?.starts == 0)
+        // Each advice is honest: whoever is kept to develop or loaned for matches is worth developing.
+        let worthDeveloping: Set<ReachLevel> = [.couldPassFirst, .couldMakeSecond]
+        #expect(loan.outlook?.level.map(worthDeveloping.contains) == true)
+        #expect(develop.outlook?.level.map(worthDeveloping.contains) == true)
+        for a in report.removal.advice where a.action == .develop || a.action == .loanForMatches {
+            #expect(a.outlook?.level.map(worthDeveloping.contains) != false, "\(a.name)")
+        }
 
         let sheet = model.removalSheet(report)
         let young = report.removal.advice.filter { $0.outlook != nil }

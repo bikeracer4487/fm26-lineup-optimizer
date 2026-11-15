@@ -192,9 +192,29 @@ import Testing
         func why(_ reason: WatchReason?) -> String {
             AdvisorText.why(.monitor, for: removal(action: .monitor, release: nil, mutual: nil, watchReason: reason))
         }
-        #expect(why(.notWorthDeveloping) == "This tool does not expect him to reach the second eleven: watch how he does.")
         #expect(why(.neededForCover) == "He is needed as cover here, so a loan would leave the squad short.")
         #expect(why(nil) == "Not enough against him to act: watch how he does")
+    }
+
+    @Test func whyAYoungPlayerNotWorthDevelopingIsWatchedFollowsHisLevel() {
+        func why(_ level: ReachLevel?, at slot: SlotID? = .D_L) -> String {
+            let watched = RemovalAdvice(
+                player: PlayerID(key: "young"), name: "Young", level: .keep, action: .monitor, score: 0, reasons: [],
+                tier: nil, outlook: outlook(level, at: slot), matchesHere: MatchesHere(starts: 0, matches: 6, basis: .startedTooFew),
+                keepReason: nil, watchReason: .notWorthDeveloping, loanOnlyToStart: false, onYouthContract: false,
+                isFalseProspect: false, isMentor: false, releaseCost: nil, mutualCost: nil, basis: .derived)
+            return AdvisorText.why(.monitor, for: watched)
+        }
+        #expect(why(.couldBeCover) == "This tool expects him to become cover at best: watch how he does.")
+        #expect(why(.markedlyLower) == "This tool does not expect him to reach the level of the squad: watch how he does.")
+        // Compared with the first team's average, the same sentences.
+        #expect(why(.couldBeCover, at: nil) == "This tool expects him to become cover at best: watch how he does.")
+        #expect(why(.markedlyLower, at: nil)
+                == "This tool does not expect him to reach the level of the squad: watch how he does.")
+        // Player Removal watches only a player at those two levels for this reason; built otherwise, said plainly.
+        for level in [ReachLevel.couldPassFirst, .couldMakeSecond, nil] {
+            #expect(why(level) == "Not enough against him to act: watch how he does", "\(String(describing: level))")
+        }
     }
 
     @Test func aYouthContractCannotBeMarked() {
@@ -413,13 +433,32 @@ import Testing
     }
 
     /// What `youngLines` should give for `advice`: the working, the standing, the matches line when `showsMatches`,
-    /// then why.
+    /// then why, ending with a full stop.
     func expectedLines(_ advice: RemovalAdvice, showsMatches: Bool) throws -> [String] {
         let outlook = try #require(advice.outlook)
         let names: (SlotID) -> String = { PositionText.plain($0.position) }
+        let why = AdvisorText.why(advice.action, for: advice)
         return [AdvisorText.reachWorking(outlook.estimate), AdvisorText.standing(outlook, names: names),
                 showsMatches ? advice.matchesHere.map(AdvisorText.matchesHere) : nil,
-                AdvisorText.why(advice.action, for: advice)].compactMap { $0 }
+                why.hasSuffix(".") ? why : why + "."].compactMap { $0 }
+    }
+
+    @Test func everyLineOfAYoungPlayerEndsWithAFullStop() throws {
+        let names: (SlotID) -> String = { PositionText.plain($0.position) }
+        // A why without one gains one in the lines; the table's own why keeps its form.
+        let released = young(.release, .startedTooFew)
+        #expect(AdvisorText.why(.release, for: released) == "He is out of contract, so releasing him costs nothing")
+        #expect(AdvisorText.youngLines(released, names: names).last
+                == "He is out of contract, so releasing him costs nothing.")
+        // One with a full stop is unchanged.
+        let playing = young(.play, .firstChoice)
+        #expect(AdvisorText.youngLines(playing, names: names).last == "He is first choice here.")
+        for action in RemovalAction.allCases {
+            for line in AdvisorText.youngLines(young(action, .startedTooFew), names: names) {
+                #expect(line.hasSuffix("."), "\(action): \(line)")
+                #expect(!line.hasSuffix(".."), "\(action): \(line)")
+            }
+        }
     }
 
     @Test func aYoungPlayersLinesShowHisMatchesWhereTheWhyDoesNotSayThem() throws {

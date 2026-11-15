@@ -18,9 +18,9 @@ public enum RemovalAction: String, CaseIterable, Sendable {
 
 /// Why a young player is watched rather than kept to develop, play or be loaned.
 public enum WatchReason: String, CaseIterable, Sendable {
-    /// His reach is no more than cover, and he is in neither eleven.
+    /// His reach is no more than cover, and he is neither kept to play nor needed as cover.
     case notWorthDeveloping
-    /// He is needed as cover: a loan would leave the squad short.
+    /// He is needed as cover, whether or not he is worth developing: a loan would leave the squad short.
     case neededForCover
 }
 
@@ -423,27 +423,35 @@ public enum Removal {
                              basis: Evidence.weakest(evidence)!)
     }
 
-    /// The advice for a player with an outlook below the high level, the first rule that applies winning: one not worth
-    /// developing (his reach no more than cover, and in neither eleven) is watched; under `loanForMatchesFromAge` he is
-    /// kept to develop; one getting his matches here is kept to play; one needed for cover is watched; a youth contract
-    /// cannot be loaned, nor a contract with `loanForMatchesMonthsAbove` months or fewer left (or unknown), so he is kept
-    /// to develop; otherwise he is loaned for matches. With the evidence of the parameters the rules read.
+    /// The advice for a player with an outlook below the high level, the first rule that applies winning.
+    /// One not worth developing (his reach no more than cover) is never kept to develop or loaned for matches: in
+    /// either eleven and getting his matches here he is kept to play; otherwise he is watched, as needed for cover when
+    /// he is, and as not worth developing when not. For anyone else: under `loanForMatchesFromAge` he is kept to
+    /// develop; one getting his matches here is kept to play; one needed for cover is watched; a youth contract cannot
+    /// be loaned, nor a contract with `loanForMatchesMonthsAbove` months or fewer left (or unknown), so he is kept to
+    /// develop; otherwise he is loaned for matches. With the evidence of the parameters the rules read.
     private static func youngAction(_ player: Player, outlook: Outlook, matchesHere: MatchesHere, inEither: Bool,
                                     thinCover: Bool, onYouthContract: Bool, parameters: EngineParameters)
         -> (action: RemovalAction, keepReason: KeepReason?, watchReason: WatchReason?, loanOnlyToStart: Bool,
             evidence: [Evidence]) {
+        let matchesEvidence = [parameters.matchesHereShare.evidence, parameters.matchesHereWindowDays.evidence,
+                               parameters.matchesHereMinimumConfirmed.evidence, parameters.depthSolidFamiliarity.evidence]
         let notWorthDeveloping: Bool
         switch outlook.level {
-        case .couldBeCover?, .markedlyLower?: notWorthDeveloping = !inEither
+        case .couldBeCover?, .markedlyLower?: notWorthDeveloping = true
         case .couldPassFirst?, .couldMakeSecond?, nil: notWorthDeveloping = false
         }
-        if notWorthDeveloping { return (.monitor, nil, .notWorthDeveloping, false, []) }
+        if notWorthDeveloping {
+            // Whether he gets his matches is read only for a player in either eleven.
+            let evidence = inEither ? matchesEvidence : []
+            if inEither && matchesHere.isEnough { return (.play, nil, nil, false, evidence) }
+            return (.monitor, nil, thinCover ? .neededForCover : .notWorthDeveloping, false, evidence)
+        }
 
         let fromAge = parameters.loanForMatchesFromAge
         var evidence = [fromAge.evidence]
         if player.age < fromAge.value { return (.develop, .age, nil, false, evidence) }
-        evidence += [parameters.matchesHereShare.evidence, parameters.matchesHereWindowDays.evidence,
-                     parameters.matchesHereMinimumConfirmed.evidence, parameters.depthSolidFamiliarity.evidence]
+        evidence += matchesEvidence
         if matchesHere.isEnough { return (.play, nil, nil, false, evidence) }
         if thinCover { return (.monitor, nil, .neededForCover, false, evidence) }
         if onYouthContract { return (.develop, .youthContract, nil, false, evidence) }

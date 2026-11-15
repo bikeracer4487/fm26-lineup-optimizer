@@ -118,6 +118,56 @@ import Testing
         #expect(found[seventeen.id]?.level == .markedlyLower)
     }
 
+    /// The levels of two players of `age` rated 50 at an ability of 30 at left back, with potentials `below` and `at`,
+    /// behind a first choice rated 100 and, when `secondRating` is given, a second choice rated that.
+    func levels(age: Int, below: Int, at: Int, secondRating: Double?) throws -> (below: SlotOutlook?, at: SlotOutlook?) {
+        let first = veteran("First Choice"), second = veteran("Second Choice")
+        let low = player("Below", age: age, current: 30, potential: below, slots: [.D_L])
+        let level = player("At", age: age, current: 30, potential: at, slots: [.D_L])
+        var ratings: [(Player, SlotID, Double)] = [(first, .D_L, 100), (low, .D_L, 50), (level, .D_L, 50)]
+        if let secondRating { ratings.append((second, .D_L, secondRating)) }
+        let t = tiers(first: [.D_L: first], second: secondRating == nil ? [:] : [.D_L: second], ratings: ratings)
+        let found = try outlooks([first, second, low, level], t)
+        return (slot(found[low.id], .D_L), slot(found[level.id], .D_L))
+    }
+
+    @Test func aReachBelowTheBarIsMarkedlyLowerEvenAboveAWeakSecondChoice() throws {
+        // Reach ratings of (70 + potential) ÷ 2: 79 and 80, against a bar of 80 (80% of 100), both above the second
+        // choice's 60.
+        let (below, at) = try levels(age: 18, below: 88, at: 90, secondRating: 60)
+        #expect(below?.reachRating == 79 && at?.reachRating == 80)
+        #expect(below?.secondChoice?.rating == 60)
+        #expect(below?.level == .markedlyLower)
+        #expect(at?.level == .couldMakeSecond)
+    }
+
+    @Test func aReachBelowTheBarIsMarkedlyLowerEvenAboveAWeakSecondChoiceAndWithNoSecondChoice() throws {
+        let (below, at) = try levels(age: 18, below: 88, at: 90, secondRating: nil)
+        #expect(below?.secondChoice == nil && at?.secondChoice == nil)
+        #expect(below?.level == .markedlyLower)
+        #expect(at?.level == .couldMakeSecond)
+    }
+
+    @Test func aReachAboveTheBarAndBelowTheSecondChoiceIsCover() throws {
+        // 80 and 89, at and above the bar of 80, below the second choice's 90.
+        let (low, high) = try levels(age: 18, below: 90, at: 108, secondRating: 90)
+        #expect(low?.reachRating == 80 && high?.reachRating == 89)
+        #expect(low?.level == .couldBeCover)
+        #expect(high?.level == .couldBeCover)
+    }
+
+    @Test func theYoungestsBarIsSeventyPercentWhateverTheSecondChoice() throws {
+        // 69 and 70 against the youngest's bar of 70 (70% of 100), above a second choice's 60 or with none.
+        for second in [60.0, nil] {
+            let (below, at) = try levels(age: 16, below: 68, at: 70, secondRating: second)
+            #expect(below?.reachRating == 69 && at?.reachRating == 70)
+            #expect(below?.level == .markedlyLower, "\(String(describing: second))")
+            #expect(at?.level == .couldMakeSecond, "\(String(describing: second))")
+        }
+        // At 17 the bar is 80: 70 is below it.
+        #expect(try levels(age: 17, below: 68, at: 70, secondRating: 60).at?.level == .markedlyLower)
+    }
+
     @Test func aMissingSecondChoiceCountsAsReached() throws {
         let first = veteran("First Choice"), second = veteran("Second Choice")
         // Rated 50 at 30 with a reach of 42: a reach rating of 56, over the bar, under the second choice's 60.
@@ -241,12 +291,14 @@ import Testing
                                     (young, .D_L, 50), (young, .D_R, 50)])
             return try outlooks([left, right, rightCover, young], t)[young.id]
         }
-        // The same level at both: the greater share of the first choice's rating.
-        #expect(try best(leftRating: 70, rightRating: 60)?.best?.slot == .D_R)
+        // The same level at both (over the bar, with no second choice): the greater share of the first choice's rating.
+        let same = try best(leftRating: 62, rightRating: 58)
+        #expect(slot(same, .D_L)?.level == .couldMakeSecond && slot(same, .D_R)?.level == .couldMakeSecond)
+        #expect(same?.best?.slot == .D_R)
         // A tie: the earlier slot.
         #expect(try best(leftRating: 60, rightRating: 60)?.best?.slot == .D_L)
         // The greater share is at a slot where a strong second choice leaves him cover only.
-        let outlook = try best(leftRating: 70, rightRating: 60, rightSecond: true)
+        let outlook = try best(leftRating: 62, rightRating: 58, rightSecond: true)
         #expect(slot(outlook, .D_R)?.level == .couldBeCover)
         #expect(outlook?.best?.slot == .D_L)
         #expect(outlook?.level == .couldMakeSecond)
