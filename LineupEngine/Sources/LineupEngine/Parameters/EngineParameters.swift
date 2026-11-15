@@ -626,6 +626,20 @@ public struct EngineParameters: Sendable {
     /// The points Player Removal and the loan review give, once per player, to the first choice of a slot where Depth
     /// finds cover thin, or to a player who counts as cover at a slot whose cover is at most `depthThinBelow`.
     public var removalThinCoverPoints: Parameter<Int>
+    // The numbers behind the estimate of where a young player's ability could reach (`Reach.estimate`).
+    /// The oldest age still counted as developing, a band that needs matches to grow.
+    public var developingUpToAge: Parameter<Int>
+    /// The points of ability a player gains in a season at each age, at Professionalism 20 and Ambition and
+    /// Determination 10 or more. The first step whose `upToAge` is at or above his age applies; past the last there is none.
+    public var growthPerSeason: Parameter<[GrowthStep]>
+    /// The rate of growth at Professionalism 1, 10 and 20; between the anchors it is read off straight lines.
+    public var growthProfessionalismRates: Parameter<[Int: Double]>
+    /// The share of growth kept at Ambition 1; it rises in a straight line to 1 at `growthPersonalityFullFrom`.
+    public var growthAmbitionAtOne: Parameter<Double>
+    /// The share of growth kept at Determination 1; it rises in a straight line to 1 at `growthPersonalityFullFrom`.
+    public var growthDeterminationAtOne: Parameter<Double>
+    /// The Ambition and Determination from which there is no loss of growth.
+    public var growthPersonalityFullFrom: Parameter<Int>
     /// The numbers behind a fixture's suggested importance.
     public var importanceRules: Parameter<ImportanceSuggestionRules>
     /// What each attribute is worth, per point, when weighing what an arrow gives its target.
@@ -940,6 +954,22 @@ public struct EngineParameters: Sendable {
             removalThinCoverPoints: Parameter(
                 -30, .derived,
                 source: "this design's choice after the advisors were run on the real squad: Player Removal told the only goalkeeper to leave"),
+            developingUpToAge: Parameter(
+                23, .carriedOverFM26,
+                source: "18 to 23 as one band that needs matches (docs/Research/player-rotation-guide.md)"),
+            growthPerSeason: Parameter(
+                [GrowthStep(upToAge: 18, points: 18), GrowthStep(upToAge: 20, points: 14), GrowthStep(upToAge: 26, points: 12)],
+                .derived,
+                source: "EBFM tests in docs/Research/fm27-development-matches-vs-training.md finding 3: 14 and 12 with 20 to 30 "
+                    + "matches; 18 = 12 with no matches + 0.75 x 8 for youth-team matches (finding 4)"),
+            growthProfessionalismRates: Parameter(
+                [1: 2.4, 10: 8.2, 20: 17], .carriedOverFM26, source: "docs/Research/skill-potential-factors.md"),
+            growthAmbitionAtOne: Parameter(
+                0.731, .carriedOverFM26, source: "docs/Research/skill-potential-factors.md finding 10"),
+            growthDeterminationAtOne: Parameter(
+                0.66, .carriedOverFM26, source: "docs/Research/skill-potential-factors.md finding 10"),
+            growthPersonalityFullFrom: Parameter(
+                10, .carriedOverFM26, source: "docs/Research/skill-potential-factors.md finding 10: no bonus above 10"),
             importanceRules: Parameter(
                 ImportanceSuggestionRules(
                     leagueBase: 80, cupBase: 60, minorCupBase: 30, friendlyBase: 10, unsetBase: 50,

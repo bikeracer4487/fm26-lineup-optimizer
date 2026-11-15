@@ -196,6 +196,43 @@ public enum FitnessModel {
         if !zip(pace.headStartSteps, pace.headStartSteps.dropFirst()).allSatisfy({ $0.minimum > $1.minimum }) {
             found.append("retrainingPace headStartSteps minimum values are not strictly decreasing")
         }
+        // The estimate of where a young player's ability could reach.
+        let growth = parameters.growthPerSeason.value
+        if growth.isEmpty {
+            found.append("growthPerSeason is empty")
+        } else {
+            if !zip(growth, growth.dropFirst()).allSatisfy({ $0.upToAge < $1.upToAge }) {
+                found.append("growthPerSeason upToAge values are not strictly increasing")
+            }
+            for step in growth where !usable(step.points) {
+                found.append("growthPerSeason at up to age \(step.upToAge) is \(step.points), \(notUsable)")
+            }
+        }
+        let rates = parameters.growthProfessionalismRates.value
+        let anchors = [1, 10, 20].map { rates[$0] }
+        if anchors.contains(where: { $0 == nil }) {
+            found.append("growthProfessionalismRates does not have an entry for each of Professionalism 1, 10 and 20")
+        } else {
+            let values = anchors.compactMap { $0 }
+            if !values.allSatisfy({ $0.isFinite && $0 > 0 }) {
+                found.append("growthProfessionalismRates has a rate that is not a finite number above 0")
+            } else if !(values[0] < values[1] && values[1] < values[2]) {
+                found.append("growthProfessionalismRates does not rise from Professionalism 1 to 10 to 20")
+            }
+        }
+        for (name, share) in [("growthAmbitionAtOne", parameters.growthAmbitionAtOne.value),
+                              ("growthDeterminationAtOne", parameters.growthDeterminationAtOne.value)]
+            where !(share >= 0 && share <= 1) {
+            found.append("\(name) is \(share), not between 0 and 1")
+        }
+        let fullFrom = parameters.growthPersonalityFullFrom.value
+        if !(2...20).contains(fullFrom) {
+            found.append("growthPersonalityFullFrom is \(fullFrom), not between 2 and 20")
+        }
+        let developing = parameters.developingUpToAge.value
+        if developing < 1 {
+            found.append("developingUpToAge is \(developing), not 1 or more")
+        }
         // Learnability is a weighted sum that should stay within 0 to 1.
         for (name, weight) in [("versatilityWeight", learnability.versatilityWeight), ("ageWeight", learnability.ageWeight),
                                ("professionalismWeight", learnability.professionalismWeight),

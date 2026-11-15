@@ -517,4 +517,66 @@ import Testing
         #expect(r.sharpnessBelowScore == 50 && r.sharpnessMinDaysToNext == 4)
         #expect(r.sharpnessMinPlayers == 3 && r.sharpnessBelow == 0.70)
     }
+
+    @Test func theGrowthParametersAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        let expected: [(String, Evidence, String)] = [
+            ("developingUpToAge", .carriedOverFM26, "player-rotation-guide.md"),
+            ("growthPerSeason", .derived, "fm27-development-matches-vs-training.md"),
+            ("growthProfessionalismRates", .carriedOverFM26, "skill-potential-factors.md"),
+            ("growthAmbitionAtOne", .carriedOverFM26, "finding 10"),
+            ("growthDeterminationAtOne", .carriedOverFM26, "finding 10"),
+            ("growthPersonalityFullFrom", .carriedOverFM26, "finding 10")]
+        for (name, evidence, quoted) in expected {
+            #expect(listed[name]?.evidence == evidence, "\(name)")
+            #expect(listed[name]?.source.contains(quoted) == true, "\(name) source")
+        }
+        let q = EngineParameters.fm27
+        #expect(q.developingUpToAge.value == 23)
+        #expect(q.growthPerSeason.value == [GrowthStep(upToAge: 18, points: 18), GrowthStep(upToAge: 20, points: 14),
+                                            GrowthStep(upToAge: 26, points: 12)])
+        #expect(q.growthProfessionalismRates.value == [1: 2.4, 10: 8.2, 20: 17])
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func growthParameterProblemsAreReported() {
+        func problems(_ change: (inout EngineParameters) -> Void) -> [String] {
+            var q = EngineParameters.fm27
+            change(&q)
+            return FitnessModel.problems(in: q)
+        }
+        #expect(problems { $0.growthPerSeason = Parameter([], .derived, source: "test") } == ["growthPerSeason is empty"])
+        #expect(problems {
+            $0.growthPerSeason = Parameter([GrowthStep(upToAge: 20, points: 14), GrowthStep(upToAge: 20, points: 12)], .derived, source: "test")
+        } == ["growthPerSeason upToAge values are not strictly increasing"])
+        #expect(problems {
+            $0.growthPerSeason = Parameter([GrowthStep(upToAge: 20, points: -1)], .derived, source: "test")
+        } == ["growthPerSeason at up to age 20 is -1.0, not a finite number of 0 or more"])
+        #expect(problems {
+            $0.growthPerSeason = Parameter([GrowthStep(upToAge: 20, points: .nan)], .derived, source: "test")
+        }.count == 1)
+        #expect(problems { $0.growthProfessionalismRates = Parameter([1: 2.4, 20: 17], .derived, source: "test") }
+            == ["growthProfessionalismRates does not have an entry for each of Professionalism 1, 10 and 20"])
+        #expect(problems { $0.growthProfessionalismRates = Parameter([1: 2.4, 10: 0, 20: 17], .derived, source: "test") }
+            == ["growthProfessionalismRates has a rate that is not a finite number above 0"])
+        #expect(problems { $0.growthProfessionalismRates = Parameter([1: 9, 10: 8.2, 20: 17], .derived, source: "test") }
+            == ["growthProfessionalismRates does not rise from Professionalism 1 to 10 to 20"])
+        #expect(problems { $0.growthAmbitionAtOne = Parameter(1.2, .derived, source: "test") }
+            == ["growthAmbitionAtOne is 1.2, not between 0 and 1"])
+        #expect(problems { $0.growthDeterminationAtOne = Parameter(-0.1, .derived, source: "test") }
+            == ["growthDeterminationAtOne is -0.1, not between 0 and 1"])
+        #expect(problems { $0.growthPersonalityFullFrom = Parameter(1, .derived, source: "test") }
+            == ["growthPersonalityFullFrom is 1, not between 2 and 20"])
+        #expect(problems { $0.growthPersonalityFullFrom = Parameter(21, .derived, source: "test") }
+            == ["growthPersonalityFullFrom is 21, not between 2 and 20"])
+        #expect(problems { $0.developingUpToAge = Parameter(0, .derived, source: "test") }
+            == ["developingUpToAge is 0, not 1 or more"])
+        // The edges that are allowed.
+        #expect(problems {
+            $0.growthPersonalityFullFrom = Parameter(2, .derived, source: "test")
+            $0.growthAmbitionAtOne = Parameter(0, .derived, source: "test")
+            $0.growthDeterminationAtOne = Parameter(1, .derived, source: "test")
+            $0.developingUpToAge = Parameter(1, .derived, source: "test")
+        }.isEmpty)
+    }
 }
