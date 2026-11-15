@@ -331,4 +331,18 @@ public enum AdvisorText {
             return "Solid at \(place): familiarity \(latest)"
         }
     }
+
+    /// One sentence on what a pasted opponent squad was found to be worth, with the clubs of the players left out as away
+    /// on loan when there are any. `day` is the date as the owner reads it.
+    public static func opponentReading(_ reading: OpponentReading, on day: String) -> String {
+        var text = "Squad pasted for \(reading.club) on \(day): their best eleven averages "
+            + "\(String(format: "%.1f", reading.theirAverage)) ability, yours \(String(format: "%.1f", reading.ownAverage)), "
+            + "which reads as \(name(reading.strength)) (this tool's estimate)."
+        if !reading.awayOnLoanAt.isEmpty {
+            let clubs = reading.awayOnLoanAt
+            let list = clubs.count == 1 ? clubs[0] : clubs.dropLast().joined(separator: ", ") + " and " + clubs[clubs.count - 1]
+            text += " Left out as away on loan: players at \(list)."
+        }
+        return text
+    }
 }

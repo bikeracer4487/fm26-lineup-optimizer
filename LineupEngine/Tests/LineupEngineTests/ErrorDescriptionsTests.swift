@@ -284,4 +284,17 @@ import Testing
         struct Foreign: Error {}
         #expect(ErrorDescriptions.describe(Foreign()).hasPrefix("Unexpected error:"))
     }
+
+    @Test func opponentReadingErrorsAreInPlainWords() {
+        #expect(ErrorDescriptions.describe(OpponentReadingError.noOwnSquad)
+                == "Import your own squad first, so there is something to compare theirs with.")
+        #expect(ErrorDescriptions.describe(OpponentReadingError.ownSquadPasted)
+                == "The rows pasted are your own players. Open the opponent's squad in FMRTE and copy that.")
+        #expect(ErrorDescriptions.describe(OpponentReadingError.noClubName)
+                == "Say who the match is against before pasting, so that a player on loan there can be told from one away on loan.")
+        #expect(ErrorDescriptions.describe(OpponentReadingError.tooFewPlayers(.theirs(club: "Banbury United"), found: 9))
+                == "Banbury United has only 9 fit players among the rows pasted who are not away on loan; eleven are needed.")
+        #expect(ErrorDescriptions.describe(OpponentReadingError.tooFewPlayers(.own, found: 9))
+                == "Your own squads have only 9 fit players who are not away on loan; eleven are needed.")
+    }
 }

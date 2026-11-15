@@ -715,6 +715,9 @@ public struct EngineParameters: Sendable {
     /// A regrouping is shown only when the groups it would make count for at least this many times what the recorded
     /// groups it breaks up count for, by the count that orders the suggestions.
     public var mentoringRegroupFactor: Parameter<Double>
+    /// How much stronger or weaker than the owner's squad a pasted opponent squad must be, as whole percentages of the
+    /// owner's best-eleven total, to read as stronger or weaker and as much stronger or much weaker.
+    public var opponentStrengthLines: Parameter<OpponentStrengthLines>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -1150,7 +1153,11 @@ public struct EngineParameters: Sendable {
             mentoringRegroupFactor: Parameter(
                 1.5, .derived,
                 source: "this design's choice: a regrouping often rests on arrows not yet read, and the guess agreed with "
-                    + "104 of the owner's 124 readings of 14 November 2026, so a small difference is not shown"))
+                    + "104 of the owner's 124 readings of 14 November 2026, so a small difference is not shown"),
+            opponentStrengthLines: Parameter(
+                OpponentStrengthLines(strongerFromPercent: 5, muchStrongerFromPercent: 15), .derived,
+                source: "this design's choice (docs/superpowers/specs/2026-11-15-fm27-league-situation-and-opponent-squad-design.md): "
+                    + "no test relates a gap in ability to results; a ratio so the lines mean the same in every division"))
     }()
 
     private static let removalSource = "ui/api/api_player_removal.py (branch customizable-tactics)"

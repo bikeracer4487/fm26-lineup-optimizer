@@ -230,6 +230,14 @@ import Testing
         #expect(q.mentoringRegroupFactor.value == 1.5)
     }
 
+    @Test func theOpponentStrengthLinesAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        #expect(listed["opponentStrengthLines"]?.evidence == .derived)
+        #expect(listed["opponentStrengthLines"]?.source.contains("league-situation-and-opponent-squad-design") == true)
+        #expect(EngineParameters.fm27.opponentStrengthLines.value
+                == OpponentStrengthLines(strongerFromPercent: 5, muchStrongerFromPercent: 15))
+    }
+
     @Test func theDepthParametersAreListedWithEvidenceAndSource() {
         let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
         for name in ["depthCoverFamiliarity", "depthSolidFamiliarity", "depthThinBelow"] {

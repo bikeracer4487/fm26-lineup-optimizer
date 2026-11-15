@@ -212,8 +212,14 @@ public struct SquadBook: Equatable, Codable, Sendable {
     /// seen (ties to the alphabetically first); nil when no player has a club.
     public func ownClub(override: String?) -> String? {
         if let trimmed = override?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty { return trimmed }
+        return Self.commonClub(among: allPlayers)
+    }
+
+    /// The most common club among the players, counting names that `PlayerID.normalise` makes equal as one club spelt as
+    /// first seen (ties to the alphabetically first); nil when no player has a club.
+    public static func commonClub(among players: [Player]) -> String? {
         var counts: [String: (spelling: String, count: Int)] = [:]
-        for club in allPlayers.compactMap(\.club) {
+        for club in players.compactMap(\.club) {
             counts[PlayerID.normalise(club), default: (club, 0)].count += 1
         }
         return counts.max { ($0.value.count, $1.key) < ($1.value.count, $0.key) }?.value.spelling

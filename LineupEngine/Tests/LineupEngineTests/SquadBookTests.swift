@@ -454,6 +454,18 @@ private func book(_ capture: String, squad: Squad) throws -> SquadBook {
         #expect(book.ownClub(override: "") == "Oxford City")
     }
 
+    @Test func commonClubCountsSpellingsAsOneAndBreaksTiesAlphabetically() {
+        #expect(SquadBook.commonClub(among: []) == nil)
+        #expect(SquadBook.commonClub(among: [.fixture(name: "A", club: nil), .fixture(name: "B", club: nil)]) == nil)
+        // Spellings that normalise equal are one club, spelt as first seen.
+        let spellings = [Player.fixture(name: "A", club: "Banbury United"), .fixture(name: "B", club: "banbury  united"),
+                         .fixture(name: "C", club: "Reading"), .fixture(name: "D", club: "BANBURY UNITED")]
+        #expect(SquadBook.commonClub(among: spellings) == "Banbury United")
+        // A tie goes to the alphabetically first.
+        let tie = [Player.fixture(name: "A", club: "Reading"), .fixture(name: "B", club: "Banbury United")]
+        #expect(SquadBook.commonClub(among: tie) == "Banbury United")
+    }
+
     // MARK: - Club names compared as names, not as exact strings
 
     /// Four club-column players at Oxford City and one out on loan.

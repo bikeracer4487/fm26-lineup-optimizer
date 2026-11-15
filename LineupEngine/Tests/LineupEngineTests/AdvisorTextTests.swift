@@ -848,4 +848,21 @@ import Testing
             #expect(!sentence.contains(code), "\(code)")
         }
     }
+
+    @Test func anOpponentReadingIsOneSentenceAndListsWhereLoaneesAre() {
+        let day = Day(year: 2026, month: 11, day: 15)!
+        func reading(_ away: [String]) -> OpponentReading {
+            OpponentReading(club: "Banbury United", day: day, theirTotal: 816, ownTotal: 754, strength: .stronger,
+                            awayOnLoanAt: away)
+        }
+        let plain = "Squad pasted for Banbury United on Sun 15 Nov: their best eleven averages 74.2 ability, yours 68.5, "
+            + "which reads as Stronger (this tool's estimate)."
+        #expect(AdvisorText.opponentReading(reading([]), on: "Sun 15 Nov") == plain)
+        #expect(AdvisorText.opponentReading(reading(["Wallingford"]), on: "Sun 15 Nov")
+                == plain + " Left out as away on loan: players at Wallingford.")
+        #expect(AdvisorText.opponentReading(reading(["Reading", "Wallingford"]), on: "Sun 15 Nov")
+                == plain + " Left out as away on loan: players at Reading and Wallingford.")
+        #expect(AdvisorText.opponentReading(reading(["Marlow", "Reading", "Wallingford"]), on: "Sun 15 Nov")
+                == plain + " Left out as away on loan: players at Marlow, Reading and Wallingford.")
+    }
 }

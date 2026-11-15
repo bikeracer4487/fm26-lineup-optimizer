@@ -12,6 +12,7 @@ public enum ErrorDescriptions {
         case let e as DecodingError: describe(e)
         case let e as DuplicatePlayerError: describe(e)
         case let e as PlanError: describe(e)
+        case let e as OpponentReadingError: describe(e)
         default: "Unexpected error: \(error.localizedDescription)"
         }
     }
@@ -111,6 +112,19 @@ public enum ErrorDescriptions {
     public static func describe(_ error: DuplicatePlayerError) -> String {
         "Two players share the identity \(error.id.key): \(error.names.joined(separator: " and ")). "
             + "Import the squad again so each player has his own identity."
+    }
+
+    public static func describe(_ error: OpponentReadingError) -> String {
+        switch error {
+        case .noOwnSquad: "Import your own squad first, so there is something to compare theirs with."
+        case .ownSquadPasted: "The rows pasted are your own players. Open the opponent's squad in FMRTE and copy that."
+        case .noClubName:
+            "Say who the match is against before pasting, so that a player on loan there can be told from one away on loan."
+        case .tooFewPlayers(.theirs(let club), let found):
+            "\(club) has only \(found) fit players among the rows pasted who are not away on loan; eleven are needed."
+        case .tooFewPlayers(.own, let found):
+            "Your own squads have only \(found) fit players who are not away on loan; eleven are needed."
+        }
     }
 
     public static func describe(_ error: PlanError) -> String {
