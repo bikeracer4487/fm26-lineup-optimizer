@@ -89,13 +89,13 @@ import Testing
         let both: [PlayerID: String] = [ashby: "Ashby", nelson: "Nelson"]
         #expect(AdvisorText.warning(.harmfulArrow(from: ashby, to: nelson, strength: .significant, isRead: true,
                                                   attribute: .ambition, fromValue: 6, toValue: 13), names: both)
-                == "Ashby's influence on Nelson is Significant, and his Ambition is 6 against 13.")
+                == "Ashby's influence on Nelson is Significant, and Ashby's Ambition is 6 against Nelson's 13.")
         #expect(AdvisorText.warning(.harmfulArrow(from: ashby, to: nelson, strength: .average, isRead: false,
                                                   attribute: .ambition, fromValue: 6, toValue: 13), names: both)
-                == "Ashby's influence on Nelson is expected to be Average, and his Ambition is 6 against 13.")
+                == "Ashby's influence on Nelson is expected to be Average, and Ashby's Ambition is 6 against Nelson's 13.")
         #expect(sentence(.harmfulArrow(from: hart, to: reid, strength: .light, isRead: true, attribute: .professionalism,
                                        fromValue: 9, toValue: 14))
-                == "Hart's influence on Reid is Light, and his Professionalism is 9 against 14.")
+                == "Hart's influence on Reid is Light, and Hart's Professionalism is 9 against Reid's 14.")
         #expect(sentence(.notInSquad(young)) == "Young is no longer in the squad.")
         #expect(sentence(.outOnLoan(young, club: "Luton")) == "Young is out on loan at Luton.")
         #expect(sentence(.advisedToLeave(hart)) == "Hart is advised to leave.")

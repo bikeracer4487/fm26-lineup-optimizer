@@ -123,7 +123,7 @@ Candidates in no suggested group are listed as not placed, with the first reason
 
 For each recorded group the engine gives its six arrows, read or guessed, and from them:
 
-- a warning for each harmful arrow, naming its strength: "Ashby's influence on Nelson is Significant, and his Ambition is 6 against 13";
+- a warning for each harmful arrow, naming its strength: "Ashby's influence on Nelson is Significant, and Ashby's Ambition is 6 against Nelson's 13.";
 - **no influence**, at once, when all six arrows have been read and all are None;
 - a prompt to read the arrows when any of the six is still a guess;
 - everything the first design reads from the personality readings (what has changed, doing harm, stopped after thirteen weeks), with two changes. The rule about who stands above whom is replaced by the arrows. And the members watched for "stopped" are those with an arrow above None into them, read or guessed; when no member has one, the group is never called stopped, because nothing was expected of it. "Doing harm" still looks at every member.
@@ -172,7 +172,8 @@ SUGGESTED GROUPS
 YOUR GROUPS                                      [ Record arrows ]   [ Add a group ]
 ┌──────────────────────────────────────────────────────────────────────────────────┐
 │ Ashby, Clark, Nelson · since 14 Nov                                              │
-│   ⚠ Ashby's influence on Nelson is Significant, and his Ambition is 6 against 13.│
+│   ⚠ Ashby's influence on Nelson is Significant, and Ashby's Ambition is 6        │
+│     against Nelson's 13.                                                         │
 │   Ashby → Clark    Significant · read 14 Nov                                     │
 │   Ashby → Nelson   Significant · read 14 Nov                                     │
 │   Clark → Nelson   Light · read 14 Nov                                           │

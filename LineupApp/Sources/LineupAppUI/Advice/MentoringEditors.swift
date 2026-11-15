@@ -41,7 +41,8 @@ struct HierarchyEditor: View {
 
     var body: some View {
         EditorPanel(title: MentoringPresentation.hierarchyEditorTitle(squad),
-                    hint: MentoringPresentation.hierarchyEditorHint(squad)) {
+                    hint: MentoringPresentation.hierarchyEditorHint(squad),
+                    note: MentoringPresentation.hierarchyEditorNote) {
             HStack(spacing: Theme.Spacing.m) {
                 Spacer(minLength: 0)
                 columnHeading(MentoringPresentation.levelLabel)
@@ -117,7 +118,7 @@ struct GroupEditor: View {
 
     var body: some View {
         let problem = model.mentoringProblem(of: draft)
-        EditorPanel(title: MentoringPresentation.groupEditorTitle(draft), hint: nil) {
+        EditorPanel(title: MentoringPresentation.groupEditorTitle(draft), hint: nil, note: nil) {
             EmptyView()
         } rows: {
             ForEach(model.memberChoices(for: draft)) { choice in
@@ -229,11 +230,12 @@ private struct EditorName: View {
     }
 }
 
-/// An editor's frame: its title and hint, the headings over its rows, a heavy rule, the rows scrolling, and the row
+/// An editor's frame: its title, its hint and a second muted line under it, the headings over its rows, a heavy rule, the rows scrolling, and the row
 /// of what sits by its buttons and the buttons at the foot, on the board's white at the editors' size.
 private struct EditorPanel<Headings: View, Rows: View, Footer: View>: View {
     let title: String
     let hint: String?
+    let note: String?
     @ViewBuilder let headings: () -> Headings
     @ViewBuilder let rows: () -> Rows
     @ViewBuilder let footer: () -> Footer
@@ -244,6 +246,12 @@ private struct EditorPanel<Headings: View, Rows: View, Footer: View>: View {
                 BoardHeading(title, size: Theme.TypeSize.boardTitle)
                 if let hint {
                     Text(hint)
+                        .font(Theme.Typeface.text(Theme.TypeSize.body))
+                        .foregroundStyle(Theme.Colour.mutedInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let note {
+                    Text(note)
                         .font(Theme.Typeface.text(Theme.TypeSize.body))
                         .foregroundStyle(Theme.Colour.mutedInk)
                         .fixedSize(horizontal: false, vertical: true)

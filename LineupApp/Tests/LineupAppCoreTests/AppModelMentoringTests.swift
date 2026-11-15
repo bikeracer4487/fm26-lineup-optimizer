@@ -17,15 +17,18 @@ import LineupEngine
         (model.squad.book.current[squad] ?? []).map(\.id)
     }
 
-    /// The engine's first suggested group for the squad, from the model's players.
+    /// The engine's first suggested group for the squad, from the model's players, with the squad's oldest player
+    /// handed to the engine as its Team Leader (and nothing saved): with no level entered nothing is suggested.
     private func suggestion(_ model: AppModel, _ squad: Squad) throws -> SuggestedGroup {
+        let oldest = try #require((model.squad.book.current[squad] ?? []).max { ($0.age, $1.name) < ($1.age, $0.name) })
         let request = MentoringRequest(
-            squad: squad, players: model.squad.book.allPlayers, ownClub: model.ownClub, dynamics: [:],
-            dynamicsUpdatedOn: nil, groups: [], readings: [:], names: [:], leaving: [], asOf: model.settings.currentDate)
+            squad: squad, players: model.squad.book.allPlayers, ownClub: model.ownClub,
+            dynamics: [oldest.id: PlayerDynamics(standing: .teamLeader)], dynamicsUpdatedOn: nil, groups: [],
+            readings: [:], arrows: [], names: [:], leaving: [], asOf: model.settings.currentDate)
         return try #require(try Mentoring.report(request, parameters: .fm27).suggestions.first)
     }
 
-    private func members(_ group: SuggestedGroup) -> [PlayerID] { [group.lead] + group.members.map(\.player) }
+    private func members(_ group: SuggestedGroup) -> [PlayerID] { group.members.map(\.player) }
 
     private func live(_ model: AppModel) -> [MentoringGroup] { model.mentoring.groups.filter(\.isLive) }
 
@@ -332,7 +335,7 @@ import LineupEngine
         #expect(Set(recorded.members.map(\.player)) == Set(members(group)))
         #expect(recorded.members.allSatisfy { $0.joinedOn == today && $0.leftOn == nil })
         for member in members(group) { #expect(t.model.mentoring.names[member] != nil) }
-        let names = [group.leadName] + group.members.map(\.name)
+        let names = group.members.map(\.name)
         #expect(t.model.notices.contains { $0.text == AdvisorText.recorded(names: names) })
         #expect(t.reopened().mentoring.groups == t.model.mentoring.groups)
     }
@@ -567,8 +570,8 @@ import LineupEngine
         let request = MentoringRequest(
             squad: squad, players: model.squad.book.allPlayers, ownClub: model.ownClub,
             dynamics: model.mentoring.dynamics(for: squad), dynamicsUpdatedOn: model.mentoring.dynamicsUpdatedOn[squad],
-            groups: model.mentoring.groups, readings: model.mentoring.readings, names: model.mentoring.names,
-            leaving: leaving, asOf: model.settings.currentDate)
+            groups: model.mentoring.groups, readings: model.mentoring.readings, arrows: [],
+            names: model.mentoring.names, leaving: leaving, asOf: model.settings.currentDate)
         return try Mentoring.report(request, parameters: .fm27)
     }
 
@@ -578,6 +581,9 @@ import LineupEngine
 
     @Test func mentoringWorksWithNoTactic() throws {
         let t = try both()
+        // With no level entered nothing would be suggested: the oldest first-team player is entered as Team Leader.
+        let oldest = try #require((t.model.squad.book.current[.firstTeam] ?? []).max { ($0.age, $1.name) < ($1.age, $0.name) })
+        t.model.setDynamics([oldest.id: PlayerDynamics(standing: .teamLeader)], for: .firstTeam)
         #expect(t.model.adviceState == .needsTactic([]))
         let advice = t.model.mentoringAdvice(for: .firstTeam)
         #expect(advice == .ready(try engineReport(t.model, .firstTeam, leaving: [])))
@@ -754,7 +760,7 @@ import LineupEngine
         #expect(model.mentoring.hierarchy.values.allSatisfy { $0.squad == .firstTeam })
         #expect(model.mentoring.dynamicsUpdatedOn == [.firstTeam: model.settings.currentDate])
         let report = try report(model)
-        #expect(!report.byAgeAlone && !report.isStale)
+        #expect(!report.needsHierarchy && !report.isStale)
         #expect(!report.suggestions.isEmpty)
         #expect(model.mentoring.groups.isEmpty)
         #expect(model.mentoringSheet(for: .firstTeam).hierarchyLines.count == 4)
@@ -779,33 +785,35 @@ import LineupEngine
         let review = try #require(report.groups.first)
         #expect(report.groups.count == 1)
         #expect(review.group.startedOn == model.settings.currentDate.adding(days: -35))
-        #expect(review.lead != nil)
+        #expect(!review.arrows.isEmpty)
         let improved = review.members.flatMap { member in member.changes.map { (member, $0) } }.filter { $0.1.change == .improved }
         #expect(improved.count == 1)
         let (member, change) = try #require(improved.first)
-        #expect(!member.isLead)
+        // He is one the group influences.
+        #expect(review.arrows.contains { $0.arrow.to == member.player })
         #expect(change.attribute == .professionalism)
         #expect(change.latest == change.start.map { $0 + 1 })
         #expect(change.weeks == 5)
         #expect(!review.isDoingHarm && !review.hasStoppedWorking)
-        #expect(!review.warnings.contains { if case .mayBeDraggedDown = $0 { true } else { false } })
+        #expect(!review.warnings.contains { if case .harmfulArrow = $0 { true } else { false } })
         let card = try #require(model.mentoringSheet(for: .firstTeam).yours.first)
         #expect(card.stateText == nil)
         #expect(card.members.contains { $0.detailText?.contains(AdvisorText.change(change)!) == true })
         #expect(model.notices.isEmpty)
     }
 
-    @Test func theWarningSampleHasALeadWhoMayDragAMemberDownInAmbition() throws {
+    @Test func theWarningSampleHasATeamLeaderWhoseArrowIntoAJuniorIsHarmfulInAmbition() throws {
         let model = try SampleData.modelWithMentoringWarning(repositoryRoot: Captures.repositoryRoot)
         let review = try #require(try report(model).groups.first)
-        let dragged = review.warnings.filter { warning in
-            if case .mayBeDraggedDown(let above, _, .ambition, let aboveValue, let belowValue) = warning {
-                return above == review.lead && aboveValue < belowValue
+        let levels = model.mentoring.dynamics(for: .firstTeam)
+        let harmful = review.warnings.filter { warning in
+            if case .harmfulArrow(let from, _, let strength, _, .ambition, let fromValue, let toValue) = warning {
+                return levels[from]?.standing == .teamLeader && strength > .none && fromValue < toValue
             }
             return false
         }
-        #expect(!dragged.isEmpty)
-        // The lead's Ambition was the same at both readings: the group is not doing harm.
+        #expect(!harmful.isEmpty)
+        // The Team Leader's Ambition was the same at both readings: the group is not doing harm.
         #expect(!review.isDoingHarm)
         let card = try #require(model.mentoringSheet(for: .firstTeam).yours.first)
         #expect(card.stateText == nil)

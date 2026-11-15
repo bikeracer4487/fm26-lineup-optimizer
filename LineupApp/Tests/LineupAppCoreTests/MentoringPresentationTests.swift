@@ -19,10 +19,12 @@ import Testing
     private let pike = PlayerID.fmrte(7)
 
     private func player(_ id: PlayerID, _ name: String, age: Int, squad: Squad = .firstTeam,
-                        professionalism: Int = 10, pressure: Int = 10, loanedTo: String? = nil) -> Player {
+                        professionalism: Int = 10, pressure: Int = 10, ambition: Int = 10,
+                        loanedTo: String? = nil) -> Player {
         Player(id: id, name: name, squad: squad, age: age, positionsText: "D C", currentAbility: 100,
                potentialAbility: 120,
-               attributes: [.professionalism: professionalism, .pressure: pressure, .determination: 10, .ambition: 10],
+               attributes: [.professionalism: professionalism, .pressure: pressure, .determination: 10,
+                            .ambition: ambition],
                familiarity: [:], condition: 1, sharpness: 1, jadedness: 0, isInjured: false, isBanned: false,
                club: club, loanedTo: loanedTo, contractType: .fullTime, monthsLeft: 10, wagePerWeek: 1,
                askingPrice: nil, nationalities: [], extras: [:])
@@ -34,7 +36,7 @@ import Testing
         let request = MentoringRequest(
             squad: squad, players: players, ownClub: club, dynamics: state.dynamics(for: squad),
             dynamicsUpdatedOn: state.dynamicsUpdatedOn[squad], groups: state.groups, readings: state.readings,
-            names: state.names, leaving: [], asOf: day ?? asOf)
+            arrows: [], names: state.names, leaving: [], asOf: day ?? asOf)
         return .ready(try Mentoring.report(request, parameters: parameters))
     }
 
@@ -47,9 +49,9 @@ import Testing
     }
 
     private func pinned(suggestions: [SuggestedGroup] = [], notPlaced: [NotPlaced] = [], groups: [GroupReview] = [],
-                        byAgeAlone: Bool = false) -> MentoringAdvice {
-        .ready(MentoringReport(squad: .firstTeam, byAgeAlone: byAgeAlone, isStale: false, suggestions: suggestions,
-                               notPlaced: notPlaced, groups: groups, basis: .carriedOverFM26))
+                        needsHierarchy: Bool = false) -> MentoringAdvice {
+        .ready(MentoringReport(squad: .firstTeam, needsHierarchy: needsHierarchy, isStale: false,
+                               suggestions: suggestions, notPlaced: notPlaced, groups: groups, basis: .carriedOverFM26))
     }
 
     /// Enters each player's level and group for the squad, as its hierarchy editor would.
@@ -74,7 +76,7 @@ import Testing
         let shown = try sheet(players, hierarchy)
         #expect(shown.hierarchyLines == ["Team Leader: Okafor, Hart.", "Influential: Mills.", "Everyone else: others."])
         #expect(shown.hierarchyLines[0].hasPrefix(AdvisorText.name(Standing.teamLeader) + ":"))
-        #expect(shown.byAgeAloneText == nil)
+        #expect(shown.needsHierarchyText == nil)
         #expect(shown.notReady == nil)
         #expect(shown.failures.isEmpty)
     }
@@ -147,15 +149,15 @@ import Testing
         #expect(never.staleText == nil)
     }
 
-    @Test func aSquadOfYoungPlayersWithNothingEnteredGoesByAgeAloneAndPlacesNobody() throws {
+    @Test func aSquadOfYoungPlayersWithNothingEnteredNeedsItsHierarchyAndPlacesNobody() throws {
         let players = [player(hart, "Hart", age: 16), player(okafor, "Okafor", age: 17), player(mills, "Mills", age: 18),
                        player(young, "Young", age: 18), player(reid, "Reid", age: 17)]
         let shown = try sheet(players)
         #expect(shown.hierarchyLines.isEmpty)
-        #expect(shown.byAgeAloneText == AdvisorText.mentoringByAgeAlone)
+        #expect(shown.needsHierarchyText == AdvisorText.mentoringNeedsHierarchy)
         #expect(shown.suggested.isEmpty)
         let expected = players.sorted { $0.id.key < $1.id.key }.map {
-            AdvisorText.notPlaced(NotPlaced(player: $0.id, name: $0.name, age: $0.age, reason: .nobodyAbove))
+            AdvisorText.notPlaced(NotPlaced(player: $0.id, name: $0.name, age: $0.age, reason: .noInfluence))
         }
         #expect(shown.notPlaced == expected)
         #expect(MentoringPresentation.noSuggestionsText(shown) == AdvisorText.noGroupToSuggest)
@@ -163,69 +165,132 @@ import Testing
         let two = try sheet(Array(players.prefix(2)))
         #expect(two.suggested.isEmpty)
         #expect(two.notPlaced.count == 2)
-        #expect(two.byAgeAloneText == AdvisorText.mentoringByAgeAlone)
+        #expect(two.needsHierarchyText == AdvisorText.mentoringNeedsHierarchy)
+
+        // One level entered, and the sentence goes.
+        var state = MentoringState()
+        enter([hart: PlayerDynamics(standing: .influential)], into: &state)
+        #expect(try sheet(players, state).needsHierarchyText == nil)
     }
 
     @Test func theNoteIsTheEnginesStandingNote() throws {
         #expect(try sheet([player(hart, "Hart", age: 34)]).noteText == AdvisorText.mentoringNote)
+        #expect(try sheet([], advice: .needsSquad).noteText == AdvisorText.mentoringNote)
+        #expect(try sheet([], advice: .failed(["Something"])).noteText == AdvisorText.mentoringNote)
+    }
+
+    // MARK: Arrows
+
+    private let readDay = Day(year: 2026, month: 11, day: 14)!
+
+    private func arrow(_ from: PlayerID, _ fromName: String, _ to: PlayerID, _ toName: String,
+                       _ strength: ArrowStrength, readOn: Day? = nil, pulls: [Pull] = []) -> GroupArrow {
+        GroupArrow(arrow: Arrow(from: from, to: to, strength: strength, readOn: readOn), fromName: fromName,
+                   toName: toName, pulls: pulls)
+    }
+
+    @Test func anArrowLineSaysReadWithItsDayOrExpected() {
+        let pulls = [Pull(attribute: .professionalism, value: 10, towards: 12),
+                     Pull(attribute: .determination, value: 7, towards: 12)]
+        let read = ArrowLine(arrow(hart, "McEachran", young, "Clark", .significant, readOn: readDay, pulls: pulls))
+        #expect(read.titleText == "McEachran → Clark")
+        #expect(read.strengthText == "Significant · read Sat 14 Nov")
+        #expect(read.detailText == "Professionalism 10, towards 12 · Determination 7, towards 12")
+        #expect(!read.isGuess)
+        #expect(read.id == "\(hart.key)→\(young.key)")
+
+        let guess = ArrowLine(arrow(hart, "McEachran", young, "Clark", .light, pulls: pulls))
+        #expect(guess.strengthText == "Light · expected, not read")
+        #expect(guess.strengthText == AdvisorText.name(ArrowStrength.light) + " · " + AdvisorText.expectedNotRead)
+        #expect(guess.isGuess)
+        // The other way round is another arrow.
+        #expect(ArrowLine(arrow(young, "Clark", hart, "McEachran", .light)).id != guess.id)
+    }
+
+    @Test func anArrowWithNothingToGainSaysSo() {
+        let line = ArrowLine(arrow(hart, "McEachran", reid, "Humphries", .average, readOn: readDay))
+        #expect(line.detailText == "nothing to gain")
+        #expect(line.detailText == AdvisorText.nothingToGain)
+        #expect(line.strengthText == "Average · read Sat 14 Nov")
     }
 
     // MARK: Suggested groups
 
     private var suggestion: SuggestedGroup {
         SuggestedGroup(
-            lead: hart, leadName: "Hart", leadAge: 34, leadStanding: .teamLeader,
-            members: [
-                SuggestedMember(player: young, name: "Young", age: 18, isMakingUp: false,
-                                pulls: [Pull(attribute: .professionalism, value: 8, towards: 17),
-                                        Pull(attribute: .pressure, value: 4, towards: 6)],
-                                inDifferentSocialGroup: false),
-                SuggestedMember(player: reid, name: "Reid", age: 19, isMakingUp: true, pulls: [],
-                                inDifferentSocialGroup: true)],
-            cautions: [.onLoanHere, .advisedToLeave], basis: .carriedOverFM26)
+            members: [SuggestedMember(player: hart, name: "Hart", age: 34),
+                      SuggestedMember(player: young, name: "Young", age: 18),
+                      SuggestedMember(player: reid, name: "Reid", age: 19)],
+            arrows: [arrow(hart, "Hart", young, "Young", .average,
+                           pulls: [Pull(attribute: .professionalism, value: 8, towards: 17),
+                                   Pull(attribute: .pressure, value: 4, towards: 6)]),
+                     arrow(hart, "Hart", reid, "Reid", .average)],
+            isRead: false, cautions: [.onLoanHere(hart), .advisedToLeave(hart)], basis: .carriedOverFM26)
     }
 
-    @Test func aSuggestedCardHasTheLeadTheMembersAndTheCautions() throws {
+    @Test func aSuggestedCardHasItsTitleItsArrowsThePromptAndTheCautions() throws {
         let shown = try sheet([], advice: pinned(suggestions: [suggestion]))
         let card = try #require(shown.suggested.first)
         #expect(shown.suggested.count == 1)
-        #expect(card.id == hart)
+        #expect(card.id == suggestion.id)
         #expect(card.suggestion == suggestion)
-        #expect(card.leadText == "Led by Hart (34, Team Leader)")
-        #expect(card.leadText == AdvisorText.lead(suggestion))
-        #expect(card.members.map(\.id) == [young, reid])
-        #expect(card.members[0].nameText == "Young (18)")
-        #expect(card.members[0].detailText == "Professionalism 8, towards 17 · Pressure 4, towards 6")
-        #expect(card.members[0].notes.isEmpty)
-        #expect(card.members[1].nameText == "Reid (19)")
-        #expect(card.members[1].detailText == nil)
-        #expect(card.members[1].notes == [AdvisorText.makingUpTheGroup, AdvisorText.otherSocialGroup(leadName: "Hart")])
-        #expect(card.cautions == [AdvisorText.caution(.onLoanHere, leadName: "Hart"),
-                                  AdvisorText.caution(.advisedToLeave, leadName: "Hart")])
+        #expect(card.titleText == "Hart, Young, Reid")
+        #expect(card.arrows.map(\.titleText) == ["Hart → Young", "Hart → Reid"])
+        #expect(card.arrows.map(\.strengthText) == ["Average · expected, not read", "Average · expected, not read"])
+        #expect(card.arrows.map(\.detailText) == ["Professionalism 8, towards 17 · Pressure 4, towards 6",
+                                                  "nothing to gain"])
+        #expect(card.arrows.allSatisfy { $0.isGuess })
+        #expect(card.promptText == "Set this group in the game and record its arrows.")
+        #expect(card.promptText == AdvisorText.setAndRecordArrows)
+        let names = [hart: "Hart", young: "Young", reid: "Reid"]
+        #expect(card.cautions == [AdvisorText.caution(.onLoanHere(hart), names: names),
+                                  AdvisorText.caution(.advisedToLeave(hart), names: names)])
+        #expect(card.cautions.first == "Hart is on loan here: the group ends when he goes back.")
         #expect(card.noteText == "(FM26-era numbers)")
         #expect(MentoringPresentation.noSuggestionsText(shown) == nil)
     }
 
+    @Test func aSuggestionThatWasReadHasNoPrompt() throws {
+        let given = SuggestedGroup(members: suggestion.members, arrows: suggestion.arrows, isRead: true, cautions: [],
+                                   basis: .derived)
+        let card = try #require(try sheet([], advice: pinned(suggestions: [given])).suggested.first)
+        #expect(card.promptText == nil)
+        #expect(card.cautions.isEmpty)
+    }
+
     @Test func aSuggestedCardIsSpokenWithEverythingOnIt() throws {
         let card = try #require(try sheet([], advice: pinned(suggestions: [suggestion])).suggested.first)
-        #expect(card.spokenText == "Led by Hart (34, Team Leader), "
-                + "Young (18), Professionalism 8, towards 17 · Pressure 4, towards 6, "
-                + "Reid (19), Making up the group, In a different social group from Hart: likely a weaker influence, "
+        #expect(card.spokenText == "Hart, Young, Reid, "
+                + "Hart → Young, Average · expected, not read, Professionalism 8, towards 17 · Pressure 4, towards 6, "
+                + "Hart → Reid, Average · expected, not read, nothing to gain, "
+                + "Set this group in the game and record its arrows., "
                 + "Caution: Hart is on loan here: the group ends when he goes back., "
                 + "Caution: Hart is advised to leave: the group ends when he goes., FM26-era numbers")
     }
 
     @Test func aCardWithFM27EvidenceHasNoNote() throws {
-        let given = SuggestedGroup(lead: hart, leadName: "Hart", leadAge: 34, leadStanding: .teamLeader,
-                                   members: suggestion.members, cautions: [], basis: .fm27Observation)
+        let given = SuggestedGroup(members: suggestion.members, arrows: suggestion.arrows, isRead: false, cautions: [],
+                                   basis: .fm27Observation)
         #expect(try #require(try sheet([], advice: pinned(suggestions: [given])).suggested.first).noteText == nil)
     }
 
+    /// Every reason: a new case stops this from building until it is added below.
+    private func listed(_ reason: NotPlacedReason) -> Bool {
+        switch reason {
+        case .takesNothing, .noInfluence, .nothingToGain, .tooFewFree, .wouldHarm, .noThirdFree, .influencersTaken: true
+        }
+    }
+
     @Test func notPlacedAreTheEnginesSentences() throws {
-        let missing = NotPlaced(player: pike, name: "Pike", age: 17, reason: .wouldHarm(.pressure))
-        let shown = try sheet([], advice: pinned(notPlaced: [missing]))
-        #expect(shown.notPlaced == [AdvisorText.notPlaced(missing)])
-        #expect(shown.notPlaced == ["Pike (17): those who are better where it counts would do him harm in Pressure."])
+        let reasons: [NotPlacedReason] = [.takesNothing, .noInfluence, .nothingToGain, .tooFewFree, .wouldHarm,
+                                          .noThirdFree, .influencersTaken]
+        #expect(reasons.allSatisfy(listed))
+        let missing = reasons.map { NotPlaced(player: pike, name: "Pike", age: 17, reason: $0) }
+        let shown = try sheet([], advice: pinned(notPlaced: missing))
+        #expect(shown.notPlaced == missing.map(AdvisorText.notPlaced))
+        #expect(Set(shown.notPlaced).count == reasons.count)
+        #expect(shown.notPlaced[0] == "Pike (17): he has taken nothing from the players tried with him so far.")
+        #expect(shown.notPlaced[4] == "Pike (17): every group that would help him would pull a player down.")
     }
 
     // MARK: Recorded groups
@@ -245,17 +310,26 @@ import Testing
         AttributeChange(attribute: attribute, start: start, latest: latest, weeks: weeks, change: change)
     }
 
-    private func review(doingHarm: Bool = true, stopped: Bool = false) -> GroupReview {
+    private var recordedArrows: [GroupArrow] {
+        [arrow(okafor, "Okafor", lane, "Lane", .significant, readOn: readDay,
+               pulls: [Pull(attribute: .professionalism, value: 10, towards: 15)]),
+         arrow(okafor, "Okafor", pike, "Pike", .light)]
+    }
+
+    private func review(doingHarm: Bool = true, stopped: Bool = false, noInfluence: Bool = false,
+                        unread: Int = 5) -> GroupReview {
         let none = Mentoring.counted(parameters).map { change($0, nil, nil, weeks: 0, .noReading) }
         return GroupReview(
-            group: recorded, lead: okafor,
+            group: recorded,
             members: [
-                MemberReview(player: okafor, name: "Okafor", age: 30, isLead: true, pulls: [],
+                MemberReview(player: okafor, name: "Okafor", age: 30,
                              changes: [change(.professionalism, 15, 15, .noChange)]),
-                MemberReview(player: lane, name: "Lane", age: 20, isLead: false, pulls: [],
+                MemberReview(player: lane, name: "Lane", age: 20,
                              changes: [change(.professionalism, 9, 10, .improved), change(.pressure, 5, 5, .noChange)]),
-                MemberReview(player: pike, name: "Pike", age: 17, isLead: false, pulls: [], changes: none)],
-            warnings: [.mayBeDraggedDown(above: okafor, below: pike, attribute: .ambition, aboveValue: 6, belowValue: 9)],
+                MemberReview(player: pike, name: "Pike", age: 17, changes: none)],
+            arrows: noInfluence ? [] : recordedArrows, unreadArrows: unread, hasNoInfluence: noInfluence,
+            warnings: [.harmfulArrow(from: okafor, to: pike, strength: .light, isRead: false, attribute: .ambition,
+                                     fromValue: 6, toValue: 9)],
             isDoingHarm: doingHarm, hasStoppedWorking: stopped, basis: .derived)
     }
 
@@ -267,13 +341,22 @@ import Testing
         #expect(card.sinceText == "since Mon 12 Oct")
         #expect(card.stateText == AdvisorText.state(of: review(), parameters: parameters))
         #expect(card.stateText?.hasPrefix("This group is doing harm") == true)
+        #expect(card.arrows == recordedArrows.map(ArrowLine.init))
+        #expect(card.arrows.map(\.titleText) == ["Okafor → Lane", "Okafor → Pike"])
+        #expect(card.arrows.map(\.strengthText) == ["Significant · read Sat 14 Nov", "Light · expected, not read"])
+        #expect(card.arrows.map(\.detailText) == ["Professionalism 10, towards 15", "nothing to gain"])
+        #expect(card.arrowsPromptText == "Record this group's arrows from the game: 5 of them are still guesses.")
         #expect(card.members.map(\.nameText) == ["Okafor (30)", "Lane (20)", "Pike (17)"])
         #expect(card.members[0].detailText == "Professionalism 15, no change")
         #expect(card.members[1].detailText == "Professionalism 9 to 10 in 5 weeks · Pressure 5, no change")
         #expect(card.members[1].notes.isEmpty)
         #expect(card.members[2].detailText == nil)
         #expect(card.members[2].notes == [AdvisorText.noReadingYet])
-        #expect(card.warnings == ["Okafor stands above Pike and has Ambition 6 against 9: Pike may be dragged down."])
+        #expect(card.warnings == ["Okafor's influence on Pike is expected to be Light, and Okafor's Ambition is 6 "
+                                  + "against Pike's 9."])
+        #expect(card.warnings == review().warnings.map {
+            AdvisorText.warning($0, names: [okafor: "Okafor", lane: "Lane", pike: "Pike"])
+        })
         #expect(card.noteText == "(this tool's estimate)")
         #expect(card.draft == MentoringGroupDraft(editing: recorded))
         #expect(!card.draft.isNew)
@@ -287,33 +370,38 @@ import Testing
         #expect(healthy.stateText == nil)
     }
 
+    @Test func aGroupWithNoInfluenceSaysSo() throws {
+        let given = review(doingHarm: false, noInfluence: true, unread: 0)
+        let card = try #require(try sheet([], advice: pinned(groups: [given])).yours.first)
+        #expect(card.stateText == AdvisorText.state(of: given, parameters: parameters))
+        #expect(card.stateText == "The game shows no influence in this group: all six arrows are None. Consider regrouping.")
+        #expect(card.arrows.isEmpty)
+        #expect(card.arrowsPromptText == nil)
+    }
+
+    @Test func aRecordedCardAsksForItsArrowsUntilAllAreRead() throws {
+        func prompt(_ unread: Int) throws -> String? {
+            try #require(try sheet([], advice: pinned(groups: [review(unread: unread)])).yours.first).arrowsPromptText
+        }
+        #expect(try prompt(6) == AdvisorText.arrowsToRead(review(unread: 6)))
+        #expect(try prompt(6) == "Record this group's arrows from the game: 6 of them are still guesses.")
+        #expect(try prompt(1) == "Record this group's arrows from the game: 1 of them is still a guess.")
+        #expect(try prompt(0) == nil)
+    }
+
     @Test func aRecordedCardIsSpokenWithEverythingOnIt() throws {
-        let card = try #require(try sheet([], advice: pinned(groups: [review(doingHarm: false)])).yours.first)
+        let card = try #require(try sheet([], advice: pinned(groups: [review(stopped: false)])).yours.first)
         #expect(card.spokenText == "Okafor, Lane, Pike, since Mon 12 Oct, "
-                + "Okafor (30), Lead, Professionalism 15, no change, "
+                + "Okafor → Lane, Significant · read Sat 14 Nov, Professionalism 10, towards 15, "
+                + "Okafor → Pike, Light · expected, not read, nothing to gain, "
+                + "Record this group's arrows from the game: 5 of them are still guesses., "
+                + "Warning: Okafor's influence on Pike is expected to be Light, and Okafor's Ambition is 6 against "
+                + "Pike's 9., "
+                + "This group is doing harm: a member is worth less than when he joined. Consider regrouping., "
+                + "Okafor (30), Professionalism 15, no change, "
                 + "Lane (20), Professionalism 9 to 10 in 5 weeks · Pressure 5, no change, "
                 + "Pike (17), No reading yet: values are read at each import, "
-                + "Warning: Okafor stands above Pike and has Ambition 6 against 9: Pike may be dragged down., "
                 + "this tool's estimate")
-    }
-
-    @Test func theLeadOfARecordedGroupIsMarked() throws {
-        let card = try #require(try sheet([], advice: pinned(groups: [review()])).yours.first)
-        #expect(card.members.map(\.leadText) == ["Lead", nil, nil])
-        // A suggested group's lead is in its title, not among its members.
-        let suggested = try #require(try sheet([], advice: pinned(suggestions: [suggestion])).suggested.first)
-        #expect(suggested.members.allSatisfy { $0.leadText == nil })
-    }
-
-    @Test func aGroupWithNobodyClearlyLeadingMarksNobody() throws {
-        let members = review().members.map {
-            MemberReview(player: $0.player, name: $0.name, age: $0.age, isLead: false, pulls: [], changes: $0.changes)
-        }
-        let leaderless = GroupReview(group: recorded, lead: nil, members: members, warnings: [.nobodyLeads],
-                                     isDoingHarm: false, hasStoppedWorking: false, basis: .derived)
-        let card = try #require(try sheet([], advice: pinned(groups: [leaderless])).yours.first)
-        #expect(card.members.allSatisfy { $0.leadText == nil })
-        #expect(card.warnings == ["Nobody is clearly leading this group."])
     }
 
     @Test func aSquadWithNoGroupRecordedSaysSo() throws {
@@ -328,9 +416,10 @@ import Testing
     }
 
     @Test func aMemberNoLongerImportedIsShownByNameWithoutAnAge() throws {
-        let gone = MemberReview(player: pike, name: "Pike", age: nil, isLead: false, pulls: [], changes: [])
-        let given = GroupReview(group: recorded, lead: okafor, members: [review().members[0], review().members[1], gone],
-                                warnings: [.notInSquad(pike)], isDoingHarm: false, hasStoppedWorking: false, basis: .derived)
+        let gone = MemberReview(player: pike, name: "Pike", age: nil, changes: [])
+        let given = GroupReview(group: recorded, members: [review().members[0], review().members[1], gone],
+                                arrows: [], unreadArrows: 2, hasNoInfluence: false, warnings: [.notInSquad(pike)],
+                                isDoingHarm: false, hasStoppedWorking: false, basis: .derived)
         let card = try #require(try sheet([], advice: pinned(groups: [given])).yours.first)
         #expect(card.members[2].nameText == "Pike")
         #expect(card.warnings == ["Pike is no longer in the squad."])
@@ -345,7 +434,7 @@ import Testing
         #expect(shown.failures.isEmpty)
         #expect(shown.hierarchyLines.isEmpty)
         #expect(shown.socialGroupsLine == nil)
-        #expect(shown.updatedText == nil && shown.staleText == nil && shown.byAgeAloneText == nil)
+        #expect(shown.updatedText == nil && shown.staleText == nil && shown.needsHierarchyText == nil)
         #expect(shown.suggested.isEmpty && shown.yours.isEmpty && shown.notPlaced.isEmpty)
         #expect(MentoringPresentation.noSuggestionsText(shown) == nil)
         #expect(try sheet([], advice: .needsSquad).notReady == "The first team has not been imported yet.")
@@ -381,14 +470,24 @@ import Testing
         #expect(card.titleText == "Okafor, Lane, Pike")
         #expect(card.sinceText == "since Mon 12 Oct")
         #expect(card.members.isEmpty && card.warnings.isEmpty)
+        #expect(card.arrows.isEmpty && card.arrowsPromptText == nil)
         #expect(card.stateText == nil && card.noteText == nil)
+        #expect(shown.needsHierarchyText == nil)
         #expect(card.draft == MentoringGroupDraft(editing: recorded))
     }
 
-    @Test func aFailedSquadWithNothingEnteredSaysItGoesByAgeAlone() throws {
+    @Test func aFailedSquadWithNothingEnteredSaysItNeedsItsHierarchy() throws {
         let shown = try sheet([player(hart, "Hart", age: 34)], advice: .failed(["Something"]))
         #expect(shown.hierarchyLines.isEmpty)
-        #expect(shown.byAgeAloneText == AdvisorText.mentoringByAgeAlone)
+        #expect(shown.needsHierarchyText == AdvisorText.mentoringNeedsHierarchy)
+        // A level entered only for a player out on loan is not one the advice uses.
+        var state = MentoringState()
+        enter([okafor: PlayerDynamics(standing: .teamLeader)], into: &state)
+        let away = [player(hart, "Hart", age: 34), player(okafor, "Okafor", age: 30, loanedTo: "Rovers")]
+        #expect(try sheet(away, state, advice: .failed(["Something"])).needsHierarchyText
+                == AdvisorText.mentoringNeedsHierarchy)
+        enter([hart: PlayerDynamics(standing: .influential)], into: &state)
+        #expect(try sheet(away, state, advice: .failed(["Something"])).needsHierarchyText == nil)
     }
 
     @Test func aMemberWithNoNameKnownIsNeverShownByHisKey() throws {
@@ -397,6 +496,53 @@ import Testing
         let shown = try sheet([], state, advice: .failed(["Something"]))
         let title = try #require(shown.yours.first).titleText
         #expect(!title.contains(okafor.key) && !title.contains(lane.key) && !title.contains(pike.key))
+    }
+
+    // MARK: Every sentence the engine's
+
+    @Test func noSentenceAboutAdviceIsWrittenInCore() throws {
+        // Hart leads a group with Young and Reid; Mills, 28, has nobody to influence him; Okafor's recorded group with
+        // Lane and Pike has a harmful arrow, his Ambition below theirs, and none of its arrows read.
+        let players = [player(hart, "Hart", age: 34, professionalism: 18), player(young, "Young", age: 18, professionalism: 8),
+                       player(reid, "Reid", age: 19, professionalism: 9), player(mills, "Mills", age: 28),
+                       player(okafor, "Okafor", age: 30, ambition: 4), player(lane, "Lane", age: 20, ambition: 9),
+                       player(pike, "Pike", age: 17, ambition: 9)]
+        var state = MentoringState()
+        enter([hart: PlayerDynamics(standing: .teamLeader), okafor: PlayerDynamics(standing: .influential)], into: &state)
+        state.groups = [recorded]
+        guard case .ready(let report) = try advice(players, state) else { Issue.record("expected advice"); return }
+        // Otherwise the test would check nothing.
+        #expect(!report.suggestions.isEmpty && !report.notPlaced.isEmpty && !report.groups.isEmpty)
+        #expect(report.groups.allSatisfy { !$0.warnings.isEmpty && !$0.arrows.isEmpty && $0.unreadArrows > 0 })
+        #expect(report.groups.contains { $0.warnings.contains { if case .harmfulArrow = $0 { true } else { false } } })
+
+        func expected(_ arrow: GroupArrow) -> [String] {
+            let read = arrow.arrow.readOn.map(MentoringPresentation.readOn) ?? AdvisorText.expectedNotRead
+            let pulls = arrow.pulls.map(AdvisorText.pull)
+            return [AdvisorText.arrowTitle(arrow), AdvisorText.name(arrow.arrow.strength) + " · " + read,
+                    pulls.isEmpty ? AdvisorText.nothingToGain : pulls.joined(separator: " · ")]
+        }
+        func shown(_ line: ArrowLine) -> [String] { [line.titleText, line.strengthText, line.detailText] }
+
+        let sheet = try sheet(players, state, advice: .ready(report))
+        #expect(sheet.noteText == AdvisorText.mentoringNote)
+        #expect(sheet.needsHierarchyText == nil)
+        #expect(sheet.notPlaced == report.notPlaced.map(AdvisorText.notPlaced))
+        #expect(sheet.suggested.count == report.suggestions.count)
+        for (card, suggestion) in zip(sheet.suggested, report.suggestions) {
+            #expect(card.arrows.map(shown) == suggestion.arrows.map(expected))
+            #expect(card.promptText == (suggestion.isRead ? nil : AdvisorText.setAndRecordArrows))
+            let names = Dictionary(uniqueKeysWithValues: suggestion.members.map { ($0.player, $0.name) })
+            #expect(card.cautions == suggestion.cautions.map { AdvisorText.caution($0, names: names) })
+        }
+        #expect(sheet.yours.count == report.groups.count)
+        for (card, review) in zip(sheet.yours, report.groups) {
+            #expect(card.arrows.map(shown) == review.arrows.map(expected))
+            #expect(card.arrowsPromptText == AdvisorText.arrowsToRead(review))
+            #expect(card.stateText == AdvisorText.state(of: review, parameters: parameters))
+            let names = Dictionary(uniqueKeysWithValues: review.members.map { ($0.player, $0.name) })
+            #expect(card.warnings == review.warnings.map { AdvisorText.warning($0, names: names) })
+        }
     }
 
     // MARK: Long names
@@ -408,10 +554,14 @@ import Testing
         enter([hart: PlayerDynamics(standing: .teamLeader)], into: &state)
         let shown = try sheet(players, state)
         #expect(shown.hierarchyLines.first == "Team Leader: \(long).")
-        let given = SuggestedGroup(lead: hart, leadName: long, leadAge: 34, leadStanding: .teamLeader,
-                                   members: suggestion.members, cautions: [], basis: .derived)
+        let given = SuggestedGroup(
+            members: [SuggestedMember(player: hart, name: long, age: 34)] + suggestion.members.dropFirst(),
+            arrows: [arrow(hart, long, young, "Young", .average)], isRead: false, cautions: [.advisedToLeave(hart)],
+            basis: .derived)
         let card = try #require(try sheet([], advice: pinned(suggestions: [given])).suggested.first)
-        #expect(card.leadText == "Led by \(long) (34, Team Leader)")
+        #expect(card.titleText == "\(long), Young, Reid")
+        #expect(card.arrows.first?.titleText == "\(long) → Young")
+        #expect(card.cautions == ["\(long) is advised to leave: the group ends when he goes."])
         #expect(MentoringPresentation.dynamicsRows(players, ownClub: club, dynamics: [:]).first?.name == long)
     }
 
@@ -445,7 +595,7 @@ import Testing
         let placed = try sheet(players, advice: pinned(notPlaced: []))
         #expect(MentoringPresentation.notPlacedHeading(placed) == nil)
         let left = try sheet(players, advice: pinned(notPlaced: [NotPlaced(player: young, name: "Young", age: 18,
-                                                                             reason: .nobodyAbove)]))
+                                                                             reason: .noInfluence)]))
         #expect(MentoringPresentation.notPlacedHeading(left) == "Not placed")
         #expect(MentoringPresentation.notPlacedHeading(try sheet([], advice: .needsSquad)) == nil)
     }
@@ -571,6 +721,10 @@ import Testing
 
         #expect((0...3).map(MentoringPresentation.chosenText)
                 == ["0 of 3 chosen", "1 of 3 chosen", "2 of 3 chosen", "3 of 3 chosen"])
+
+        #expect(MentoringPresentation.hierarchyEditorNote == AdvisorText.socialGroupsNotUsed)
+        #expect(MentoringPresentation.hierarchyEditorNote
+                == "Social groups are kept as entered. They do not change the advice.")
     }
 
     @Test func aDraftBeingChangedKeepsItsGroupsSquad() {
@@ -593,6 +747,10 @@ import Testing
         let headings = MentoringPresentation.headings
         #expect([headings.hierarchy, headings.suggested, headings.yours, headings.notPlaced]
                 == ["Hierarchy", "Suggested groups", "Your groups", "Not placed"])
+        #expect(MentoringPresentation.readOn(readDay) == "read Sat 14 Nov")
+        #expect(MentoringPresentation.readOn(readDay) == "read \(DayText.short(readDay))")
+        #expect([MentoringPresentation.recordTitle, MentoringPresentation.addTitle, MentoringPresentation.editTitle,
+                 MentoringPresentation.endTitle] == ["Record as set", "Add a group", "Edit", "End group"])
         #expect(TrainingView.allCases.map(\.title) == ["Retraining", "Mentoring"])
         #expect(MentoringEditing.hierarchy(.u21).id != MentoringEditing.hierarchy(.firstTeam).id)
         let draft = MentoringGroupDraft(squad: .firstTeam)

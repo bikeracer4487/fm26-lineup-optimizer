@@ -388,7 +388,7 @@ public enum SampleData {
     /// The sample model with the first team's hierarchy entered, as the owner enters it: the three oldest first-team
     /// players of the club's own raised, the oldest to Team Leader, the next to Highly Influential and the third to
     /// Influential, all three in the core social group, and the two youngest in secondary group A; nobody else has an
-    /// entry. The U21s have none, so their advice goes by age alone.
+    /// entry. The U21s have none, so their advice asks for their hierarchy.
     @MainActor public static func modelWithHierarchy(repositoryRoot: URL) throws -> AppModel {
         let model = try build(repositoryRoot: repositoryRoot).model
         try enterHierarchy(in: model)
@@ -423,7 +423,7 @@ public enum SampleData {
     }
 
     /// The hierarchy sample with the advice's first suggested first-team group recorded five weeks before the game's
-    /// current date, and an import today in which the first of its members after the lead has risen one in
+    /// current date, and an import today in which the player its first arrow points to has risen one in
     /// Professionalism.
     @MainActor public static func modelWithMentoringGroup(repositoryRoot: URL) throws -> AppModel {
         let model = try modelWithHierarchy(repositoryRoot: repositoryRoot)
@@ -431,22 +431,24 @@ public enum SampleData {
         return model
     }
 
-    /// As `modelWithMentoringGroup`, with the group's lead given an Ambition one below the highest a member has (counting
-    /// no higher than where Ambition stops counting) before the group was recorded, so he may drag that member down.
-    /// His Ambition is the same at both readings, so the group is not doing harm.
+    /// As `modelWithMentoringGroup`, with the group's Team Leader given, before the group was recorded, an Ambition one
+    /// below that of the first junior his arrow points to (counting no higher than where Ambition stops counting), so
+    /// his guessed arrow into that junior is harmful. His Ambition is the same at both readings, so the group is not
+    /// doing harm.
     @MainActor public static func modelWithMentoringWarning(repositoryRoot: URL) throws -> AppModel {
         let model = try modelWithHierarchy(repositoryRoot: repositoryRoot)
         let group = try firstSuggestion(model)
         let ceiling = model.planParameters.mentoringCeilings.value[.ambition] ?? 20
         let players = model.squad.book.current[.firstTeam] ?? []
-        let highest = group.members.compactMap { member in
-            players.first { $0.id == member.player }?.attributes[.ambition].map { min($0, ceiling) }
-        }.max()
-        guard let highest, highest > 1 else {
-            throw SampleDataError(description: "No member of the sample's first suggested group has an Ambition above 1.")
+        let levels = model.mentoring.dynamics(for: .firstTeam)
+        guard let arrow = group.arrows.first(where: { levels[$0.arrow.from]?.standing == .teamLeader })?.arrow,
+              let junior = players.first(where: { $0.id == arrow.to })?.attributes[.ambition].map({ min($0, ceiling) }),
+              junior > 1 else {
+            throw SampleDataError(description: "The sample's first suggested group has no arrow from its Team Leader into "
+                                  + "a junior with an Ambition above 1.")
         }
         edit(model) { player in
-            if player.id == group.lead { player.attributes[.ambition] = highest - 1 }
+            if player.id == arrow.from { player.attributes[.ambition] = junior - 1 }
         }
         try recordGroupWithARise(in: model, group: group)
         return model
@@ -481,17 +483,17 @@ public enum SampleData {
     }
 
     /// Records `group` (the first suggested, if not given) five weeks back, then takes today's reading again with the
-    /// first member after the lead one higher in Professionalism.
+    /// player its first arrow points to one higher in Professionalism.
     @MainActor private static func recordGroupWithARise(in model: AppModel, group given: SuggestedGroup? = nil) throws {
         let group = try given ?? firstSuggestion(model)
         let ceiling = model.planParameters.mentoringCeilings.value[.professionalism] ?? 20
-        guard let mentee = group.members.first,
-              let value = (model.squad.book.current[.firstTeam] ?? []).first(where: { $0.id == mentee.player })?
+        guard let mentee = group.arrows.first?.arrow.to,
+              let value = (model.squad.book.current[.firstTeam] ?? []).first(where: { $0.id == mentee })?
                 .attributes[.professionalism], value < ceiling else {
             throw SampleDataError(description: "The sample's first suggested group has no member who can rise in Professionalism.")
         }
         record(group, in: model, weeksAgo: 5)
-        edit(model) { if $0.id == mentee.player { $0.attributes[.professionalism] = value + 1 } }
+        edit(model) { if $0.id == mentee { $0.attributes[.professionalism] = value + 1 } }
         model.recordPersonality(after: .firstTeam, on: model.settings.currentDate)
     }
 

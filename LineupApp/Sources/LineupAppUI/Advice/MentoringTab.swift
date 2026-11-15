@@ -54,7 +54,7 @@ private struct PartHeading<Control: View>: View {
 }
 
 /// The levels as entered, one line each, how many have a social group, when it was updated and the Update button; and
-/// on a sticky note, that the entries are old or that the groups go by age alone.
+/// on a sticky note, that the entries are old or that the advice needs the hierarchy.
 private struct HierarchyPart: View {
     let sheet: MentoringSheet
     let update: () -> Void
@@ -90,8 +90,8 @@ private struct HierarchyPart: View {
             if let stale = sheet.staleText {
                 HierarchyNote(text: stale, tilt: NoteTilt.degrees(at: 0))
             }
-            if let byAge = sheet.byAgeAloneText {
-                HierarchyNote(text: byAge, tilt: NoteTilt.degrees(at: 1))
+            if let needed = sheet.needsHierarchyText {
+                HierarchyNote(text: needed, tilt: NoteTilt.degrees(at: 1))
             }
         }
     }

@@ -70,7 +70,7 @@
 //                                              ("training-mentoring-empty-…"), on the U21s
 //                                              ("training-mentoring-u21-…"), with a group recorded five weeks ago
 //                                              and a member risen since ("training-mentoring-recorded-…"), the same
-//                                              with a lead who may drag a member down
+//                                              with a harmful arrow from its Team Leader into a junior
 //                                              ("training-mentoring-warning-…"), with a group fourteen weeks old
 //                                              that has stopped working ("training-mentoring-stopped-…"), with a
 //                                              first-team player missing a Pressure value

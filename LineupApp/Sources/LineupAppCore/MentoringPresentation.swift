@@ -11,7 +11,7 @@ public struct MentoringSheet: Equatable, Sendable {
     /// are then empty, and the owner's groups are named from the saved state with nothing about how they are going.
     public let failures: [String]
     /// "Team Leader: Hart, Okafor." for each level with anyone in it, highest first, then "Everyone else: others.";
-    /// empty while no level is entered, when `byAgeAloneText` says so.
+    /// empty while no level is entered, when `needsHierarchyText` says so.
     public let hierarchyLines: [String]
     /// "Social groups entered for 14 of 22."
     public let socialGroupsLine: String?
@@ -19,8 +19,9 @@ public struct MentoringSheet: Equatable, Sendable {
     public let updatedText: String?
     /// The engine's sentence when the hierarchy is old.
     public let staleText: String?
-    /// The engine's sentence when no level is entered for this squad.
-    public let byAgeAloneText: String?
+    /// The engine's sentence when no level above Others is entered for the squad's players not out on loan: the advice
+    /// then has nothing to go on.
+    public let needsHierarchyText: String?
     /// The engine's standing note on mentoring advice.
     public let noteText: String
     public let suggested: [SuggestedGroupCard]
@@ -29,55 +30,76 @@ public struct MentoringSheet: Equatable, Sendable {
     public let notPlaced: [String]
 }
 
-/// One member of a group as its card lists him.
+/// One arrow of a group as its card lists it: who to whom, its strength and whether it was read, and what it gives.
+public struct ArrowLine: Identifiable, Equatable, Sendable {
+    /// The two players' keys; never shown.
+    public let id: String
+    /// The engine's "McEachran → Clark".
+    public let titleText: String
+    /// The strength in the game's word, then "read" and its day, or the engine's "expected, not read":
+    /// "Significant · read Sat 14 Nov", "Light · expected, not read".
+    public let strengthText: String
+    /// The engine's pulls joined with " · ", or its "nothing to gain".
+    public let detailText: String
+    /// The tool's guess, not read in the game.
+    public let isGuess: Bool
+
+    var spokenParts: [String] { [titleText, strengthText, detailText] }
+
+    init(_ arrow: GroupArrow) {
+        id = "\(arrow.arrow.from.key)→\(arrow.arrow.to.key)"
+        titleText = AdvisorText.arrowTitle(arrow)
+        let read = arrow.arrow.readOn.map(MentoringPresentation.readOn) ?? AdvisorText.expectedNotRead
+        strengthText = "\(AdvisorText.name(arrow.arrow.strength)) · \(read)"
+        detailText = MentoringPresentation.joined(arrow.pulls.map(AdvisorText.pull)) ?? AdvisorText.nothingToGain
+        isGuess = !arrow.arrow.isRead
+    }
+}
+
+/// One member of a recorded group as its card lists him.
 public struct MemberLine: Identifiable, Equatable, Sendable {
     public let id: PlayerID
     /// "Young (18)"; the name alone for a player no longer imported.
     public let nameText: String
-    /// "Lead" for the lead of a recorded group, as the engine read it; nil for everyone else, for every member of a
-    /// group nobody is clearly leading, and in a suggested group, whose lead is in its title.
-    public let leadText: String?
-    /// In a suggested group his pulls, in a recorded one his changes, in the engine's words joined with " · "; nil
-    /// when there are none.
+    /// His changes in the engine's words joined with " · "; nil when there are none.
     public let detailText: String?
-    /// The engine's words: making up the group, a different social group from the lead, no reading yet.
+    /// The engine's words: no reading yet.
     public let notes: [String]
 
-    var spokenParts: [String] { [nameText] + [leadText, detailText].compactMap { $0 } + notes }
+    var spokenParts: [String] { [nameText] + [detailText].compactMap { $0 } + notes }
 }
 
 /// A suggested group as its card shows it.
 public struct SuggestedGroupCard: Identifiable, Equatable, Sendable {
-    public var id: PlayerID { suggestion.lead }
+    public var id: String { suggestion.id }
     /// What *Record as set* records.
     public let suggestion: SuggestedGroup
-    /// The engine's words: "Led by Hart (34, Team Leader)".
-    public let leadText: String
-    public let members: [MemberLine]
+    /// The three names in the suggestion's order: "Hart, Young, Reid".
+    public let titleText: String
+    /// Each arrow above None, in the suggestion's order.
+    public let arrows: [ArrowLine]
+    /// The engine's sentence to set the group in the game and record its arrows, when it rests on a guess.
+    public let promptText: String?
     /// The engine's sentences on why the group may not last.
     public let cautions: [String]
     /// The evidence note in brackets: "(FM26-era numbers)"; nil for FM27 evidence.
     public let noteText: String?
     private let spokenNote: String?
 
-    /// The card as said to assistive technology.
+    /// The card as said to assistive technology: its title, each arrow, the prompt, the cautions and the note.
     public var spokenText: String {
-        ([leadText] + members.flatMap(\.spokenParts) + cautions.map { "Caution: \($0)" } + [spokenNote].compactMap { $0 })
+        ([titleText] + arrows.flatMap(\.spokenParts) + [promptText].compactMap { $0 }
+            + cautions.map { "Caution: \($0)" } + [spokenNote].compactMap { $0 })
             .joined(separator: ", ")
     }
 
     init(_ suggestion: SuggestedGroup) {
         self.suggestion = suggestion
-        leadText = AdvisorText.lead(suggestion)
-        members = suggestion.members.map { member in
-            var notes: [String] = []
-            if member.isMakingUp { notes.append(AdvisorText.makingUpTheGroup) }
-            if member.inDifferentSocialGroup { notes.append(AdvisorText.otherSocialGroup(leadName: suggestion.leadName)) }
-            return MemberLine(id: member.player, nameText: MentoringPresentation.nameText(member.name, age: member.age),
-                              leadText: nil, detailText: MentoringPresentation.joined(member.pulls.map(AdvisorText.pull)),
-                              notes: notes)
-        }
-        cautions = suggestion.cautions.map { AdvisorText.caution($0, leadName: suggestion.leadName) }
+        titleText = suggestion.members.map(\.name).joined(separator: ", ")
+        arrows = suggestion.arrows.map(ArrowLine.init)
+        promptText = suggestion.isRead ? nil : AdvisorText.setAndRecordArrows
+        let names = Dictionary(suggestion.members.map { ($0.player, $0.name) }, uniquingKeysWith: { first, _ in first })
+        cautions = suggestion.cautions.map { AdvisorText.caution($0, names: names) }
         spokenNote = AdvisorText.note(for: suggestion.basis)
         noteText = spokenNote.map { "(\($0))" }
     }
@@ -91,8 +113,12 @@ public struct RecordedGroupCard: Identifiable, Equatable, Sendable {
     public let titleText: String
     /// "since Mon 12 Oct".
     public let sinceText: String
-    /// The engine's sentence when the group is doing harm or has stopped working; nil otherwise.
+    /// The engine's sentence when the group is doing harm, shows no influence or has stopped working; nil otherwise.
     public let stateText: String?
+    /// Each arrow above None between its present members, in the engine's order.
+    public let arrows: [ArrowLine]
+    /// The engine's prompt to record the group's arrows while any is a guess.
+    public let arrowsPromptText: String?
     public let members: [MemberLine]
     /// The engine's sentences.
     public let warnings: [String]
@@ -102,10 +128,12 @@ public struct RecordedGroupCard: Identifiable, Equatable, Sendable {
     public let draft: MentoringGroupDraft
     private let spokenNote: String?
 
-    /// The card as said to assistive technology.
+    /// The card as said to assistive technology: its title and since when, each arrow, the prompt, the warnings, the
+    /// state, each member with what has changed, and the note.
     public var spokenText: String {
-        ([titleText, sinceText] + [stateText].compactMap { $0 } + members.flatMap(\.spokenParts)
-            + warnings.map { "Warning: \($0)" } + [spokenNote].compactMap { $0 })
+        ([titleText, sinceText] + arrows.flatMap(\.spokenParts) + [arrowsPromptText].compactMap { $0 }
+            + warnings.map { "Warning: \($0)" } + [stateText].compactMap { $0 } + members.flatMap(\.spokenParts)
+            + [spokenNote].compactMap { $0 })
             .joined(separator: ", ")
     }
 
@@ -115,12 +143,13 @@ public struct RecordedGroupCard: Identifiable, Equatable, Sendable {
         titleText = review.members.map(\.name).joined(separator: ", ")
         sinceText = MentoringPresentation.sinceText(review.group.startedOn)
         stateText = AdvisorText.state(of: review, parameters: parameters)
+        arrows = review.arrows.map(ArrowLine.init)
+        arrowsPromptText = AdvisorText.arrowsToRead(review)
         members = review.members.map { member in
             let changes = member.changes.compactMap(AdvisorText.change)
             let noReading = member.changes.allSatisfy { $0.change == .noReading }
             return MemberLine(id: member.player,
                               nameText: member.age.map { MentoringPresentation.nameText(member.name, age: $0) } ?? member.name,
-                              leadText: member.isLead ? MentoringPresentation.leadTitle : nil,
                               detailText: MentoringPresentation.joined(changes),
                               notes: noReading ? [AdvisorText.noReadingYet] : [])
         }
@@ -137,6 +166,8 @@ public struct RecordedGroupCard: Identifiable, Equatable, Sendable {
         titleText = group.current.map { names($0.player) }.joined(separator: ", ")
         sinceText = MentoringPresentation.sinceText(group.startedOn)
         stateText = nil
+        arrows = []
+        arrowsPromptText = nil
         members = []
         warnings = []
         draft = MentoringGroupDraft(editing: group)
@@ -180,7 +211,6 @@ public enum MentoringPresentation {
     public static let endTitle = "End group"
     public static let saveTitle = "Save"
     public static let cancelTitle = "Cancel"
-    public static let leadTitle = "Lead"
     public static let levelLabel = "Level"
     public static let socialGroupLabel = "Social group"
     static let everyoneElse = "Everyone else: others."
@@ -249,7 +279,7 @@ public enum MentoringPresentation {
         switch advice {
         case .needsSquad:
             return MentoringSheet(squad: squad, notReady: notImported(squad), failures: [], hierarchyLines: [],
-                                  socialGroupsLine: nil, updatedText: nil, staleText: nil, byAgeAloneText: nil,
+                                  socialGroupsLine: nil, updatedText: nil, staleText: nil, needsHierarchyText: nil,
                                   noteText: AdvisorText.mentoringNote, suggested: [], yours: [], notPlaced: [])
         case .failed(let sentences):
             report = nil
@@ -262,7 +292,8 @@ public enum MentoringPresentation {
         let present = notOutOnLoan(players, ownClub: ownClub)
         let dynamics = state.dynamics(for: squad)
         let levels = levelLines(present, dynamics: dynamics)
-        let byAgeAlone = report?.byAgeAlone ?? levels.isEmpty
+        // The engine's rule, for a squad whose advice stopped: no level above Others among its players not out on loan.
+        let needsHierarchy = report?.needsHierarchy ?? levels.isEmpty
         let entered = present.filter { dynamics[$0.id]?.socialGroup != nil }.count
         let updatedOn = state.dynamicsUpdatedOn[squad]
 
@@ -277,13 +308,13 @@ public enum MentoringPresentation {
 
         return MentoringSheet(
             squad: squad, notReady: nil, failures: failures,
-            hierarchyLines: byAgeAlone ? [] : levels,
+            hierarchyLines: needsHierarchy ? [] : levels,
             socialGroupsLine: "Social groups entered for \(entered) of \(present.count).",
             updatedText: updatedOn.map { "Updated \(DayText.short($0))" },
             staleText: report.flatMap { report in
                 updatedOn.flatMap { AdvisorText.staleHierarchy(report, updatedOn: $0, asOf: asOf) }
             },
-            byAgeAloneText: byAgeAlone ? AdvisorText.mentoringByAgeAlone : nil,
+            needsHierarchyText: needsHierarchy ? AdvisorText.mentoringNeedsHierarchy : nil,
             noteText: AdvisorText.mentoringNote,
             suggested: report?.suggestions.map(SuggestedGroupCard.init) ?? [],
             yours: yours,
@@ -359,6 +390,9 @@ public enum MentoringPresentation {
         }
     }
 
+    /// Under the hierarchy editor's hint: the engine's sentence that social groups do not change the advice.
+    public static let hierarchyEditorNote = AdvisorText.socialGroupsNotUsed
+
     /// "Add a first-team group" for a new group; "Change the group" for one recorded.
     public static func groupEditorTitle(_ draft: MentoringGroupDraft) -> String {
         guard draft.isNew else { return "Change the group" }
@@ -379,6 +413,11 @@ public enum MentoringPresentation {
     /// "Young (18)".
     static func nameText(_ name: String, age: Int) -> String {
         "\(name) (\(age))"
+    }
+
+    /// "read Sat 14 Nov": beside an arrow read in the game, the day as `DayText.short` writes it.
+    public static func readOn(_ day: Day) -> String {
+        "read \(DayText.short(day))"
     }
 
     /// "since Mon 12 Oct".

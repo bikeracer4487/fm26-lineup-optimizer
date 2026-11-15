@@ -28,11 +28,11 @@ extension AppModel {
     }
 
     /// Records a suggested group as set up in the game from today, its three members joining today, and says so in a
-    /// notice. Nothing happens if one of them is in a live group already, or within `trainingActionInterval` of the last
+    /// notice naming them in the suggestion's order. Nothing happens if one of them is in a live group already, or within `trainingActionInterval` of the last
     /// training action: the card moves under the pointer, as a training card does.
     public func recordGroup(_ suggestion: SuggestedGroup, in squad: Squad) {
         trainingAction {
-            let named = [(suggestion.lead, suggestion.leadName)] + suggestion.members.map { ($0.player, $0.name) }
+            let named = suggestion.members.map { ($0.player, $0.name) }
             guard Set(named.map(\.0)).count == Mentoring.groupSize,
                   !named.contains(where: { isInLiveGroup($0.0, except: nil) }) else { return }
             tellTraining(AdvisorText.recorded(names: named.map(\.1)))
@@ -152,13 +152,15 @@ extension AppModel {
                                             state: mentoring)
     }
 
-    /// What the engine is handed for the squad's mentoring advice.
+    /// What the engine is handed for the squad's mentoring advice. No arrow read in the game is kept yet, so it is
+    /// handed none and every arrow is the engine's guess.
     func mentoringRequest(for squad: Squad, asOf: Day) -> MentoringRequest {
         let leaving = AdvicePresentation.report(adviceState)?.removal.advisedToLeave ?? []
         return MentoringRequest(
             squad: squad, players: self.squad.book.allPlayers, ownClub: ownClub,
             dynamics: mentoring.dynamics(for: squad), dynamicsUpdatedOn: mentoring.dynamicsUpdatedOn[squad],
-            groups: mentoring.groups, readings: mentoring.readings, names: mentoring.names, leaving: leaving, asOf: asOf)
+            groups: mentoring.groups, readings: mentoring.readings, arrows: [], names: mentoring.names,
+            leaving: leaving, asOf: asOf)
     }
 
     private func workedOutMentoring(for squad: Squad, asOf: Day) -> MentoringAdvice {

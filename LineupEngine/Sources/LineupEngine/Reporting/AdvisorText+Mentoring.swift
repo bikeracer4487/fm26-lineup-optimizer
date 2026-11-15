@@ -96,13 +96,14 @@ extension AdvisorText {
     }
 
     /// `names` gives each player's name; a player it lacks is shown by his key. A harmful arrow that is a guess says
-    /// "expected to be" before its strength.
+    /// "expected to be" before its strength; each value has its player's name before it, so neither can be taken for
+    /// the other's.
     public static func warning(_ warning: GroupWarning, names: [PlayerID: String]) -> String {
         func who(_ id: PlayerID) -> String { names[id] ?? id.key }
         return switch warning {
         case .harmfulArrow(let from, let to, let strength, let isRead, let attribute, let fromValue, let toValue):
-            "\(who(from))'s influence on \(who(to)) is \(isRead ? "" : "expected to be ")\(name(strength)), and his "
-                + "\(attribute.rawValue) is \(fromValue) against \(toValue)."
+            "\(who(from))'s influence on \(who(to)) is \(isRead ? "" : "expected to be ")\(name(strength)), and "
+                + "\(who(from))'s \(attribute.rawValue) is \(fromValue) against \(who(to))'s \(toValue)."
         case .notInSquad(let id): "\(who(id)) is no longer in the squad."
         case .outOnLoan(let id, let club): "\(who(id)) is out on loan at \(club)."
         case .advisedToLeave(let id): "\(who(id)) is advised to leave."
