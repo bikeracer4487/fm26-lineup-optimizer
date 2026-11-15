@@ -82,11 +82,13 @@ import Testing
         #expect(AdvisorText.limitNotes(of: rest(jadedness: 450, limit: 400)) == nil)
     }
 
-    func removal(action: RemovalAction = .sell, release: Int?, mutual: Int?, keepReason: KeepReason? = nil,
-                 loanOnlyToStart: Bool = false) -> RemovalAdvice {
+    func removal(action: RemovalAction = .sell, release: Int?, mutual: Int?, matchesHere: MatchesHere? = nil,
+                 keepReason: KeepReason? = nil, watchReason: WatchReason? = nil, loanOnlyToStart: Bool = false,
+                 onYouthContract: Bool = false) -> RemovalAdvice {
         RemovalAdvice(player: PlayerID(key: "p"), name: "P", level: .high, action: action, score: 10, reasons: [],
-                      tier: nil, outlook: nil, matchesHere: nil, keepReason: keepReason, loanOnlyToStart: loanOnlyToStart,
-                      isFalseProspect: false, isMentor: false, releaseCost: release, mutualCost: mutual, basis: .derived)
+                      tier: nil, outlook: nil, matchesHere: matchesHere, keepReason: keepReason, watchReason: watchReason,
+                      loanOnlyToStart: loanOnlyToStart, onYouthContract: onYouthContract, isFalseProspect: false,
+                      isMentor: false, releaseCost: release, mutualCost: mutual, basis: .derived)
     }
 
     @Test func costs() {
@@ -113,13 +115,13 @@ import Testing
 
     @Test func whyEachAction() {
         let advice = removal(release: nil, mutual: nil)
-        #expect(AdvisorText.why(.release, for: removal(release: 0, mutual: 0))
-                == "He is out of contract, so releasing him costs nothing")
-        // A release that costs something, or whose cost is not known, is of a young player on a youth contract.
-        #expect(AdvisorText.why(.release, for: removal(release: 24_700, mutual: 13_585))
-                == "A player on a youth contract cannot be sold or loaned out, only released.")
-        #expect(AdvisorText.why(.release, for: advice)
-                == "A player on a youth contract cannot be sold or loaned out, only released.")
+        #expect(AdvisorText.why(.release, for: advice) == "He is out of contract, so releasing him costs nothing")
+        // The contract decides, not the cost.
+        for (release, mutual) in [(Int?.none, Int?.none), (0, 0), (24_700, 13_585)] {
+            #expect(AdvisorText.why(.release, for: removal(release: release, mutual: mutual, onYouthContract: true))
+                    == "He is on a youth contract, so he cannot be sold or loaned out: releasing him is the only way to "
+                        + "move him on")
+        }
         #expect(AdvisorText.why(.terminate, for: advice)
                 == "His contract is nearly over and no fee is likely to beat the cost of ending it")
         #expect(AdvisorText.why(.sell, for: advice) == "Selling is the way left: nothing cheaper applies")
@@ -137,12 +139,27 @@ import Testing
                 == "He is not getting matches here, and a loan needs a full-time contract.")
         #expect(why(.develop, .shortContract) == "He is not getting matches here: renew his contract before a loan.")
         #expect(why(.develop) == "He is worth developing here.")
-        #expect(why(.play) == "He is getting his matches here.")
+        func play(_ basis: MatchesHereBasis) -> String {
+            AdvisorText.why(.play, for: removal(action: .play, release: nil, mutual: nil,
+                                                matchesHere: MatchesHere(starts: 0, matches: 0, basis: basis)))
+        }
+        #expect(play(.firstChoice) == "He is first choice here.")
+        #expect(play(.startedEnough) == "He is getting his matches here.")
+        #expect(play(.solidSecondChoice) == "He is second choice here, and too few matches are confirmed to count his starts.")
         #expect(why(.loanForMatches)
                 == "He is worth developing and is not getting matches here: a loan gives him matches.")
         #expect(why(.loanForMatches, loanOnlyToStart: true)
                 == "He is worth developing and is not getting matches here: a loan gives him matches. "
                     + "Only where he will start regularly; otherwise he grows nearly as well here.")
+    }
+
+    @Test func whyAYoungPlayerIsWatched() {
+        func why(_ reason: WatchReason?) -> String {
+            AdvisorText.why(.monitor, for: removal(action: .monitor, release: nil, mutual: nil, watchReason: reason))
+        }
+        #expect(why(.notWorthDeveloping) == "This tool does not expect him to reach the second eleven: watch how he does.")
+        #expect(why(.neededForCover) == "He is needed as cover here, so a loan would leave the squad short.")
+        #expect(why(nil) == "Not enough against him to act: watch how he does")
     }
 
     @Test func aYouthContractCannotBeMarked() {
@@ -156,10 +173,12 @@ import Testing
     func outlook(_ level: ReachLevel?, at slot: SlotID? = .D_L) -> Outlook {
         let estimate = ReachEstimate(age: 19, current: 80, potential: 120, professionalism: 15, ambition: 10,
                                      determination: 10, seasonGrowth: 10, bySeason: [80, 90, 100, 110, 120],
-                                     reachesPotential: true)
+                                     reachesPotential: true, ambitionSlows: false, determinationSlows: false,
+                                     professionalismHoldsBack: false)
         let best = slot.map { slot in
             SlotOutlook(slot: slot, rating: 50, reachRating: 75, isFirstChoice: false,
-                        firstChoice: Rival(player: PlayerID(key: "smith"), name: "Smith", age: 28, rating: 70, compared: 70),
+                        firstChoice: Rival(player: PlayerID(key: "smith"), name: "Smith", age: 28, rating: 70, compared: 70,
+                                           isAgeNamed: false),
                         secondChoice: nil, band: .onCourse, pointsNeeded: 32, level: level)
         }
         return Outlook(player: PlayerID(key: "young"), estimate: estimate, slots: best.map { [$0] } ?? [], best: best,
@@ -195,12 +214,15 @@ import Testing
         #expect(AdvisorText.reachLine(outlook(nil, at: nil), names: { PositionText.plain($0.position) }) == nil)
     }
 
-    /// An estimate as `Reach.estimate` would give it, with `bySeason` running from `current` to `reach`.
+    /// An estimate as `Reach.estimate` would give it under the fm27 parameters, with `bySeason` running from `current`
+    /// to `reach`: a value under 10 slows growth or holds him back.
     func estimate(age: Int, current: Int, potential: Int, professionalism: Int, ambition: Int = 10,
                   determination: Int = 10, seasonGrowth: Double, reach: Double, reachesPotential: Bool) -> ReachEstimate {
         ReachEstimate(age: age, current: current, potential: potential, professionalism: professionalism,
                       ambition: ambition, determination: determination, seasonGrowth: seasonGrowth,
-                      bySeason: [Double(current), reach], reachesPotential: reachesPotential)
+                      bySeason: [Double(current), reach], reachesPotential: reachesPotential,
+                      ambitionSlows: ambition < 10, determinationSlows: determination < 10,
+                      professionalismHoldsBack: professionalism < 10)
     }
 
     @Test func theReachWorkingForEachEnding() {
@@ -228,7 +250,8 @@ import Testing
         // Past the last growth step.
         #expect(AdvisorText.reachWorking(ReachEstimate(age: 27, current: 90, potential: 95, professionalism: 15,
                                                        ambition: 10, determination: 10, seasonGrowth: 0, bySeason: [90],
-                                                       reachesPotential: false))
+                                                       reachesPotential: false, ambitionSlows: false,
+                                                       determinationSlows: false, professionalismHoldsBack: false))
                 == "Ability 90, potential 95. At 27 this tool expects no more growth.")
     }
 
@@ -262,7 +285,8 @@ import Testing
     func standingOutlook(smith: Rival?, points: Int? = 14, firstAt: SlotID? = nil) -> Outlook {
         let estimate = ReachEstimate(age: 19, current: 80, potential: 150, professionalism: 15, ambition: 10,
                                      determination: 10, seasonGrowth: 12.3, bySeason: [80, 92, 104],
-                                     reachesPotential: false)
+                                     reachesPotential: false, ambitionSlows: false, determinationSlows: false,
+                                     professionalismHoldsBack: false)
         let best = smith.map { smith in
             SlotOutlook(slot: .D_L, rating: 50, reachRating: 75, isFirstChoice: false, firstChoice: smith,
                         secondChoice: nil, band: .onCourse, pointsNeeded: points, level: .couldPassFirst)
@@ -275,8 +299,10 @@ import Testing
                        best: best, level: best?.level, average: nil)
     }
 
+    /// Smith, named with his age when the engine says so (at 30 or over under the fm27 parameters).
     func smith(age: Int, rating: Double = 70, compared: Double = 70) -> Rival {
-        Rival(player: PlayerID(key: "smith"), name: "Smith", age: age, rating: rating, compared: compared)
+        Rival(player: PlayerID(key: "smith"), name: "Smith", age: age, rating: rating, compared: compared,
+              isAgeNamed: age >= 30)
     }
 
     @Test func theStandingAtHisBestSlot() {
@@ -309,18 +335,31 @@ import Testing
                     + "expects about 12 a season. On course.")
     }
 
+    @Test func aFirstChoiceAtASlotOfTheSameNameIsNotComparedWithTheOther() {
+        let names: (SlotID) -> String = { PositionText.plain($0.position) }
+        // First choice at one left-back-named slot, best at the other: only the first sentence.
+        #expect(AdvisorText.standing(standingOutlook(smith: smith(age: 28), firstAt: .D_L), names: names)
+                == "First choice at left back.")
+        // Named the same by the function handed in.
+        #expect(AdvisorText.standing(standingOutlook(smith: smith(age: 28), firstAt: .ST_C), names: { _ in "the middle" })
+                == "First choice at the middle.")
+        // Different words: the comparison is kept.
+        #expect(AdvisorText.standing(standingOutlook(smith: smith(age: 28), firstAt: .ST_C), names: names)?
+                    .hasPrefix("First choice at striker. Needs about 14") == true)
+    }
+
     @Test func noStandingWithNoSlotToPass() {
         #expect(AdvisorText.standing(standingOutlook(smith: nil), names: { PositionText.plain($0.position) }) == nil)
         #expect(AdvisorText.standing(outlook(.couldMakeSecond, at: nil), names: { PositionText.plain($0.position) }) == nil)
     }
 
     @Test func matchesHereCountedOrNot() {
-        #expect(AdvisorText.matchesHere(MatchesHere(starts: 1, matches: 9, isCounted: true, isEnough: false))
+        #expect(AdvisorText.matchesHere(MatchesHere(starts: 1, matches: 9, basis: .startedTooFew))
                 == "He has started 1 of the last 9 matches here.")
-        #expect(AdvisorText.matchesHere(MatchesHere(starts: 0, matches: 3, isCounted: false, isEnough: true))
+        #expect(AdvisorText.matchesHere(MatchesHere(starts: 0, matches: 3, basis: .solidSecondChoice))
                 == "Too few matches are confirmed to count his starts.")
         // A first choice is counted whatever is confirmed; with nothing confirmed there is nothing to count.
-        #expect(AdvisorText.matchesHere(MatchesHere(starts: 0, matches: 0, isCounted: true, isEnough: true))
+        #expect(AdvisorText.matchesHere(MatchesHere(starts: 0, matches: 0, basis: .firstChoice))
                 == "Too few matches are confirmed to count his starts.")
     }
 

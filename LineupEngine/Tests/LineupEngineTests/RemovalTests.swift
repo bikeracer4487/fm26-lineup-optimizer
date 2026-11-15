@@ -703,10 +703,10 @@ import Testing
             ConfirmedLineup(fixture: FixtureID("f\(index)"), date: Day(iso: day)!, starters: index < 2 ? [.D_L: young.id] : [:])
         }
         let a = try #require(try report(try squad([young]), history: history).advice.first { $0.player == young.id })
-        #expect(a.matchesHere == MatchesHere(starts: 2, matches: 6, isCounted: true, isEnough: true))
+        #expect(a.matchesHere == MatchesHere(starts: 2, matches: 6, basis: .startedEnough))
         // With none confirmed, a backup is not counted and has not enough.
         let b = try advice(young)
-        #expect(b.matchesHere == MatchesHere(starts: 0, matches: 0, isCounted: false, isEnough: false))
+        #expect(b.matchesHere == MatchesHere(starts: 0, matches: 0, basis: .tooFewConfirmed))
     }
 
     @Test func aSlotHeIsRetrainingForCountsInHisReach() throws {
@@ -829,6 +829,8 @@ import Testing
         #expect(a.reasons == [reason("Not expected to reach the level of the squad at any position", 70),
                               reason("Cover at left back would be thin without him", -30)])
         #expect(a.score == 40 && a.level == .medium && a.action == .monitor)
+        // Step 1 decides it before the cover: not worth developing.
+        #expect(a.watchReason == .notWorthDeveloping)
     }
 
     @Test func oneNotNeededScoresSeventy() throws {
@@ -927,6 +929,7 @@ import Testing
         try #require(playing.outlook?.level == .couldMakeSecond)
         #expect(playing.matchesHere?.isEnough == true)
         #expect(playing.action == .play && playing.keepReason == nil)
+        #expect(AdvisorText.why(playing.action, for: playing) == "He is getting his matches here.")
         // One of six is not enough: a loan for matches.
         let benched = try advice(young, history: sixMatches(starting: young.id, starts: 1))
         #expect(benched.matchesHere?.isEnough == false)
@@ -945,12 +948,14 @@ import Testing
         try #require(a.tier == .backup && a.outlook?.level.map(worthDeveloping.contains) == true)
         #expect(a.reasons.contains(reason("Cover at left back would be thin without him", -30)))
         #expect(a.action == .monitor && a.keepReason == nil)
+        #expect(a.watchReason == .neededForCover)
+        #expect(AdvisorText.why(a.action, for: a) == "He is needed as cover here, so a loan would leave the squad short.")
         // With a solid second choice he is not needed: a loan for matches.
         let (spare, other) = try needed(20, age: 19, all: 9, potentialAbility: reaching, months: 24)
         let b = try advice(other.id, in: spare)
         try #require(b.tier == .backup && b.outlook?.level.map(worthDeveloping.contains) == true)
         #expect(thinReasons(b).isEmpty)
-        #expect(b.action == .loanForMatches)
+        #expect(b.action == .loanForMatches && b.watchReason == nil)
     }
 
     @Test func aYouthContractIsNeverLoanedOrSold() throws {
@@ -965,7 +970,13 @@ import Testing
         }
         let high = try advice(lower(.youth, months: nil))
         #expect(high.level == .high && high.action == .release)
-        #expect(AdvisorText.why(high.action, for: high) == AdvisorText.youthContractNotMarked)
+        #expect(high.onYouthContract)
+        #expect(AdvisorText.why(high.action, for: high)
+                == "He is on a youth contract, so he cannot be sold or loaned out: releasing him is the only way to move him on")
+        // A youth contract with 0 months left is read as no contract: released at no cost, for that reason.
+        let ended = try advice(lower(.youth, months: 0))
+        #expect(!ended.onYouthContract && ended.action == .release)
+        #expect(AdvisorText.why(ended.action, for: ended) == "He is out of contract, so releasing him costs nothing")
         #expect(try advice(lower(.fullTime, months: nil)).action == .sell)
         // At critical with 8 months left and no buyer (+15): released, where a full-time contract is terminated, and
         // the release is costed.
@@ -995,6 +1006,9 @@ import Testing
             try #require(a.outlook?.level == .couldBeCover && a.tier == .backup)
             #expect(a.level == .keep)
             #expect(a.action == .monitor && a.keepReason == nil, "\(age)")
+            #expect(a.watchReason == .notWorthDeveloping, "\(age)")
+            #expect(AdvisorText.why(a.action, for: a)
+                    == "This tool does not expect him to reach the second eleven: watch how he does.")
         }
         // Worth developing, the same player is loaned for matches.
         #expect(try advice(try prospect(age: 19, months: 24)).action == .loanForMatches)
@@ -1008,7 +1022,8 @@ import Testing
         })
         try #require(first19.tier == .first(.D_L))
         try #require(first19.outlook?.level == .couldBeCover || first19.outlook?.level == .markedlyLower)
-        #expect(first19.action == .play)
+        #expect(first19.action == .play && first19.watchReason == nil)
+        #expect(AdvisorText.why(first19.action, for: first19) == "He is first choice here.")
     }
 
     @Test func aFalseProspectIsSoldNotTerminated() throws {
@@ -1046,11 +1061,21 @@ import Testing
             p.age = 19; p.potentialAbility = 100; p.monthsLeft = 24
         })
         #expect(a.tier == .second(.D_L))
-        #expect(a.matchesHere == MatchesHere(starts: 0, matches: 0, isCounted: false, isEnough: true))
+        #expect(a.matchesHere == MatchesHere(starts: 0, matches: 0, basis: .solidSecondChoice))
         #expect(a.action == .play)
+        #expect(AdvisorText.why(a.action, for: a)
+                == "He is second choice here, and too few matches are confirmed to count his starts.")
+        // The same second choice at a slot he is not solid at (familiarity 14) is a stand-in: not getting matches.
+        let standIn = try advice(secondID, in: try squad(changing: secondID) { p in
+            p.age = 19; p.potentialAbility = 100; p.monthsLeft = 24
+            p.familiarity[assignment(.D_L).ipPosition] = 14; p.familiarity[assignment(.D_L).oopPosition] = 14
+        })
+        try #require(standIn.tier == .second(.D_L))
+        #expect(standIn.matchesHere == MatchesHere(starts: 0, matches: 0, basis: .tooFewConfirmed))
+        #expect(standIn.action != .play)
         // A backup with none confirmed is not getting matches.
         let backup = try advice(try prospect(age: 19, months: 24))
-        #expect(backup.matchesHere == MatchesHere(starts: 0, matches: 0, isCounted: false, isEnough: false))
+        #expect(backup.matchesHere == MatchesHere(starts: 0, matches: 0, basis: .tooFewConfirmed))
         #expect(backup.action == .loanForMatches)
     }
 
@@ -1065,7 +1090,7 @@ import Testing
         #expect(try second(age: 23).action == .play)
         let older = try second(age: 24)
         #expect(older.outlook == nil && older.keepReason == nil)
-        #expect(older.action == .keep)
+        #expect(older.action == .keep && older.watchReason == nil)
         // A backup worth developing at 23 (ability 40, so four seasons' growth takes him past the second choice) is
         // loaned for matches; at 24 he has no outlook and the old actions.
         func backup(age: Int) -> Player {
@@ -1077,14 +1102,21 @@ import Testing
         #expect(backup23.action == .loanForMatches)
         let backup24 = try advice(backup(age: 24))
         #expect(backup24.outlook == nil && old.contains(backup24.action))
-        // On a youth contract at the high level, a player of 24 is sold as before, where at 23 he is released.
-        func weak(age: Int) -> Player {
-            target(age: age, currentAbility: 50, potentialAbility: 50) { $0.contractType = .youth; $0.monthsLeft = nil }
+        // A youth contract is released at any age: at 24 as at 23. On a full-time contract the same player of 24 is
+        // sold, as before.
+        func weak(age: Int, _ contract: ContractType) -> Player {
+            target(age: age, currentAbility: 50, potentialAbility: 50) { $0.contractType = contract; $0.monthsLeft = nil }
         }
-        let youth24 = try advice(weak(age: 24))
+        let youth24 = try advice(weak(age: 24, .youth))
         #expect(youth24.level == .high || youth24.level == .critical)
-        #expect(youth24.action == .sell)
-        #expect(try advice(weak(age: 23)).action == .release)
+        #expect(youth24.outlook == nil && youth24.action == .release)
+        #expect(try advice(weak(age: 23, .youth)).action == .release)
+        let fullTime24 = try advice(weak(age: 24, .fullTime))
+        #expect(fullTime24.level == youth24.level && fullTime24.action == .sell)
+        // A player of 24 who is watched keeps the old sentence.
+        let watched = try advice(target { $0.monthsLeft = nil })
+        #expect(watched.action == .monitor && watched.watchReason == nil)
+        #expect(AdvisorText.why(watched.action, for: watched) == "Not enough against him to act: watch how he does")
     }
 
     // MARK: The evidence behind a young player's advice
@@ -1105,6 +1137,7 @@ import Testing
         relabel(&q.matchesHereShare, "matchesHereShare")
         relabel(&q.matchesHereWindowDays, "matchesHereWindowDays")
         relabel(&q.matchesHereMinimumConfirmed, "matchesHereMinimumConfirmed")
+        relabel(&q.depthSolidFamiliarity, "depthSolidFamiliarity")
         return q
     }
 
@@ -1126,7 +1159,8 @@ import Testing
         let loaned = try prospect(age: 19, months: 24)
         try #require(try advice(loaned).action == .loanForMatches)
         #expect(try advice(loaned, parameters: labelled(derived: nil)).basis == .carriedOverFM26)
-        for name in ["matchesHereShare", "matchesHereWindowDays", "matchesHereMinimumConfirmed", "loanForMatchesMonthsAbove"] {
+        for name in ["matchesHereShare", "matchesHereWindowDays", "matchesHereMinimumConfirmed", "depthSolidFamiliarity",
+                     "loanForMatchesMonthsAbove"] {
             #expect(try advice(loaned, parameters: labelled(derived: name)).basis == .derived, "\(name)")
         }
     }

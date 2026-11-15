@@ -20,6 +20,12 @@ public struct ReachEstimate: Equatable, Sendable {
     public var reach: Double { bySeason.last! }
     /// True when the cap, not his rate of growth, is what limits him.
     public let reachesPotential: Bool
+    /// His Ambition is under `growthPersonalityFullFrom`, so it slows his growth.
+    public let ambitionSlows: Bool
+    /// His Determination is under `growthPersonalityFullFrom`, so it slows his growth.
+    public let determinationSlows: Bool
+    /// His Professionalism is under `professionalismHoldsBackBelow`.
+    public let professionalismHoldsBack: Bool
 }
 
 public enum Reach {
@@ -58,7 +64,10 @@ public enum Reach {
             age: player.age, current: player.currentAbility, potential: player.potentialAbility,
             professionalism: professionalism, ambition: ambition, determination: determination,
             seasonGrowth: growth(atAge: player.age), bySeason: bySeason,
-            reachesPotential: potential > current && bySeason.last! == potential)
+            reachesPotential: potential > current && bySeason.last! == potential,
+            ambitionSlows: ambition < parameters.growthPersonalityFullFrom.value,
+            determinationSlows: determination < parameters.growthPersonalityFullFrom.value,
+            professionalismHoldsBack: professionalism < parameters.professionalismHoldsBackBelow.value)
     }
 
     /// His rate of growth over the rate at Professionalism 20, read off straight lines between the anchors.

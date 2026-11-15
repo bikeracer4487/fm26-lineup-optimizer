@@ -100,4 +100,39 @@ import Testing
             }
         }
     }
+
+    /// The working for a 19-year-old of ability 60 and potential 190, who falls short of his potential.
+    private func working(professionalism: Int = 15, ambition: Int = 10, determination: Int = 10,
+                         parameters: EngineParameters? = nil) throws -> String {
+        let player = Player.fixture(
+            age: 19, attributes: [.professionalism: professionalism, .ambition: ambition, .determination: determination],
+            currentAbility: 60, potentialAbility: 190)
+        return AdvisorText.reachWorking(try Reach.estimate(for: player, parameters: parameters ?? self.parameters))
+    }
+
+    @Test func aProfessionalismUnderTheLineIsSaidToHoldHimBack() throws {
+        let mentoring = "mentoring could change that."
+        #expect(try estimate(professionalism: 9).professionalismHoldsBack)
+        #expect(try !estimate(professionalism: 10).professionalismHoldsBack)
+        #expect(try working(professionalism: 9).hasSuffix(mentoring))
+        #expect(try !working(professionalism: 10).hasSuffix(mentoring))
+        // The line is the parameter's.
+        var q = parameters
+        q.professionalismHoldsBackBelow = Parameter(12, .derived, source: "test")
+        #expect(try working(professionalism: 11, parameters: q).hasSuffix(mentoring))
+        #expect(try !working(professionalism: 12, parameters: q).hasSuffix(mentoring))
+    }
+
+    @Test func anAmbitionOrDeterminationThatSlowsGrowthIsNamed() throws {
+        #expect(try estimate(ambition: 9).ambitionSlows && !estimate(ambition: 10).ambitionSlows)
+        #expect(try estimate(determination: 9).determinationSlows && !estimate(determination: 10).determinationSlows)
+        #expect(try working(ambition: 9).contains("with Professionalism 15 and Ambition 9 this tool"))
+        #expect(try working(ambition: 10).contains("with Professionalism 15 this tool"))
+        #expect(try working(determination: 9).contains("with Professionalism 15 and Determination 9 this tool"))
+        // From `growthPersonalityFullFrom`.
+        var q = parameters
+        q.growthPersonalityFullFrom = Parameter(12, .derived, source: "test")
+        #expect(try working(ambition: 11, determination: 12, parameters: q).contains("and Ambition 11 this tool"))
+        #expect(try working(ambition: 12, determination: 12, parameters: q).contains("with Professionalism 15 this tool"))
+    }
 }

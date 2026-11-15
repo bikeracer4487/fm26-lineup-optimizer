@@ -27,6 +27,8 @@ public struct Rival: Equatable, Sendable {
     /// What the young player must reach: when the rival is developing too, his own reach rating (`rating` scaled from
     /// his ability to his reach, as `SlotOutlook.reachRating` is); `rating` otherwise.
     public let compared: Double
+    /// He is at least `firstChoiceAgeNamedFrom`, so the words name his age.
+    public let isAgeNamed: Bool
 }
 
 /// A young player at one slot he can play.
@@ -70,13 +72,46 @@ public struct Outlook: Equatable, Sendable {
     public var isMarkedlyLower: Bool { level == .markedlyLower }
 }
 
+/// What decided whether a young player is getting enough matches here.
+public enum MatchesHereBasis: String, CaseIterable, Sendable {
+    /// He is first choice at a slot: enough, whatever he started.
+    case firstChoice
+    /// Enough matches were confirmed to count, and he started enough of them.
+    case startedEnough
+    /// Enough matches were confirmed to count, and he started too few of them.
+    case startedTooFew
+    /// Too few matches were confirmed to count, and he is second choice at a slot he is solid at: enough.
+    case solidSecondChoice
+    /// Too few matches were confirmed to count, and he is not a solid second choice: not enough.
+    case tooFewConfirmed
+}
+
 /// Whether a young player is getting enough matches at this club.
 public struct MatchesHere: Equatable, Sendable {
     public let starts: Int
     public let matches: Int
+    public let basis: MatchesHereBasis
+
+    public init(starts: Int, matches: Int, basis: MatchesHereBasis) {
+        self.starts = starts
+        self.matches = matches
+        self.basis = basis
+    }
+
     /// False when too few matches were confirmed to judge by, and his place in the elevens decided it.
-    public let isCounted: Bool
-    public let isEnough: Bool
+    public var isCounted: Bool {
+        switch basis {
+        case .firstChoice, .startedEnough, .startedTooFew: true
+        case .solidSecondChoice, .tooFewConfirmed: false
+        }
+    }
+
+    public var isEnough: Bool {
+        switch basis {
+        case .firstChoice, .startedEnough, .solidSecondChoice: true
+        case .startedTooFew, .tooFewConfirmed: false
+        }
+    }
 }
 
 public enum Development {
@@ -118,7 +153,8 @@ public enum Development {
         func rival(_ id: PlayerID?, at slot: SlotID) -> Rival? {
             guard let id, let player = byID[id], let rating = tiers.ratings[id]?[slot] else { return nil }
             let compared = estimates[id].map { scaled(rating, from: Double($0.current), to: $0.reach, parameters) } ?? rating
-            return Rival(player: id, name: player.name, age: player.age, rating: rating, compared: compared)
+            return Rival(player: id, name: player.name, age: player.age, rating: rating, compared: compared,
+                         isAgeNamed: player.age >= parameters.firstChoiceAgeNamedFrom.value)
         }
 
         var found: [PlayerID: Outlook] = [:]
@@ -144,22 +180,35 @@ public enum Development {
     /// A first choice at any slot has enough, whatever he has started. Otherwise, with at least
     /// `matchesHereMinimumConfirmed` matches confirmed in the last `matchesHereWindowDays` days up to and including
     /// `asOf`, he has enough when he started `matchesHereShare` of them. With fewer, they are not counted: a second choice
-    /// has enough and anyone else, or a player the tiers did not rate, does not.
+    /// at a slot he is solid at (`depthSolidFamiliarity` in both phases, Depth's line) has enough, and anyone else does
+    /// not: a stand-in, such as an outfield player who is the second eleven's goalkeeper, a backup, or a player the tiers
+    /// did not rate. `assignments` are the tactic's.
+    /// Throws `RatingError.missingFamiliarity` for a second choice without a familiarity at his slot's positions.
     /// The parameters must have passed `FitnessModel.problems(in:)`.
-    public static func matchesHere(for player: PlayerID, tiers: SquadTiers, history: StartHistory, asOf: Day,
-                                   parameters: EngineParameters) -> MatchesHere {
+    public static func matchesHere(for player: Player, assignments: [SlotAssignment], tiers: SquadTiers,
+                                   history: StartHistory, asOf: Day, parameters: EngineParameters) throws -> MatchesHere {
         let window = parameters.matchesHereWindowDays.value
-        let starts = history.starts(of: player, inDays: window, endingOn: asOf)
+        let starts = history.starts(of: player.id, inDays: window, endingOn: asOf)
         let matches = history.matches(inDays: window, endingOn: asOf)
-        let tier = tiers.tier(of: player)
-        if case .first = tier { return MatchesHere(starts: starts, matches: matches, isCounted: true, isEnough: true) }
+        let tier = tiers.tier(of: player.id)
+        if case .first = tier { return MatchesHere(starts: starts, matches: matches, basis: .firstChoice) }
         guard matches >= parameters.matchesHereMinimumConfirmed.value else {
-            var isSecond = false
-            if case .second = tier { isSecond = true }
-            return MatchesHere(starts: starts, matches: matches, isCounted: false, isEnough: isSecond)
+            var isSolidSecond = false
+            if case .second(let slot)? = tier, let assignment = assignments.first(where: { $0.slot == slot }) {
+                func familiarity(_ position: Position) throws -> Int {
+                    guard let value = player.familiarity[position] else {
+                        throw RatingError.missingFamiliarity(player: player.name, position: position)
+                    }
+                    return value
+                }
+                let solidFrom = parameters.depthSolidFamiliarity.value
+                let ip = try familiarity(assignment.ipPosition), oop = try familiarity(assignment.oopPosition)
+                isSolidSecond = ip >= solidFrom && oop >= solidFrom
+            }
+            return MatchesHere(starts: starts, matches: matches, basis: isSolidSecond ? .solidSecondChoice : .tooFewConfirmed)
         }
         let enough = Double(starts) + roundingNoise >= parameters.matchesHereShare.value * Double(matches)
-        return MatchesHere(starts: starts, matches: matches, isCounted: true, isEnough: enough)
+        return MatchesHere(starts: starts, matches: matches, basis: enough ? .startedEnough : .startedTooFew)
     }
 
     private static func isDeveloping(_ player: Player, ownClub: String?, parameters: EngineParameters) -> Bool {

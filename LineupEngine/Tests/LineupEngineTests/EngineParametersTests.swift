@@ -689,6 +689,32 @@ import Testing
         }.isEmpty)
     }
 
+    @Test func theWordsThresholdsAreListedAndTheirProblemsReported() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        #expect(listed["professionalismHoldsBackBelow"]?.evidence == .derived)
+        #expect(listed["professionalismHoldsBackBelow"]?.source.contains("middle anchor") == true)
+        #expect(listed["firstChoiceAgeNamedFrom"]?.evidence == .derived)
+        #expect(listed["firstChoiceAgeNamedFrom"]?.source.contains("decline is not measured") == true)
+        #expect(EngineParameters.fm27.professionalismHoldsBackBelow.value == 10)
+        #expect(EngineParameters.fm27.firstChoiceAgeNamedFrom.value == 30)
+        func problems(_ change: (inout EngineParameters) -> Void) -> [String] {
+            var q = EngineParameters.fm27
+            change(&q)
+            return FitnessModel.problems(in: q)
+        }
+        #expect(problems { $0.professionalismHoldsBackBelow = Parameter(0, .derived, source: "test") }
+            == ["professionalismHoldsBackBelow is 0, not between 1 and 21"])
+        #expect(problems { $0.professionalismHoldsBackBelow = Parameter(22, .derived, source: "test") }
+            == ["professionalismHoldsBackBelow is 22, not between 1 and 21"])
+        #expect(problems { $0.firstChoiceAgeNamedFrom = Parameter(0, .derived, source: "test") }
+            == ["firstChoiceAgeNamedFrom is 0, not 1 or more"])
+        #expect(problems {
+            $0.professionalismHoldsBackBelow = Parameter(1, .derived, source: "test")
+            $0.firstChoiceAgeNamedFrom = Parameter(1, .derived, source: "test")
+        }.isEmpty)
+        #expect(problems { $0.professionalismHoldsBackBelow = Parameter(21, .derived, source: "test") }.isEmpty)
+    }
+
     @Test func theRatingOffsetIsListedWithEvidenceAndSource() {
         let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
         #expect(listed["ratingAbilityOffset"]?.evidence == .derived)

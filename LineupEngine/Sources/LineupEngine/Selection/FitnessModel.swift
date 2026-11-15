@@ -270,6 +270,16 @@ public enum FitnessModel {
         if loanMonths < 0 {
             found.append("loanForMatchesMonthsAbove is \(loanMonths), not 0 or more")
         }
+        // The lines the words are drawn at. Professionalism runs from 1 to 20, so "under 21" is the highest that means
+        // anything.
+        let holdsBack = parameters.professionalismHoldsBackBelow.value
+        if !(1...21).contains(holdsBack) {
+            found.append("professionalismHoldsBackBelow is \(holdsBack), not between 1 and 21")
+        }
+        let namedFrom = parameters.firstChoiceAgeNamedFrom.value
+        if namedFrom < 1 {
+            found.append("firstChoiceAgeNamedFrom is \(namedFrom), not 1 or more")
+        }
         // Learnability is a weighted sum that should stay within 0 to 1.
         for (name, weight) in [("versatilityWeight", learnability.versatilityWeight), ("ageWeight", learnability.ageWeight),
                                ("professionalismWeight", learnability.professionalismWeight),

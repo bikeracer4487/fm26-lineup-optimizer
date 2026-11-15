@@ -132,7 +132,7 @@ import Testing
         let players = try thinAtLeftBack([back])
         let handed = try advice(request(players, history: history, accepted: [retraining]))
         #expect(handed.outlook?.slots.map(\.slot).contains(.D_L) == true)
-        #expect(handed.matchesHere == MatchesHere(starts: 2, matches: 6, isCounted: true, isEnough: true))
+        #expect(handed.matchesHere == MatchesHere(starts: 2, matches: 6, basis: .startedEnough))
         // Without them: no left back among his slots, and no matches to count.
         let without = try advice(request(players))
         #expect(without.outlook?.slots.map(\.slot).contains(.D_L) == false)

@@ -16,6 +16,14 @@ public enum RemovalAction: String, CaseIterable, Sendable {
     case keep
 }
 
+/// Why a young player is watched rather than kept to develop, play or be loaned.
+public enum WatchReason: String, CaseIterable, Sendable {
+    /// His reach is no more than cover, and he is in neither eleven.
+    case notWorthDeveloping
+    /// He is needed as cover: a loan would leave the squad short.
+    case neededForCover
+}
+
 /// Why a young player worth developing who is not getting matches is kept and not loaned.
 public enum KeepReason: String, CaseIterable, Sendable {
     /// Under `loanForMatchesFromAge`: at his age he grows mainly in training.
@@ -55,8 +63,13 @@ public struct RemovalAdvice: Equatable, Sendable {
     public let matchesHere: MatchesHere?
     /// Why he is kept to develop and not loaned for matches; with `develop` only.
     public let keepReason: KeepReason?
+    /// Why a young player is watched; with `monitor` for a player with an outlook only.
+    public let watchReason: WatchReason?
     /// A loan for matches at exactly `loanForMatchesFromAge`: worth it only where he will start regularly.
     public let loanOnlyToStart: Bool
+    /// He is on a youth contract that has not run out (one with 0 months left is read as no contract), so he can only
+    /// be kept or released.
+    public let onYouthContract: Bool
     public let isFalseProspect: Bool
     public let isMentor: Bool
     /// Wages left on the contract, in whole units of the squads' currency: 0 for a player out of contract, or on a
@@ -114,7 +127,7 @@ public enum Removal {
     /// Throws `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, what
     /// `Elevens.report` throws, and `RatingError.missingAttribute` for an assessed player without Consistency, Important
     /// Matches, Injury Proneness, Professionalism, Ambition, Controversy, Temperament or Determination. Throws what
-    /// `Depth.report`, `Tactic.assignments(catalog:)` and `Development.outlooks` throw.
+    /// `Depth.report`, `Tactic.assignments(catalog:)`, `Development.outlooks` and `Development.matchesHere` throw.
     public static func report(tactic: Tactic, players: [Player], ownClub: String?, money: MoneyStyle,
                               history: StartHistory, asOf: Day, retraining: [Retraining],
                               catalog: RoleCatalog, profile: RatingProfile,
@@ -133,7 +146,7 @@ public enum Removal {
     /// The same, from `elevens` and `depth` already worked out for the tactic and these players (`Elevens.report`
     /// keeps injured players in), and the tactic's `assignments`. The caller has checked the parameters with
     /// `FitnessModel.problems(in:)`. Throws `RatingError.missingAttribute` as above, and what `Development.outlooks`
-    /// throws.
+    /// and `Development.matchesHere` throw.
     static func report(players: [Player], ownClub: String?, money: MoneyStyle, history: StartHistory, asOf: Day,
                        retraining: [Retraining], assignments: [SlotAssignment], elevens: ElevensReport,
                        depth depthReport: DepthReport, parameters: EngineParameters) throws -> RemovalReport {
@@ -167,9 +180,9 @@ public enum Removal {
         var leaving: Set<PlayerID> = []
         for player in own {
             let outlook = outlooks[player.id]
-            let matchesHere = outlook.map { _ in
-                Development.matchesHere(for: player.id, tiers: tiers, history: history, asOf: asOf, parameters: parameters)
-            }
+            let matchesHere = outlook == nil ? nil
+                : try Development.matchesHere(for: player, assignments: assignments, tiers: tiers, history: history,
+                                              asOf: asOf, parameters: parameters)
             let one = Self.advice(for: player, traits: traits[player.id]!, outlook: outlook, matchesHere: matchesHere,
                                   squad: squad, money: money, parameters: parameters)
             switch (one.level, one.action) {
@@ -211,17 +224,20 @@ public enum Removal {
         // checked against the game); unknown months are not.
         let outOfContract: Bool
         let costsKnown: Bool
+        let onYouthContract: Bool
         switch player.contractType {
         case .fullTime where player.monthsLeft == 0, .youth where player.monthsLeft == 0:
-            (outOfContract, costsKnown) = (true, true)
+            (outOfContract, costsKnown, onYouthContract) = (true, true, false)
             reasons.add(rules.notFullTimePoints, "No contract: 0 months left")
-        case .fullTime, .youth:
-            (outOfContract, costsKnown) = (false, true)
+        case .fullTime:
+            (outOfContract, costsKnown, onYouthContract) = (false, true, false)
+        case .youth:
+            (outOfContract, costsKnown, onYouthContract) = (false, true, true)
         case .outOfContract:
-            (outOfContract, costsKnown) = (true, true)
+            (outOfContract, costsKnown, onYouthContract) = (true, true, false)
             reasons.add(rules.notFullTimePoints, "Not on a full-time contract")
         case .other(let type):
-            (outOfContract, costsKnown) = (false, false)
+            (outOfContract, costsKnown, onYouthContract) = (false, false, false)
             reasons.add(0, "Contract type \(type) is not one this tool reads: no release cost is given")
         }
 
@@ -362,14 +378,15 @@ public enum Removal {
             evidence.append(parameters.contractMonthsAllowance.evidence)
         }
 
-        // A young player on a youth contract can only be kept or released (the owner's statement; FM27 observation), and
-        // a false prospect is sold, not terminated: buyers still pay for his potential.
+        // A player on a youth contract can only be kept or released, at any age (the owner's statement; FM27
+        // observation), and a young false prospect is sold, not terminated: buyers still pay for his potential.
         let action: RemovalAction
         var keepReason: KeepReason?
+        var watchReason: WatchReason?
         var loanOnlyToStart = false
         switch level {
         case .high, .critical:
-            if outOfContract || (outlook != nil && player.contractType == .youth) {
+            if outOfContract || onYouthContract {
                 action = .release
             } else if outlook != nil && isFalseProspect {
                 action = .sell
@@ -382,8 +399,9 @@ public enum Removal {
         case .medium, .keep:
             if let outlook, let matchesHere {
                 let young = youngAction(player, outlook: outlook, matchesHere: matchesHere, inEither: inEither,
-                                        thinCover: thinCover, parameters: parameters)
-                (action, keepReason, loanOnlyToStart) = (young.action, young.keepReason, young.loanOnlyToStart)
+                                        thinCover: thinCover, onYouthContract: onYouthContract, parameters: parameters)
+                (action, keepReason, watchReason, loanOnlyToStart)
+                    = (young.action, young.keepReason, young.watchReason, young.loanOnlyToStart)
                 evidence += young.evidence
             } else {
                 action = level == .keep ? .keep : .monitor
@@ -392,7 +410,8 @@ public enum Removal {
 
         return RemovalAdvice(player: player.id, name: player.name, level: level, action: action, score: score,
                              reasons: reasons.list, tier: tier, outlook: outlook, matchesHere: matchesHere,
-                             keepReason: keepReason, loanOnlyToStart: loanOnlyToStart, isFalseProspect: isFalseProspect,
+                             keepReason: keepReason, watchReason: watchReason, loanOnlyToStart: loanOnlyToStart,
+                             onYouthContract: onYouthContract, isFalseProspect: isFalseProspect,
                              isMentor: isMentor, releaseCost: releaseCost, mutualCost: mutualCost,
                              basis: Evidence.weakest(evidence)!)
     }
@@ -403,29 +422,30 @@ public enum Removal {
     /// cannot be loaned, nor a contract with `loanForMatchesMonthsAbove` months or fewer left (or unknown), so he is kept
     /// to develop; otherwise he is loaned for matches. With the evidence of the parameters the rules read.
     private static func youngAction(_ player: Player, outlook: Outlook, matchesHere: MatchesHere, inEither: Bool,
-                                    thinCover: Bool, parameters: EngineParameters)
-        -> (action: RemovalAction, keepReason: KeepReason?, loanOnlyToStart: Bool, evidence: [Evidence]) {
+                                    thinCover: Bool, onYouthContract: Bool, parameters: EngineParameters)
+        -> (action: RemovalAction, keepReason: KeepReason?, watchReason: WatchReason?, loanOnlyToStart: Bool,
+            evidence: [Evidence]) {
         let notWorthDeveloping: Bool
         switch outlook.level {
         case .couldBeCover?, .markedlyLower?: notWorthDeveloping = !inEither
         case .couldPassFirst?, .couldMakeSecond?, nil: notWorthDeveloping = false
         }
-        if notWorthDeveloping { return (.monitor, nil, false, []) }
+        if notWorthDeveloping { return (.monitor, nil, .notWorthDeveloping, false, []) }
 
         let fromAge = parameters.loanForMatchesFromAge
         var evidence = [fromAge.evidence]
-        if player.age < fromAge.value { return (.develop, .age, false, evidence) }
+        if player.age < fromAge.value { return (.develop, .age, nil, false, evidence) }
         evidence += [parameters.matchesHereShare.evidence, parameters.matchesHereWindowDays.evidence,
-                     parameters.matchesHereMinimumConfirmed.evidence]
-        if matchesHere.isEnough { return (.play, nil, false, evidence) }
-        if thinCover { return (.monitor, nil, false, evidence) }
-        if player.contractType == .youth { return (.develop, .youthContract, false, evidence) }
+                     parameters.matchesHereMinimumConfirmed.evidence, parameters.depthSolidFamiliarity.evidence]
+        if matchesHere.isEnough { return (.play, nil, nil, false, evidence) }
+        if thinCover { return (.monitor, nil, .neededForCover, false, evidence) }
+        if onYouthContract { return (.develop, .youthContract, nil, false, evidence) }
         let monthsAbove = parameters.loanForMatchesMonthsAbove
         evidence.append(monthsAbove.evidence)
         guard let months = player.monthsLeft, months > monthsAbove.value else {
-            return (.develop, .shortContract, false, evidence)
+            return (.develop, .shortContract, nil, false, evidence)
         }
-        return (.loanForMatches, nil, player.age == fromAge.value, evidence)
+        return (.loanForMatches, nil, nil, player.age == fromAge.value, evidence)
     }
 
     // MARK: Players on loan here

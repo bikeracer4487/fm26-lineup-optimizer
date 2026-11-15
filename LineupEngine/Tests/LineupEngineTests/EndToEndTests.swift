@@ -408,7 +408,26 @@ import Testing
                 break
             }
             #expect((a.action == .develop) == (a.keepReason != nil), "\(player.id.key)")
+            #expect((a.action == .monitor) == (a.watchReason != nil), "\(player.id.key)")
+            #expect(a.onYouthContract == (player.contractType == .youth && player.monthsLeft != 0), "\(player.id.key)")
         }
+        // The U21 18-year-old, a backup who could pass the first choice, is watched because he is needed as cover.
+        let eighteen = try #require(young.first { $0.squad == .u21 && $0.age == 18 })
+        let watched = try #require(removal.advice.first { $0.player == eighteen.id })
+        #expect(watched.tier == .backup && watched.watchReason == .neededForCover)
+        #expect(AdvisorText.why(watched.action, for: watched)
+                == "He is needed as cover here, so a loan would leave the squad short.")
+        // An outfield player who is the second eleven's goalkeeper is not getting his matches because of it.
+        var standIns = 0
+        for player in young {
+            let a = try #require(removal.advice.first { $0.player == player.id })
+            if case .second(.GK)? = a.tier, (player.familiarity[.goalkeeper] ?? 0) < 15 {
+                standIns += 1
+                #expect(a.matchesHere?.isEnough == false, "\(player.id.key)")
+                #expect(a.action != .play, "\(player.id.key)")
+            }
+        }
+        #expect(standIns == 1)
     }
 
     @Test func mentoringRunsOnTheCapturedSquads() throws {

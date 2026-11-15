@@ -651,6 +651,12 @@ public struct EngineParameters: Sendable {
     /// A loan for matches needs more than this many months left on his contract; with this many or fewer, or unknown, he
     /// is kept and the contract renewed first.
     public var loanForMatchesMonthsAbove: Parameter<Int>
+    // The lines the words about a young player's outlook are drawn at.
+    /// A Professionalism under this is said to hold his growth back (`ReachEstimate.professionalismHoldsBack`).
+    public var professionalismHoldsBackBelow: Parameter<Int>
+    /// A first choice this age or over is named with his age where a young player is compared with him
+    /// (`Rival.isAgeNamed`).
+    public var firstChoiceAgeNamedFrom: Parameter<Int>
     /// The numbers behind a fixture's suggested importance.
     public var importanceRules: Parameter<ImportanceSuggestionRules>
     /// What each attribute is worth, per point, when weighing what an arrow gives its target.
@@ -1018,6 +1024,14 @@ public struct EngineParameters: Sendable {
                 12, .derived,
                 source: "the young players' development design, 7.3: a loan for matches needs more than 12 months left, so the "
                     + "contract is not running down while he is away"),
+            professionalismHoldsBackBelow: Parameter(
+                10, .derived,
+                source: "the young players' development design, section 6: the working says when his Professionalism holds "
+                    + "him back; 10 is the middle anchor of growthProfessionalismRates, below which the rate falls fastest"),
+            firstChoiceAgeNamedFrom: Parameter(
+                30, .derived,
+                source: "the young players' development design, section 6: a first choice of 30 or over is named with his "
+                    + "age and nothing more, since decline is not measured"),
             importanceRules: Parameter(
                 ImportanceSuggestionRules(
                     leagueBase: 80, cupBase: 60, minorCupBase: 30, friendlyBase: 10, unsetBase: 50,

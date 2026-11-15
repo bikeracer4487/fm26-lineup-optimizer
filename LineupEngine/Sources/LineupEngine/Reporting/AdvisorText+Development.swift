@@ -41,15 +41,15 @@ extension AdvisorText {
 
     /// How his reach was worked out, as a reach figure is never shown without it: "Ability 55, potential 140. At 16 with
     /// Professionalism 15 this tool expects about 13 points a season now, fewer later: could reach his potential." An
-    /// Ambition or Determination under 10 (where it starts to slow growth, `growthPersonalityFullFrom`) is named after
-    /// the Professionalism, and a Professionalism under 10 is said to be what holds him back. Figures are whole numbers.
+    /// Ambition or Determination that slows his growth is named after the Professionalism, and a Professionalism that
+    /// holds him back is said to, as the estimate's flags say. Figures are whole numbers.
     public static func reachWorking(_ estimate: ReachEstimate) -> String {
         let figures = "Ability \(estimate.current), potential \(estimate.potential)."
         // Past the last growth step there are no seasons ahead.
         guard estimate.bySeason.count > 1 else { return "\(figures) At \(estimate.age) this tool expects no more growth." }
         var traits = ["Professionalism \(estimate.professionalism)"]
-        if estimate.ambition < personalityNamedBelow { traits.append("Ambition \(estimate.ambition)") }
-        if estimate.determination < personalityNamedBelow { traits.append("Determination \(estimate.determination)") }
+        if estimate.ambitionSlows { traits.append("Ambition \(estimate.ambition)") }
+        if estimate.determinationSlows { traits.append("Determination \(estimate.determination)") }
         let named = traits.count == 1 ? traits[0] : traits.dropLast().joined(separator: ", ") + " and " + traits.last!
         let rate = "about \(points(estimate.seasonGrowth)) a season"
         let expects = "\(figures) At \(estimate.age) with \(named) this tool expects \(rate) now, fewer later"
@@ -58,25 +58,29 @@ extension AdvisorText {
         }
         if estimate.reachesPotential { return "\(expects): could reach his potential." }
         let reach = "\(expects): could reach about \(whole(estimate.reach))."
-        guard estimate.professionalism < personalityNamedBelow else { return reach }
+        guard estimate.professionalismHoldsBack else { return reach }
         return "\(reach) At his Professionalism this tool expects \(rate); mentoring could change that."
     }
 
     /// Where he stands at his best slot: "Needs about 14 more ability points to match Smith at left back; this tool
-    /// expects about 12 a season. On course.", with " Smith is 31." for a first choice of 30 or over and " Smith is 20 and
+    /// expects about 12 a season. On course.", with " Smith is 31." for a first choice the engine names with his age
+    /// (`Rival.isAgeNamed`) and " Smith is 20 and
     /// still growing." for one compared at his own reach. Begins "First choice at striker." at a slot he is first choice
-    /// at. nil when he is first choice nowhere and has no slot with a first choice to pass.
+    /// at; when that slot's words are his best slot's (two defensive midfield slots), that is all it says. nil when he
+    /// is first choice nowhere and has no slot with a first choice to pass.
     public static func standing(_ outlook: Outlook, names: (SlotID) -> String) -> String? {
         var parts: [String] = []
-        if let home = outlook.slots.first(where: \.isFirstChoice) { parts.append("First choice at \(names(home.slot)).") }
-        if let best = outlook.best, let first = best.firstChoice, let needed = best.pointsNeeded, let band = best.band {
+        let home = outlook.slots.first(where: \.isFirstChoice).map { names($0.slot) }
+        if let home { parts.append("First choice at \(home).") }
+        if let best = outlook.best, names(best.slot) != home, let first = best.firstChoice,
+           let needed = best.pointsNeeded, let band = best.band {
             let need = needed == 0 ? "Needs no more ability points"
                 : "Needs about \(needed) more ability \(needed == 1 ? "point" : "points")"
             var sentence = "\(need) to match \(first.name) at \(names(best.slot)); this tool expects about "
                 + "\(whole(outlook.estimate.seasonGrowth)) a season. \(name(band))."
             if first.compared > first.rating {
                 sentence += " \(first.name) is \(first.age) and still growing."
-            } else if first.age >= firstChoiceAgeNamedFrom {
+            } else if first.isAgeNamed {
                 sentence += " \(first.name) is \(first.age)."
             }
             parts.append(sentence)
@@ -102,11 +106,25 @@ extension AdvisorText {
         }
     }
 
-    /// The words name an Ambition, Determination or Professionalism under this: from 10 Ambition and Determination no
-    /// longer slow growth (`growthPersonalityFullFrom`), and 10 is where the Professionalism rates' middle anchor sits.
-    private static let personalityNamedBelow = 10
-    /// A first choice this age or over is named with his age: decline is not measured (the design, section 6).
-    private static let firstChoiceAgeNamedFrom = 30
+    /// Why a young player is kept to play, from what decided that he gets his matches here.
+    static func whyPlay(_ basis: MatchesHereBasis?) -> String {
+        switch basis {
+        case .firstChoice?: "He is first choice here."
+        case .startedEnough?: "He is getting his matches here."
+        case .solidSecondChoice?: "He is second choice here, and too few matches are confirmed to count his starts."
+        // Player Removal keeps a player to play only on the three above; an advice built otherwise is said plainly.
+        case .startedTooFew?, .tooFewConfirmed?, nil: "Nothing here says he should go"
+        }
+    }
+
+    /// Why a player is watched; a player without an outlook keeps the general sentence.
+    static func whyWatch(_ reason: WatchReason?) -> String {
+        switch reason {
+        case .notWorthDeveloping?: "This tool does not expect him to reach the second eleven: watch how he does."
+        case .neededForCover?: "He is needed as cover here, so a loan would leave the squad short."
+        case nil: "Not enough against him to act: watch how he does"
+        }
+    }
 
     /// A figure rounded to the nearest whole number.
     private static func whole(_ x: Double) -> Int { Int(x.rounded()) }

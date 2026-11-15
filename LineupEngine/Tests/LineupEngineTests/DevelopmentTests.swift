@@ -97,8 +97,10 @@ import Testing
         }
         let row = try #require(slot(found[young[0].id], .D_L))
         #expect(row.rating == 50 && !row.isFirstChoice)
-        #expect(row.firstChoice == Rival(player: first.id, name: "First Choice", age: 28, rating: 100, compared: 100))
-        #expect(row.secondChoice == Rival(player: second.id, name: "Second Choice", age: 28, rating: 90, compared: 90))
+        #expect(row.firstChoice == Rival(player: first.id, name: "First Choice", age: 28, rating: 100, compared: 100,
+                                         isAgeNamed: false))
+        #expect(row.secondChoice == Rival(player: second.id, name: "Second Choice", age: 28, rating: 90, compared: 90,
+                                          isAgeNamed: false))
         #expect(found[young[0].id]?.best == row)
         #expect(found[young[0].id]?.average == nil)
     }
@@ -391,70 +393,129 @@ import Testing
         })
     }
 
-    func matchesHere(_ player: Player, _ tiers: SquadTiers, _ history: StartHistory) -> MatchesHere {
-        Development.matchesHere(for: player.id, tiers: tiers, history: history, asOf: day, parameters: parameters)
+    func matchesHere(_ player: Player, _ tiers: SquadTiers, _ history: StartHistory,
+                     parameters: EngineParameters? = nil) throws -> MatchesHere {
+        try Development.matchesHere(for: player, assignments: assignments, tiers: tiers, history: history, asOf: day,
+                                    parameters: parameters ?? self.parameters)
     }
 
-    @Test func aFirstChoiceHasEnoughWhateverHeStarted() {
+    @Test func aFirstChoiceHasEnoughWhateverHeStarted() throws {
         let p = player("First", slots: [.D_L])
         let t = tiers(first: [.D_L: p], ratings: [(p, .D_L, 50)])
-        let result = matchesHere(p, t, history(starts: 0, of: 8, player: p))
-        #expect(result == MatchesHere(starts: 0, matches: 8, isCounted: true, isEnough: true))
+        let result = try matchesHere(p, t, history(starts: 0, of: 8, player: p))
+        #expect(result == MatchesHere(starts: 0, matches: 8, basis: .firstChoice))
+        #expect(result.isCounted && result.isEnough)
         // Even with nothing confirmed.
-        #expect(matchesHere(p, t, StartHistory([])).isEnough)
+        #expect(try matchesHere(p, t, StartHistory([])) == MatchesHere(starts: 0, matches: 0, basis: .firstChoice))
     }
 
-    @Test func aThirdOfSixIsEnoughAndOneOfSixIsNot() {
+    @Test func aThirdOfSixIsEnoughAndOneOfSixIsNot() throws {
         let p = player("Backup", slots: [.D_L])
         let t = tiers(ratings: [(p, .D_L, 50)])
-        #expect(matchesHere(p, t, history(starts: 2, of: 6, player: p))
-            == MatchesHere(starts: 2, matches: 6, isCounted: true, isEnough: true))
-        #expect(matchesHere(p, t, history(starts: 1, of: 6, player: p))
-            == MatchesHere(starts: 1, matches: 6, isCounted: true, isEnough: false))
+        let two = try matchesHere(p, t, history(starts: 2, of: 6, player: p))
+        #expect(two == MatchesHere(starts: 2, matches: 6, basis: .startedEnough))
+        #expect(two.isCounted && two.isEnough)
+        let one = try matchesHere(p, t, history(starts: 1, of: 6, player: p))
+        #expect(one == MatchesHere(starts: 1, matches: 6, basis: .startedTooFew))
+        #expect(one.isCounted && !one.isEnough)
         // A second choice who started too little has not enough either, once the matches are counted.
         let s = player("Second", slots: [.D_L])
         let t2 = tiers(second: [.D_L: s], ratings: [(s, .D_L, 50)])
-        #expect(!matchesHere(s, t2, history(starts: 1, of: 6, player: s)).isEnough)
-        #expect(matchesHere(s, t2, history(starts: 2, of: 6, player: s)).isEnough)
+        #expect(try !matchesHere(s, t2, history(starts: 1, of: 6, player: s)).isEnough)
+        #expect(try matchesHere(s, t2, history(starts: 2, of: 6, player: s)).isEnough)
     }
 
-    @Test func matchesOutsideTheWindowAreNotCounted() {
+    @Test func matchesOutsideTheWindowAreNotCounted() throws {
         let p = player("Backup", slots: [.D_L])
         let t = tiers(ratings: [(p, .D_L, 50)])
         let old = (0..<6).map { n in
             ConfirmedLineup(fixture: FixtureID("old\(n)"), date: day.adding(days: -61 - n), starters: [.D_L: p.id])
         }
-        let result = matchesHere(p, t, StartHistory(old))
-        #expect(result == MatchesHere(starts: 0, matches: 0, isCounted: false, isEnough: false))
+        let result = try matchesHere(p, t, StartHistory(old))
+        #expect(result == MatchesHere(starts: 0, matches: 0, basis: .tooFewConfirmed))
+        #expect(!result.isCounted && !result.isEnough)
     }
 
-    @Test func withFewerThanSixConfirmedHisPlaceDecides() {
+    @Test func withFewerThanSixConfirmedHisPlaceDecides() throws {
         let second = player("Second", slots: [.D_L]), backup = player("Backup", slots: [.D_L])
         let t = tiers(second: [.D_L: second], ratings: [(second, .D_L, 50), (backup, .D_L, 40)])
         let none = StartHistory([])
-        #expect(matchesHere(second, t, none) == MatchesHere(starts: 0, matches: 0, isCounted: false, isEnough: true))
-        #expect(matchesHere(backup, t, none) == MatchesHere(starts: 0, matches: 0, isCounted: false, isEnough: false))
+        let solid = try matchesHere(second, t, none)
+        #expect(solid == MatchesHere(starts: 0, matches: 0, basis: .solidSecondChoice))
+        #expect(!solid.isCounted && solid.isEnough)
+        #expect(try matchesHere(backup, t, none) == MatchesHere(starts: 0, matches: 0, basis: .tooFewConfirmed))
         // Five confirmed and he started all five, but is a backup: not counted, not enough.
-        let five = matchesHere(backup, t, history(starts: 5, of: 5, player: backup))
-        #expect(five == MatchesHere(starts: 5, matches: 5, isCounted: false, isEnough: false))
+        let five = try matchesHere(backup, t, history(starts: 5, of: 5, player: backup))
+        #expect(five == MatchesHere(starts: 5, matches: 5, basis: .tooFewConfirmed))
         // Six confirmed counts them: all six started is enough for the backup.
-        #expect(matchesHere(backup, t, history(starts: 6, of: 6, player: backup)).isCounted)
+        #expect(try matchesHere(backup, t, history(starts: 6, of: 6, player: backup)).isCounted)
         // A player the tiers did not rate has no place to decide it.
         let unrated = player("Unrated", slots: [.D_L])
-        #expect(!matchesHere(unrated, t, none).isEnough)
+        #expect(try !matchesHere(unrated, t, none).isEnough)
     }
 
-    @Test func theMinimumAndShareComeFromTheParameters() {
+    @Test func aSecondChoiceHasEnoughOnlyAtASlotHeIsSolidAt() throws {
+        let none = StartHistory([])
+        // Solid (familiarity 15 in both phases): enough while too few matches are confirmed.
+        let solid = player("Solid", slots: [.D_L], familiarity: 15)
+        #expect(try matchesHere(solid, tiers(second: [.D_L: solid], ratings: [(solid, .D_L, 50)]), none).basis
+                == .solidSecondChoice)
+        // An option there but not solid (14): a stand-in, not enough.
+        let standIn = player("Stand-in", slots: [.D_L], familiarity: 14)
+        let found = try matchesHere(standIn, tiers(second: [.D_L: standIn], ratings: [(standIn, .D_L, 50)]), none)
+        #expect(found == MatchesHere(starts: 0, matches: 0, basis: .tooFewConfirmed))
+        #expect(!found.isEnough)
+        // An outfield player who is the second eleven's goalkeeper.
+        var keeper = player("Outfield keeper", slots: [.D_L], familiarity: 15)
+        keeper.familiarity[.goalkeeper] = 1
+        #expect(try !matchesHere(keeper, tiers(second: [.GK: keeper], ratings: [(keeper, .GK, 30)]), none).isEnough)
+        // Solid is Depth's line, from its parameter.
+        var q = parameters
+        q.depthSolidFamiliarity = Parameter(14, .derived, source: "test")
+        #expect(try matchesHere(standIn, tiers(second: [.D_L: standIn], ratings: [(standIn, .D_L, 50)]), none,
+                                parameters: q).isEnough)
+        // Once enough matches are confirmed, his starts decide, solid or not.
+        #expect(try matchesHere(standIn, tiers(second: [.D_L: standIn], ratings: [(standIn, .D_L, 50)]),
+                                history(starts: 2, of: 6, player: standIn)).isEnough)
+    }
+
+    @Test func aMissingFamiliarityAtHisSecondChoiceSlotIsAnError() {
+        var second = player("Second", slots: [.D_L])
+        second.familiarity[assignment(.ST_C).ipPosition] = nil
+        #expect(throws: RatingError.missingFamiliarity(player: "Second", position: assignment(.ST_C).ipPosition)) {
+            try matchesHere(second, tiers(second: [.ST_C: second], ratings: [(second, .ST_C, 50)]), StartHistory([]))
+        }
+    }
+
+    @Test func theMinimumAndShareComeFromTheParameters() throws {
         let p = player("Backup", slots: [.D_L])
         let t = tiers(ratings: [(p, .D_L, 50)])
         var q = parameters
         q.matchesHereMinimumConfirmed = Parameter(3, .derived, source: "test")
         q.matchesHereShare = Parameter(0.5, .derived, source: "test")
         let h = history(starts: 1, of: 4, player: p)
-        #expect(!Development.matchesHere(for: p.id, tiers: t, history: h, asOf: day, parameters: q).isEnough)
-        #expect(Development.matchesHere(for: p.id, tiers: t, history: history(starts: 2, of: 4, player: p), asOf: day,
-                                        parameters: q).isEnough)
+        #expect(try !matchesHere(p, t, h, parameters: q).isEnough)
+        #expect(try matchesHere(p, t, history(starts: 2, of: 4, player: p), parameters: q).isEnough)
         q.matchesHereWindowDays = Parameter(3, .derived, source: "test")
-        #expect(Development.matchesHere(for: p.id, tiers: t, history: h, asOf: day, parameters: q).matches == 2)
+        #expect(try matchesHere(p, t, h, parameters: q).matches == 2)
+    }
+
+    @Test func aFirstChoiceIsNamedWithHisAgeFromTheParameter() throws {
+        func standing(firstAge: Int, _ q: EngineParameters? = nil) throws -> (named: Bool?, words: String?) {
+            var first = veteran("First Choice")
+            first.age = firstAge
+            let young = player("Young", slots: [.D_L])
+            let found = try outlooks([first, young], tiers(first: [.D_L: first], ratings: [(first, .D_L, 90), (young, .D_L, 80)]),
+                                     parameters: q)
+            let outlook = try #require(found[young.id])
+            return (outlook.best?.firstChoice?.isAgeNamed, AdvisorText.standing(outlook, names: { PositionText.plain($0.position) }))
+        }
+        let at29 = try standing(firstAge: 29), at30 = try standing(firstAge: 30)
+        #expect(at29.named == false && at29.words?.hasSuffix(".") == true && at29.words?.contains("is 29") == false)
+        #expect(at30.named == true && at30.words?.hasSuffix(" First Choice is 30.") == true)
+        var q = parameters
+        q.firstChoiceAgeNamedFrom = Parameter(31, .derived, source: "test")
+        #expect(try standing(firstAge: 30, q).named == false)
+        #expect(try standing(firstAge: 31, q).words?.hasSuffix(" First Choice is 31.") == true)
     }
 }

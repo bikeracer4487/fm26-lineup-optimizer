@@ -155,22 +155,24 @@ public enum AdvisorText {
     }
 
     /// The rule that chose the action, in one sentence. The termination line is a parameter, so it is not named in
-    /// months here. A release that costs something is a young player's on a youth contract, which can only be released.
-    /// A young player kept to develop is told why from `advice.keepReason`, and a loan for matches at the youngest age
-    /// for one says it is worth it only where he will start.
+    /// months here. A release is said from his contract: out of contract, or on a youth contract that can only be
+    /// released. A young player kept to develop, kept to play or watched is told why from `advice.keepReason`,
+    /// `advice.matchesHere` and `advice.watchReason`, and a loan for matches at the youngest age for one says it is
+    /// worth it only where he will start.
     public static func why(_ action: RemovalAction, for advice: RemovalAdvice) -> String {
         switch action {
         case .release:
-            advice.releaseCost == 0 && advice.mutualCost == 0
-                ? "He is out of contract, so releasing him costs nothing" : youthContractNotMarked
+            advice.onYouthContract
+                ? "He is on a youth contract, so he cannot be sold or loaned out: releasing him is the only way to move him on"
+                : "He is out of contract, so releasing him costs nothing"
         case .develop: whyDevelop(advice.keepReason)
-        case .play: "He is getting his matches here."
+        case .play: whyPlay(advice.matchesHere?.basis)
         case .loanForMatches:
             "He is worth developing and is not getting matches here: a loan gives him matches."
                 + (advice.loanOnlyToStart ? " Only where he will start regularly; otherwise he grows nearly as well here." : "")
         case .terminate: "His contract is nearly over and no fee is likely to beat the cost of ending it"
         case .sell: "Selling is the way left: nothing cheaper applies"
-        case .monitor: "Not enough against him to act: watch how he does"
+        case .monitor: whyWatch(advice.watchReason)
         case .keep: "Nothing here says he should go"
         }
     }

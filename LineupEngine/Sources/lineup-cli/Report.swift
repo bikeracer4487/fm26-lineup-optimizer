@@ -222,7 +222,9 @@ enum Report {
             }
             let showsMatches: Bool
             switch one.action {
-            case .play, .loanForMatches: showsMatches = true
+            // A second choice kept to play while too few matches are confirmed is told so in the why.
+            case .play: showsMatches = one.matchesHere?.basis != .solidSecondChoice
+            case .loanForMatches: showsMatches = true
             case .develop: showsMatches = one.keepReason != .age
             case .release, .terminate, .sell, .monitor, .keep: showsMatches = false
             }
