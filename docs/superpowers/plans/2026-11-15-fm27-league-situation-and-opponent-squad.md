@@ -78,7 +78,7 @@ Conditions the spec does not spell out and that are most likely to bite, most li
   - `ImportanceAdvisor.suggest(for:among:confirmed:players:tiers:situation:parameters:)`, with `situation: LeagueSituation` a required argument before `parameters`.
   - `AdvisorText.name(_ situation: LeagueSituation) -> String`
 
-- [ ] **Step 1: Write the failing tests** in `ImportanceSuggestionTests`. Give the suite's `suggest` helper a `situation: LeagueSituation = .inContention` argument that it passes on.
+- [x] **Step 1: Write the failing tests** in `ImportanceSuggestionTests`. Give the suite's `suggest` helper a `situation: LeagueSituation = .inContention` argument that it passes on.
 
 ```swift
 @Test func eachSituationSetsALeagueMatchsBase() throws {
@@ -133,12 +133,12 @@ Conditions the spec does not spell out and that are most likely to bite, most li
 
 In `AdvisorTextTests`: the four names are "Title race or relegation fight", "In contention", "Mid-table", "Nothing to play for". In `FitnessModelTests`, beside the existing test of a base that is not finite: each of the three new bases set to `.infinity` gives a problem naming it.
 
-- [ ] **Step 2: Run them and see them fail to compile**
+- [x] **Step 2: Run them and see them fail to compile**
 
 Run: `cd LineupEngine && swift test --filter ImportanceSuggestionTests`
 Expected: build errors for `LeagueSituation` and the `situation:` argument.
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
   - `LeagueSituation` in `PlanInputs.swift` under `Competition`, with a one-line comment.
   - The three bases in `ImportanceSuggestionRules` and its initialiser, with the values above in `EngineParameters.fm27`. Rewrite the end of the parameter's source: the league bases are the old table's four league values (title race or relegation 100, contention 80, mid-table 60, dead rubber 20); the old table gave 100 only in the last ten league matches, and here the owner says when.
   - `FitnessModel.problems(in:)`: add the three to the list of bases checked for being finite.
@@ -147,17 +147,17 @@ Expected: build errors for `LeagueSituation` and the `situation:` argument.
   - `main.swift`: `advise` accepts `--league-situation` with `title-race`, `in-contention`, `mid-table` or `nothing-to-play-for` (default in contention, as the usage text must say); any other value is a `UsageError` listing the four. Add it to the usage comment at the top of the file.
   - `AppModel+Advice.swift`: both calls pass `situation: .inContention` for now. Task 3 replaces it.
 
-- [ ] **Step 4: Run every test**
+- [x] **Step 4: Run every test**
 
 Run: `cd LineupEngine && swift test` then `cd ../LineupApp && swift build`
 Expected: all pass, no warnings; the app builds.
 
-- [ ] **Step 5: Try the command line**
+- [x] **Step 5: Try the command line**
 
 Run the `advise` command from `CLAUDE.md` twice, once as written and once with `--league-situation nothing-to-play-for`.
 Expected: without the flag the output is unchanged from before this task (compare with `git stash` or a saved copy); with it, every league fixture's suggestion reads Low or Sharpness with the reason "League match, nothing to play for: 20".
 
-- [ ] **Step 6: Commit** the engine and the app call sites, saying that a league match's worth depends on where the club stands and that in contention keeps every existing suggestion.
+- [x] **Step 6: Commit** the engine and the app call sites, saying that a league match's worth depends on where the club stands and that in contention keeps every existing suggestion.
 
 ---
 
@@ -219,7 +219,7 @@ extension AdvisorText { public static func opponentReading(_ reading: OpponentRe
 7. With `T` their total, `O` the owner's, `s` and `m` the two lines, in whole numbers and in this order: `T × 100 ≥ O × (100 + m)` much stronger; `T × 100 ≥ O × (100 + s)` stronger; `T × 100 ≤ O × (100 − m)` much weaker; `T × 100 ≤ O × (100 − s)` weaker; otherwise similar.
 8. `awayOnLoanAt` is the "loaned to" of every pasted player who reads as `.loanedOut`, injured or not.
 
-- [ ] **Step 1: Write the failing tests** in `OpponentReadingTests`. A helper `side(club:loanedTo:abilities:)` builds players with distinct names and `club` as given (nil for FMRTE's team grid, which has no club column). The owner's side is eleven players with club nil, all at ability 100, so `ownTotal` is 1100; `ownClub` is "Oxford City"; `named` is "Banbury United" unless a test says otherwise.
+- [x] **Step 1: Write the failing tests** in `OpponentReadingTests`. A helper `side(club:loanedTo:abilities:)` builds players with distinct names and `club` as given (nil for FMRTE's team grid, which has no club column). The owner's side is eleven players with club nil, all at ability 100, so `ownTotal` is 1100; `ownClub` is "Oxford City"; `named` is "Banbury United" unless a test says otherwise.
 
 ```swift
 @Test func eachLineGivesItsStep() throws {
@@ -303,23 +303,23 @@ In `ErrorDescriptionsTests`, each case through `ErrorDescriptions.describe(_: Er
 | `.tooFewPlayers(.theirs(club: "Banbury United"), found: 9)` | "Banbury United has only 9 fit players among the rows pasted who are not away on loan; eleven are needed." |
 | `.tooFewPlayers(.own, found: 9)` | "Your own squads have only 9 fit players who are not away on loan; eleven are needed." |
 
-- [ ] **Step 2: Run them and see them fail to compile**
+- [x] **Step 2: Run them and see them fail to compile**
 
 Run: `cd LineupEngine && swift test --filter OpponentReadingTests`
 Expected: build errors for the new types.
 
-- [ ] **Step 3: Implement** the interfaces and the rule above.
+- [x] **Step 3: Implement** the interfaces and the rule above.
   - `commonClub(among:)` is the counting half of `ownClub(override:)`, which now calls it.
   - `opponentStrengthLines` in `EngineParameters.fm27`: 5 and 15, `.derived`, with the source "this design's choice (docs/superpowers/specs/2026-11-15-fm27-league-situation-and-opponent-squad-design.md): no test relates a gap in ability to results; a ratio so the lines mean the same in every division". Add the parameter wherever the other parameters are listed (the initialiser, and any test that counts or names every parameter).
   - The reading's sentence writes each average to one decimal place and the strength with `AdvisorText.name`.
   - `ErrorDescriptions.describe(_: Error)` gains the new error type, with its own exhaustive `describe`.
 
-- [ ] **Step 4: Run every engine test**
+- [x] **Step 4: Run every engine test**
 
 Run: `cd LineupEngine && swift test`
 Expected: all pass, no warnings.
 
-- [ ] **Step 5: Commit**, saying that the strength is read from the squad because the owner had nothing to pick it by, and that the lines are the tool's own estimate.
+- [x] **Step 5: Commit**, saying that the strength is read from the squad because the owner had nothing to pick it by, and that the lines are the tool's own estimate.
 
 ---
 
@@ -336,7 +336,7 @@ Expected: all pass, no warnings.
   - `AppModel.setLeagueSituation(_ situation: LeagueSituation)`
   - `AppModel.leagueSituationChoices: [(value: LeagueSituation, title: String)]` (static, in `allCases` order, titles from the engine) and `AppModel.leagueSituationLabel = "League situation"`.
 
-- [ ] **Step 1: Write the failing tests.** Use the suite's existing way of making a model with the captured squads, a tactic and league fixtures.
+- [x] **Step 1: Write the failing tests.** Use the suite's existing way of making a model with the captured squads, a tactic and league fixtures.
 
 ```swift
 @Test func theSituationChangesALeagueFixturesSuggestion() throws
@@ -357,22 +357,22 @@ Expected: all pass, no warnings.
 @Test func theMenuListsTheFourSituationsInTheEnginesWords() throws
 ```
 
-- [ ] **Step 2: Run them and see them fail**
+- [x] **Step 2: Run them and see them fail**
 
 Run: `cd LineupApp && swift test --filter FixturePresentationTests`
 Expected: build errors for the new members.
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
   - `AppSettings` keeps its synthesised coding; the new optional is absent in old files.
   - Both calls to `ImportanceAdvisor.suggest` pass `settings.situation`.
   - `setLeagueSituation` saves the settings and clears the kept suggestions (`adviceCache?.suggestions = nil`); it does not call `replan()`. Make sure a view that read `suggestions` is told: `suggestions` must read something observed that this action changes. `update(_ settings:)` needs no change, since the situation is not among the things it plans again for; check that a change to it there also clears the kept suggestions, so the two routes agree.
 
-- [ ] **Step 4: Run the app's tests**
+- [x] **Step 4: Run the app's tests**
 
 Run: `cd LineupApp && swift build && swift test`
 Expected: all pass, no warnings.
 
-- [ ] **Step 5: Commit**, saying the situation is the owner's to say and changes suggestions only.
+- [x] **Step 5: Commit**, saying the situation is the owner's to say and changes suggestions only.
 
 ---
 
@@ -390,7 +390,7 @@ Expected: all pass, no warnings.
   - `AppModel.offersUseIt(for fixture: StoredFixture, editing: FixtureID?) -> Bool`
   - `SuggestionNote.useItLabel(opponent: String) -> String`: "Use the suggested importance for the match against Banbury United", for VoiceOver.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```swift
 @Test func useItTakesTheSuggestionAndPlansAgain() throws
@@ -409,19 +409,19 @@ Expected: all pass, no warnings.
 @Test func theUseItLabelNamesTheMatch() throws
 ```
 
-- [ ] **Step 2: Run them and see them fail**
+- [x] **Step 2: Run them and see them fail**
 
 Run: `cd LineupApp && swift test --filter FixturePresentationTests`
 Expected: build errors.
 
-- [ ] **Step 3: Implement.** `useSuggestion` is guarded by `suggestionLine(for:)` being present and by the interval, measured from the end of the last one that ran, as the Training guard is; keep its own time, not the Training one's.
+- [x] **Step 3: Implement.** `useSuggestion` is guarded by `suggestionLine(for:)` being present and by the interval, measured from the end of the last one that ran, as the Training guard is; keep its own time, not the Training one's.
 
-- [ ] **Step 4: Run the app's tests**
+- [x] **Step 4: Run the app's tests**
 
 Run: `cd LineupApp && swift build && swift test`
 Expected: all pass, no warnings.
 
-- [ ] **Step 5: Commit**, saying why: after the situation changes, the owner would otherwise open and save every league fixture.
+- [x] **Step 5: Commit**, saying why: after the situation changes, the owner would otherwise open and save every league fixture.
 
 ---
 
@@ -447,7 +447,7 @@ Expected: all pass, no warnings.
 - The rows are imported as `.firstTeam` only to satisfy the importer; the result's warnings and money are dropped.
 - Nothing is saved, planned or advised by a paste. `save(_ draft:)` carries the draft's reading to the fixture, new or edited.
 
-- [ ] **Step 1: Write the failing tests.** The captures give two sides that read as different players: the owner imports `first-team-with-id.tsv` with its own grids (players keyed by FMRTE's id; fifteen fit), and the opponent's paste is `first-team.tsv` with its grids (the same men keyed by name; sixteen fit). Neither has a club column. Add `Captures.firstTeamWithID` and its grids to the test support if they are not there. The draft's opponent is "Banbury United".
+- [x] **Step 1: Write the failing tests.** The captures give two sides that read as different players: the owner imports `first-team-with-id.tsv` with its own grids (players keyed by FMRTE's id; fifteen fit), and the opponent's paste is `first-team.tsv` with its grids (the same men keyed by name; sixteen fit). Neither has a club column. Add `Captures.firstTeamWithID` and its grids to the test support if they are not there. The draft's opponent is "Banbury United".
 
 ```swift
 @Test func aPasteSetsTheStrengthAndTheReading() throws
@@ -477,19 +477,19 @@ Expected: all pass, no warnings.
 @Test func useItInTheTableKeepsTheReading() throws                 // useSuggestion(for:) on a fixture with one
 ```
 
-- [ ] **Step 2: Run them and see them fail**
+- [x] **Step 2: Run them and see them fail**
 
 Run: `cd LineupApp && swift test --filter FixturePresentationTests`
 Expected: build errors.
 
-- [ ] **Step 3: Implement** the interfaces and behaviour above.
+- [x] **Step 3: Implement** the interfaces and behaviour above.
 
-- [ ] **Step 4: Run the app's tests**
+- [x] **Step 4: Run the app's tests**
 
 Run: `cd LineupApp && swift build && swift test`
 Expected: all pass, no warnings.
 
-- [ ] **Step 5: Commit**, saying the opponent's players are read and dropped, and only what the comparison found is kept.
+- [x] **Step 5: Commit**, saying the opponent's players are read and dropped, and only what the comparison found is kept.
 
 ---
 
@@ -501,13 +501,13 @@ Expected: all pass, no warnings.
 **Interfaces:**
 - Consumes: everything Tasks 3 to 5 produce. No new logic: if a view needs an `if` about data, put it in Core with a test.
 
-- [ ] **Step 1: The Fixtures screen.**
+- [x] **Step 1: The Fixtures screen.**
   - In the heading row, after "Add fixture" and pushed to the trailing edge, the label `AppModel.leagueSituationLabel` and a menu of `AppModel.leagueSituationChoices` bound to `model.settings.situation` and `model.setLeagueSituation`. Shown whenever the table is shown. Style it as the editor's menus are.
   - On a row's suggestion line, a "Use it" button (`SuggestionNote.useItTitle`) where `model.offersUseIt(for:editing:)` is true, calling `model.useSuggestion(for:)`, with `useItLabel` as its accessibility label. It sits beside the line and does not toggle the reasons.
 
-- [ ] **Step 2: The editor.** Beside the "Their strength" menu, a button titled `FixtureDraft.pasteButtonTitle` calling `model.pasteOpponentSquad(into: &draft)`. Under the two menus, `draft.opponentReadingText` in muted ink when present, and `draft.pasteProblem` in the style `shownProblem` uses when present. Both wrap; neither widens the card.
+- [x] **Step 2: The editor.** Beside the "Their strength" menu, a button titled `FixtureDraft.pasteButtonTitle` calling `model.pasteOpponentSquad(into: &draft)`. Under the two menus, `draft.opponentReadingText` in muted ink when present, and `draft.pasteProblem` in the style `shownProblem` uses when present. Both wrap; neither widens the card.
 
-- [ ] **Step 3: The pictures.** Add to the picture run, in light and dark:
+- [x] **Step 3: The pictures.** Add to the picture run, in light and dark:
   - `fixtures-situation`: the Fixtures screen with the situation "Nothing to play for", so its league rows show "Suggested: Low" (or Sharpness) with "Use it".
   - `fixtures-editor-reading`: the editor for a fixture with a reading.
   - `fixtures-editor-refused`: the editor after a refused paste (the owner's own squad).
@@ -516,14 +516,14 @@ Expected: all pass, no warnings.
 Run: `cd LineupApp && swift run -q LineupApp --sample-data .. --pictures .build/pictures-opponent`
 Expected: the run ends with no error and writes the new files.
 
-- [ ] **Step 4: Look at the pictures.** Open `fixtures-light`, `fixtures-dark`, `fixtures-small-*`, `fixtures-narrow-*`, `fixtures-reasons-*`, `fixtures-situation-*`, `fixtures-editor-*`, `fixtures-editor-reading-*` and `fixtures-editor-refused-*`. Check: the menu does not crowd or wrap the heading in the smallest window; "Use it" does not push the importance column out of line; the reading's sentence wraps inside the card; nothing is clipped in dark. Put right what is wrong and draw again. A screen is not done until its pictures have been looked at.
+- [x] **Step 4: Look at the pictures.** Open `fixtures-light`, `fixtures-dark`, `fixtures-small-*`, `fixtures-narrow-*`, `fixtures-reasons-*`, `fixtures-situation-*`, `fixtures-editor-*`, `fixtures-editor-reading-*` and `fixtures-editor-refused-*`. Check: the menu does not crowd or wrap the heading in the smallest window; "Use it" does not push the importance column out of line; the reading's sentence wraps inside the card; nothing is clipped in dark. Put right what is wrong and draw again. A screen is not done until its pictures have been looked at.
 
-- [ ] **Step 5: Run the app's tests**
+- [x] **Step 5: Run the app's tests**
 
 Run: `cd LineupApp && swift build && swift test`
 Expected: all pass, no warnings.
 
-- [ ] **Step 6: Commit**, naming the directory the pictures were checked in.
+- [x] **Step 6: Commit**, naming the directory the pictures were checked in.
 
 ---
 
@@ -532,19 +532,52 @@ Expected: all pass, no warnings.
 **Files:**
 - Modify: `CLAUDE.md`, this plan
 
-- [ ] **Step 1: Run everything once more**
+- [x] **Step 1: Run everything once more**
 
 Run: `cd LineupEngine && swift test` and `cd LineupApp && swift build && swift test`
 Expected: all pass, no warnings.
 
-- [ ] **Step 2: Bring `CLAUDE.md` up to date.**
+- [x] **Step 2: Bring `CLAUDE.md` up to date.**
   - The list of plans at the top: this plan and its design, complete.
   - The Advisors paragraph, at `ImportanceAdvisor`: the league situation and its four bases; that the strength can be read from a pasted squad, how, and that the lines are the tool's own estimate.
   - The `advise` command: `--league-situation`.
   - The app section: the "League situation" menu and "Use it" on the Fixtures table; "Paste their squad" in the editor, what it keeps and what it does not; where the pictures were checked (`.build/pictures-opponent`).
 
-- [ ] **Step 3: Add this plan's closing sections**, as the earlier plans have them: what changed during the build, and the limits and small faults left. Among the limits, whatever else the build finds: no real opponent squad has been through the importer; the strength lines have no test behind them; the best eleven are the eleven best fit players whatever their positions, so a side with no fit goalkeeper reads stronger than it is; a name typed differently from the game's leaves a loanee out, which the reading shows but does not put right; a reading is not refreshed when the owner's own squad is imported again; home or away is not recorded.
+- [x] **Step 3: Add this plan's closing sections**, as the earlier plans have them: what changed during the build, and the limits and small faults left. Among the limits, whatever else the build finds: no real opponent squad has been through the importer; the strength lines have no test behind them; the best eleven are the eleven best fit players whatever their positions, so a side with no fit goalkeeper reads stronger than it is; a name typed differently from the game's leaves a loanee out, which the reading shows but does not put right; a reading is not refreshed when the owner's own squad is imported again; home or away is not recorded.
 
-- [ ] **Step 4: Commit** the documents.
+- [x] **Step 4: Commit** the documents.
 
 - [ ] **Step 5: Leave to the owner**, and say so in the hand-over: installing with `tools/build_app.sh`; the first real paste of an opponent's squad from FMRTE, checked by hand; and, with that squad still on the clipboard, `tools/capture_fmrte_paste.sh opponent` so the tests can use a real opponent.
+
+---
+
+## Changes made while building
+
+- **The design was revised twice before any code, with the owner's word, after the captured squads were checked.** FMRTE's team grid has no club column, so "their club" is the most common club on the rows when they carry one (the search grid) and otherwise the opponent as typed on the fixture; the reading lists the clubs its left-out players are away at. The best eleven became the eleven best fit players whatever their positions, because the owner's only first-team goalkeeper was injured on the day of the capture and the U21 goalkeeper was away on loan, so asking for a fit goalkeeper would have refused every paste. The own-club check became "more than half the pasted players are in the owner's squads", by identity.
+- **Task 1: `situation:` is a required argument of `ImportanceAdvisor.suggest`**, so four test call sites in the app were given `.inContention` as well as the two in `AppModel+Advice.swift`.
+- **Task 3: `FixturePresentation.swift` needed no change** for the editor's suggestion to follow the situation. `AppModel.suggestions` reads `settings` first on every path so that a view is told when the situation changes, and `update(_ settings:)` clears the kept suggestions too, so both routes agree.
+- **Task 5: reading the clipboard and FMRTE's settings file became one helper**, shared by the squad import and the opponent paste. A test for an unreadable FMRTE settings file was added.
+- **Task 6: "Use it" sits under a row's suggestion line, not beside it**, since the importance column has no room. The fixture editor's card went from 480 to 520 points wide so "Paste their squad" fits beside the strength menu. The suggestion line's mark now stays with its last word when the line wraps. Two sample-data builders give the pictures a draft with a reading and one with a refused paste.
+- **The game plan research arrived during the build** (`docs/Research/fm27-match-simulation-game-plans.md`). It found nothing on how the game judges a favourite, and reports FM27 engine tests in which current ability had no measurable effect on results once attributes were held fixed. The design's Evidence section records this; the measure was built as approved.
+- **The pictures were checked** in `LineupApp/.build/pictures-opponent`: `fixtures-*`, `fixtures-situation-*`, `fixtures-editor-reading-*` and `fixtures-editor-refused-*`. Light and dark are the same by design.
+- **The app was not clicked through by hand, and was not installed** (Step 5 of this task is the owner's).
+
+## Known limits and small faults left
+
+- No real opponent squad has been through the importer. The tests use the owner's captured first team, keyed two ways.
+- The strength lines (5% and 15%) are the tool's own estimate with no test behind them.
+- Current ability is a stand-in: FM27 engine tests found results come from attributes, not ability. A measure built from attributes is a possible later change.
+- The best eleven are the eleven best fit players whatever their positions, so a side with no fit goalkeeper reads stronger than it is.
+- A name typed differently from the game's ("Banbury" for "Banbury United") leaves a loanee there out. The reading lists his club, which shows it but does not put it right.
+- A reading is not refreshed when the owner's own squad is imported again, and it keeps the club's name it was read for if the opponent is renamed afterwards. Pasting again puts both right.
+- Injuries are as each side's latest paste showed them.
+- Home or away is not recorded on a fixture.
+- The league situation is one choice for every league fixture; cups have no stage.
+- Small faults: the list of clubs in a reading sorts capitals before lower case, and "as first spelt" follows the order of the pasted rows; the league reason lines repeat the situations' names in lower case rather than building on them; the command line's `--league-situation` has no test; `setLeagueSituation` saves even when the value is unchanged; a few tests assert less than their names say (the nil-clipboard case, which refusal the too-few-own-players test gets, the no-`Id` test, the half-second boundary resting on floating-point sums); VoiceOver may read the suggestion line's mark; the look of "Use it" in the live window has not been checked by hand, since pictures draw an inactive window.
+
+## For the owner
+
+- Install with `tools/build_app.sh` from the repository root. It was not run in this build.
+- Check the first real paste of an opponent's squad from FMRTE by hand: the club it finds, the players it leaves out, and the strength it gives.
+- With that squad still on the clipboard, run `tools/capture_fmrte_paste.sh opponent` so the tests can use a real opponent.
+- The two strength lines and the four league bases are in `EngineParameters` (`opponentStrengthLines` and the league bases), one line each to change.
