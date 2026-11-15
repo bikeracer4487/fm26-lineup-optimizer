@@ -81,6 +81,18 @@ public struct AgeFactorStep: Sendable, Equatable {
     }
 }
 
+/// One step of the development floor's table: a player aged `upToAge` or under, and above the step before, takes
+/// `factor`.
+public struct AgeFactor: Equatable, Sendable {
+    public let upToAge: Int
+    public let factor: Double
+
+    public init(upToAge: Int, factor: Double) {
+        self.upToAge = upToAge
+        self.factor = factor
+    }
+}
+
 /// How quickly a player is likely to learn a new position, from 0 to 1: a weighted sum of his Versatility, an age
 /// factor, his Professionalism and his room to grow. The weights add up to 1.
 public struct LearnabilityRules: Sendable, Equatable {
@@ -533,12 +545,20 @@ public struct EngineParameters: Sendable {
     public var sharpnessNeedStrengthBuild: Parameter<Double>
     /// Factor on a first or second eleven player who is already fully sharp in a sharpness fixture.
     public var fullySharpFactor: Parameter<Double>
-    /// The oldest age counted as a prospect by the planner.
-    public var prospectMaxAge: Parameter<Int>
     /// A prospect's potential ability is at least this multiple of his current ability.
     public var prospectHeadroom: Parameter<Double>
-    /// Factor on a prospect's value in a lesser fixture.
-    public var developmentFactor: Parameter<Double>
+    /// The development floor: the factor on a developing prospect's value in a low or sharpness fixture, by age. The
+    /// first step whose `upToAge` is at or above his age applies; past the last there is none.
+    public var developmentFactors: Parameter<[AgeFactor]>
+    /// The floor for a player aged `developmentLowProfessionalismUpToAge` or under with Professionalism at most
+    /// `developmentLowProfessionalismUpTo`, in place of his age's.
+    public var developmentFactorLowProfessionalism: Parameter<Double>
+    public var developmentLowProfessionalismUpTo: Parameter<Int>
+    public var developmentLowProfessionalismUpToAge: Parameter<Int>
+    /// A player who has started this many matches in the last `developmentMonthDays` days before a fixture has had his
+    /// matches for the month: no development favour.
+    public var developmentStartsPerMonth: Parameter<Int>
+    public var developmentMonthDays: Parameter<Int>
     /// Factor on the value, in a low or sharpness fixture, of a player the owner has marked to sell or to loan out;
     /// 1 switches the rule off.
     public var shopWindowFactor: Parameter<Double>
@@ -799,11 +819,28 @@ public struct EngineParameters: Sendable {
             sharpnessNeedStrengthBuild: Parameter(
                 1.0, .derived, source: "a sharpness fixture exists to build sharpness, so need counts fully; this design's choice"),
             fullySharpFactor: Parameter(0.60, .carriedOverFM26, source: matchSelectorSource),
-            prospectMaxAge: Parameter(21, .carriedOverFM26, source: "ui/api/api_player_removal.py (branch customizable-tactics)"),
             prospectHeadroom: Parameter(1.15, .carriedOverFM26, source: "ui/api/api_player_removal.py (branch customizable-tactics)"),
-            developmentFactor: Parameter(
-                1.10, .derived,
-                source: "this design's size; the premise, that growth comes mainly from match time, is one FM27 tester's report in docs/Research/fm27-training-and-retraining.md"),
+            developmentFactors: Parameter(
+                [AgeFactor(upToAge: 17, factor: 1.02), AgeFactor(upToAge: 20, factor: 1.07), AgeFactor(upToAge: 23, factor: 1.10)],
+                .derived,
+                source: "\(developmentSource) recommendation 3: about 0.1, 0.35 and 0.5 points of ability per 90 minutes at "
+                    + "15 to 17, 18 to 20 and 21 to 23 (carried over from FM26, derived from EBFM's per-season gaps); "
+                    + "the factor is 1 + a fifth of the growth, so that 0.5 keeps the ×1.10 the planner gave before"),
+            developmentFactorLowProfessionalism: Parameter(
+                1.04, .derived,
+                source: "\(developmentSource) recommendation 3: 0.2 per 90 minutes at 15 to 17 with Professionalism 14 or "
+                    + "under, taken as developmentFactors takes its growth"),
+            developmentLowProfessionalismUpTo: Parameter(
+                14, .derived, source: "\(developmentSource) recommendation 3: Professionalism 14 or under"),
+            developmentLowProfessionalismUpToAge: Parameter(
+                17, .derived, source: "\(developmentSource) recommendation 3: ages 15 to 17"),
+            developmentStartsPerMonth: Parameter(
+                4, .carriedOverFM26,
+                source: "\(developmentSource) finding 5: the development check reads at most 150 match points a month, "
+                    + "which four or five full matches reach (FM24 memory analysis)"),
+            developmentMonthDays: Parameter(
+                30, .carriedOverFM26,
+                source: "\(developmentSource) finding 5: at most 150 match points a month, read once a month"),
             shopWindowFactor: Parameter(
                 1.03, .derived,
                 source: "this design's size, a tie-breaker: no test in any version shows that playing a player brings offers "
@@ -1077,6 +1114,8 @@ public struct EngineParameters: Sendable {
     }()
 
     private static let removalSource = "ui/api/api_player_removal.py (branch customizable-tactics)"
+
+    private static let developmentSource = "docs/Research/fm27-development-matches-vs-training.md"
 
     private static let trainingAdvisorSource = "fm_training_advisor.py (branch customizable-tactics)"
 

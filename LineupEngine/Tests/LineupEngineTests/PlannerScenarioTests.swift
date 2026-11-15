@@ -150,13 +150,14 @@ import Testing
     // MARK: - Young prospects
 
     @Test func youngProspectsGetTheLowFixture() throws {
-        // A 19-year-old with room to grow, 5% below the first-choice striker (familiarity 15 against 20).
+        // A 19-year-old with room to grow, 5% below the first-choice striker (familiarity 15 against 20): within what
+        // the floor at his age (×1.07) can overturn.
         var players = try PlannerFixture.squad(first: 14, second: 12)
         let prospect = Player.fixture(name: "ST prospect", age: 19, all: 14, familiarity: [.striker: 15],
                                       currentAbility: 100, potentialAbility: 130)
         players.append(prospect)
         let gap = try rating(prospect.id, at: .ST_C, in: players) / rating(id(.ST_C), at: .ST_C, in: players)
-        try #require(gap > 0.9 && gap < 1)
+        try #require(gap > 1 / 1.07 && gap < 1)
 
         let fixtures = [fixture("m", .medium, day: 0), fixture("l", .low, day: 4), fixture("h", .high, day: 8)]
         let result = try plan(fixtures, players, settings: PlanSettings(savingPlayers: 0))
@@ -172,8 +173,48 @@ import Testing
         #expect(by == [prospect.id])
         #expect(kinds.contains(.development))
         #expect(striker.reason.hasPrefix("Left out: ST prospect is preferred: "))
-        #expect(striker.reason.contains("Young player with room to grow: favoured for minutes (×1.10)"))
+        #expect(striker.reason.contains("Young player with room to grow: favoured for minutes (×1.07)"))
         #expect(pick(result.fixtures[2], .ST_C)?.player == id(.ST_C))
+
+        // With the Development setting at 0 the planner gives no floor, and the first-choice striker starts.
+        let off = try plan(fixtures, players, settings: PlanSettings(savingPlayers: 0, development: 0))
+        let lowOff = try #require(pick(off.fixtures[1], .ST_C))
+        #expect(lowOff.player == id(.ST_C))
+        #expect(off.fixtures.allSatisfy { $0.lineup.picks.allSatisfy { !$0.adjustments.contains { $0.kind == .development } } })
+    }
+
+    @Test func anInjuredYoungPlayersOutlookIsWhatItIsWhenFit() throws {
+        var players = try PlannerFixture.squad(first: 14, second: 12)
+        let young = Player.fixture(name: "ST young", age: 19, all: 13, familiarity: [.striker: 15],
+                                   currentAbility: 100, potentialAbility: 130)
+        players.append(young)
+        let low = fixture("l", .low, day: 0)
+        func outlook(_ squad: [Player]) throws -> Outlook {
+            try #require(try planner.developmentOutlooks(for: low, players: squad, ownClub: "Oxford City", retraining: [])[young.id])
+        }
+        let fit = try outlook(players)
+        let level = try #require(fit.level)
+        #expect(fit.best?.slot == .ST_C)
+        #expect(fit.best?.firstChoice?.player == id(.ST_C))
+        // Injured, he is rated and compared as when fit.
+        let injured = players.map { player in
+            var player = player
+            if player.id == young.id { player.isInjured = true }
+            return player
+        }
+        #expect(try outlook(injured) == fit)
+        // An injured first choice is still the one he is compared with.
+        let firstInjured = changing(players, .ST_C) { $0.isInjured = true }
+        let comparedWithInjured = try outlook(firstInjured)
+        #expect(comparedWithInjured.level == level)
+        #expect(comparedWithInjured.best?.firstChoice?.player == id(.ST_C))
+        // The planner's own tiers, which leave injured players out, would not have rated him at all.
+        let withoutInjured = try SquadTiers.compute(tactic: tactic, players: injured, ownClub: "Oxford City",
+                                                    catalog: RoleCatalog.fm27(), profile: RatingProfile.standard(),
+                                                    parameters: parameters)
+        let fromThose = try Development.outlooks(players: injured, ownClub: "Oxford City", assignments: assignments,
+                                                 tiers: withoutInjured, retraining: [], parameters: parameters)
+        #expect(fromThose[young.id]?.slots.isEmpty == true)
     }
 
     // MARK: - Marked to sell or loan out

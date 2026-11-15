@@ -100,6 +100,11 @@ public struct Planner: Sendable {
         let tiersByFixture = try fixtures.map { try squadTiers(for: $0, players, ownClub: request.ownClub) }
         let settings = request.settings
         let retraining = Self.latestRetraining(request.retraining)
+        // For the development favours, each fixture's outlooks come from a second set of tiers with injured players
+        // kept in, so an injury neither hides a young player nor moves whom he is compared with.
+        let outlooksByFixture = try fixtures.map {
+            try developmentOutlooks(for: $0, players: players, ownClub: request.ownClub, retraining: retraining)
+        }
         var history = StartHistory(request.confirmed)
         let known = Set(players.map(\.id))
         let (imported, anyEarlyMatch) = try afterEarlyMatches(
@@ -135,7 +140,8 @@ public struct Planner: Sendable {
             }
             let context = RuleContext(importance: fixture.importance, date: fixture.date, assignments: assignments,
                                       ownClub: request.ownClub, history: history, tiers: tiersByFixture[index], retraining: retraining,
-                                      marks: request.marks, stability: settings.stability)
+                                      marks: request.marks, stability: settings.stability,
+                                      outlooks: outlooksByFixture[index], development: settings.development)
 
             var everySlot: [PlayerID: [Adjustment]] = [:]
             var bySlot: [PlayerID: [SlotID: [Adjustment]]] = [:]
@@ -280,10 +286,22 @@ public struct Planner: Sendable {
         return next
     }
 
-    /// The first and second elevens for one fixture's tactic.
-    private func squadTiers(for fixture: Fixture, _ players: [Player], ownClub: String?) throws -> SquadTiers {
+    /// The first and second elevens for one fixture's tactic; injured players are left out unless `ignoringInjuries`.
+    private func squadTiers(for fixture: Fixture, _ players: [Player], ownClub: String?,
+                            ignoringInjuries: Bool = false) throws -> SquadTiers {
         try SquadTiers.compute(tactic: fixture.tactic, players: players, ownClub: ownClub, catalog: catalog,
-                               profile: profile, parameters: parameters)
+                               profile: profile, parameters: parameters, ignoringInjuries: ignoringInjuries)
+    }
+
+    /// Each developing player's outlook for the fixture's tactic, as Player Removal works it out: from tiers with
+    /// injured players kept in. Tiers ignore fitness, so the outlooks hold for the whole plan. Throws as
+    /// `Development.outlooks` and `SquadTiers.compute` do.
+    func developmentOutlooks(for fixture: Fixture, players: [Player], ownClub: String?,
+                             retraining: [Retraining]) throws -> [PlayerID: Outlook] {
+        let tiers = try squadTiers(for: fixture, players, ownClub: ownClub, ignoringInjuries: true)
+        let assignments = try fixture.tactic.assignments(catalog: catalog)
+        return try Development.outlooks(players: players, ownClub: ownClub, assignments: assignments, tiers: tiers,
+                                        retraining: retraining, parameters: parameters)
     }
 
     /// The player as the selector sees him on the day: projected condition and sharpness, jadedness to the nearest whole number.

@@ -15,6 +15,7 @@ import Foundation
         #expect(s.stability == 0.5)
         #expect(s.savingPlayers == 1)
         #expect(s.horizon == 5)
+        #expect(s.development == 1)
         #expect(s == PlanSettings())
     }
 
@@ -36,6 +37,33 @@ import Foundation
         }
         #expect(PlanSettings(savingPlayers: .nan).problems() == ["Saving players must be between 0 and 10, but is nan"])
         #expect(PlanSettings(savingPlayers: .infinity).problems() == ["Saving players must be between 0 and 10, but is inf"])
+    }
+
+    @Test func developmentOutOfRangeIsReported() {
+        #expect(PlanSettings(development: 1.5).problems() == ["Development must be between 0 and 1, but is 1.5"])
+        #expect(PlanSettings(development: -0.1).problems() == ["Development must be between 0 and 1, but is -0.1"])
+        #expect(PlanSettings(development: .nan).problems() == ["Development must be between 0 and 1, but is nan"])
+        #expect(PlanSettings(development: 0).problems().isEmpty)
+        #expect(PlanSettings(development: 1).problems().isEmpty)
+        #expect(PlanSettings(development: 0.5).problems().isEmpty)
+    }
+
+    @Test func settingsSavedBeforeDevelopmentReadAsOne() throws {
+        let old = Data(#"{"trainingIntensity":"high","stability":0.3,"savingPlayers":2,"horizon":8}"#.utf8)
+        let read = try JSONDecoder().decode(PlanSettings.self, from: old)
+        #expect(read == PlanSettings(trainingIntensity: .high, stability: 0.3, savingPlayers: 2, horizon: 8, development: 1))
+        // Encoding writes the key, and it reads back as written.
+        let written = try JSONEncoder().encode(PlanSettings(development: 0.4))
+        let object = try #require(try JSONSerialization.jsonObject(with: written) as? [String: Any])
+        #expect(object["development"] as? Double == 0.4)
+        #expect(try JSONDecoder().decode(PlanSettings.self, from: written).development == 0.4)
+        // Only development may be missing: any of the four older keys missing is still an error.
+        for key in ["trainingIntensity", "stability", "savingPlayers", "horizon"] {
+            var fields = try #require(try JSONSerialization.jsonObject(with: old) as? [String: Any])
+            fields[key] = nil
+            let data = try JSONSerialization.data(withJSONObject: fields)
+            #expect(throws: DecodingError.self, "without \(key)") { try JSONDecoder().decode(PlanSettings.self, from: data) }
+        }
     }
 
     @Test func savingPlayersIsAtMostTen() {
@@ -68,7 +96,7 @@ import Foundation
         let data2 = try JSONEncoder().encode(retraining)
         #expect(try JSONDecoder().decode(Retraining.self, from: data2) == retraining)
 
-        let settings = PlanSettings(trainingIntensity: .high, stability: 0.3, savingPlayers: 2, horizon: 8)
+        let settings = PlanSettings(trainingIntensity: .high, stability: 0.3, savingPlayers: 2, horizon: 8, development: 0.6)
         let data3 = try JSONEncoder().encode(settings)
         #expect(try JSONDecoder().decode(PlanSettings.self, from: data3) == settings)
     }

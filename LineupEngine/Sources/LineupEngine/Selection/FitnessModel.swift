@@ -110,7 +110,6 @@ public enum FitnessModel {
         func usable(_ x: Double) -> Bool { x.isFinite && x >= 0 }
         let notUsable = "not a finite number of 0 or more"
         for (name, value) in [("fullySharpFactor", parameters.fullySharpFactor.value),
-                              ("developmentFactor", parameters.developmentFactor.value),
                               ("shopWindowFactor", parameters.shopWindowFactor.value),
                               ("retrainingFactorLow", parameters.retrainingFactorLow.value),
                               ("retrainingFactorMedium", parameters.retrainingFactorMedium.value),
@@ -129,6 +128,31 @@ public enum FitnessModel {
             for step in consecutive[position] ?? [] where !usable(step.factor) {
                 found.append("consecutiveStartSteps for \(position.rawValue) at \(step.starts) starts is \(step.factor), \(notUsable)")
             }
+        }
+        // The development floor favours a young player and never holds him back, so its factors are 1 or more. Its
+        // steps are read youngest first; an empty table gives no floor at any age.
+        func favouring(_ x: Double) -> Bool { x.isFinite && x >= 1 }
+        let notFavouring = "not a finite number of 1 or more"
+        let floorSteps = parameters.developmentFactors.value
+        if !zip(floorSteps, floorSteps.dropFirst()).allSatisfy({ $0.upToAge < $1.upToAge }) {
+            found.append("developmentFactors upToAge values are not strictly increasing")
+        }
+        for step in floorSteps where !favouring(step.factor) {
+            found.append("developmentFactors at up to age \(step.upToAge) is \(step.factor), \(notFavouring)")
+        }
+        let lowProfessionalism = parameters.developmentFactorLowProfessionalism.value
+        if !favouring(lowProfessionalism) {
+            found.append("developmentFactorLowProfessionalism is \(lowProfessionalism), \(notFavouring)")
+        }
+        // Professionalism runs from 1 to 20; 0 means nobody counts as low.
+        let lowUpTo = parameters.developmentLowProfessionalismUpTo.value
+        if !(0...20).contains(lowUpTo) {
+            found.append("developmentLowProfessionalismUpTo is \(lowUpTo), not between 0 and 20")
+        }
+        for (name, count) in [("developmentLowProfessionalismUpToAge", parameters.developmentLowProfessionalismUpToAge.value),
+                              ("developmentStartsPerMonth", parameters.developmentStartsPerMonth.value),
+                              ("developmentMonthDays", parameters.developmentMonthDays.value)] where count < 1 {
+            found.append("\(name) is \(count), not 1 or more")
         }
         let weights = parameters.importanceWeights.value
         for importance in Importance.allCases {

@@ -13,7 +13,7 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
                          --fixtures <fixtures.json> --as-of <YYYY-MM-DD>
                          [--first-team <paste.tsv>] [--u21 <paste.tsv>] [--u18 <paste.tsv>] [--own-club <name>]
                          [--history <confirmed.json>] [--intensity low|medium|high] [--stability <0...1>]
-                         [--saving <0...10>] [--horizon <n>] [--profile fm27|carried-over]
+                         [--saving <0...10>] [--horizon <n>] [--development <0...1>] [--profile fm27|carried-over]
        lineup-cli advise --grids <fmrte config or grids snapshot> --tactic <tactic.json> --as-of <YYYY-MM-DD>
                          [--first-team <paste.tsv>] [--u21 <paste.tsv>] [--u18 <paste.tsv>] [--own-club <name>]
                          [--history <confirmed.json>] [--fixtures <fixtures.json>] [--intensity low|medium|high]
@@ -39,7 +39,8 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        opponentStrength. --history is a JSON array of confirmed lineups:
        {"fixture", "date", "starters": {"<slot>": "<player key>"}}. Dates are YYYY-MM-DD. A player's key is "fmrte:<Id>"
        when the paste has FMRTE's Id column, otherwise his name in lower case.
-       Unless given, training intensity is medium, stability 0.5, saving players 1 (0 turns it off) and horizon 5.
+       Unless given, training intensity is medium, stability 0.5, saving players 1 (0 turns it off), horizon 5 and
+       development 1 (how much of the favour to young players in lesser fixtures applies; 0 turns it off).
 """
 
 enum Command: String { case select, plan, advise }
@@ -82,7 +83,7 @@ func parse(_ arguments: [String]) throws -> Options {
     let shared = ["--grids", "--tactic", "--own-club", "--profile"]
     let allowed = switch command {
     case .select: shared + ["--importance"]
-    case .plan: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--stability", "--saving", "--horizon"]
+    case .plan: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--stability", "--saving", "--horizon", "--development"]
     case .advise: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--standings"]
     }
     let name = command.rawValue
@@ -120,6 +121,7 @@ func parse(_ arguments: [String]) throws -> Options {
             options.settings.trainingIntensity = intensity
         case "--stability": options.settings.stability = try number(value)
         case "--saving": options.settings.savingPlayers = try number(value)
+        case "--development": options.settings.development = try number(value)
         case "--horizon":
             guard let horizon = Int(value) else { throw UsageError(reason: "--horizon needs a whole number, not '\(value)'") }
             options.settings.horizon = horizon

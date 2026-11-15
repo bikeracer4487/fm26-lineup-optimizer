@@ -37,7 +37,8 @@ enum Report {
         out += summary(header)
         out.append("Rating profile: \(profile.name)")
         out.append("Training \(settings.trainingIntensity.rawValue), stability \(number(settings.stability)), "
-                   + "saving players \(number(settings.savingPlayers)), horizon \(settings.horizon)")
+                   + "saving players \(number(settings.savingPlayers)), development \(number(settings.development)), "
+                   + "horizon \(settings.horizon)")
         out += confirmed(history, book: header.book)
         let names = Dictionary(header.book.allPlayers.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
 

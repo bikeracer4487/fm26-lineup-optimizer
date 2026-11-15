@@ -86,7 +86,6 @@ import Testing
             }
             let reason = "is \(bad), not a finite number of 0 or more"
             #expect(broken { $0.fullySharpFactor = Parameter(bad, .derived, source: "test") } == ["fullySharpFactor \(reason)"])
-            #expect(broken { $0.developmentFactor = Parameter(bad, .derived, source: "test") } == ["developmentFactor \(reason)"])
             #expect(broken { $0.shopWindowFactor = Parameter(bad, .derived, source: "test") } == ["shopWindowFactor \(reason)"])
             #expect(broken { $0.retrainingFactorLow = Parameter(bad, .derived, source: "test") } == ["retrainingFactorLow \(reason)"])
             #expect(broken { $0.retrainingFactorMedium = Parameter(bad, .derived, source: "test") } == ["retrainingFactorMedium \(reason)"])

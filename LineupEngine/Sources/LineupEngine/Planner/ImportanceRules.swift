@@ -11,12 +11,18 @@ public struct RuleContext: Sendable {
     public var marks: [PlayerID: SaleMark]
     /// The manager's stability setting, 0 (none) to 1 (full).
     public var stability: Double
+    /// Each developing player's outlook for the fixture's tactic (`Development.outlooks`, from tiers with injured
+    /// players kept in). A player without one gets no development favour.
+    public var outlooks: [PlayerID: Outlook] = [:]
+    /// The manager's Development setting, 0 (no development favour) to 1 (in full).
+    public var development: Double = 1
 
     public init(importance: Importance, date: Day, assignments: [SlotAssignment], ownClub: String?, history: StartHistory,
-                tiers: SquadTiers, retraining: [Retraining], marks: [PlayerID: SaleMark] = [:], stability: Double) {
+                tiers: SquadTiers, retraining: [Retraining], marks: [PlayerID: SaleMark] = [:], stability: Double,
+                outlooks: [PlayerID: Outlook] = [:], development: Double = 1) {
         self.importance = importance; self.date = date; self.assignments = assignments; self.ownClub = ownClub
         self.history = history; self.tiers = tiers; self.retraining = retraining; self.marks = marks
-        self.stability = stability
+        self.stability = stability; self.outlooks = outlooks; self.development = development
     }
 }
 
@@ -30,15 +36,17 @@ public enum ImportanceRules {
         everySlot += loanedIn(player, context, parameters)
         everySlot += consecutiveStarts(player, context, parameters)
         everySlot += needsSharpness(player, context, parameters)
-        everySlot += development(player, context, parameters)
         everySlot += shopWindow(player, context, parameters)
 
         let recent = context.history.recentSlots(
             of: player.id, before: context.date, limit: parameters.stabilityAnchorRun.value)
+        let floor = developmentFloor(player, context, parameters)
 
         var bySlot: [SlotID: [Adjustment]] = [:]
         for assignment in context.assignments {
             var found: [Adjustment] = []
+            // The same at every slot; kept in each slot's own list so a larger favour can take its place at one.
+            found += floor
             found += retraining(player, assignment, context, parameters)
             found += stability(recent, assignment, context, parameters)
             bySlot[assignment.slot] = found.sorted(by: inKindOrder)
@@ -116,18 +124,39 @@ public enum ImportanceRules {
                            reason: "Needs minutes: sharpness \(Display.percent(player.sharpness)) (×\(Display.twoDecimals(factor)))")]
     }
 
-    private static func development(_ player: Player, _ context: RuleContext, _ parameters: EngineParameters) -> [Adjustment] {
+    /// The floor every developing prospect gets in a low or sharpness fixture: aged `developingUpToAge` or under, with
+    /// potential at least `prospectHeadroom` times his ability and an outlook that is not markedly lower. Its size is
+    /// what a match is worth to his growth at his age (`developmentFactors`, or `developmentFactorLowProfessionalism`
+    /// for a young teenager with low Professionalism), scaled by the Development setting. He has none once he has
+    /// started `developmentStartsPerMonth` matches in the `developmentMonthDays` days before the fixture, planned
+    /// starts included, since the game reads only so much match time a month.
+    private static func developmentFloor(_ player: Player, _ context: RuleContext,
+                                         _ parameters: EngineParameters) -> [Adjustment] {
         switch context.importance {
         case .high, .medium: return []
         case .low, .sharpness: break
         }
-        let factor = parameters.developmentFactor.value
         // The margin absorbs binary floating-point error: 1.10 × 100 is 110.00000000000001.
-        guard player.age <= parameters.prospectMaxAge.value, factor != 1,
-              Double(player.potentialAbility) + 1e-9 >= parameters.prospectHeadroom.value * Double(player.currentAbility)
+        guard context.development > 0, player.age <= parameters.developingUpToAge.value,
+              Double(player.potentialAbility) + 1e-9 >= parameters.prospectHeadroom.value * Double(player.currentAbility),
+              let outlook = context.outlooks[player.id], !outlook.isMarkedlyLower
         else { return [] }
-        return [Adjustment(kind: .development, factor: factor,
-                           reason: "Young player with room to grow: favoured for minutes (×\(Display.twoDecimals(factor)))")]
+        let started = context.history.starts(of: player.id, inDays: parameters.developmentMonthDays.value,
+                                             endingOn: context.date.adding(days: -1))
+        guard started < parameters.developmentStartsPerMonth.value else { return [] }
+        let base: Double
+        // His Professionalism as his outlook's estimate read it, so a missing value was already an error there.
+        if player.age <= parameters.developmentLowProfessionalismUpToAge.value,
+           outlook.estimate.professionalism <= parameters.developmentLowProfessionalismUpTo.value {
+            base = parameters.developmentFactorLowProfessionalism.value
+        } else if let step = parameters.developmentFactors.value.first(where: { player.age <= $0.upToAge }) {
+            base = step.factor
+        } else {
+            return []
+        }
+        let factor = 1 + (base - 1) * context.development
+        guard factor != 1 else { return [] }
+        return [Adjustment(kind: .development, factor: factor, reason: AdvisorText.developmentFloor(factor))]
     }
 
     /// The owner's belief that minutes bring offers is untested, so the factor only breaks near-ties, and only where
@@ -141,6 +170,8 @@ public enum ImportanceRules {
         guard let mark = context.marks[player.id], factor != 1 else { return [] }
         // A mark made before he became a loanee must not favour another club's player.
         if case .loanedIn = LoanStatus.of(player, ownClub: context.ownClub) { return [] }
+        // A player on a youth contract cannot be sold or loaned out, so a mark held from before means nothing.
+        if case .youth = player.contractType { return [] }
         let words: String
         switch mark {
         case .toSell: words = "to sell"

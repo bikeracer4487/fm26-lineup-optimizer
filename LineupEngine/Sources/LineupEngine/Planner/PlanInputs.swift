@@ -83,13 +83,30 @@ public struct PlanSettings: Equatable, Codable, Sendable {
     public var savingPlayers: Double
     /// How many fixtures ahead to plan, 1 to 20.
     public var horizon: Int
+    /// 0...1: how much of each development favour applies; 0 turns them off.
+    public var development: Double
 
     public init(
         trainingIntensity: TrainingIntensity = .medium, stability: Double = 0.5,
-        savingPlayers: Double = 1, horizon: Int = 5
+        savingPlayers: Double = 1, horizon: Int = 5, development: Double = 1
     ) {
         self.trainingIntensity = trainingIntensity; self.stability = stability
-        self.savingPlayers = savingPlayers; self.horizon = horizon
+        self.savingPlayers = savingPlayers; self.horizon = horizon; self.development = development
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case trainingIntensity, stability, savingPlayers, horizon, development
+    }
+
+    /// Settings saved before Development existed have no `development` and read it as 1, so nobody's favour shrinks
+    /// unasked. Every other key is required, as before.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        trainingIntensity = try container.decode(TrainingIntensity.self, forKey: .trainingIntensity)
+        stability = try container.decode(Double.self, forKey: .stability)
+        savingPlayers = try container.decode(Double.self, forKey: .savingPlayers)
+        horizon = try container.decode(Int.self, forKey: .horizon)
+        development = try container.decodeIfPresent(Double.self, forKey: .development) ?? 1
     }
 
     public static let standard = PlanSettings()
@@ -104,6 +121,9 @@ public struct PlanSettings: Equatable, Codable, Sendable {
         // At most 10 keeps every saving cost far below the selector's solver limit. NaN and infinity fail both checks.
         if !(0...10).contains(savingPlayers) {
             found.append("Saving players must be between 0 and 10, but is \(savingPlayers)")
+        }
+        if !(0...1).contains(development) {
+            found.append("Development must be between 0 and 1, but is \(development)")
         }
         if horizon < 1 {
             found.append("Horizon must be at least 1 fixture, but is \(horizon)")

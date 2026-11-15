@@ -36,6 +36,12 @@ extension AdvisorText {
         }
     }
 
+    /// The reason on the planner's development floor: "Young player with room to grow: favoured for minutes (×1.07)",
+    /// the factor to two decimals as the other reasons show theirs.
+    public static func developmentFloor(_ factor: Double) -> String {
+        "Young player with room to grow: favoured for minutes (×\(Display.twoDecimals(factor)))"
+    }
+
     /// Said where a player on a youth contract would be marked to sell or to loan out.
     public static let youthContractNotMarked = "A player on a youth contract cannot be sold or loaned out, only released."
 

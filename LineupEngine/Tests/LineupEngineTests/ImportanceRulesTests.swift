@@ -12,20 +12,23 @@ import Testing
 
     func context(_ importance: Importance, history: [ConfirmedLineup] = [], tiers: SquadTiers? = nil,
                  retraining: [Retraining] = [], marks: [PlayerID: SaleMark] = [:], stability: Double = 0,
-                 ownClub: String? = "Oxford City") -> RuleContext {
+                 ownClub: String? = "Oxford City", outlooks: [PlayerID: Outlook] = [:],
+                 development: Double = 1) -> RuleContext {
         RuleContext(importance: importance, date: date, assignments: assignments, ownClub: ownClub,
                     history: StartHistory(history), tiers: tiers ?? SquadTiers(first: [:], second: [:], ratings: [:]),
-                    retraining: retraining, marks: marks, stability: stability)
+                    retraining: retraining, marks: marks, stability: stability, outlooks: outlooks,
+                    development: development)
     }
 
     func run(_ player: Player, _ importance: Importance, history: [ConfirmedLineup] = [], tiers: SquadTiers? = nil,
              retraining: [Retraining] = [], marks: [PlayerID: SaleMark] = [:], stability: Double = 0,
-             ownClub: String? = "Oxford City", parameters: EngineParameters? = nil)
+             ownClub: String? = "Oxford City", outlooks: [PlayerID: Outlook] = [:], development: Double = 1,
+             parameters: EngineParameters? = nil)
         -> (everySlot: [Adjustment], bySlot: [SlotID: [Adjustment]]) {
         ImportanceRules.adjustments(
             for: player,
             context: context(importance, history: history, tiers: tiers, retraining: retraining, marks: marks,
-                             stability: stability, ownClub: ownClub),
+                             stability: stability, ownClub: ownClub, outlooks: outlooks, development: development),
             parameters: parameters ?? self.parameters)
     }
 
@@ -188,31 +191,143 @@ import Testing
 
     // MARK: Development
 
+    /// A young player with Professionalism `professionalism`.
+    func young(_ age: Int, professionalism: Int = 15, current: Int = 100, potential: Int = 130) -> Player {
+        Player.fixture(age: age, attributes: [.professionalism: professionalism], currentAbility: current,
+                       potentialAbility: potential)
+    }
+
+    /// An outlook for `player` at `level`, as the planner hands the rules one: its estimate carries his age, abilities
+    /// and Professionalism.
+    func outlook(_ player: Player, _ level: ReachLevel? = .couldMakeSecond) -> Outlook {
+        let estimate = ReachEstimate(
+            age: player.age, current: player.currentAbility, potential: player.potentialAbility,
+            professionalism: player.attributes[.professionalism]!, ambition: 10, determination: 10, seasonGrowth: 10,
+            bySeason: [Double(player.currentAbility), Double(player.potentialAbility)], reachesPotential: true,
+            ambitionSlows: false, determinationSlows: false, professionalismHoldsBack: false)
+        return Outlook(player: player.id, estimate: estimate, slots: [], best: nil, level: level, average: nil)
+    }
+
+    func outlooks(_ player: Player, _ level: ReachLevel? = .couldMakeSecond) -> [PlayerID: Outlook] {
+        [player.id: outlook(player, level)]
+    }
+
+    /// The floor's factor: the same development adjustment at two different slots, and none in the every-slot list.
+    /// nil when he has none at either.
+    func floorFactor(_ r: (everySlot: [Adjustment], bySlot: [SlotID: [Adjustment]]),
+               sourceLocation: SourceLocation = #_sourceLocation) -> Double? {
+        #expect(every(r, .development) == nil, sourceLocation: sourceLocation)
+        let left = slot(r, .D_L, .development), striker = slot(r, .ST_C, .development)
+        #expect(left == striker, sourceLocation: sourceLocation)
+        return left?.factor
+    }
+
     @Test func aProspectIsFavouredInALesserFixture() {
         let p = Player.fixture(age: 21, currentAbility: 100, potentialAbility: 115)
         for importance in [Importance.low, .sharpness] {
-            let a = every(run(p, importance), .development)
-            #expect(a?.factor == 1.10)
-            #expect(a?.reason == "Young player with room to grow: favoured for minutes (×1.10)")
+            let r = run(p, importance, outlooks: outlooks(p))
+            #expect(floorFactor(r) == 1.10)
+            #expect(slot(r, .D_L, .development)?.reason == "Young player with room to grow: favoured for minutes (×1.10)")
+            #expect(slot(r, .ST_C, .development)?.reason == "Young player with room to grow: favoured for minutes (×1.10)")
         }
-        #expect(every(run(p, .medium), .development) == nil)
-        #expect(every(run(p, .high), .development) == nil)
+        #expect(floorFactor(run(p, .medium, outlooks: outlooks(p))) == nil)
+        #expect(floorFactor(run(p, .high, outlooks: outlooks(p))) == nil)
     }
 
     @Test func anOlderOrLimitedPlayerIsNotAProspect() {
-        #expect(every(run(Player.fixture(age: 22, currentAbility: 100, potentialAbility: 115), .low), .development) == nil)
-        #expect(every(run(Player.fixture(age: 21, currentAbility: 100, potentialAbility: 114), .low), .development) == nil)
+        let older = Player.fixture(age: 24, currentAbility: 100, potentialAbility: 115)
+        #expect(floorFactor(run(older, .low, outlooks: outlooks(older))) == nil)
+        let limited = Player.fixture(age: 21, currentAbility: 100, potentialAbility: 114)
+        #expect(floorFactor(run(limited, .low, outlooks: outlooks(limited))) == nil)
     }
 
     @Test func aPotentialExactlyAtTheHeadroomCountsDespiteRounding() {
         // 1.10 × 100 is 110.00000000000001 in binary floating point.
         var q = parameters
         q.prospectHeadroom = Parameter(1.10, .derived, source: "test")
-        let context = context(.low)
         let exact = Player.fixture(age: 21, currentAbility: 100, potentialAbility: 110)
-        #expect(ImportanceRules.adjustments(for: exact, context: context, parameters: q).everySlot.map(\.kind) == [.development])
+        let found = run(exact, .low, outlooks: outlooks(exact), parameters: q)
+        #expect(found.everySlot.isEmpty)
+        #expect(floorFactor(found) == 1.10)
         let below = Player.fixture(age: 21, currentAbility: 100, potentialAbility: 109)
-        #expect(ImportanceRules.adjustments(for: below, context: context, parameters: q).everySlot.isEmpty)
+        let none = run(below, .low, outlooks: outlooks(below), parameters: q)
+        #expect(none.everySlot.isEmpty)
+        #expect(none.bySlot.values.allSatisfy { $0.isEmpty })
+    }
+
+    @Test func theFavourFollowsHisAge() {
+        for (age, factor) in [(17, 1.02), (18, 1.07), (20, 1.07), (21, 1.10), (23, 1.10)] {
+            let p = young(age)
+            #expect(floorFactor(run(p, .low, outlooks: outlooks(p))) == factor, "aged \(age)")
+        }
+        let p = young(18)
+        #expect(slot(run(p, .sharpness, outlooks: outlooks(p)), .D_L, .development)?.reason
+            == "Young player with room to grow: favoured for minutes (×1.07)")
+        // At 24 he is no longer developing, even with an outlook handed in.
+        let older = young(24)
+        #expect(floorFactor(run(older, .low, outlooks: outlooks(older))) == nil)
+    }
+
+    @Test func aYoungTeenagerWithLowProfessionalismIsFavouredMore() {
+        let low = young(17, professionalism: 14)
+        #expect(floorFactor(run(low, .low, outlooks: outlooks(low))) == 1.04)
+        let fair = young(17, professionalism: 15)
+        #expect(floorFactor(run(fair, .low, outlooks: outlooks(fair))) == 1.02)
+        let older = young(18, professionalism: 14)
+        #expect(floorFactor(run(older, .low, outlooks: outlooks(older))) == 1.07)
+    }
+
+    @Test func aMarkedlyLowerPlayerIsNotFavoured() {
+        let p = young(21)
+        #expect(floorFactor(run(p, .low, outlooks: outlooks(p, .markedlyLower))) == nil)
+        // Every other level, and an outlook with no level (first choice wherever he has a slot), is favoured.
+        for level in [ReachLevel.couldPassFirst, .couldMakeSecond, .couldBeCover] {
+            #expect(floorFactor(run(p, .low, outlooks: outlooks(p, level))) == 1.10, "\(level)")
+        }
+        #expect(floorFactor(run(p, .low, outlooks: outlooks(p, nil))) == 1.10)
+        // With no outlook there is nothing to go on: an ability of 0 gives none, and so does leaving him out.
+        #expect(floorFactor(run(p, .low)) == nil)
+        let unrated = Player.fixture(age: 19, currentAbility: 0, potentialAbility: 0)
+        #expect(floorFactor(run(unrated, .low)) == nil)
+    }
+
+    @Test func nothingAtMediumOrHigh() {
+        let p = young(21)
+        #expect(floorFactor(run(p, .medium, outlooks: outlooks(p))) == nil)
+        #expect(floorFactor(run(p, .high, outlooks: outlooks(p))) == nil)
+        #expect(floorFactor(run(p, .low, outlooks: outlooks(p))) == 1.10)
+        #expect(floorFactor(run(p, .sharpness, outlooks: outlooks(p))) == 1.10)
+    }
+
+    @Test func theSettingScalesTheFavourAndZeroGivesNoReason() {
+        let p = young(21)
+        let half = run(p, .low, outlooks: outlooks(p), development: 0.5)
+        #expect(abs((floorFactor(half) ?? 0) - 1.05) < 1e-9)
+        #expect(slot(half, .D_L, .development)?.reason == "Young player with room to grow: favoured for minutes (×1.05)")
+        #expect(floorFactor(run(p, .low, outlooks: outlooks(p), development: 1)) == 1.10)
+        let none = run(p, .low, outlooks: outlooks(p), development: 0)
+        #expect(none.everySlot.isEmpty)
+        #expect(none.bySlot.values.allSatisfy { $0.isEmpty })
+    }
+
+    @Test func afterFourStartsInThirtyDaysHeIsNotFavouredAndAfterThreeHeIs() {
+        let p = young(21)
+        func favour(_ history: [ConfirmedLineup]) -> Double? { floorFactor(run(p, .low, history: history, outlooks: outlooks(p))) }
+        // No history: favoured.
+        #expect(favour([]) == 1.10)
+        #expect(favour(starts(p, count: 3, spacing: 7)) == 1.10)
+        #expect(favour(starts(p, count: 4, spacing: 7)) == nil)
+        // The month is the 30 days before the fixture: a start 30 days back counts, one 31 days back does not.
+        func start(daysBack: Int) -> ConfirmedLineup {
+            ConfirmedLineup(fixture: FixtureID("back \(daysBack)"), date: date.adding(days: -daysBack), starters: [.D_L: p.id])
+        }
+        #expect(favour(starts(p, count: 3, spacing: 7) + [start(daysBack: 31)]) == 1.10)
+        #expect(favour(starts(p, count: 3, spacing: 7) + [start(daysBack: 30)]) == nil)
+        // Matches he did not start do not count.
+        let others = (1...4).map { i in
+            ConfirmedLineup(fixture: FixtureID("o\(i)"), date: date.adding(days: -3 * i), starters: [.D_L: PlayerID(key: "other")])
+        }
+        #expect(favour(others) == 1.10)
     }
 
     // MARK: Marked to sell or loan out
@@ -252,8 +367,22 @@ import Testing
 
     @Test func aMarkedProspectGetsBothAndInKindOrder() {
         let p = Player.fixture(age: 19, currentAbility: 100, potentialAbility: 130)
-        let kinds = run(p, .low, marks: [p.id: .toLoanOut]).everySlot.map(\.kind)
-        #expect(kinds == [.development, .shopWindow])
+        let r = run(p, .low, marks: [p.id: .toLoanOut], outlooks: outlooks(p))
+        // The floor is in every slot's own list and the mark in the every-slot list; the selector applies and names
+        // them by kind, the floor first.
+        #expect(r.everySlot.map(\.kind) == [.shopWindow])
+        #expect(r.bySlot[.D_L]?.map(\.kind) == [.development])
+        #expect(r.bySlot[.ST_C]?.map(\.kind) == [.development])
+        let order = Adjustment.Kind.allCases
+        #expect(order.firstIndex(of: .development)! < order.firstIndex(of: .shopWindow)!)
+    }
+
+    @Test func aMarkOnAYouthContractPlayerIsIgnored() {
+        var p = Player.fixture(age: 18, currentAbility: 100, potentialAbility: 100)
+        #expect(every(run(p, .low, marks: [p.id: .toSell]), .shopWindow)?.factor == 1.03)
+        p.contractType = .youth
+        #expect(every(run(p, .low, marks: [p.id: .toSell]), .shopWindow) == nil)
+        #expect(every(run(p, .sharpness, marks: [p.id: .toLoanOut]), .shopWindow) == nil)
     }
 
     @Test func aFactorOfOneSwitchesTheRuleOff() {
@@ -362,9 +491,13 @@ import Testing
     @Test func adjustmentsComeBackInKindOrder() {
         let p = Player.fixture(age: 20, familiarity: [.defenderLeft: 12], currentAbility: 100, potentialAbility: 130,
                                sharpness: 0.6, club: "Elsewhere FC")
-        let r = run(p, .low, history: starts(p, count: 4), retraining: retrain(p, .defenderLeft), stability: 1)
-        #expect(r.everySlot.map(\.kind) == [.loanedIn, .consecutiveStarts, .needsSharpness, .development])
-        #expect(r.bySlot[.D_L]?.map(\.kind) == [.retraining, .stability])
+        // Three starts, not four, so the monthly stop leaves the floor in. The planner hands a loanee no outlook; this
+        // one is handed in only to see every kind in its place.
+        let r = run(p, .low, history: starts(p, count: 3), retraining: retrain(p, .defenderLeft), stability: 1,
+                    outlooks: outlooks(p))
+        #expect(r.everySlot.map(\.kind) == [.loanedIn, .consecutiveStarts, .needsSharpness])
+        #expect(r.bySlot[.D_L]?.map(\.kind) == [.development, .retraining, .stability])
+        #expect(r.bySlot[.D_R]?.map(\.kind) == [.development])
     }
 
     @Test func aPlayerWithNothingSpecialHasNoAdjustments() {

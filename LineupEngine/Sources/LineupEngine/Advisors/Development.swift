@@ -115,7 +115,7 @@ public struct MatchesHere: Equatable, Sendable {
 }
 
 public enum Development {
-    /// Comparisons allow for binary floating-point error, as `ImportanceRules.development` does.
+    /// Comparisons allow for binary floating-point error, as `ImportanceRules.developmentFloor` does.
     private static let roundingNoise = 1e-9
 
     /// The mean current ability of the club's own first-team players; nil when there is none.

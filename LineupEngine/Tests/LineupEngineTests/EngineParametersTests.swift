@@ -76,7 +76,9 @@ import Testing
     @Test func theImportanceRuleParametersAreListedWithEvidenceAndSource() {
         let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
         let names = ["loanedInFactor", "consecutiveStartSteps", "sharpnessNeedFull", "sharpnessNeedMost", "sharpnessNeedStrengthLow",
-                     "sharpnessNeedStrengthBuild", "fullySharpFactor", "prospectMaxAge", "prospectHeadroom", "developmentFactor", "shopWindowFactor",
+                     "sharpnessNeedStrengthBuild", "fullySharpFactor", "prospectHeadroom", "developmentFactors",
+                     "developmentFactorLowProfessionalism", "developmentLowProfessionalismUpTo",
+                     "developmentLowProfessionalismUpToAge", "developmentStartsPerMonth", "developmentMonthDays", "shopWindowFactor",
                      "retrainingFromFamiliarity", "retrainingFromFamiliarityMedium", "retrainingUntilFamiliarity",
                      "retrainingFactorLow", "retrainingFactorMedium", "stabilityAnchorRun", "stabilityAnchorBonus", "stabilityRecentBonus"]
         for name in names {
@@ -86,6 +88,73 @@ import Testing
         #expect(listed["sharpnessNeedMost"]?.evidence == .derived)
         #expect(listed["shopWindowFactor"]?.evidence == .derived)
         #expect(listed["loanedInFactor"]?.evidence == .carriedOverFM26)
+    }
+
+    @Test func theDevelopmentFloorParametersAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        let expected: [(String, Evidence, String)] = [
+            ("developmentFactors", .derived, "fm27-development-matches-vs-training.md recommendation 3"),
+            ("developmentFactorLowProfessionalism", .derived, "recommendation 3"),
+            ("developmentLowProfessionalismUpTo", .derived, "recommendation 3"),
+            ("developmentLowProfessionalismUpToAge", .derived, "recommendation 3"),
+            ("developmentStartsPerMonth", .carriedOverFM26, "150 match points a month"),
+            ("developmentMonthDays", .carriedOverFM26, "150 match points a month")]
+        for (name, evidence, quoted) in expected {
+            #expect(listed[name]?.evidence == evidence, "\(name)")
+            #expect(listed[name]?.source.contains(quoted) == true, "\(name) source")
+        }
+        // The flat favour and its age limit are gone; the headroom stays.
+        #expect(listed["prospectMaxAge"] == nil)
+        #expect(listed["developmentFactor"] == nil)
+        #expect(listed["prospectHeadroom"] != nil)
+        let q = EngineParameters.fm27
+        #expect(q.developmentFactors.value == [AgeFactor(upToAge: 17, factor: 1.02), AgeFactor(upToAge: 20, factor: 1.07),
+                                               AgeFactor(upToAge: 23, factor: 1.10)])
+        #expect(q.developmentFactorLowProfessionalism.value == 1.04)
+        #expect(q.developmentLowProfessionalismUpTo.value == 14)
+        #expect(q.developmentLowProfessionalismUpToAge.value == 17)
+        #expect(q.developmentStartsPerMonth.value == 4)
+        #expect(q.developmentMonthDays.value == 30)
+        #expect(q.prospectHeadroom.value == 1.15)
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func developmentFloorParameterProblemsAreReported() {
+        func problems(_ change: (inout EngineParameters) -> Void) -> [String] {
+            var q = EngineParameters.fm27
+            change(&q)
+            return FitnessModel.problems(in: q)
+        }
+        #expect(problems {
+            $0.developmentFactors = Parameter([AgeFactor(upToAge: 20, factor: 1.07), AgeFactor(upToAge: 20, factor: 1.10)],
+                                              .derived, source: "test")
+        } == ["developmentFactors upToAge values are not strictly increasing"])
+        for bad in [0.99, -1, Double.nan, .infinity] {
+            #expect(problems { $0.developmentFactors = Parameter([AgeFactor(upToAge: 20, factor: bad)], .derived, source: "test") }
+                == ["developmentFactors at up to age 20 is \(bad), not a finite number of 1 or more"])
+            #expect(problems { $0.developmentFactorLowProfessionalism = Parameter(bad, .derived, source: "test") }
+                == ["developmentFactorLowProfessionalism is \(bad), not a finite number of 1 or more"])
+        }
+        #expect(problems { $0.developmentStartsPerMonth = Parameter(0, .derived, source: "test") }
+            == ["developmentStartsPerMonth is 0, not 1 or more"])
+        #expect(problems { $0.developmentMonthDays = Parameter(0, .derived, source: "test") }
+            == ["developmentMonthDays is 0, not 1 or more"])
+        #expect(problems { $0.developmentLowProfessionalismUpToAge = Parameter(0, .derived, source: "test") }
+            == ["developmentLowProfessionalismUpToAge is 0, not 1 or more"])
+        #expect(problems { $0.developmentLowProfessionalismUpTo = Parameter(21, .derived, source: "test") }
+            == ["developmentLowProfessionalismUpTo is 21, not between 0 and 20"])
+        #expect(problems { $0.developmentLowProfessionalismUpTo = Parameter(-1, .derived, source: "test") }
+            == ["developmentLowProfessionalismUpTo is -1, not between 0 and 20"])
+        // The edges that are allowed: a factor of exactly 1, an empty table (no floor at any age), Professionalism 0
+        // (nobody counts as low) and a month of one day.
+        #expect(problems {
+            $0.developmentFactors = Parameter([AgeFactor(upToAge: 20, factor: 1)], .derived, source: "test")
+            $0.developmentFactorLowProfessionalism = Parameter(1, .derived, source: "test")
+            $0.developmentLowProfessionalismUpTo = Parameter(0, .derived, source: "test")
+            $0.developmentMonthDays = Parameter(1, .derived, source: "test")
+            $0.developmentStartsPerMonth = Parameter(1, .derived, source: "test")
+        }.isEmpty)
+        #expect(problems { $0.developmentFactors = Parameter([], .derived, source: "test") }.isEmpty)
     }
 
     @Test func theMentoringParametersAreListedWithEvidenceAndSource() {
