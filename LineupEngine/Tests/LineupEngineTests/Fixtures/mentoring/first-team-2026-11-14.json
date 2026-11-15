@@ -1,0 +1,213 @@
+{
+  "what": "The owner's first team on the day he read the mentoring arrows: each player's age, the hierarchy level and social group the owner entered from the game's Dynamics screen, and the four personality values the advice counts.",
+  "asOf": "2026-11-14",
+  "levels": [
+    "teamLeader",
+    "highlyInfluential",
+    "influential",
+    "others"
+  ],
+  "socialGroupCodes": "core, others, or secondary:<letter>; null where the owner entered none",
+  "players": [
+    {
+      "name": "Alfie Potter",
+      "age": 37,
+      "level": "influential",
+      "socialGroup": "core",
+      "professionalism": 14,
+      "pressure": 12,
+      "determination": 10,
+      "ambition": 12
+    },
+    {
+      "name": "Canice Carroll",
+      "age": 27,
+      "level": "influential",
+      "socialGroup": "core",
+      "professionalism": 10,
+      "pressure": 13,
+      "determination": 14,
+      "ambition": 13
+    },
+    {
+      "name": "Darnell Johnson",
+      "age": 27,
+      "level": "influential",
+      "socialGroup": "secondary:B",
+      "professionalism": 17,
+      "pressure": 14,
+      "determination": 17,
+      "ambition": 12
+    },
+    {
+      "name": "Deago Nelson",
+      "age": 20,
+      "level": "others",
+      "socialGroup": "secondary:A",
+      "professionalism": 9,
+      "pressure": 12,
+      "determination": 5,
+      "ambition": 13
+    },
+    {
+      "name": "Dejan Tetek",
+      "age": 23,
+      "level": "others",
+      "socialGroup": "others",
+      "professionalism": 12,
+      "pressure": 8,
+      "determination": 14,
+      "ambition": 14
+    },
+    {
+      "name": "Dillon De Silva",
+      "age": 24,
+      "level": "others",
+      "socialGroup": "secondary:A",
+      "professionalism": 11,
+      "pressure": 13,
+      "determination": 10,
+      "ambition": 9
+    },
+    {
+      "name": "Ellis Brown",
+      "age": 24,
+      "level": "others",
+      "socialGroup": "others",
+      "professionalism": 12,
+      "pressure": 10,
+      "determination": 5,
+      "ambition": 13
+    },
+    {
+      "name": "Evan Humphries",
+      "age": 20,
+      "level": "others",
+      "socialGroup": "core",
+      "professionalism": 12,
+      "pressure": 10,
+      "determination": 16,
+      "ambition": 11
+    },
+    {
+      "name": "Ewan Clark",
+      "age": 23,
+      "level": "influential",
+      "socialGroup": "core",
+      "professionalism": 10,
+      "pressure": 10,
+      "determination": 7,
+      "ambition": 10
+    },
+    {
+      "name": "Fernando Forestieri",
+      "age": 36,
+      "level": "influential",
+      "socialGroup": "secondary:A",
+      "professionalism": 14,
+      "pressure": 8,
+      "determination": 16,
+      "ambition": 15
+    },
+    {
+      "name": "Jack Thompson",
+      "age": 19,
+      "level": "others",
+      "socialGroup": "secondary:A",
+      "professionalism": 14,
+      "pressure": 9,
+      "determination": 13,
+      "ambition": 15
+    },
+    {
+      "name": "Jonny Maxted",
+      "age": 32,
+      "level": "influential",
+      "socialGroup": "secondary:B",
+      "professionalism": 13,
+      "pressure": 7,
+      "determination": 13,
+      "ambition": 7
+    },
+    {
+      "name": "Josh Ashby",
+      "age": 30,
+      "level": "teamLeader",
+      "socialGroup": "secondary:B",
+      "professionalism": 13,
+      "pressure": 14,
+      "determination": 7,
+      "ambition": 6
+    },
+    {
+      "name": "Keegan Bloom",
+      "age": 23,
+      "level": "others",
+      "socialGroup": "secondary:B",
+      "professionalism": 13,
+      "pressure": 12,
+      "determination": 4,
+      "ambition": 10
+    },
+    {
+      "name": "Ludwig Francillette",
+      "age": 27,
+      "level": "others",
+      "socialGroup": "secondary:A",
+      "professionalism": 10,
+      "pressure": 11,
+      "determination": 15,
+      "ambition": 12
+    },
+    {
+      "name": "Matty Taylor",
+      "age": 36,
+      "level": "highlyInfluential",
+      "socialGroup": "core",
+      "professionalism": 13,
+      "pressure": 9,
+      "determination": 14,
+      "ambition": 11
+    },
+    {
+      "name": "Samuel Onyekachukwu",
+      "age": 18,
+      "level": "others",
+      "socialGroup": "secondary:A",
+      "professionalism": 11,
+      "pressure": 10,
+      "determination": 8,
+      "ambition": 10
+    },
+    {
+      "name": "Scott Pollock",
+      "age": 25,
+      "level": "others",
+      "socialGroup": "core",
+      "professionalism": 5,
+      "pressure": 8,
+      "determination": 10,
+      "ambition": 5
+    },
+    {
+      "name": "Tyrone Marsh",
+      "age": 32,
+      "level": "influential",
+      "socialGroup": "core",
+      "professionalism": 8,
+      "pressure": 9,
+      "determination": 13,
+      "ambition": 12
+    },
+    {
+      "name": "Zac McEachran",
+      "age": 30,
+      "level": "teamLeader",
+      "socialGroup": "secondary:B",
+      "professionalism": 12,
+      "pressure": 9,
+      "determination": 12,
+      "ambition": 11
+    }
+  ]
+}
