@@ -94,7 +94,12 @@
 //                                              medium and a keep row's reasons ("removal-all-open-…"), and
 //                                              with a U21 player on loan here so the loan review shows
 //                                              ("removal-loanee-…"), and with its first two players marked,
-//                                              one to sell and one to loan out ("removal-marked-…").
+//                                              one to sell and one to loan out ("removal-marked-…"), and
+//                                              with young players to develop, release and loan out, tall
+//                                              enough for the whole Young players part ("removal-young-…"),
+//                                              and the same with every row open, so a youth-contract row
+//                                              shows why he cannot be marked ("removal-young-open-…"),
+//                                              and in the narrow window's width ("removal-young-narrow-…").
 //                                              Every screen is drawn again in a narrow window, 800 by 700
 //                                              ("<screen>-narrow-…"), and Match Selection, Tactics, Fixtures
 //                                              and the advisor screens in the smallest window
@@ -163,7 +168,7 @@ enum SampleState {
     case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, nothingToRetrain, loanee
     case differingSuggestion
     case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
-    case arrowsRead, harmfulArrow, noInfluence
+    case arrowsRead, harmfulArrow, noInfluence, youngPlayers
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -199,6 +204,7 @@ enum SampleState {
         case .arrowsRead: return try SampleData.modelWithArrowsRead(repositoryRoot: url)
         case .harmfulArrow: return try SampleData.modelWithHarmfulArrow(repositoryRoot: url)
         case .noInfluence: return try SampleData.modelWithNoInfluence(repositoryRoot: url)
+        case .youngPlayers: return try SampleData.modelWithYoungPlayers(repositoryRoot: url)
         }
     } catch {
         fail("\(error)")
@@ -386,12 +392,14 @@ let narrowWindow = CGSize(width: 800, height: 700)
                                             name: "training-mentoring-arrows-sheet")
 }
 
-/// The Player Removal screen with every row open, with a loanee, and with two players marked: see the usage at the top.
+/// The Player Removal screen with every row open, with a loanee, with two players marked, and with young players: see
+/// the usage at the top.
 @MainActor func drawRemoval(_ root: String, to directory: URL, size: CGSize) throws {
     try ScreenPictures.write(model: sampleModel(root), to: directory, size: CGSize(width: size.width, height: size.height * 4),
                              variant: "all-open", screens: [.removal], removalStart: RemovalStart(allOpen: true))
+    // Tall enough for the Young players part above the loans.
     try ScreenPictures.write(model: sampleModel(root, .loanee), to: directory,
-                             size: CGSize(width: size.width, height: size.height * 3), variant: "loanee", screens: [.removal])
+                             size: CGSize(width: size.width, height: size.height * 5), variant: "loanee", screens: [.removal])
     let marked = sampleModel(root)
     if case .ready(let report) = marked.adviceState {
         for (player, mark) in zip(report.removal.advice.map(\.player), SaleMark.allCases) {
@@ -400,6 +408,15 @@ let narrowWindow = CGSize(width: 800, height: 700)
     }
     try ScreenPictures.write(model: marked, to: directory, size: CGSize(width: size.width, height: size.height * 2),
                              variant: "marked", screens: [.removal])
+    try ScreenPictures.write(model: sampleModel(root, .youngPlayers), to: directory,
+                             size: CGSize(width: size.width, height: size.height * 5), variant: "young",
+                             screens: [.removal])
+    try ScreenPictures.write(model: sampleModel(root, .youngPlayers), to: directory,
+                             size: CGSize(width: size.width, height: size.height * 10), variant: "young-open",
+                             screens: [.removal], removalStart: RemovalStart(allOpen: true))
+    try ScreenPictures.write(model: sampleModel(root, .youngPlayers), to: directory,
+                             size: CGSize(width: narrowWindow.width, height: narrowWindow.height * 7),
+                             variant: "young-narrow", screens: [.removal])
 }
 
 /// Draws the pictures and returns the process's exit status.

@@ -21,6 +21,7 @@ public struct SettingsScreen: View {
                     trainingIntensity
                     stability
                     savingPlayers
+                    development
                     horizon
                     conditionFloor
                     heading("Squad and FMRTE")
@@ -79,6 +80,13 @@ public struct SettingsScreen: View {
             CommittingSlider(label: "Saving players for bigger fixtures", value: setting(\.savingPlayers), range: 0...2,
                              step: 0.1, low: "Off", high: "2",
                              readout: AppSettings.savingPlayersText)
+        }
+    }
+
+    private var development: some View {
+        SettingRow("Development", AppSettings.developmentExplanation) {
+            CommittingSlider(label: "Development", value: setting(\.plan.development), range: 0...1, step: 0.05,
+                             low: "Off", high: "Full", readout: AppSettings.developmentText)
         }
     }
 

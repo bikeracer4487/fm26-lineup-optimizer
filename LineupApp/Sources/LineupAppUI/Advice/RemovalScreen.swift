@@ -11,9 +11,9 @@ public struct RemovalStart: Sendable {
     }
 }
 
-/// Who to sell, loan out, release or keep, and the loans to the club: a line saying what the advice is judged against,
-/// the two figures, the filter, then the table, highest score first, and the loans under it. Everything under the
-/// heading scrolls down, the table's headings staying in view.
+/// Who to sell, loan out, release or keep, the young players and the loans to the club: a line saying what the advice
+/// is judged against, the two figures, the filter, then the table, highest score first, and the two parts under it.
+/// Everything under the heading scrolls down, the table's headings staying in view.
 public struct RemovalScreen: View {
     let model: AppModel
     @Bindable var navigation: Navigation
@@ -63,8 +63,10 @@ private struct RemovalBody: View {
                         RemovalHeadings(wide: wide)
                     }
                 }
+                YoungPlayers(sheet: sheet)
+                    .padding(.top, Theme.Removal.partGap)
                 LoansToTheClub(sheet: sheet)
-                    .padding(.top, Theme.Removal.loansGap)
+                    .padding(.top, Theme.Removal.partGap)
                     .padding(.bottom, Theme.Spacing.l)
             }
         }
@@ -208,6 +210,7 @@ private struct RemovalRowView: View {
                         .foregroundStyle(Theme.Colour.mutedInk)
                 }
             }
+            .padding(.trailing, Theme.Spacing.s)
         case .name:
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                 Text(row.name)
@@ -246,7 +249,8 @@ private struct RemovalRowView: View {
 }
 
 /// An open row's reasons with their points, the sentence for why that action, the evidence note, and the control that
-/// marks him to sell or to loan out.
+/// marks him to sell or to loan out, or, for a player on a youth contract, the engine's sentence saying why he cannot be
+/// marked.
 private struct RemovalDetail: View {
     let row: RemovalRow
     let setMark: (SaleMark?) -> Void
@@ -266,12 +270,21 @@ private struct RemovalDetail: View {
                     .foregroundStyle(Theme.Colour.mutedInk)
                     .padding(.leading, Theme.Removal.pointsColumn + Theme.Spacing.m)
             }
-            HStack(alignment: .center, spacing: Theme.Spacing.m) {
-                Text(RemovalPresentation.markLabel)
-                    .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
-                    .foregroundStyle(Theme.Colour.mutedInk)
-                BoardTabs(choices: RemovalPresentation.markChoices.map { ($0.mark, $0.title) },
-                          selection: Binding(get: { row.mark }, set: { setMark($0) }))
+            Group {
+                if let refusal = row.markRefusalText {
+                    Text(refusal)
+                        .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
+                        .foregroundStyle(Theme.Colour.mutedInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    HStack(alignment: .center, spacing: Theme.Spacing.m) {
+                        Text(RemovalPresentation.markLabel)
+                            .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
+                            .foregroundStyle(Theme.Colour.mutedInk)
+                        BoardTabs(choices: RemovalPresentation.markChoices.map { ($0.mark, $0.title) },
+                                  selection: Binding(get: { row.mark }, set: { setMark($0) }))
+                    }
+                }
             }
             .padding(.top, Theme.Spacing.s)
             .padding(.leading, Theme.Removal.pointsColumn + Theme.Spacing.m)
@@ -302,6 +315,66 @@ private struct PointedReasons: View {
                 .accessibilityElement(children: .combine)
             }
         }
+    }
+}
+
+/// "Young players": the line saying who is listed and how far to trust the figures, then a block for each young player,
+/// separated by faint rules, or the line saying there is nobody of that age.
+private struct YoungPlayers: View {
+    let sheet: RemovalSheet
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                BoardHeading(RemovalPresentation.youngHeading, size: Theme.TypeSize.boardTitle)
+                MutedLine(text: RemovalPresentation.youngExplanation)
+            }
+            if let none = sheet.youngEmptyText {
+                MutedLine(text: none)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(sheet.young) { row in
+                    FaintRule()
+                    YoungRowView(row: row)
+                }
+            }
+        }
+    }
+}
+
+/// One young player: who he is in the name's face with the action stamped at the right, then the engine's lines on how
+/// far he could grow, where he stands, whether he gets matches here and why that action.
+private struct YoungRowView: View {
+    let row: YoungRow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Removal.youngActionGap) {
+                Text(row.titleText)
+                    .font(Theme.Typeface.display(Theme.TypeSize.noteHeading, weight: .bold))
+                    .foregroundStyle(Theme.Colour.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                StampView(stamp: StatusStamp(text: row.actionText, tone: .ink))
+                    .fixedSize()
+            }
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                // Keyed by place, so two identical lines are both shown.
+                ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(Theme.Typeface.text())
+                        .foregroundStyle(Theme.Colour.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: Theme.Removal.youngLinesWidth, alignment: .leading)
+            .padding(.leading, Theme.Removal.youngLinesIndent)
+        }
+        .padding(.vertical, Theme.Spacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .textSelection(.enabled)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(row.spokenText)
     }
 }
 

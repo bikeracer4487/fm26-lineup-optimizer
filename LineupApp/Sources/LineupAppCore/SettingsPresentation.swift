@@ -51,6 +51,13 @@ extension AppSettings {
         value == 0 ? "Off" : String(format: "%.1f", value)
     }
 
+    /// The line under Development, with the oldest age the engine favours for development.
+    public static var developmentExplanation: String {
+        "Higher starts players of \(EngineParameters.fm27.developingUpToAge.value) or under more often in lesser "
+            + "fixtures, and those on course to pass your first choice at their slot a little in ordinary ones too, "
+            + "never in the biggest. Off leaves their growth out of every lineup."
+    }
+
     /// "Off" for 0, else the share of each development favour that applies, in whole percent: "100%".
     public static func developmentText(_ value: Double) -> String {
         value == 0 ? "Off" : "\(percent(value))%"

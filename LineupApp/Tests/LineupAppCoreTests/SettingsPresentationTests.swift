@@ -33,6 +33,14 @@ import LineupEngine
             == "Players below this condition are left out of every match unless you pick them yourself.")
     }
 
+    @Test func developmentSaysWhatItDoesWithTheEnginesAge() {
+        let age = EngineParameters.fm27.developingUpToAge.value
+        #expect(AppSettings.developmentExplanation
+            == "Higher starts players of \(age) or under more often in lesser fixtures, and those on course to pass "
+            + "your first choice at their slot a little in ordinary ones too, never in the biggest. Off leaves their "
+            + "growth out of every lineup.")
+    }
+
     @Test func usingTheEnginesFloorAgainForgetsTheOwnersAndTurningItOffStartsFromTheEngines() {
         var settings = AppSettings(currentDate: today)
         settings.conditionFloorPercent = 70

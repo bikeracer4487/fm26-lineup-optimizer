@@ -672,8 +672,9 @@ public enum Theme {
         public static let disclosureColumn: CGFloat = 22
         /// The level's stamp, room for the widest level's.
         public static let stampColumn: CGFloat = 86
-        /// The action, room for the longest: "Terminate".
-        public static let actionColumn: CGFloat = 96
+        /// The action, room for "Keep and play" on one line with a gap before the name; the longest, "Keep and
+        /// develop" and "Loan for matches", wrap to a second.
+        public static let actionColumn: CGFloat = 112
         /// The name on a wide board; a longer name wraps to a second line. On a narrow board the name takes what the
         /// other columns leave, with the costs sentence under it.
         public static let nameColumn: CGFloat = 240
@@ -691,8 +692,14 @@ public enum Theme {
         public static let pointsColumn: CGFloat = 44
         /// The verdict's stamp before a loanee's name, room for the longest: "Keep to the end".
         public static let verdictColumn: CGFloat = 136
-        /// The space above "Loans to the club".
-        public static let loansGap: CGFloat = 32
+        /// The space above each part under the table: "Young players" and "Loans to the club".
+        public static let partGap: CGFloat = 32
+        /// How far a young player's lines sit in from his name, so they read as his.
+        public static let youngLinesIndent: CGFloat = 16
+        /// The widest a young player's lines run before they wrap, so a sentence stays readable on a wide board.
+        public static let youngLinesWidth: CGFloat = 720
+        /// The least room kept between a young player's name and his action.
+        public static let youngActionGap: CGFloat = 24
     }
 
     // MARK: Columns
