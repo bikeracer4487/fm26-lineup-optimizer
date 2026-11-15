@@ -393,7 +393,7 @@ import Testing
             LoanStatus.of($0, ownClub: ownClub) == .own && $0.age <= EngineParameters.fm27.developingUpToAge.value
         }
         #expect(young.count >= 10)
-        var belowTheBar = 0
+        var belowTheBar = 0, notWorth = 0
         for player in young {
             let a = try #require(removal.advice.first { $0.player == player.id })
             #expect(player.currentAbility > 0 && a.outlook != nil, "\(player.id.key)")
@@ -414,6 +414,11 @@ import Testing
                 #expect(!AdvisorText.why(a.action, for: a).contains("not getting matches"), "\(player.id.key)")
             }
             #expect(a.onYouthContract == (player.contractType == .youth && player.monthsLeft != 0), "\(player.id.key)")
+            // Not worth developing: never told to renew his contract.
+            if a.outlook?.level == .couldBeCover || a.outlook?.level == .markedlyLower {
+                notWorth += 1
+                #expect(!a.reasons.contains { $0.text.contains("renew it") }, "\(player.id.key)")
+            }
             // Not expected to pass the first choice at his best slot, and his reach below the bar there: not worth
             // developing, so neither kept to develop (for any reason, his age included) nor loaned for matches.
             let parameters = EngineParameters.fm27
@@ -429,6 +434,7 @@ import Testing
         }
         // The three U21 19-year-olds of ability 25 are below the bar at their best slots.
         #expect(belowTheBar >= 3)
+        #expect(notWorth >= 3)
         // The U21 18-year-old, a backup who could pass the first choice, is watched because he is needed as cover.
         let eighteen = try #require(young.first { $0.squad == .u21 && $0.age == 18 })
         let watched = try #require(removal.advice.first { $0.player == eighteen.id })

@@ -156,6 +156,14 @@ import Testing
         #expect(high?.level == .couldBeCover)
     }
 
+    @Test func aReachExactlyAtTheSecondChoicesAboveTheBarCouldMakeTheSecondEleven() throws {
+        // 84 and 85 against a second choice's 85, both above the bar of 80.
+        let (below, at) = try levels(age: 18, below: 98, at: 100, secondRating: 85)
+        #expect(below?.reachRating == 84 && at?.reachRating == 85)
+        #expect(below?.level == .couldBeCover)
+        #expect(at?.level == .couldMakeSecond)
+    }
+
     @Test func theYoungestsBarIsSeventyPercentWhateverTheSecondChoice() throws {
         // 69 and 70 against the youngest's bar of 70 (70% of 100), above a second choice's 60 or with none.
         for second in [60.0, nil] {

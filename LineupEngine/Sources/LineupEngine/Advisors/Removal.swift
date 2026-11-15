@@ -220,7 +220,8 @@ public enum Removal {
 
     /// A player with an outlook is scored on one line in place of the elevens, weakest and ability lines: the better of
     /// his place in the elevens and his reach. His Professionalism and Ambition add no line, since his reach already
-    /// counts them, and a short contract on a player worth keeping says to renew it, at no points. His advice is the
+    /// counts them, and a short contract on a player worth developing (`isWorthDeveloping`) says to renew it, at no
+    /// points; on one not worth developing it keeps its words and points, in an eleven or not. His advice is the
     /// young players' (`youngAction`), and rests also on the evidence of the estimate behind his outlook.
     private static func advice(for player: Player, traits: Traits, outlook: Outlook?, matchesHere: MatchesHere?,
                                squad: SquadFacts, money: MoneyStyle, parameters: EngineParameters) -> RemovalAdvice {
@@ -253,17 +254,14 @@ public enum Removal {
         let place = tierLine(tier, first: rules.firstElevenPoints, second: rules.secondElevenPoints,
                              neither: rules.neitherElevenPoints)
         let inEither = place.inEither
-        // Whether the line added says he is worth keeping: in either eleven, or a reach that could take him there.
-        var worthKeeping = inEither
         if let outlook, let level = outlook.level,
            let line = AdvisorText.reachLine(outlook, names: { PositionText.plain($0.position) }) {
             let reach = reachPoints(level, rules)
             // Only a place in the elevens competes with his reach; on a tie, the place.
-            if inEither && place.reason.points <= reach.points {
+            if inEither && place.reason.points <= reach {
                 reasons.list.append(place.reason)
             } else {
-                reasons.add(reach.points, line)
-                worthKeeping = reach.worthKeeping
+                reasons.add(reach, line)
             }
         } else {
             reasons.list.append(place.reason)
@@ -302,7 +300,8 @@ public enum Removal {
             let points: Int? = months <= rules.contractEndingSoonUpTo ? rules.contractEndingSoonPoints
                 : months <= rules.contractEndingUpTo ? rules.contractEndingPoints : nil
             let ends = "Contract ends in \(months) \(months == 1 ? "month" : "months")"
-            if points != nil, outlook != nil, worthKeeping {
+            // A place in an eleven alone does not make a young player worth renewing: his reach must.
+            if points != nil, let outlook, isWorthDeveloping(outlook) {
                 reasons.add(0, "\(ends): renew it")
             } else if let points {
                 reasons.add(points, ends)
@@ -437,12 +436,7 @@ public enum Removal {
             evidence: [Evidence]) {
         let matchesEvidence = [parameters.matchesHereShare.evidence, parameters.matchesHereWindowDays.evidence,
                                parameters.matchesHereMinimumConfirmed.evidence, parameters.depthSolidFamiliarity.evidence]
-        let notWorthDeveloping: Bool
-        switch outlook.level {
-        case .couldBeCover?, .markedlyLower?: notWorthDeveloping = true
-        case .couldPassFirst?, .couldMakeSecond?, nil: notWorthDeveloping = false
-        }
-        if notWorthDeveloping {
+        if !isWorthDeveloping(outlook) {
             // Whether he gets his matches is read only for a player in either eleven.
             let evidence = inEither ? matchesEvidence : []
             if inEither && matchesHere.isEnough { return (.play, nil, nil, false, evidence) }
@@ -521,14 +515,23 @@ public enum Removal {
         }
     }
 
-    /// The points for his reach at `level`, from the rules for the elevens, the weakest and far below the average, and
-    /// whether that level says he is worth keeping.
-    private static func reachPoints(_ level: ReachLevel, _ rules: RemovalRules) -> (points: Int, worthKeeping: Bool) {
+    /// The points for his reach at `level`, from the rules for the elevens, the weakest and far below the average.
+    private static func reachPoints(_ level: ReachLevel, _ rules: RemovalRules) -> Int {
         switch level {
-        case .couldPassFirst: (rules.firstElevenPoints, true)
-        case .couldMakeSecond: (rules.secondElevenPoints, true)
-        case .couldBeCover: (rules.neitherElevenPoints, false)
-        case .markedlyLower: (rules.neitherElevenPoints + rules.weakestPoints + rules.farBelowAveragePoints, false)
+        case .couldPassFirst: rules.firstElevenPoints
+        case .couldMakeSecond: rules.secondElevenPoints
+        case .couldBeCover: rules.neitherElevenPoints
+        case .markedlyLower: rules.neitherElevenPoints + rules.weakestPoints + rules.farBelowAveragePoints
+        }
+    }
+
+    /// Whether a young player is worth developing: his reach could pass the first choice or make the second eleven, or
+    /// he has no level (no slot compares him with a first choice other than himself). One at cover level or markedly
+    /// lower is not.
+    static func isWorthDeveloping(_ outlook: Outlook) -> Bool {
+        switch outlook.level {
+        case .couldPassFirst?, .couldMakeSecond?, nil: true
+        case .couldBeCover?, .markedlyLower?: false
         }
     }
 

@@ -1036,19 +1036,23 @@ import Testing
         try #require(first19.tier == .first(.D_L))
         try #require(first19.outlook?.level == .couldBeCover || first19.outlook?.level == .markedlyLower)
         #expect(first19.action == .play && first19.watchReason == nil)
-        #expect(AdvisorText.why(first19.action, for: first19) == "He is first choice here.")
+        #expect(AdvisorText.why(first19.action, for: first19)
+                == "He is first choice here. He keeps the place until the squad has someone better there.")
     }
 
     /// The planner's squad with its second-choice left back aged `age`, at current ability 40 and potential `potential`,
-    /// with 24 months left and every attribute `all` but Professionalism 20 and Ambition and Determination 10 (so he
-    /// grows at the table's full rate) and Consistency, Important Matches and Temperament 10 (so no rule reads them). With
-    /// `spare`, a solid left back of 28 rated below him joins, so cover there is not thin without him. Left back is the
-    /// only slot he can play: he is second choice there, behind "D L first", with no second choice of his own.
-    func weakSecond(age: Int, potential: Int, all: Int = 8, spare: Bool = true) throws -> (players: [Player], id: PlayerID) {
+    /// with `months` left (24 unless given) on a `contract` (full-time unless given) and every attribute `all` but
+    /// Professionalism 20 and Ambition and Determination 10 (so he grows at the table's full rate) and Consistency,
+    /// Important Matches and Temperament 10 (so no rule reads them). With `spare`, a solid left back of 28 rated below him
+    /// joins, so cover there is not thin without him. Left back is the only slot he can play: he is second choice there,
+    /// behind "D L first", with no second choice of his own.
+    func weakSecond(age: Int, potential: Int, all: Int = 8, spare: Bool = true, months: Int? = 24,
+                    contract: ContractType = .fullTime) throws -> (players: [Player], id: PlayerID) {
         let id = PlannerFixture.id(.D_L, "second")
         let positions = [assignment(.D_L).ipPosition, assignment(.D_L).oopPosition]
         var players = try squad(changing: id) { p in
-            p.age = age; p.currentAbility = 40; p.potentialAbility = potential; p.monthsLeft = 24
+            p.age = age; p.currentAbility = 40; p.potentialAbility = potential; p.monthsLeft = months
+            p.contractType = contract
             p.attributes = p.attributes.mapValues { _ in all }
             p.attributes[.professionalism] = 20; p.attributes[.ambition] = 10; p.attributes[.determination] = 10
             for attribute in [Attribute.consistency, .importantMatches, .temperament] { p.attributes[attribute] = 10 }
@@ -1107,11 +1111,15 @@ import Testing
         // none confirmed) he is kept to play, at 16 as at 19.
         for age in [19, 16] {
             let (players, id) = try weakSecond(age: age, potential: 40)
-            for history in [sixMatches(starting: id, starts: 2), []] {
+            let sentences = ["He is getting his matches here.",
+                             "He is second choice here, and too few matches are confirmed to count his starts."]
+            for (history, sentence) in zip([sixMatches(starting: id, starts: 2), []], sentences) {
                 let a = try #require(try report(players, history: history).advice.first { $0.player == id })
                 try #require(a.outlook?.level == .markedlyLower && a.tier == .second(.D_L))
                 #expect(a.matchesHere?.isEnough == true, "\(age)")
                 #expect(a.action == .play && a.watchReason == nil && a.keepReason == nil, "\(age)")
+                #expect(AdvisorText.why(a.action, for: a)
+                        == sentence + " He keeps the place until the squad has someone better there.", "\(age)")
             }
         }
         // Getting his matches but in neither eleven: watched, not kept to play.
@@ -1136,6 +1144,52 @@ import Testing
             #expect(a.action == .monitor && a.watchReason == .neededForCover, "\(age)")
             #expect(AdvisorText.why(a.action, for: a)
                     == "He is needed as cover here: he stays until the squad has someone better there.")
+        }
+    }
+
+    @Test func aPlayerNotWorthDevelopingInAnElevenIsNotToldToRenewHisContract() throws {
+        // In the second eleven with 10 months left, not getting matches: the contract line keeps its words and points.
+        let rules = parameters.removalRules.value
+        try #require(10 > rules.contractEndingSoonUpTo && 10 <= rules.contractEndingUpTo)
+        let (players, id) = try weakSecond(age: 19, potential: 40, months: 10)
+        let a = try #require(try report(players, history: sixMatches(starting: id, starts: 0)).advice.first { $0.player == id })
+        try #require(a.outlook?.level == .markedlyLower && a.tier == .second(.D_L))
+        #expect(reasons(a.reasons, "Contract") == [reason("Contract ends in 10 months", rules.contractEndingPoints)])
+        #expect(!a.reasons.contains { $0.text.contains("renew it") })
+        #expect(a.reasons == [reason("In the second eleven at left back", rules.secondElevenPoints),
+                              reason("Contract ends in 10 months", rules.contractEndingPoints)])
+        #expect(a.score == rules.secondElevenPoints + rules.contractEndingPoints)
+        #expect(a.action == .monitor && a.watchReason == .notWorthDeveloping)
+        // His twin worth developing (his reach at the bar): "renew it" at no points, and kept to develop for that.
+        let worth = try weakSecondPotential(reaching: parameters.markedlyLowerShare.value, age: 19)
+        let (twinPlayers, twinID) = try weakSecond(age: 19, potential: worth, months: 10)
+        let twin = try #require(try report(twinPlayers, history: sixMatches(starting: twinID, starts: 0)).advice
+            .first { $0.player == twinID })
+        try #require(twin.outlook?.level == .couldMakeSecond && twin.tier == .second(.D_L))
+        #expect(reasons(twin.reasons, "Contract") == [reason("Contract ends in 10 months: renew it", 0)])
+        #expect(twin.score == rules.secondElevenPoints)
+        #expect(twin.action == .develop && twin.keepReason == .shortContract)
+    }
+
+    @Test func aPlayerNotWorthDevelopingInAnElevenIsWatchedWhateverHisContract() throws {
+        // In the second eleven and not getting his matches, on a youth contract with months left or a full-time contract
+        // with 12 months or fewer: the steps that keep a player worth developing to develop do not apply to him.
+        let cases: [(ContractType, Int?)] = [(.youth, 24), (.youth, nil), (.fullTime, 12), (.fullTime, 1), (.fullTime, nil)]
+        for (contract, months) in cases {
+            let (players, id) = try weakSecond(age: 19, potential: 40, months: months, contract: contract)
+            let a = try #require(try report(players, history: sixMatches(starting: id, starts: 0)).advice
+                .first { $0.player == id })
+            let label = "\(contract) \(String(describing: months))"
+            try #require(a.outlook?.level == .markedlyLower && a.tier == .second(.D_L), "\(label)")
+            try #require(a.level == .keep || a.level == .medium, "\(label)")
+            #expect(a.action == .monitor && a.watchReason == .notWorthDeveloping && a.keepReason == nil, "\(label)")
+            // Worth developing, the same contracts keep him to develop.
+            let worth = try weakSecondPotential(reaching: parameters.markedlyLowerShare.value, age: 19)
+            let (twinPlayers, twinID) = try weakSecond(age: 19, potential: worth, months: months, contract: contract)
+            let twin = try #require(try report(twinPlayers, history: sixMatches(starting: twinID, starts: 0)).advice
+                .first { $0.player == twinID })
+            #expect(twin.action == .develop, "\(label)")
+            #expect(twin.keepReason == (contract == .youth ? .youthContract : .shortContract), "\(label)")
         }
     }
 

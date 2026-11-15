@@ -206,6 +206,33 @@ import Testing
         return AdvisorText.why(.monitor, for: watched)
     }
 
+    @Test func whyAYoungPlayerKeptToPlayFollowsHisLevel() {
+        func why(_ basis: MatchesHereBasis, _ level: ReachLevel?) -> String {
+            let playing = RemovalAdvice(
+                player: PlayerID(key: "young"), name: "Young", level: .keep, action: .play, score: 0, reasons: [],
+                tier: nil, outlook: outlook(level), matchesHere: MatchesHere(starts: 3, matches: 6, basis: basis),
+                keepReason: nil, watchReason: nil, loanOnlyToStart: false, onYouthContract: false,
+                isFalseProspect: false, isMentor: false, releaseCost: nil, mutualCost: nil, basis: .derived)
+            return AdvisorText.why(.play, for: playing)
+        }
+        let cases: [(MatchesHereBasis, String)] = [
+            (.firstChoice, "He is first choice here."),
+            (.startedEnough, "He is getting his matches here."),
+            (.solidSecondChoice, "He is second choice here, and too few matches are confirmed to count his starts."),
+        ]
+        for (basis, sentence) in cases {
+            // Worth developing, or with no level: as before.
+            for level in [ReachLevel.couldPassFirst, .couldMakeSecond, nil] {
+                #expect(why(basis, level) == sentence, "\(basis) \(String(describing: level))")
+            }
+            // Not worth developing: told why he keeps the place.
+            for level in [ReachLevel.couldBeCover, .markedlyLower] {
+                #expect(why(basis, level) == sentence + " He keeps the place until the squad has someone better there.",
+                        "\(basis) \(level)")
+            }
+        }
+    }
+
     @Test func whyAYoungPlayerNeededForCoverIsWatchedFollowsHisLevel() {
         let loan = "He is needed as cover here, so a loan would leave the squad short."
         let stays = "He is needed as cover here: he stays until the squad has someone better there."

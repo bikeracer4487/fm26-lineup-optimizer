@@ -174,15 +174,19 @@ extension AdvisorText {
         }
     }
 
-    /// Why a young player is kept to play, from what decided that he gets his matches here.
-    static func whyPlay(_ basis: MatchesHereBasis?) -> String {
+    /// Why a young player is kept to play, from what decided that he gets his matches here; one not worth developing
+    /// (`isWorthDeveloping` false) is also told that he keeps the place until the squad has someone better.
+    static func whyPlay(_ basis: MatchesHereBasis?, isWorthDeveloping: Bool) -> String {
+        let reason: String
         switch basis {
-        case .firstChoice?: "He is first choice here."
-        case .startedEnough?: "He is getting his matches here."
-        case .solidSecondChoice?: "He is second choice here, and too few matches are confirmed to count his starts."
+        case .firstChoice?: reason = "He is first choice here."
+        case .startedEnough?: reason = "He is getting his matches here."
+        case .solidSecondChoice?:
+            reason = "He is second choice here, and too few matches are confirmed to count his starts."
         // Player Removal keeps a player to play only on the three above; an advice built otherwise is said plainly.
-        case .startedTooFew?, .tooFewConfirmed?, nil: "Nothing here says he should go"
+        case .startedTooFew?, .tooFewConfirmed?, nil: return "Nothing here says he should go"
         }
+        return isWorthDeveloping ? reason : reason + " He keeps the place until the squad has someone better there."
     }
 
     /// Why a player is watched; a player without an outlook keeps the general sentence. One not worth developing is
