@@ -737,6 +737,144 @@ import Testing
         #expect(second.competition != nil && second.opponentStrength != nil)
     }
 
+    // MARK: Taking a suggestion from the table
+
+    /// A copy of the sample on a scripted clock the test holds still.
+    private func clockedSample() throws -> (model: AppModel, input: ScriptedInput, directory: URL) {
+        let sampled = try sample()
+        defer { try? FileManager.default.removeItem(at: sampled.store.directory) }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("use-it-\(UUID().uuidString)")
+        try FileManager.default.copyItem(at: sampled.store.directory, to: directory)
+        let input = ScriptedInput(today: SampleData.date)
+        input.tick = 0
+        input.uptime = 1_000
+        return (AppModel(store: Store(directory: directory), environment: input.environment), input, directory)
+    }
+
+    /// The first `count` fixtures still to play that have a suggestion, each made to differ from it.
+    private func fixturesShowingALine(_ model: AppModel, count: Int) throws -> [StoredFixture] {
+        let open = model.fixtures.filter { model.suggestions[$0.id] != nil && model.state(of: $0) == .toPlay && !model.isPast($0.date) }
+        try #require(open.count >= count)
+        for fixture in open.prefix(count) {
+            var changed = fixture
+            changed.importance = Importance.allCases.first { $0 != model.suggestions[fixture.id]?.importance }!
+            model.update(changed)
+        }
+        let shown = model.fixtures.filter { model.suggestionLine(for: $0) != nil }
+        try #require(shown.count >= count)
+        return Array(shown.prefix(count))
+    }
+
+    @Test func useItTakesTheSuggestionAndPlansAgain() throws {
+        let c = try clockedSample()
+        defer { try? FileManager.default.removeItem(at: c.directory) }
+        let fixture = try fixturesShowingALine(c.model, count: 1)[0]
+        let line = try #require(c.model.suggestionLine(for: fixture))
+        let planned = c.model.timesPlanned
+        c.model.useSuggestion(for: fixture.id)
+        let after = try #require(c.model.fixtures.first { $0.id == fixture.id })
+        #expect(after.importance == line.importance)
+        #expect(after.importance != fixture.importance)
+        #expect(c.model.timesPlanned == planned + 1)
+        #expect(c.model.suggestionLine(for: after) == nil)
+        let reopened = AppModel(store: Store(directory: c.directory), environment: c.input.environment)
+        #expect(reopened.fixtures.first { $0.id == fixture.id }?.importance == line.importance)
+    }
+
+    @Test func useItDoesNothingWhereNoLineIsShown() throws {
+        // Confirmed.
+        let confirmed = try SampleData.modelAfterConfirmingFirst(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: confirmed.store.directory) }
+        let played = try #require(confirmed.fixtures.first)
+        #expect(confirmed.state(of: played) == .confirmed)
+        let beforeConfirmed = confirmed.fixtures
+        let plannedConfirmed = confirmed.timesPlanned
+        confirmed.useSuggestion(for: played.id)
+        #expect(confirmed.fixtures == beforeConfirmed)
+        #expect(confirmed.timesPlanned == plannedConfirmed)
+
+        // Past and not confirmed, made to differ from its suggestion.
+        let past = try SampleData.modelWithPastFixtures(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: past.store.directory) }
+        var missed = past.fixtures[1]
+        #expect(past.state(of: missed) == .pastNotConfirmed)
+        missed.importance = Importance.allCases.first { $0 != past.suggestions[missed.id]?.importance }!
+        past.update(missed)
+        let beforePast = past.fixtures
+        let plannedPast = past.timesPlanned
+        past.useSuggestion(for: missed.id)
+        #expect(past.fixtures == beforePast)
+        #expect(past.timesPlanned == plannedPast)
+
+        // Suggestion equal to the importance chosen, and an id no fixture has.
+        let c = try clockedSample()
+        defer { try? FileManager.default.removeItem(at: c.directory) }
+        let same = try #require(c.model.fixtures.first { c.model.suggestionLine(for: $0) == nil
+            && c.model.suggestions[$0.id] != nil && c.model.state(of: $0) == .toPlay })
+        let before = c.model.fixtures
+        let planned = c.model.timesPlanned
+        c.model.useSuggestion(for: same.id)
+        c.input.uptime += 10
+        c.model.useSuggestion(for: FixtureID("no such fixture"))
+        #expect(c.model.fixtures == before)
+        #expect(c.model.timesPlanned == planned)
+    }
+
+    @Test func aSecondUseItWithinHalfASecondDoesNothing() throws {
+        let c = try clockedSample()
+        defer { try? FileManager.default.removeItem(at: c.directory) }
+        let two = try fixturesShowingALine(c.model, count: 2)
+        let lineOfSecond = try #require(c.model.suggestionLine(for: two[1]))
+        c.model.useSuggestion(for: two[0].id)
+        c.input.uptime += AppModel.suggestionActionInterval - 0.1
+        c.model.useSuggestion(for: two[1].id)
+        #expect(c.model.fixtures.first { $0.id == two[1].id }?.importance == two[1].importance)
+        c.input.uptime += 0.1
+        c.model.useSuggestion(for: two[1].id)
+        #expect(c.model.fixtures.first { $0.id == two[1].id }?.importance == lineOfSecond.importance)
+    }
+
+    @Test func theSuggestionIntervalIsHalfASecondAndItsOwn() throws {
+        #expect(AppModel.suggestionActionInterval == 0.5)
+        let c = try clockedSample()
+        defer { try? FileManager.default.removeItem(at: c.directory) }
+        let two = try fixturesShowingALine(c.model, count: 2)
+        // A training action just now does not hold up taking a suggestion.
+        c.model.lastTrainingAction = c.input.uptime
+        c.model.useSuggestion(for: two[0].id)
+        #expect(c.model.fixtures.first { $0.id == two[0].id }?.importance != two[0].importance)
+    }
+
+    @Test func theTableOffersNoUseItForTheFixtureBeingEdited() throws {
+        let c = try clockedSample()
+        defer { try? FileManager.default.removeItem(at: c.directory) }
+        let fixture = try fixturesShowingALine(c.model, count: 1)[0]
+        #expect(!c.model.offersUseIt(for: fixture, editing: fixture.id))
+        #expect(c.model.offersUseIt(for: fixture, editing: nil))
+        #expect(c.model.offersUseIt(for: fixture, editing: FixtureID("another")))
+        let plain = try #require(c.model.fixtures.first { c.model.suggestionLine(for: $0) == nil })
+        #expect(!c.model.offersUseIt(for: plain, editing: nil))
+        #expect(!c.model.offersUseIt(for: plain, editing: FixtureID("another")))
+    }
+
+    @Test func useItKeepsTheFixturesOtherChoices() throws {
+        let c = try clockedSample()
+        defer { try? FileManager.default.removeItem(at: c.directory) }
+        let fixture = try fixturesShowingALine(c.model, count: 1)[0]
+        let before = try #require(c.model.fixtures.first { $0.id == fixture.id })
+        c.model.useSuggestion(for: fixture.id)
+        var after = try #require(c.model.fixtures.first { $0.id == fixture.id })
+        #expect(after.importance != before.importance)
+        after.importance = before.importance
+        after.lastPlanned = before.lastPlanned
+        #expect(after == before)
+    }
+
+    @Test func theUseItLabelNamesTheMatch() {
+        #expect(SuggestionNote.useItLabel(opponent: "Banbury United")
+                == "Use the suggested importance for the match against Banbury United")
+    }
+
     // MARK: Today
 
     @Test func todayMovesByADayAndIsSaved() throws {

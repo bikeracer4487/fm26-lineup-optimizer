@@ -126,6 +126,11 @@ public struct FixtureDraft: Equatable, Sendable {
 public struct SuggestionNote: Equatable, Sendable {
     public static let useItTitle = "Use it"
 
+    /// What VoiceOver says for "Use it" in the table, naming the match.
+    public static func useItLabel(opponent: String) -> String {
+        "Use the suggested importance for the match against \(opponent)"
+    }
+
     /// What a click on the line in the table does.
     public static func clickHelp(_ shown: Bool) -> String {
         shown ? "Hide the reasons" : "Show the reasons"

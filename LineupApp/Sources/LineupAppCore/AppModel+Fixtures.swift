@@ -28,6 +28,32 @@ extension AppModel {
         replan()
     }
 
+    /// How soon after one suggestion has been taken from the table another is ignored. Taking one replans before the
+    /// click is over and the table may move under the pointer, so the second click of a double-click would otherwise
+    /// take the next fixture's suggestion. The interval runs from the end of the last one taken, after its replan.
+    /// It is the Training screen's interval, but kept apart: a training action does not hold this one up.
+    public static let suggestionActionInterval: TimeInterval = 0.5
+
+    /// Sets the fixture's importance to its suggestion's and plans again; everything else about it stays. Nothing
+    /// happens where the table shows no suggestion for it (confirmed, past, the same as the importance chosen, or no
+    /// such fixture), or within `suggestionActionInterval` of the end of the last suggestion taken.
+    public func useSuggestion(for id: FixtureID) {
+        let start = environment.now()
+        if let last = lastSuggestionAction, start - last < Self.suggestionActionInterval { return }
+        guard let fixture = fixtures.first(where: { $0.id == id }),
+              let line = suggestionLine(for: fixture) else { return }
+        var changed = fixture
+        changed.importance = line.importance
+        update(changed)
+        lastSuggestionAction = environment.now()
+    }
+
+    /// Whether the table offers "Use it" for the fixture: it shows a suggestion line, and its editor is not the one open
+    /// (`editing`), where the editor's own button does the same.
+    public func offersUseIt(for fixture: StoredFixture, editing: FixtureID?) -> Bool {
+        fixture.id != editing && suggestionLine(for: fixture) != nil
+    }
+
     /// Removes the fixture and any lineup confirmed for it.
     public func deleteFixture(_ id: FixtureID) {
         fixtures.removeAll { $0.id == id }

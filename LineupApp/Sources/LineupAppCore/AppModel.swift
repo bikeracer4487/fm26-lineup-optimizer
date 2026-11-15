@@ -102,6 +102,8 @@ public struct AppEnvironment: Sendable {
     @ObservationIgnored var trainingNotice: Notice.ID?
     /// When the last training action arrived, on `environment.now`'s clock; nil before the first.
     @ObservationIgnored var lastTrainingAction: TimeInterval?
+    /// When the last suggestion was taken from the Fixtures table, on `environment.now`'s clock; nil before the first.
+    @ObservationIgnored var lastSuggestionAction: TimeInterval?
 
     /// The advice since the last replan; nil until it is first read after one (see `adviceState`).
     @ObservationIgnored var adviceCache: AdviceCache?
