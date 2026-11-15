@@ -40,9 +40,9 @@ public struct MentoringRequest: Sendable {
     }
 }
 
-/// One counted attribute in which a player's worth differs from another's: his value and the other's, which he is
-/// pulled towards. On a suggested group's arrow a pull only ever goes upward, because no arrow there is harmful; in a
-/// recorded group it may go either way.
+/// One counted attribute in which an arrow's target is worth less than its source: his value and the source's, which
+/// he is pulled towards. A pull only ever goes upward; where the source is worth less, a recorded group is warned of a
+/// harmful arrow instead.
 public struct Pull: Equatable, Sendable {
     public let attribute: Attribute
     public let value: Int
@@ -177,14 +177,7 @@ extension Mentoring {
                 })))
         }
 
-        // A reading counts only between two players of this squad not out on loan. Sorted so that, of two readings of
-        // one pair on one day, the same one counts whatever the input order.
-        let ids = Set(people.map(\.player.id))
-        let readings = request.arrows
-            .filter { $0.squad == request.squad && ids.contains($0.from) && ids.contains($0.to) }
-            .sorted { a, b in
-                (a.from.key, a.to.key, a.readOn, a.strength) < (b.from.key, b.to.key, b.readOn, b.strength)
-            }
+        let readings = readingsUsed(request.arrows, in: request.squad, among: Set(people.map(\.player.id)))
         let judge = Judge(people: people, squad: request.squad, readings: readings, counted: counted,
                           parameters: parameters)
 
@@ -215,6 +208,38 @@ extension Mentoring {
         return MentoringReport(
             squad: request.squad, needsHierarchy: !people.contains { $0.standing > .others },
             isStale: isStale, suggestions: suggestions, notPlaced: notPlaced, groups: groups, basis: judge.basis)
+    }
+
+    // MARK: Rules shared with the review of a recorded group
+
+    /// The readings the advice uses in `squad`: those of that squad between two of `players`, the squad's players not
+    /// out on loan. Sorted so that, of two readings of one pair on one day, the same one counts whatever the input
+    /// order.
+    static func readingsUsed(_ arrows: [ArrowReading], in squad: Squad,
+                             among players: Set<PlayerID>) -> [ArrowReading] {
+        arrows.filter { $0.squad == squad && players.contains($0.from) && players.contains($0.to) }.sorted { a, b in
+            (a.from.key, a.to.key, a.readOn, a.strength) < (b.from.key, b.to.key, b.readOn, b.strength)
+        }
+    }
+
+    /// The counted attributes, in `counted` order, in which the source of an arrow above None is worth less than its
+    /// target; the arrow is harmful when there is one. Empty for an arrow of None. Both value lists hold every counted
+    /// attribute.
+    static func harms(_ strength: ArrowStrength, from source: [Attribute: Int], to target: [Attribute: Int],
+                      counted: [Attribute], parameters: EngineParameters) -> [Attribute] {
+        guard strength > .none else { return [] }
+        return counted.filter {
+            worth($0, source[$0]!, parameters: parameters) < worth($0, target[$0]!, parameters: parameters)
+        }
+    }
+
+    /// The counted attributes, in `counted` order, in which an arrow's target is worth less than its source, each with
+    /// the two values. Both value lists hold every counted attribute.
+    static func pulls(from source: [Attribute: Int], to target: [Attribute: Int], counted: [Attribute],
+                      parameters: EngineParameters) -> [Pull] {
+        counted.filter {
+            worth($0, target[$0]!, parameters: parameters) < worth($0, source[$0]!, parameters: parameters)
+        }.map { Pull(attribute: $0, value: target[$0]!, towards: source[$0]!) }
     }
 
     // MARK: Working
@@ -260,11 +285,12 @@ extension Mentoring {
     private struct Judge {
         let people: [Person]
         let counted: [Attribute]
+        let parameters: EngineParameters
         /// `arrows[from][to]`, read or guessed; the diagonal is never used.
         let arrows: [[Arrow]]
         /// The strength's weight times the sum over the counted attributes of the source's worth less the target's.
         let gains: [[Int]]
-        /// Above None, and the source is worth less than the target in a counted attribute.
+        /// `Mentoring.harms` finds a counted attribute.
         let harmful: [[Bool]]
         let takesNothing: [Bool]
         /// Belongs to the club, not advised to leave, and below the ceiling in a counted attribute. Only players in no
@@ -277,6 +303,7 @@ extension Mentoring {
              parameters: EngineParameters) {
             self.people = people
             self.counted = counted
+            self.parameters = parameters
             let standings = Dictionary(uniqueKeysWithValues: people.map { ($0.player.id, $0.standing) })
             let parties = people.map { Party(id: $0.player.id, standing: $0.standing, age: $0.player.age) }
             // `problems(in:)` has made sure every strength has a weight.
@@ -290,8 +317,8 @@ extension Mentoring {
                     let difference = counted.reduce(0) { $0 + source.worth[$1]! - target.worth[$1]! }
                     arrowRow.append(arrow)
                     gainRow.append(i == j ? 0 : weights[arrow.strength]! * difference)
-                    harmRow.append(i != j && arrow.strength > .none
-                                   && counted.contains { source.worth[$0]! < target.worth[$0]! })
+                    harmRow.append(i != j && !Mentoring.harms(arrow.strength, from: source.values, to: target.values,
+                                                                counted: counted, parameters: parameters).isEmpty)
                 }
                 arrows.append(arrowRow)
                 gains.append(gainRow)
@@ -376,9 +403,8 @@ extension Mentoring {
                     let source = people[from], target = people[to]
                     listed.append((GroupArrow(
                         arrow: arrows[from][to], fromName: source.player.name, toName: target.player.name,
-                        pulls: counted.filter { target.worth[$0]! < source.worth[$0]! }.map {
-                            Pull(attribute: $0, value: target.values[$0]!, towards: source.values[$0]!)
-                        }), gains[from][to]))
+                        pulls: Mentoring.pulls(from: source.values, to: target.values, counted: counted,
+                                               parameters: parameters)), gains[from][to]))
                 }
             }
             listed.sort { a, b in

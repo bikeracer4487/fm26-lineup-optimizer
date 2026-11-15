@@ -33,20 +33,43 @@ import Testing
         })
     }
 
+    /// Lead at Team Leader, everyone else at Others: the review helper's levels unless a test gives its own.
+    var leader: [PlayerID: PlayerDynamics] { [id("Lead"): PlayerDynamics(standing: .teamLeader)] }
+
+    /// An arrow read in the first team on day `n`.
+    func arrow(_ from: String, _ to: String, _ strength: ArrowStrength, day n: Int = 0) -> ArrowReading {
+        ArrowReading(from: id(from), to: id(to), squad: .firstTeam, strength: strength, readOn: day(n))
+    }
+
+    /// The six arrows among three players, all read on day 0 at `strength`.
+    func six(_ names: [String], _ strength: ArrowStrength = .none) -> [ArrowReading] {
+        names.flatMap { from in names.filter { $0 != from }.map { arrow(from, $0, strength) } }
+    }
+
+    func read(_ from: String, _ to: String, _ strength: ArrowStrength, day n: Int = 0) -> Arrow {
+        Arrow(from: id(from), to: id(to), strength: strength, readOn: day(n))
+    }
+
+    func guessed(_ from: String, _ to: String, _ strength: ArrowStrength) -> Arrow {
+        Arrow(from: id(from), to: id(to), strength: strength, readOn: nil)
+    }
+
     func request(_ players: [Player], groups: [MentoringGroup] = [], dynamics: [PlayerID: PlayerDynamics] = [:],
-                 readings: [String: [PersonalityReading]] = [:], names: [PlayerID: String] = [:],
-                 leaving: Set<PlayerID> = [], asOf: Int = 100) -> MentoringRequest {
+                 readings: [String: [PersonalityReading]] = [:], arrows: [ArrowReading] = [],
+                 names: [PlayerID: String] = [:], leaving: Set<PlayerID> = [], asOf: Int = 100) -> MentoringRequest {
         MentoringRequest(squad: .firstTeam, players: players, ownClub: "Oxford City", dynamics: dynamics,
                          dynamicsUpdatedOn: nil, groups: groups,
                          readings: Dictionary(uniqueKeysWithValues: readings.map { (id($0.key), $0.value) }),
-                         arrows: [], names: names, leaving: leaving, asOf: day(asOf))
+                         arrows: arrows, names: names, leaving: leaving, asOf: day(asOf))
     }
 
-    func review(_ group: MentoringGroup, _ players: [Player], dynamics: [PlayerID: PlayerDynamics] = [:],
-                readings: [String: [PersonalityReading]] = [:], names: [PlayerID: String] = [:],
-                leaving: Set<PlayerID> = [], asOf: Int = 100) -> GroupReview {
-        Mentoring.review(group, request: request(players, groups: [group], dynamics: dynamics, readings: readings,
-                                                 names: names, leaving: leaving, asOf: asOf),
+    /// `dynamics` is `leader` when not given.
+    func review(_ group: MentoringGroup, _ players: [Player], dynamics: [PlayerID: PlayerDynamics]? = nil,
+                readings: [String: [PersonalityReading]] = [:], arrows: [ArrowReading] = [],
+                names: [PlayerID: String] = [:], leaving: Set<PlayerID> = [], asOf: Int = 100) -> GroupReview {
+        Mentoring.review(group, request: request(players, groups: [group], dynamics: dynamics ?? leader,
+                                                 readings: readings, arrows: arrows, names: names, leaving: leaving,
+                                                 asOf: asOf),
                          parameters: q)
     }
 
@@ -58,74 +81,146 @@ import Testing
         try #require(member.changes.first { $0.attribute == attribute })
     }
 
-    /// Three players: a lead aged 34 and two aged 18.
+    /// Three players: Lead aged 34, at Team Leader by the review helper's levels, and two aged 18. Lead is guessed
+    /// Average into each of the other two; nothing else is above None.
     var trio: [Player] { [player("Lead", 34), player("Abel", 18), player("Brook", 18)] }
 
-    // MARK: Who leads
+    // MARK: The six arrows
 
-    @Test func theLeadStandsAboveEveryOtherMember() throws {
-        let result = review(group(["Brook", "Lead", "Abel"]), trio)
-        #expect(result.lead == id("Lead"))
-        #expect(result.members.map(\.player) == [id("Lead"), id("Abel"), id("Brook")])
-        #expect(result.members.map(\.isLead) == [true, false, false])
-        #expect(result.members.map(\.name) == ["Lead", "Abel", "Brook"])
-        #expect(result.members.map(\.age) == [34, 18, 18])
+    @Test func theSixArrowsAreReadOrGuessed() throws {
+        let players = [player("Lead", 34), player("Abel", 18, [.professionalism: 8]),
+                       player("Brook", 18, [.professionalism: 8])]
+        let result = review(group(["Brook", "Lead", "Abel"]), players, arrows: [arrow("Lead", "Abel", .significant)])
+        #expect(result.arrows == [
+            GroupArrow(arrow: read("Lead", "Abel", .significant), fromName: "Lead", toName: "Abel",
+                       pulls: [Pull(attribute: .professionalism, value: 8, towards: 10)]),
+            GroupArrow(arrow: guessed("Lead", "Brook", .average), fromName: "Lead", toName: "Brook",
+                       pulls: [Pull(attribute: .professionalism, value: 8, towards: 10)])])
+        #expect(result.unreadArrows == 5)
+        #expect(!result.hasNoInfluence)
+        #expect(result.members.map(\.player) == [id("Abel"), id("Brook"), id("Lead")])
+        #expect(result.members.map(\.name) == ["Abel", "Brook", "Lead"])
+        #expect(result.members.map(\.age) == [18, 18, 34])
         #expect(result.warnings.isEmpty)
         #expect(result.basis == .derived)
         #expect(result.group.id == result.id)
 
-        // A higher standing leads whatever the age.
-        let captain = review(group(["Lead", "Abel", "Captain"]), trio + [player("Captain", 19)],
-                             dynamics: [id("Captain"): PlayerDynamics(standing: .teamLeader)])
-        #expect(captain.lead == id("Captain"))
-        #expect(captain.members.map(\.player) == [id("Captain"), id("Abel"), id("Lead")])
+        // Strongest first, then by the source's key, then by the target's.
+        let all = [arrow("Lead", "Abel", .significant), arrow("Lead", "Brook", .significant),
+                   arrow("Abel", "Brook", .light), arrow("Brook", "Abel", .none), arrow("Abel", "Lead", .none),
+                   arrow("Brook", "Lead", .none)]
+        let allRead = review(group(["Brook", "Lead", "Abel"]), players, arrows: all)
+        #expect(allRead.unreadArrows == 0)
+        #expect(allRead.arrows.map(\.arrow) == [read("Lead", "Abel", .significant), read("Lead", "Brook", .significant),
+                                                read("Abel", "Brook", .light)])
+        #expect(allRead.arrows.last?.pulls == [])
+        #expect(!allRead.hasNoInfluence)
+        #expect(allRead.warnings.isEmpty)
     }
 
-    @Test func nobodyLeadsWhenTwoAreLevel() throws {
-        let result = review(group(["Lead", "Second", "Abel"]), [player("Lead", 34), player("Second", 33), player("Abel", 18)])
-        #expect(result.lead == nil)
-        #expect(result.warnings == [.nobodyLeads])
-        #expect(result.members.map(\.player) == [id("Abel"), id("Lead"), id("Second")])
-        #expect(result.members.allSatisfy { !$0.isLead && $0.pulls.isEmpty })
+    @Test func aHarmfulArrowIsAWarningWithItsStrength() throws {
+        let levels = [id("Ashby"): PlayerDynamics(standing: .teamLeader)]
+        let players = [player("Ashby", 30, [.ambition: 6]), player("Nelson", 20, [.ambition: 13, .professionalism: 8]),
+                       player("Cole", 30)]
+        let members = group(["Ashby", "Nelson", "Cole"])
+
+        let readSignificant = review(members, players, dynamics: levels, arrows: [arrow("Ashby", "Nelson", .significant)])
+        #expect(readSignificant.warnings == [.harmfulArrow(from: id("Ashby"), to: id("Nelson"), strength: .significant,
+                                                            isRead: true, attribute: .ambition, fromValue: 6, toValue: 13)])
+        // The pull only ever goes upward; the downward pull is the warning.
+        #expect(readSignificant.arrows.map(\.pulls) == [[Pull(attribute: .professionalism, value: 8, towards: 10)]])
+
+        let guessedAverage = review(members, players, dynamics: levels)
+        #expect(guessedAverage.warnings == [.harmfulArrow(from: id("Ashby"), to: id("Nelson"), strength: .average,
+                                                           isRead: false, attribute: .ambition, fromValue: 6, toValue: 13)])
+
+        // Read as None: no influence, so no harm, though Cole's Ambition 10 is also above Ashby's 6.
+        let readNone = review(members, players, dynamics: levels, arrows: [arrow("Ashby", "Nelson", .none)])
+        #expect(readNone.warnings.isEmpty)
+        #expect(readNone.arrows.isEmpty)
+
+        // Judged by worth: Ambition 11 against 13 is past the ceiling on both sides.
+        let pastTheCeiling = review(members, [player("Ashby", 30, [.ambition: 11])] + players.dropFirst(),
+                                    dynamics: levels, arrows: [arrow("Ashby", "Nelson", .significant)])
+        #expect(pastTheCeiling.warnings.isEmpty)
+
+        // A member with no value for a counted attribute has his arrows, but no pulls and no harm judged.
+        var noPressure = players[1]
+        noPressure.attributes[.pressure] = nil
+        let missing = review(members, [players[0], noPressure, players[2]], dynamics: levels,
+                             arrows: [arrow("Ashby", "Nelson", .significant)])
+        #expect(missing.arrows == [GroupArrow(arrow: read("Ashby", "Nelson", .significant), fromName: "Ashby",
+                                              toName: "Nelson", pulls: [])])
+        #expect(missing.warnings.isEmpty)
     }
 
-    // MARK: Pulls and warnings
+    @Test func noInfluenceAtOnceWhenAllSixAreReadAsNone() throws {
+        let names = ["Lead", "Abel", "Brook"]
+        let same = ["Lead": [reading(0), reading(98)], "Abel": [reading(0), reading(98)], "Brook": [reading(0), reading(98)]]
+        let none = review(group(names), trio, readings: same, arrows: six(names), asOf: 300)
+        #expect(none.hasNoInfluence)
+        #expect(none.arrows.isEmpty)
+        #expect(none.unreadArrows == 0)
+        #expect(none.warnings.isEmpty)
+        #expect(!none.hasStoppedWorking)
+        #expect(!review(group(names), trio, readings: ["Abel": [reading(0), reading(400)]], arrows: six(names), asOf: 400)
+            .hasStoppedWorking)
+        #expect(review(group(names), trio, arrows: six(names)).hasNoInfluence)
 
-    @Test func pullsShowBothDirections() throws {
-        let players = [player("Lead", 34, [.professionalism: 6, .pressure: 14]),
-                       player("Abel", 18, [.professionalism: 12, .pressure: 12]),
-                       player("Brook", 18, [.professionalism: 4])]
-        let result = review(group(["Lead", "Abel", "Brook"]), players)
-        #expect(try member(result, "Abel").pulls == [Pull(attribute: .professionalism, value: 12, towards: 6)])
-        // Brook's Pressure 10 against 14 is past the ceiling on both sides: no pull.
-        #expect(try member(result, "Brook").pulls == [Pull(attribute: .professionalism, value: 4, towards: 6)])
-        #expect(try member(result, "Lead").pulls == [])
-        #expect(result.warnings == [.mayBeDraggedDown(above: id("Lead"), below: id("Abel"), attribute: .professionalism,
-                                                      aboveValue: 6, belowValue: 12)])
+        // Five read: the sixth is a guess, though it is guessed None.
+        let five = six(names).filter { !($0.from == id("Abel") && $0.to == id("Brook")) }
+        let fiveRead = review(group(names), trio, arrows: five)
+        #expect(!fiveRead.hasNoInfluence)
+        #expect(fiveRead.unreadArrows == 1)
+        #expect(fiveRead.arrows.isEmpty)
 
-        // Between two members as well as from the lead: at 23 Elder stands above Young and has less Ambition.
-        let between = review(group(["Lead", "Elder", "Young"]),
-                             [player("Lead", 34), player("Elder", 23, [.ambition: 6]), player("Young", 18, [.ambition: 9])])
-        #expect(between.warnings == [.mayBeDraggedDown(above: id("Elder"), below: id("Young"), attribute: .ambition,
-                                                       aboveValue: 6, belowValue: 9)])
-        let fourYears = review(group(["Lead", "Elder", "Young"]),
-                               [player("Lead", 34), player("Elder", 22, [.ambition: 6]), player("Young", 18, [.ambition: 9])])
-        #expect(fourYears.warnings.isEmpty)
+        // One of the six read Light.
+        let oneLight = five + [arrow("Abel", "Brook", .light)]
+        #expect(!review(group(names), trio, arrows: oneLight).hasNoInfluence)
+
+        // One member out on loan: the two left were read None both ways, but not six arrows.
+        let away = [player("Lead", 34), player("Abel", 18), player("Brook", 18, loanedTo: "Banbury United")]
+        let onLoan = review(group(names), away, arrows: six(names))
+        #expect(!onLoan.hasNoInfluence)
+        #expect(onLoan.unreadArrows == 0)
+
+        // Four members, every arrow read None: not "all six".
+        let four = names + ["Cole"]
+        #expect(!review(group(four), trio + [player("Cole", 18)], arrows: six(four)).hasNoInfluence)
+
+        // Doing harm and no influence can be true together; stopped is never true with either.
+        let worse = review(group(names), trio, readings: ["Abel": [reading(0), reading(98, [.ambition: 9])]],
+                           arrows: six(names), asOf: 300)
+        #expect(worse.hasNoInfluence)
+        #expect(worse.isDoingHarm)
+        #expect(!worse.hasStoppedWorking)
     }
 
-    @Test func aDifferentSocialGroupIsACaution() throws {
-        let apart = review(group(["Lead", "Abel", "Brook"]), trio,
-                           dynamics: [id("Lead"): PlayerDynamics(socialGroup: .core),
-                                      id("Abel"): PlayerDynamics(socialGroup: .secondary("A")),
-                                      id("Brook"): PlayerDynamics(socialGroup: .core)])
-        #expect(apart.warnings == [.differentSocialGroup(id("Abel"))])
+    @Test func arrowsBothWaysAreBothJudged() throws {
+        let players = [player("Ashby", 25, [.professionalism: 12, .ambition: 6]), player("Bell", 25, [.ambition: 9]),
+                       player("Cole", 18)]
+        let names = ["Ashby", "Bell", "Cole"]
+        let arrows = [arrow("Ashby", "Bell", .light), arrow("Bell", "Ashby", .light)]
+        let result = review(group(names), players, dynamics: [:], arrows: arrows)
+        #expect(result.warnings == [
+            .harmfulArrow(from: id("Ashby"), to: id("Bell"), strength: .light, isRead: true, attribute: .ambition,
+                          fromValue: 6, toValue: 9),
+            .harmfulArrow(from: id("Bell"), to: id("Ashby"), strength: .light, isRead: true,
+                          attribute: .professionalism, fromValue: 10, toValue: 12)])
 
-        let leadNotEntered = review(group(["Lead", "Abel", "Brook"]), trio,
-                                    dynamics: [id("Abel"): PlayerDynamics(socialGroup: .secondary("A"))])
-        #expect(leadNotEntered.warnings.isEmpty)
-        let memberNotEntered = review(group(["Lead", "Abel", "Brook"]), trio,
-                                      dynamics: [id("Lead"): PlayerDynamics(socialGroup: .core)])
-        #expect(memberNotEntered.warnings.isEmpty)
+        // Both are watched; Cole, with nothing into him, is not.
+        func stopped(changed: String?) -> Bool {
+            var readings = Dictionary(uniqueKeysWithValues: names.map { ($0, [reading(0), reading(98)]) })
+            if let changed {
+                readings[changed] = [reading(0), reading(70, [.professionalism: 11]), reading(98, [.professionalism: 11])]
+            }
+            return review(group(names), players, dynamics: [:], readings: readings, arrows: arrows, asOf: 300)
+                .hasStoppedWorking
+        }
+        #expect(stopped(changed: nil))
+        #expect(!stopped(changed: "Ashby"))
+        #expect(!stopped(changed: "Bell"))
+        #expect(stopped(changed: "Cole"))
     }
 
     // MARK: What changed
@@ -211,10 +306,12 @@ import Testing
 
     @Test func stoppedAfterThirteenWeeksWithNoChange() throws {
         func stopped(_ readings: [String: [PersonalityReading]], joined: [String: Int] = [:],
-                     players: [Player]? = nil) -> Bool {
+                     players: [Player]? = nil, dynamics: [PlayerID: PlayerDynamics]? = nil) -> Bool {
             let names = (players ?? trio).map(\.name)
-            return review(group(names, joined: joined), players ?? trio, readings: readings, asOf: 300).hasStoppedWorking
+            return review(group(names, joined: joined), players ?? trio, dynamics: dynamics, readings: readings,
+                          asOf: 300).hasStoppedWorking
         }
+        // Lead is guessed Average into Abel and Brook: they are watched.
         let same91 = ["Abel": [reading(0), reading(91)], "Brook": [reading(0), reading(91)]]
         #expect(stopped(same91))
         #expect(!stopped(["Abel": [reading(0), reading(90)], "Brook": [reading(0), reading(90)]]))
@@ -236,19 +333,51 @@ import Testing
         // So does a group started later than its readings.
         #expect(!review(group(["Lead", "Abel", "Brook"], startedOn: 10), trio, readings: same91).hasStoppedWorking)
 
-        // The lead's own change does not restart it.
+        // Lead's own change does not restart it: no arrow above None points into him.
         let leadChanged = same91.merging(["Lead": [reading(0), reading(50, [.professionalism: 11]),
                                                    reading(91, [.professionalism: 11])]]) { _, new in new }
         #expect(stopped(leadChanged))
 
-        // With nobody leading, any member's change does.
-        let level = [player("Lead", 34), player("Second", 33), player("Abel", 18)]
-        let levelSame = ["Lead": [reading(0), reading(91)], "Second": [reading(0), reading(91)],
-                         "Abel": [reading(0), reading(91)]]
-        #expect(stopped(levelSame, players: level))
-        let leadOfLevelChanged = levelSame.merging(["Lead": [reading(0), reading(50, [.professionalism: 11]),
-                                                             reading(91, [.professionalism: 11])]]) { _, new in new }
-        #expect(!stopped(leadOfLevelChanged, players: level))
+        // A second senior with an arrow into him is watched as well: Lead is guessed Average into Second, 20.
+        let two = [player("Lead", 34), player("Second", 20), player("Abel", 18)]
+        let twoLevels = [id("Lead"): PlayerDynamics(standing: .teamLeader),
+                         id("Second"): PlayerDynamics(standing: .influential)]
+        let twoSame = ["Lead": [reading(0), reading(91)], "Second": [reading(0), reading(91)],
+                       "Abel": [reading(0), reading(91)]]
+        #expect(stopped(twoSame, players: two, dynamics: twoLevels))
+        let secondChanged = twoSame.merging(["Second": [reading(0), reading(50, [.professionalism: 11]),
+                                                        reading(91, [.professionalism: 11])]]) { _, new in new }
+        #expect(!stopped(secondChanged, players: two, dynamics: twoLevels))
+    }
+
+    @Test func stoppedWatchesTheMembersWithAnArrowIntoThem() throws {
+        // Lead is guessed Average into Abel; nothing is above None into Lead or into Old, who is 30.
+        let players = [player("Lead", 34), player("Abel", 18), player("Old", 30)]
+        let names = ["Lead", "Abel", "Old"]
+        let still = Dictionary(uniqueKeysWithValues: names.map { ($0, [reading(0), reading(98)]) })
+        func changed(_ name: String) -> [String: [PersonalityReading]] {
+            still.merging([name: [reading(0), reading(70, [.professionalism: 11]),
+                                  reading(98, [.professionalism: 11])]]) { _, new in new }
+        }
+        func result(_ readings: [String: [PersonalityReading]], dynamics: [PlayerID: PlayerDynamics]? = nil,
+                    arrows: [ArrowReading] = []) -> GroupReview {
+            review(group(names), players, dynamics: dynamics, readings: readings, arrows: arrows, asOf: 300)
+        }
+        #expect(result(still).hasStoppedWorking)
+        #expect(!result(changed("Abel")).hasStoppedWorking)
+        #expect(result(changed("Lead")).hasStoppedWorking)
+        #expect(result(changed("Old")).hasStoppedWorking)
+
+        // With no arrow above None in the group, and not all six read, it is never called stopped.
+        let nothing = result(still, dynamics: [:])
+        #expect(!nothing.hasStoppedWorking)
+        #expect(!nothing.hasNoInfluence)
+        #expect(nothing.unreadArrows == 6)
+
+        // A read arrow counts as much as a guess: Old is watched once Abel's Light into him is read.
+        let lightIntoOld = [arrow("Abel", "Old", .light)]
+        #expect(result(still, dynamics: [:], arrows: lightIntoOld).hasStoppedWorking)
+        #expect(!result(changed("Old"), dynamics: [:], arrows: lightIntoOld).hasStoppedWorking)
     }
 
     @Test func aGroupDoingHarmIsNotAlsoStopped() throws {
@@ -281,75 +410,122 @@ import Testing
         let names = [id("Gone"): "Gone Away"]
         let stayers = [player("Lead", 34), player("Abel", 18, [.professionalism: 8])]
 
+        let leadIntoAbel = GroupArrow(arrow: guessed("Lead", "Abel", .average), fromName: "Lead", toName: "Abel",
+                                      pulls: [Pull(attribute: .professionalism, value: 8, towards: 10)])
+
         let absent = review(group(["Lead", "Abel", "Gone"]), stayers, readings: gone, names: names)
         #expect(absent.warnings == [.notInSquad(id("Gone"))])
         let left = try member(absent, "Gone")
         #expect(left.name == "Gone Away")
         #expect(left.age == nil)
-        #expect(left.pulls.isEmpty)
-        #expect(!left.isLead)
         #expect(try change(left, .professionalism)
                 == AttributeChange(attribute: .professionalism, start: 8, latest: 9, weeks: 5.0, change: .improved))
-        #expect(absent.lead == id("Lead"))
-        #expect(try member(absent, "Abel").pulls == [Pull(attribute: .professionalism, value: 8, towards: 10)])
+        #expect(absent.arrows == [leadIntoAbel])
 
         // Through the report too: a member with no attributes at all is no error.
-        let report = try Mentoring.report(request(stayers, groups: [group(["Lead", "Abel", "Gone"])], readings: gone,
-                                                  names: names), parameters: q)
+        let report = try Mentoring.report(request(stayers, groups: [group(["Lead", "Abel", "Gone"])], dynamics: leader,
+                                                  readings: gone, names: names), parameters: q)
         #expect(report.groups.first?.warnings == [.notInSquad(id("Gone"))])
+        #expect(report.groups.first?.arrows == [leadIntoAbel])
 
         let moved = review(group(["Lead", "Abel", "Gone"]), stayers + [player("Gone", 19, squad: .u21)],
                            readings: gone, names: names)
         #expect(moved.warnings == [.notInSquad(id("Gone"))])
         #expect(try member(moved, "Gone").age == 19)
         #expect(try member(moved, "Gone").name == "Gone")
-        #expect(try member(moved, "Gone").pulls.isEmpty)
+        #expect(moved.arrows == [leadIntoAbel])
 
-        // Away on loan he is not read: his Professionalism 15 against the lead's 10 is no dragged-down warning.
+        // Away on loan he is not read: his Professionalism 15 against Lead's 10 is no harmful arrow.
         let onLoan = review(group(["Lead", "Abel", "Gone"]),
                             stayers + [player("Gone", 19, [.professionalism: 15], loanedTo: "Banbury United")])
         #expect(onLoan.warnings == [.outOnLoan(id("Gone"), club: "Banbury United")])
+        #expect(onLoan.arrows == [leadIntoAbel])
         let backFromLoan = review(group(["Lead", "Abel", "Gone"]), stayers + [player("Gone", 19, [.professionalism: 15])])
-        #expect(backFromLoan.warnings == [.mayBeDraggedDown(above: id("Lead"), below: id("Gone"),
-                                                            attribute: .professionalism, aboveValue: 10, belowValue: 15)])
-        #expect(try member(onLoan, "Gone").pulls.isEmpty)
+        #expect(backFromLoan.warnings == [.harmfulArrow(from: id("Lead"), to: id("Gone"), strength: .average,
+                                                        isRead: false, attribute: .professionalism, fromValue: 10,
+                                                        toValue: 15)])
 
         let leaving = review(group(["Lead", "Abel", "Gone"]), stayers + [player("Gone", 19)], leaving: [id("Gone")])
         #expect(leaving.warnings == [.advisedToLeave(id("Gone"))])
-        // Still in the squad, so still read: he is pulled towards the lead's Professionalism.
+        // Still in the squad, so still read: Lead's arrow into him pulls him towards Professionalism 10.
         let leavingWithGap = review(group(["Lead", "Abel", "Gone"]),
                                     stayers + [player("Gone", 19, [.professionalism: 7])], leaving: [id("Gone")])
-        #expect(try member(leavingWithGap, "Gone").pulls == [Pull(attribute: .professionalism, value: 7, towards: 10)])
+        #expect(leavingWithGap.arrows.first { $0.arrow.to == id("Gone") }?.pulls
+                == [Pull(attribute: .professionalism, value: 7, towards: 10)])
 
-        // When the lead goes, the other two are level: nobody leads.
+        // When Lead goes, the other two are at Others: no arrow is above None.
         let leadGone = review(group(["Lead", "Abel", "Brook"]), [player("Abel", 18), player("Brook", 18)],
                               names: [id("Lead"): "Lead"])
-        #expect(leadGone.lead == nil)
-        #expect(leadGone.warnings == [.nobodyLeads, .notInSquad(id("Lead"))])
+        #expect(leadGone.warnings == [.notInSquad(id("Lead"))])
+        #expect(leadGone.arrows.isEmpty)
         #expect(try member(leadGone, "Lead").name == "Lead")
     }
 
-    @Test func aMemberWithAMissingValueHasNoPulls() throws {
-        var noPressure = player("Abel", 18, [.professionalism: 8])
-        noPressure.attributes[.pressure] = nil
-        let result = review(group(["Lead", "Abel", "Brook"]), [player("Lead", 34), noPressure, player("Brook", 18)])
-        #expect(try member(result, "Abel").pulls.isEmpty)
-        #expect(try member(result, "Brook").pulls.isEmpty)
-        #expect(result.lead == id("Lead"))
+    @Test func aMemberWhoHasGoneHasNoArrows() throws {
+        let stayers = [player("Lead", 34), player("Abel", 18)]
+        // Readings into and out of Gone, which are not used while he is away.
+        let arrows = [arrow("Lead", "Gone", .significant), arrow("Gone", "Abel", .light), arrow("Gone", "Lead", .light)]
+        let leadIntoAbel = [guessed("Lead", "Abel", .average)]
+        func check(_ players: [Player], _ warning: GroupWarning) throws {
+            let result = review(group(["Lead", "Abel", "Gone"]), players, arrows: arrows,
+                                names: [id("Gone"): "Gone Away"])
+            #expect(result.arrows.map(\.arrow) == leadIntoAbel)
+            #expect(result.unreadArrows == 2)
+            #expect(!result.hasNoInfluence)
+            #expect(result.warnings == [warning])
+            let report = try Mentoring.report(request(players, groups: [group(["Lead", "Abel", "Gone"])],
+                                                      dynamics: leader, arrows: arrows), parameters: q)
+            #expect(report.groups.first?.arrows.map(\.arrow) == leadIntoAbel)
+        }
+        try check(stayers + [player("Gone", 19, loanedTo: "Banbury United")],
+                  .outOnLoan(id("Gone"), club: "Banbury United"))
+        try check(stayers + [player("Gone", 19, squad: .u21)], .notInSquad(id("Gone")))
+        try check(stayers, .notInSquad(id("Gone")))
+
+        // The pair left, once read, is no longer counted as unread.
+        let readPair = review(group(["Lead", "Abel", "Gone"]), stayers,
+                              arrows: arrows + [arrow("Lead", "Abel", .light)])
+        #expect(readPair.unreadArrows == 1)
+
+        // A reading from him while he is away counts for nothing: Abel takes nothing from three Influential players,
+        // so Lead is guessed None into him, and Gone's Light does not undo it.
+        let seniors = [player("Sam", 30), player("Tom", 30), player("Uri", 30)]
+        let levels = leader.merging(["Sam", "Tom", "Uri"].map { (id($0), PlayerDynamics(standing: .influential)) }) {
+            a, _ in a
+        }
+        let takesNothing = ["Sam", "Tom", "Uri"].map { arrow($0, "Abel", .none) }
+        for players in [stayers + seniors, stayers + seniors + [player("Gone", 19, loanedTo: "Banbury United")],
+                        stayers + seniors + [player("Gone", 19, squad: .u21)]] {
+            let result = review(group(["Lead", "Abel", "Gone"]), players, dynamics: levels,
+                                arrows: takesNothing + [arrow("Gone", "Abel", .light)])
+            #expect(result.arrows.isEmpty)
+        }
+
+        // Back in the squad, his arrows are read and guessed again.
+        let back = review(group(["Lead", "Abel", "Gone"]), stayers + [player("Gone", 19)], arrows: arrows)
+        #expect(back.unreadArrows == 3)
+        #expect(back.arrows.map(\.arrow) == [read("Lead", "Gone", .significant), guessed("Lead", "Abel", .average),
+                                             read("Gone", "Abel", .light), read("Gone", "Lead", .light)])
     }
 
     @Test func everyWarningInOrder() throws {
-        let players = [player("Lead", 34, [.ambition: 6]), player("Abel", 18, [.ambition: 9]),
+        let players = [player("Lead", 34, [.ambition: 6, .pressure: 4]),
+                       player("Abel", 18, [.ambition: 9, .pressure: 5, .determination: 8]),
                        player("Brook", 18, [.ambition: 9]), player("Cole", 19, loanedTo: "Banbury United")]
         let result = review(group(["Lead", "Abel", "Brook", "Cole", "Dunn"]), players,
-                            dynamics: [id("Lead"): PlayerDynamics(socialGroup: .core),
-                                       id("Abel"): PlayerDynamics(socialGroup: .others),
-                                       id("Brook"): PlayerDynamics(socialGroup: .secondary("B"))],
-                            leaving: [id("Brook"), id("Abel")])
+                            arrows: [arrow("Abel", "Brook", .light)], leaving: [id("Brook"), id("Abel")])
+        func harmful(_ from: String, _ to: String, _ strength: ArrowStrength, read: Bool, _ attribute: Attribute,
+                     _ fromValue: Int, _ toValue: Int) -> GroupWarning {
+            .harmfulArrow(from: id(from), to: id(to), strength: strength, isRead: read, attribute: attribute,
+                          fromValue: fromValue, toValue: toValue)
+        }
         #expect(result.warnings == [
-            .mayBeDraggedDown(above: id("Lead"), below: id("Abel"), attribute: .ambition, aboveValue: 6, belowValue: 9),
-            .mayBeDraggedDown(above: id("Lead"), below: id("Brook"), attribute: .ambition, aboveValue: 6, belowValue: 9),
-            .differentSocialGroup(id("Abel")), .differentSocialGroup(id("Brook")),
+            harmful("Abel", "Brook", .light, read: true, .pressure, 5, 10),
+            harmful("Abel", "Brook", .light, read: true, .determination, 8, 10),
+            harmful("Lead", "Abel", .average, read: false, .pressure, 4, 5),
+            harmful("Lead", "Abel", .average, read: false, .ambition, 6, 9),
+            harmful("Lead", "Brook", .average, read: false, .pressure, 4, 10),
+            harmful("Lead", "Brook", .average, read: false, .ambition, 6, 9),
             .notInSquad(id("Dunn")), .outOnLoan(id("Cole"), club: "Banbury United"),
             .advisedToLeave(id("Abel")), .advisedToLeave(id("Brook"))])
     }
@@ -376,7 +552,7 @@ import Testing
         let readings = ["Gone": [reading(0, [.ambition: 9]), reading(35, [.ambition: 8])]]
         let result = review(group(["Lead", "Abel", "Gone", "Brook"], joined: ["Brook": 40], left: ["Gone": 40]), trio,
                             readings: readings)
-        #expect(result.members.map(\.player) == [id("Lead"), id("Abel"), id("Brook")])
+        #expect(result.members.map(\.player) == [id("Abel"), id("Brook"), id("Lead")])
         #expect(result.warnings.isEmpty)
         #expect(!result.isDoingHarm)
     }
@@ -391,17 +567,27 @@ import Testing
                         "Lead": [reading(0), reading(84)]]
         let dynamics = [id("Lead"): PlayerDynamics(standing: .teamLeader, socialGroup: .core),
                         id("Young"): PlayerDynamics(socialGroup: .secondary("A"))]
+        // Young into Elder read twice on one day, None and Light; Lead into Young read twice, the later counting;
+        // and readings from players who are away or in another squad.
+        let arrows = [arrow("Elder", "Young", .light), arrow("Young", "Elder", .none), arrow("Young", "Elder", .light),
+                      arrow("Lead", "Young", .light), arrow("Lead", "Young", .significant, day: 30),
+                      arrow("Away", "Young", .significant), arrow("Other", "Elder", .average)]
         let recorded = group(["Lead", "Elder", "Young", "Away"], joined: ["Young": 7])
-        let forward = review(recorded, players, dynamics: dynamics, readings: readings, leaving: [id("Elder")])
+        let forward = review(recorded, players, dynamics: dynamics, readings: readings, arrows: arrows,
+                             leaving: [id("Elder")])
         #expect(!forward.warnings.isEmpty)
+        #expect(!forward.arrows.isEmpty)
 
         var reordered = recorded
         reordered.members.reverse()
         let backward = review(reordered, players.reversed(), dynamics: dynamics,
-                              readings: readings.mapValues { $0.reversed() }, leaving: [id("Elder")])
+                              readings: readings.mapValues { $0.reversed() }, arrows: arrows.reversed(),
+                              leaving: [id("Elder")])
         #expect(backward.members == forward.members)
+        #expect(backward.arrows == forward.arrows)
+        #expect(backward.unreadArrows == forward.unreadArrows)
+        #expect(backward.hasNoInfluence == forward.hasNoInfluence)
         #expect(backward.warnings == forward.warnings)
-        #expect(backward.lead == forward.lead)
         #expect(backward.isDoingHarm == forward.isDoingHarm)
         #expect(backward.hasStoppedWorking == forward.hasStoppedWorking)
     }

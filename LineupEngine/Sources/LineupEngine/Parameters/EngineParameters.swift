@@ -635,9 +635,8 @@ public struct EngineParameters: Sendable {
     public var mentoringCeilings: Parameter<[Attribute: Int]>
     /// The guess gives an arrow above None only into a player this age or younger.
     public var mentoringMenteeMaxAge: Parameter<Int>
-    /// A player this many years older than another of the same standing stands above him.
-    public var mentoringSeniorityYears: Parameter<Int>
-    /// A recorded group that has had no personality change in this many weeks is reviewed as not working.
+    /// A recorded group in which no member with an arrow above None into him has changed in this many weeks is
+    /// reviewed as stopped.
     public var mentoringStoppedAfterWeeks: Parameter<Int>
     /// The standings and social groups the owner entered are called stale after this many days.
     public var mentoringDynamicsStaleAfterDays: Parameter<Int>
@@ -967,7 +966,6 @@ public struct EngineParameters: Sendable {
                 23, .fm27Observation,
                 source: "the owner's readings of 14 November 2026: of four players of 24 and over, one took Light from two "
                     + "seniors and the others nothing in eight tries; the line at 23 is this design's"),
-            mentoringSeniorityYears: Parameter(5, .derived, source: "this design's choice"),
             mentoringStoppedAfterWeeks: Parameter(
                 13, .derived, source: "this design's choice, from the research's three months, taken as thirteen weeks"),
             mentoringDynamicsStaleAfterDays: Parameter(28, .derived, source: "this design's choice"),

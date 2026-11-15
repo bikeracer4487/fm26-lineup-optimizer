@@ -95,16 +95,14 @@ extension AdvisorText {
         }
     }
 
-    /// `names` gives each player's name; a player it lacks is shown by his key.
+    /// `names` gives each player's name; a player it lacks is shown by his key. A harmful arrow that is a guess says
+    /// "expected to be" before its strength.
     public static func warning(_ warning: GroupWarning, names: [PlayerID: String]) -> String {
         func who(_ id: PlayerID) -> String { names[id] ?? id.key }
         return switch warning {
-        case .nobodyLeads: "Nobody is clearly leading this group."
-        case .mayBeDraggedDown(let above, let below, let attribute, let aboveValue, let belowValue):
-            "\(who(above)) stands above \(who(below)) and has \(attribute.rawValue) \(aboveValue) against "
-                + "\(belowValue): \(who(below)) may be dragged down."
-        case .differentSocialGroup(let id):
-            "\(who(id)) is in a different social group from the lead: likely a weaker influence."
+        case .harmfulArrow(let from, let to, let strength, let isRead, let attribute, let fromValue, let toValue):
+            "\(who(from))'s influence on \(who(to)) is \(isRead ? "" : "expected to be ")\(name(strength)), and his "
+                + "\(attribute.rawValue) is \(fromValue) against \(toValue)."
         case .notInSquad(let id): "\(who(id)) is no longer in the squad."
         case .outOnLoan(let id, let club): "\(who(id)) is out on loan at \(club)."
         case .advisedToLeave(let id): "\(who(id)) is advised to leave."
@@ -134,19 +132,32 @@ extension AdvisorText {
 
     public static let noReadingYet = "No reading yet: values are read at each import"
 
-    /// What a recorded group is doing, when that is bad: doing harm, or stopped; nil otherwise. A stopped group with
-    /// nobody clearly leading says nobody has changed, since there is no lead to set apart.
+    /// What a recorded group is doing, when that is bad: doing harm, then no influence, then stopped; nil otherwise.
     public static func state(of review: GroupReview, parameters: EngineParameters) -> String? {
         if review.isDoingHarm {
             return "This group is doing harm: a member is worth less than when he joined. Consider regrouping."
         }
+        if review.hasNoInfluence {
+            return "The game shows no influence in this group: all six arrows are None. Consider regrouping."
+        }
         if review.hasStoppedWorking {
             let weeks = parameters.mentoringStoppedAfterWeeks.value
-            let who = review.lead == nil ? "nobody" : "nobody but the lead"
-            return "This group has stopped working: \(who) has changed in \(weeks) weeks. Consider regrouping."
+            return "This group has stopped working: nobody it influences has changed in \(weeks) weeks. "
+                + "Consider regrouping."
         }
         return nil
     }
+
+    /// The prompt to read a recorded group's arrows in the game; nil when none of them is a guess.
+    public static func arrowsToRead(_ review: GroupReview) -> String? {
+        let count = review.unreadArrows
+        guard count > 0 else { return nil }
+        return "Record this group's arrows from the game: "
+            + (count == 1 ? "1 of them is still a guess." : "\(count) of them are still guesses.")
+    }
+
+    /// Beside the social groups in the hierarchy.
+    public static let socialGroupsNotUsed = "Social groups are kept as entered. They do not change the advice."
 
     /// "Hart, Young and Reid are recorded as a group from today. Set it in the game as well."
     public static func recorded(names: [String]) -> String {

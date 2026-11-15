@@ -85,10 +85,17 @@ import Testing
 
     @Test func eachWarningHasItsOwnSentence() {
         func sentence(_ warning: GroupWarning) -> String { AdvisorText.warning(warning, names: names) }
-        #expect(sentence(.mayBeDraggedDown(above: hart, below: young, attribute: .professionalism, aboveValue: 6, belowValue: 12))
-                == "Hart stands above Young and has Professionalism 6 against 12: Young may be dragged down.")
-        #expect(sentence(.nobodyLeads) == "Nobody is clearly leading this group.")
-        #expect(sentence(.differentSocialGroup(reid)) == "Reid is in a different social group from the lead: likely a weaker influence.")
+        let ashby = PlayerID(key: "ashby"), nelson = PlayerID(key: "nelson")
+        let both: [PlayerID: String] = [ashby: "Ashby", nelson: "Nelson"]
+        #expect(AdvisorText.warning(.harmfulArrow(from: ashby, to: nelson, strength: .significant, isRead: true,
+                                                  attribute: .ambition, fromValue: 6, toValue: 13), names: both)
+                == "Ashby's influence on Nelson is Significant, and his Ambition is 6 against 13.")
+        #expect(AdvisorText.warning(.harmfulArrow(from: ashby, to: nelson, strength: .average, isRead: false,
+                                                  attribute: .ambition, fromValue: 6, toValue: 13), names: both)
+                == "Ashby's influence on Nelson is expected to be Average, and his Ambition is 6 against 13.")
+        #expect(sentence(.harmfulArrow(from: hart, to: reid, strength: .light, isRead: true, attribute: .professionalism,
+                                       fromValue: 9, toValue: 14))
+                == "Hart's influence on Reid is Light, and his Professionalism is 9 against 14.")
         #expect(sentence(.notInSquad(young)) == "Young is no longer in the squad.")
         #expect(sentence(.outOnLoan(young, club: "Luton")) == "Young is out on loan at Luton.")
         #expect(sentence(.advisedToLeave(hart)) == "Hart is advised to leave.")
@@ -112,23 +119,40 @@ import Testing
         #expect(AdvisorText.change(change(.pressure, nil, nil, weeks: 0, .noReading)) == nil)
     }
 
-    func review(harm: Bool, stopped: Bool, lead: PlayerID?) -> GroupReview {
+    func review(harm: Bool = false, noInfluence: Bool = false, stopped: Bool = false, unread: Int = 0) -> GroupReview {
         let group = MentoringGroup(id: UUID(), squad: .firstTeam, startedOn: Day(year: 2026, month: 9, day: 1)!, members: [])
-        return GroupReview(group: group, lead: lead, members: [], warnings: [], isDoingHarm: harm,
-                           hasStoppedWorking: stopped, basis: .derived)
+        return GroupReview(group: group, members: [], arrows: [], unreadArrows: unread, hasNoInfluence: noInfluence,
+                           warnings: [], isDoingHarm: harm, hasStoppedWorking: stopped, basis: .derived)
     }
 
     @Test func aGroupDoingHarmOrStoppedSaysSoAndOtherwiseNothing() {
-        #expect(AdvisorText.state(of: review(harm: true, stopped: false, lead: hart), parameters: parameters)
-                == "This group is doing harm: a member is worth less than when he joined. Consider regrouping.")
-        #expect(AdvisorText.state(of: review(harm: true, stopped: false, lead: nil), parameters: parameters)
-                == "This group is doing harm: a member is worth less than when he joined. Consider regrouping.")
-        #expect(AdvisorText.state(of: review(harm: false, stopped: true, lead: hart), parameters: parameters)
-                == "This group has stopped working: nobody but the lead has changed in 13 weeks. Consider regrouping.")
-        #expect(AdvisorText.state(of: review(harm: false, stopped: true, lead: nil), parameters: parameters)
-                == "This group has stopped working: nobody has changed in 13 weeks. Consider regrouping.")
-        #expect(AdvisorText.state(of: review(harm: false, stopped: false, lead: hart), parameters: parameters) == nil)
-        #expect(AdvisorText.state(of: review(harm: false, stopped: false, lead: nil), parameters: parameters) == nil)
+        let harm = "This group is doing harm: a member is worth less than when he joined. Consider regrouping."
+        let none = "The game shows no influence in this group: all six arrows are None. Consider regrouping."
+        #expect(AdvisorText.state(of: review(harm: true), parameters: parameters) == harm)
+        // Doing harm comes first: a group can be both.
+        #expect(AdvisorText.state(of: review(harm: true, noInfluence: true), parameters: parameters) == harm)
+        #expect(AdvisorText.state(of: review(noInfluence: true), parameters: parameters) == none)
+        #expect(AdvisorText.state(of: review(stopped: true), parameters: parameters)
+                == "This group has stopped working: nobody it influences has changed in 13 weeks. Consider regrouping.")
+        var eight = parameters
+        eight.mentoringStoppedAfterWeeks = Parameter(8, .derived, source: "test")
+        #expect(AdvisorText.state(of: review(stopped: true), parameters: eight)
+                == "This group has stopped working: nobody it influences has changed in 8 weeks. Consider regrouping.")
+        #expect(AdvisorText.state(of: review(), parameters: parameters) == nil)
+        #expect(AdvisorText.state(of: review(unread: 4), parameters: parameters) == nil)
+    }
+
+    @Test func arrowsStillToReadAreCounted() {
+        #expect(AdvisorText.arrowsToRead(review(unread: 0)) == nil)
+        #expect(AdvisorText.arrowsToRead(review(unread: 1))
+                == "Record this group's arrows from the game: 1 of them is still a guess.")
+        #expect(AdvisorText.arrowsToRead(review(unread: 4))
+                == "Record this group's arrows from the game: 4 of them are still guesses.")
+        #expect(AdvisorText.arrowsToRead(review(noInfluence: true)) == nil)
+    }
+
+    @Test func socialGroupsAreNotUsed() {
+        #expect(AdvisorText.socialGroupsNotUsed == "Social groups are kept as entered. They do not change the advice.")
     }
 
     @Test func recordingAGroupSaysToSetItInTheGame() {

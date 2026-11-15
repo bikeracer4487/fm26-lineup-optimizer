@@ -134,21 +134,6 @@ public enum Mentoring {
         return weight * min(value, ceiling)
     }
 
-    /// Nil when either has no group entered; false when they differ or either is in `.others`.
-    public static func sameSocialGroup(_ a: SocialGroup?, _ b: SocialGroup?) -> Bool? {
-        guard let a, let b else { return nil }
-        if a == .others || b == .others { return false }
-        return a == b
-    }
-
-    /// A higher standing, or the same standing and at least `mentoringSeniorityYears` older.
-    /// A lower standing never stands above, whatever the age.
-    public static func standsAbove(_ a: (standing: Standing, age: Int), _ b: (standing: Standing, age: Int),
-                                   parameters: EngineParameters) -> Bool {
-        if a.standing != b.standing { return a.standing > b.standing }
-        return a.age - b.age >= parameters.mentoringSeniorityYears.value
-    }
-
     /// Problems in the mentoring parameters, in plain words; empty when they can be used.
     public static func problems(in parameters: EngineParameters) -> [String] {
         var found: [String] = []
@@ -167,7 +152,6 @@ public enum Mentoring {
         }
         let positives: [(String, Int)] = [
             ("mentoringMenteeMaxAge", parameters.mentoringMenteeMaxAge.value),
-            ("mentoringSeniorityYears", parameters.mentoringSeniorityYears.value),
             ("mentoringStoppedAfterWeeks", parameters.mentoringStoppedAfterWeeks.value),
             ("mentoringDynamicsStaleAfterDays", parameters.mentoringDynamicsStaleAfterDays.value),
             ("mentoringTakesNothingAfter", parameters.mentoringTakesNothingAfter.value)]

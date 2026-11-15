@@ -24,30 +24,6 @@ import Testing
         #expect(Mentoring.counted(off) == [.professionalism, .pressure, .determination])
     }
 
-    @Test func aHigherStandingStandsAboveWhateverTheAge() {
-        #expect(Mentoring.standsAbove((standing: .influential, age: 18), (standing: .others, age: 35), parameters: q))
-    }
-
-    @Test func theSameStandingNeedsFiveYears() {
-        #expect(Mentoring.standsAbove((standing: .influential, age: 30), (standing: .influential, age: 25), parameters: q))
-        #expect(!Mentoring.standsAbove((standing: .influential, age: 29), (standing: .influential, age: 25), parameters: q))
-    }
-
-    @Test func aLowerStandingNeverStandsAbove() {
-        #expect(!Mentoring.standsAbove((standing: .others, age: 35), (standing: .influential, age: 18), parameters: q))
-    }
-
-    @Test func socialGroups() {
-        #expect(Mentoring.sameSocialGroup(.core, .core) == true)
-        #expect(Mentoring.sameSocialGroup(.secondary("A"), .secondary("A")) == true)
-        #expect(Mentoring.sameSocialGroup(.secondary("A"), .secondary("B")) == false)
-        #expect(Mentoring.sameSocialGroup(.core, .secondary("A")) == false)
-        #expect(Mentoring.sameSocialGroup(.others, .others) == false)
-        #expect(Mentoring.sameSocialGroup(nil, .core) == nil)
-        #expect(Mentoring.sameSocialGroup(.core, nil) == nil)
-        #expect(Mentoring.sameSocialGroup(nil, nil) == nil)
-    }
-
     @Test func socialGroupCodesAsOneString() throws {
         let decoder = JSONDecoder(), encoder = JSONEncoder()
         for group in [SocialGroup.core, .others, .secondary("A")] {

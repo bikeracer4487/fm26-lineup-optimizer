@@ -20,21 +20,14 @@ public struct MemberReview: Equatable, Sendable {
     public let name: String
     /// Nil when he is no longer imported.
     public let age: Int?
-    public let isLead: Bool
-    /// Against the lead, in `Mentoring.counted` order, either direction; empty for the lead, with nobody leading, and
-    /// for a member not present or without a value for every counted attribute.
-    public let pulls: [Pull]
     /// One for each counted attribute, in `Mentoring.counted` order, from his readings whether or not he is present.
     public let changes: [AttributeChange]
 }
 
 public enum GroupWarning: Equatable, Sendable {
-    /// No present member stands above every other.
-    case nobodyLeads
-    /// `above` stands above `below` and is worth less in this counted attribute.
-    case mayBeDraggedDown(above: PlayerID, below: PlayerID, attribute: Attribute, aboveValue: Int, belowValue: Int)
-    /// Known to be in a different social group from the lead's, or either is in `.others`.
-    case differentSocialGroup(PlayerID)
+    /// An arrow above None whose source is worth less than its target in this counted attribute.
+    case harmfulArrow(from: PlayerID, to: PlayerID, strength: ArrowStrength, isRead: Bool,
+                      attribute: Attribute, fromValue: Int, toValue: Int)
     /// Left, or moved to another squad.
     case notInSquad(PlayerID)
     case outOnLoan(PlayerID, club: String)
@@ -44,27 +37,35 @@ public enum GroupWarning: Equatable, Sendable {
 public struct GroupReview: Identifiable, Equatable, Sendable {
     public var id: UUID { group.id }
     public let group: MentoringGroup
-    public let lead: PlayerID?
-    /// The current members: the lead first, then by player key.
+    /// The current members, by player key.
     public let members: [MemberReview]
-    /// In the order of `GroupWarning`'s cases; within a case by player key (for `mayBeDraggedDown`, by the key of the
-    /// one above, then of the one below, then in `Mentoring.counted` order).
+    /// The arrows above None between present members: strongest first, then by the source's key, then by the target's.
+    public let arrows: [GroupArrow]
+    /// Of the arrows between present members, None included, how many are guesses.
+    public let unreadArrows: Int
+    /// The group's three current members are all present, and all six arrows between them were read as None.
+    public let hasNoInfluence: Bool
+    /// In the order of `GroupWarning`'s cases. `harmfulArrow` by the source's key, then the target's, then in
+    /// `Mentoring.counted` order; the others by player key.
     public let warnings: [GroupWarning]
-    /// A member, the lead included, is worth less in a counted attribute at his latest reading than at his start.
+    /// A current member is worth less in a counted attribute at his latest reading than at his start.
     public let isDoingHarm: Bool
-    /// No change in worth among the members other than the lead for `mentoringStoppedAfterWeeks`, up to the latest
-    /// reading; never when the group is doing harm.
+    /// No change in worth for `mentoringStoppedAfterWeeks`, up to the latest reading, among the watched members: the
+    /// present members with an arrow above None into them, read or guessed. Never with nobody watched, and never when
+    /// the group is doing harm or has no influence.
     public let hasStoppedWorking: Bool
     public let basis: Evidence
 }
 
 extension Mentoring {
-    /// Reads one recorded group as the request's players and readings now stand. Only current members are read.
+    /// Reads one recorded group as the request's players, readings and arrows now stand. Only current members are read.
     ///
-    /// A member is present when he is among the request's players in the group's squad and not out on loan. The lead,
-    /// the pulls, the dragged-down warning and the social-group caution are worked out among present members only.
-    /// Never throws for a member who has left or lacks a value: he has no pulls, and his changes come from his readings.
-    /// The name of a member no longer imported is taken from `names`, or failing that his key.
+    /// A member is present when he is among the request's players in the group's squad and not out on loan. The arrows
+    /// are worked out between present members only, from the readings of the group's squad between its players not
+    /// out on loan, and the guess where a pair has none; the harm and the pulls are judged as for a suggestion. Never
+    /// throws for a member who has left or lacks a value: he has arrows only while present, a member without a value
+    /// for every counted attribute has no pulls and no harm judged, and his changes come from his readings. The name
+    /// of a member no longer imported is taken from `names`, or failing that his key.
     static func review(_ group: MentoringGroup, request: MentoringRequest, parameters: EngineParameters) -> GroupReview {
         let counted = Mentoring.counted(parameters)
         let members = group.current
@@ -85,59 +86,55 @@ extension Mentoring {
                 imported?.attributes[attribute].map { (attribute, $0) }
             })
             return Reviewed(member: member, imported: imported, isPresent: isPresent, loanedTo: loanedTo,
-                            standing: request.dynamics[member.player]?.standing ?? .others,
-                            socialGroup: request.dynamics[member.player]?.socialGroup,
                             values: isPresent && values.count == counted.count ? values : nil,
                             readings: (request.readings[member.player] ?? []).sorted { $0.day < $1.day })
         }
 
-        let present = reviewed.filter(\.isPresent)
-        func standsAbove(_ a: Reviewed, _ b: Reviewed) -> Bool {
-            guard let ageA = a.imported?.age, let ageB = b.imported?.age else { return false }
-            return Mentoring.standsAbove((a.standing, ageA), (b.standing, ageB), parameters: parameters)
+        // The squad's players not out on loan, as the suggestions take them: whose levels count towards taking
+        // nothing, and between whom readings are used.
+        var standings: [PlayerID: Standing] = [:]
+        for player in request.players where player.squad == group.squad {
+            if case .loanedOut = LoanStatus.of(player, ownClub: request.ownClub) { continue }
+            standings[player.id] = request.dynamics[player.id]?.standing ?? .others
         }
-        let lead = present.first { candidate in
-            present.allSatisfy { $0.member.player == candidate.member.player || standsAbove(candidate, $0) }
-        }
-        func worth(_ attribute: Attribute, _ value: Int) -> Int {
-            Mentoring.worth(attribute, value, parameters: parameters)
-        }
+        let readings = readingsUsed(request.arrows, in: group.squad, among: Set(standings.keys))
 
-        var memberReviews: [MemberReview] = []
-        var changesByPlayer: [PlayerID: [AttributeChange]] = [:]
-        for person in reviewed {
-            let isLead = person.member.player == lead?.member.player
-            var pulls: [Pull] = []
-            if !isLead, let mine = person.values, let theirs = lead?.values {
-                pulls = counted.filter { worth($0, mine[$0]!) != worth($0, theirs[$0]!) }.map {
-                    Pull(attribute: $0, value: mine[$0]!, towards: theirs[$0]!)
-                }
-            }
-            let changes = Self.changes(of: person, counted: counted, parameters: parameters)
-            changesByPlayer[person.member.player] = changes
-            let review = MemberReview(
-                player: person.member.player,
-                name: person.imported?.name ?? request.names[person.member.player] ?? person.member.player.key,
-                age: person.imported?.age, isLead: isLead, pulls: pulls, changes: changes)
-            if isLead { memberReviews.insert(review, at: 0) } else { memberReviews.append(review) }
+        // Every ordered pair of present members, by the source's key, then the target's.
+        let present = reviewed.filter(\.isPresent)
+        let parties = present.map {
+            Party(id: $0.member.player, standing: standings[$0.member.player] ?? .others, age: $0.imported!.age)
         }
+        var pairs: [(arrow: Arrow, from: Reviewed, to: Reviewed)] = []
+        for (i, source) in present.enumerated() {
+            for (j, target) in present.enumerated() where i != j {
+                pairs.append((Mentoring.arrow(from: parties[i], to: parties[j], in: group.squad, readings: readings,
+                                              standings: standings, parameters: parameters), source, target))
+            }
+        }
+        let influencing = pairs.filter { $0.arrow.strength > .none }
+
+        let arrows = influencing.sorted { a, b in
+            if a.arrow.strength != b.arrow.strength { return a.arrow.strength > b.arrow.strength }
+            return (a.arrow.from.key, a.arrow.to.key) < (b.arrow.from.key, b.arrow.to.key)
+        }.map { pair in
+            var pulls: [Pull] = []
+            if let source = pair.from.values, let target = pair.to.values {
+                pulls = Mentoring.pulls(from: source, to: target, counted: counted, parameters: parameters)
+            }
+            return GroupArrow(arrow: pair.arrow, fromName: pair.from.imported!.name, toName: pair.to.imported!.name,
+                              pulls: pulls)
+        }
+        let hasNoInfluence = members.count == Mentoring.groupSize && present.count == members.count
+            && pairs.allSatisfy { $0.arrow.isRead && $0.arrow.strength == .none }
 
         var warnings: [GroupWarning] = []
-        if lead == nil { warnings.append(.nobodyLeads) }
-        for above in present {
-            for below in present where above.member.player != below.member.player && standsAbove(above, below) {
-                guard let high = above.values, let low = below.values else { continue }
-                for attribute in counted where worth(attribute, high[attribute]!) < worth(attribute, low[attribute]!) {
-                    warnings.append(.mayBeDraggedDown(above: above.member.player, below: below.member.player,
-                                                      attribute: attribute, aboveValue: high[attribute]!,
-                                                      belowValue: low[attribute]!))
-                }
-            }
-        }
-        if let lead {
-            for person in present where person.member.player != lead.member.player
-                && Mentoring.sameSocialGroup(lead.socialGroup, person.socialGroup) == false {
-                warnings.append(.differentSocialGroup(person.member.player))
+        for pair in influencing {
+            guard let source = pair.from.values, let target = pair.to.values else { continue }
+            for attribute in Mentoring.harms(pair.arrow.strength, from: source, to: target, counted: counted,
+                                             parameters: parameters) {
+                warnings.append(.harmfulArrow(from: pair.arrow.from, to: pair.arrow.to, strength: pair.arrow.strength,
+                                              isRead: pair.arrow.isRead, attribute: attribute,
+                                              fromValue: source[attribute]!, toValue: target[attribute]!))
             }
         }
         for person in reviewed where !person.isPresent && person.loanedTo == nil {
@@ -150,16 +147,25 @@ extension Mentoring {
             warnings.append(.advisedToLeave(person.member.player))
         }
 
-        let isDoingHarm = changesByPlayer.values.contains { $0.contains { $0.change == .worse } }
-        let watched = reviewed.filter { $0.member.player != lead?.member.player }
-        let hasStoppedWorking = !isDoingHarm && Self.hasStopped(
+        let memberReviews = reviewed.map { person in
+            MemberReview(
+                player: person.member.player,
+                name: person.imported?.name ?? request.names[person.member.player] ?? person.member.player.key,
+                age: person.imported?.age,
+                changes: Self.changes(of: person, counted: counted, parameters: parameters))
+        }
+        let isDoingHarm = memberReviews.contains { $0.changes.contains { $0.change == .worse } }
+        let targets = Set(influencing.map(\.arrow.to))
+        let watched = reviewed.filter { targets.contains($0.member.player) }
+        let hasStoppedWorking = !isDoingHarm && !hasNoInfluence && !watched.isEmpty && Self.hasStopped(
             group, members: members, watched: watched, counted: counted, parameters: parameters)
 
         return GroupReview(
-            group: group, lead: lead?.member.player, members: memberReviews, warnings: warnings,
-            isDoingHarm: isDoingHarm, hasStoppedWorking: hasStoppedWorking,
+            group: group, members: memberReviews, arrows: arrows, unreadArrows: pairs.filter { !$0.arrow.isRead }.count,
+            hasNoInfluence: hasNoInfluence, warnings: warnings, isDoingHarm: isDoingHarm,
+            hasStoppedWorking: hasStoppedWorking,
             basis: Evidence.weakest([parameters.mentoringWeights.evidence, parameters.mentoringCeilings.evidence,
-                                     parameters.mentoringSeniorityYears.evidence,
+                                     parameters.mentoringStrengthWeights.evidence, parameters.mentoringGuess.evidence,
                                      parameters.mentoringStoppedAfterWeeks.evidence])!)
     }
 
@@ -171,8 +177,6 @@ extension Mentoring {
         let isPresent: Bool
         /// The club he is out on loan to.
         let loanedTo: String?
-        let standing: Standing
-        let socialGroup: SocialGroup?
         /// The counted attributes' values; nil when he is not present or lacks one.
         let values: [Attribute: Int]?
         /// By day.
