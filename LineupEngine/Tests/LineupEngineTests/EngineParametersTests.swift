@@ -584,4 +584,56 @@ import Testing
             $0.developingUpToAge = Parameter(1, .derived, source: "test")
         }.isEmpty)
     }
+
+    @Test func theOutlookParametersAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        let expected: [(String, Evidence, String)] = [
+            ("onCourseBeforeAge", .carriedOverFM26, "player-retention-strategy.md"),
+            ("markedlyLowerShare", .carriedOverFM26, "cover can be about 20% worse than the first choice"),
+            ("markedlyLowerShareYoungest", .derived, "7.1"),
+            ("youngestUpToAge", .derived, "7.1")]
+        for (name, evidence, quoted) in expected {
+            #expect(listed[name]?.evidence == evidence, "\(name)")
+            #expect(listed[name]?.source.contains(quoted) == true, "\(name) source")
+        }
+        let q = EngineParameters.fm27
+        #expect(q.onCourseBeforeAge.value == 24)
+        #expect(q.markedlyLowerShare.value == 0.80)
+        #expect(q.markedlyLowerShareYoungest.value == 0.70)
+        #expect(q.youngestUpToAge.value == 16)
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func outlookParameterProblemsAreReported() {
+        func problems(_ change: (inout EngineParameters) -> Void) -> [String] {
+            var q = EngineParameters.fm27
+            change(&q)
+            return FitnessModel.problems(in: q)
+        }
+        #expect(problems { $0.markedlyLowerShare = Parameter(1.1, .derived, source: "test") }
+            == ["markedlyLowerShare is 1.1, not between 0 and 1"])
+        #expect(problems {
+            $0.markedlyLowerShare = Parameter(-0.1, .derived, source: "test")
+            $0.markedlyLowerShareYoungest = Parameter(-0.2, .derived, source: "test")
+        } == ["markedlyLowerShare is -0.1, not between 0 and 1", "markedlyLowerShareYoungest is -0.2, not between 0 and 1"])
+        #expect(problems { $0.markedlyLowerShareYoungest = Parameter(.nan, .derived, source: "test") }
+            == ["markedlyLowerShareYoungest is nan, not between 0 and 1"])
+        #expect(problems { $0.markedlyLowerShareYoungest = Parameter(0.85, .derived, source: "test") }
+            == ["markedlyLowerShareYoungest (0.85) is above markedlyLowerShare (0.8)"])
+        #expect(problems { $0.onCourseBeforeAge = Parameter(0, .derived, source: "test") }
+            == ["onCourseBeforeAge is 0, not 1 or more"])
+        #expect(problems { $0.youngestUpToAge = Parameter(0, .derived, source: "test") }
+            == ["youngestUpToAge is 0, not 1 or more"])
+        // The edges that are allowed.
+        #expect(problems {
+            $0.markedlyLowerShare = Parameter(1, .derived, source: "test")
+            $0.markedlyLowerShareYoungest = Parameter(1, .derived, source: "test")
+            $0.onCourseBeforeAge = Parameter(1, .derived, source: "test")
+            $0.youngestUpToAge = Parameter(1, .derived, source: "test")
+        }.isEmpty)
+        #expect(problems {
+            $0.markedlyLowerShare = Parameter(0, .derived, source: "test")
+            $0.markedlyLowerShareYoungest = Parameter(0, .derived, source: "test")
+        }.isEmpty)
+    }
 }

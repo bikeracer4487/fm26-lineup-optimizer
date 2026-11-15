@@ -235,6 +235,19 @@ public enum FitnessModel {
         if developing < 1 {
             found.append("developingUpToAge is \(developing), not 1 or more")
         }
+        // A young player's outlook: his reach against these shares of the first choice's rating.
+        let lowerShare = parameters.markedlyLowerShare.value, youngestShare = parameters.markedlyLowerShareYoungest.value
+        for (name, share) in [("markedlyLowerShare", lowerShare), ("markedlyLowerShareYoungest", youngestShare)]
+            where !(share >= 0 && share <= 1) {
+            found.append("\(name) is \(share), not between 0 and 1")
+        }
+        if youngestShare > lowerShare {
+            found.append("markedlyLowerShareYoungest (\(youngestShare)) is above markedlyLowerShare (\(lowerShare))")
+        }
+        for (name, age) in [("onCourseBeforeAge", parameters.onCourseBeforeAge.value),
+                            ("youngestUpToAge", parameters.youngestUpToAge.value)] where age < 1 {
+            found.append("\(name) is \(age), not 1 or more")
+        }
         // Learnability is a weighted sum that should stay within 0 to 1.
         for (name, weight) in [("versatilityWeight", learnability.versatilityWeight), ("ageWeight", learnability.ageWeight),
                                ("professionalismWeight", learnability.professionalismWeight),

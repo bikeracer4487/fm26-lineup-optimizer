@@ -640,6 +640,15 @@ public struct EngineParameters: Sendable {
     public var growthDeterminationAtOne: Parameter<Double>
     /// The Ambition and Determination from which there is no loss of growth.
     public var growthPersonalityFullFrom: Parameter<Int>
+    // The numbers behind a young player's outlook at each slot he can play (`Development.outlooks`).
+    /// A player first ahead of the first choice before this age is on course to pass him.
+    public var onCourseBeforeAge: Parameter<Int>
+    /// Below this share of the first choice's rating, at every slot he can play, a young player's reach is markedly lower.
+    public var markedlyLowerShare: Parameter<Double>
+    /// The same share for a player aged `youngestUpToAge` or under.
+    public var markedlyLowerShareYoungest: Parameter<Double>
+    /// The oldest age that has the youngest's share.
+    public var youngestUpToAge: Parameter<Int>
     /// The numbers behind a fixture's suggested importance.
     public var importanceRules: Parameter<ImportanceSuggestionRules>
     /// What each attribute is worth, per point, when weighing what an arrow gives its target.
@@ -973,6 +982,18 @@ public struct EngineParameters: Sendable {
             growthPersonalityFullFrom: Parameter(
                 10, .carriedOverFM26,
                 source: "docs/Research/fm27-development-matches-vs-training.md finding 10 (Ambition 20 gives 104.9%, Determination 20 gives 101%) and its recommendation 4: no bonus above 10"),
+            onCourseBeforeAge: Parameter(
+                24, .carriedOverFM26,
+                source: "the target age Player Removal already uses (docs/Research/player-retention-strategy.md 3.1: peak age 24)"),
+            markedlyLowerShare: Parameter(
+                0.80, .carriedOverFM26,
+                source: "docs/Research/lineup-depth-strategy.md and docs/Research/player-rotation-guide.md: cover can be about 20% "
+                    + "worse than the first choice, as retrainingMinimumShare"),
+            markedlyLowerShareYoungest: Parameter(
+                0.70, .derived,
+                source: "the young players' development design, 7.1: the estimate adds up the most seasons for the youngest "
+                    + "and is least reliable for them, and a release cannot be undone"),
+            youngestUpToAge: Parameter(16, .derived, source: "the young players' development design, 7.1"),
             importanceRules: Parameter(
                 ImportanceSuggestionRules(
                     leagueBase: 80, cupBase: 60, minorCupBase: 30, friendlyBase: 10, unsetBase: 50,
