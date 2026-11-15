@@ -367,20 +367,34 @@ import Testing
         #expect(notPlaced(ring) == ["a": .nothingToGain, "b": .nothingToGain, "c": .nothingToGain])
     }
 
-    @Test func fewerThanThreeFreePlayers() throws {
+    @Test func fewerThanThreeFreePlayersSaySo() throws {
         let two = try report([senior("Lead"), player("Kid", 18)], dynamics: leader)
         #expect(two.suggestions.isEmpty)
-        #expect(notPlaced(two) == ["kid": .wouldHarm])
-
-        let oneRecorded = try report([senior("Lead"), player("A", 18), player("B", 18)], dynamics: leader,
-                                     groups: [group(["lead", "x", "y"])])
-        #expect(oneRecorded.suggestions.isEmpty)
-        #expect(notPlaced(oneRecorded) == ["a": .influencersTaken, "b": .influencersTaken])
+        #expect(two.notPlaced == [NotPlaced(player: id("Kid"), name: "Kid", age: 18, reason: .tooFewFree)])
+        #expect(two.notPlaced.map(AdvisorText.notPlaced) == ["Kid (18): there are not three players free to make a group with him."])
 
         let oneAway = try report([senior("Lead"), player("A", 18), player("B", 18, loanedTo: "Banbury United")],
                                  dynamics: leader)
         #expect(oneAway.suggestions.isEmpty)
-        #expect(notPlaced(oneAway) == ["a": .wouldHarm])
+        #expect(notPlaced(oneAway) == ["a": .tooFewFree])
+
+        // The third player is in a recorded group: only two are free.
+        let thirdRecorded = try report([senior("Lead"), player("Kid", 18), player("Taken", 18)], dynamics: leader,
+                                       groups: [group(["taken", "x", "y"])])
+        #expect(thirdRecorded.suggestions.isEmpty)
+        #expect(notPlaced(thirdRecorded) == ["kid": .tooFewFree])
+
+        // The only player with a gain to give is in a recorded group: no free player could help them.
+        let leadRecorded = try report([senior("Lead"), player("A", 18), player("B", 18)], dynamics: leader,
+                                      groups: [group(["lead", "x", "y"])])
+        #expect(leadRecorded.suggestions.isEmpty)
+        #expect(notPlaced(leadRecorded) == ["a": .influencersTaken, "b": .influencersTaken])
+
+        // Exactly three free, and the only group of three holds a harmful arrow.
+        let threeHarmful = try report([senior("Lead", 30, [.ambition: 6]), player("A", 18, [.ambition: 9]),
+                                       player("B", 18, [.ambition: 9])], dynamics: leader)
+        #expect(threeHarmful.suggestions.isEmpty)
+        #expect(notPlaced(threeHarmful) == ["a": .wouldHarm, "b": .wouldHarm, "lead": .noInfluence])
     }
 
     @Test func aPlayerAtEveryCeilingAppearsNowhere() throws {

@@ -99,8 +99,11 @@ public enum NotPlacedReason: Equatable, Sendable {
     case noInfluence
     /// No arrow into him above None has anything to give him.
     case nothingToGain
-    /// A player free to be grouped has an arrow into him with something to give, but every group of free players that
-    /// would give it holds a harmful arrow.
+    /// A player free to be grouped has an arrow into him with something to give, but fewer than three players, himself
+    /// included, are free to be grouped at all.
+    case tooFewFree
+    /// A player free to be grouped has an arrow into him with something to give, and groups of three free players can
+    /// be formed with him and such a player, but every one that would give it holds a harmful arrow.
     case wouldHarm
     /// The players who could influence him are in a suggested or recorded group.
     case influencersTaken
@@ -401,6 +404,8 @@ extension Mentoring {
             if !influencing.contains(where: { gains[$0][index] > 0 }) { return .nothingToGain }
             let free = pool.filter { $0 != index }
             if free.contains(where: { gains[$0][index] > 0 }) {
+                // "Free" is the pool, himself included: no group of three can be formed from fewer.
+                if pool.count < Mentoring.groupSize { return .tooFewFree }
                 let helped = free.indices.contains { i in
                     free[(i + 1)...].contains { other in
                         option([index, free[i], other].sorted())?.restsOn.contains { $0.to == index } == true

@@ -76,6 +76,7 @@ import Testing
         #expect(sentence(.takesNothing) == "Dunn (17): he has taken nothing from the players tried with him so far.")
         #expect(sentence(.noInfluence) == "Dunn (17): nobody in this squad is expected to influence him.")
         #expect(sentence(.nothingToGain) == "Dunn (17): nobody who influences him is better where it counts.")
+        #expect(sentence(.tooFewFree) == "Dunn (17): there are not three players free to make a group with him.")
         #expect(sentence(.wouldHarm) == "Dunn (17): every group that would help him would pull a player down.")
         #expect(sentence(.influencersTaken) == "Dunn (17): the players who could influence him are already in a group.")
     }
