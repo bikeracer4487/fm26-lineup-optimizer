@@ -665,11 +665,36 @@ import Testing
         }.isEmpty)
     }
 
+    @Test func theLoanForMatchesParametersAreListedAndTheirProblemsReported() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        #expect(listed["loanForMatchesFromAge"]?.evidence == .carriedOverFM26)
+        #expect(listed["loanForMatchesFromAge"]?.source.contains("docs/Research/fm27-development-matches-vs-training.md") == true)
+        #expect(listed["loanForMatchesFromAge"]?.source.contains("recommendation 1") == true)
+        #expect(listed["loanForMatchesMonthsAbove"]?.evidence == .derived)
+        #expect(listed["loanForMatchesMonthsAbove"]?.source.isEmpty == false)
+        #expect(EngineParameters.fm27.loanForMatchesFromAge.value == 18)
+        #expect(EngineParameters.fm27.loanForMatchesMonthsAbove.value == 12)
+        func problems(_ change: (inout EngineParameters) -> Void) -> [String] {
+            var q = EngineParameters.fm27
+            change(&q)
+            return FitnessModel.problems(in: q)
+        }
+        #expect(problems { $0.loanForMatchesFromAge = Parameter(0, .derived, source: "test") }
+            == ["loanForMatchesFromAge is 0, not 1 or more"])
+        #expect(problems { $0.loanForMatchesMonthsAbove = Parameter(-1, .derived, source: "test") }
+            == ["loanForMatchesMonthsAbove is -1, not 0 or more"])
+        #expect(problems {
+            $0.loanForMatchesFromAge = Parameter(1, .derived, source: "test")
+            $0.loanForMatchesMonthsAbove = Parameter(0, .derived, source: "test")
+        }.isEmpty)
+    }
+
     @Test func theRatingOffsetIsListedWithEvidenceAndSource() {
         let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
         #expect(listed["ratingAbilityOffset"]?.evidence == .derived)
         let source = listed["ratingAbilityOffset"]?.source ?? ""
-        for quoted in ["least squares", "57.0", "0.798", "71.5", "0.82", "20 outfield players"] {
+        for quoted in ["least squares", "57.0", "0.798", "71.5", "0.82", "20 outfield players", "injured players kept in",
+                       "goalkeeper familiarity under"] {
             #expect(source.contains(quoted), "\(quoted)")
         }
         #expect(EngineParameters.fm27.ratingAbilityOffset.value == 70)

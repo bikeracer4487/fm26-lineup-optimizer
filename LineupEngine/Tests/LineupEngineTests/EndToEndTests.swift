@@ -379,6 +379,38 @@ import Testing
         #expect(fixtures.contains { $0.date == Day(iso: "2026-11-21") })
     }
 
+    @Test func theYoungPlayersOfTheCapturedSquadsEachHaveAnOutlookAndAnAdvice() throws {
+        let book = try realBook()
+        let players = book.allPlayers
+        let ownClub = book.ownClub(override: ownClubName)
+        let tactic = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
+        let history = try JSONDecoder().decode([ConfirmedLineup].self, from: Fixtures.data("plans/sample-history.json"))
+        let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, money: book.moneyStyle,
+                                         history: StartHistory(history), asOf: try #require(Day(iso: "2026-11-13")),
+                                         retraining: [], catalog: try .fm27(), profile: try .standard(),
+                                         parameters: .fm27)
+        let young = players.filter {
+            LoanStatus.of($0, ownClub: ownClub) == .own && $0.age <= EngineParameters.fm27.developingUpToAge.value
+        }
+        #expect(young.count >= 10)
+        for player in young {
+            let a = try #require(removal.advice.first { $0.player == player.id })
+            #expect(player.currentAbility > 0 && a.outlook != nil, "\(player.id.key)")
+            #expect(a.matchesHere != nil, "\(player.id.key)")
+            switch a.action {
+            case .terminate, .sell:
+                #expect(a.level == .high || a.level == .critical, "\(player.id.key)")
+                #expect(player.contractType != .youth, "\(player.id.key)")
+            case .loanForMatches:
+                #expect((player.monthsLeft ?? 0) > 12 && player.contractType != .youth, "\(player.id.key)")
+                #expect(!removal.advisedToLeave.contains(player.id), "\(player.id.key)")
+            case .release, .monitor, .develop, .play, .keep:
+                break
+            }
+            #expect((a.action == .develop) == (a.keepReason != nil), "\(player.id.key)")
+        }
+    }
+
     @Test func mentoringRunsOnTheCapturedSquads() throws {
         let book = try realBook()
         let asOf = Day(year: 2026, month: 11, day: 13)!
@@ -465,6 +497,7 @@ import Testing
     @Test func theRatingOffsetIsCloseToTheCapturedSquadsFit() throws {
         let fit = try capturedRatingFit()
         // On the captures: a = 57.0, b = 0.798, an offset of 71.5, R² 0.82 over 20 players.
+        #expect(fit.count == 20, "a change to the captures that drops players from the fit")
         #expect(fit.b > 0)
         #expect(fit.rSquared >= 0.6)
         #expect(abs(EngineParameters.fm27.ratingAbilityOffset.value - fit.a / fit.b) <= 10)

@@ -348,7 +348,7 @@ import Testing
         #expect(abs((row.firstChoice?.compared ?? 0) - 72) < 1e-9)
         #expect(row.pointsNeeded == 20)
         // The walk: rated 50 at 100 with potential 200 he is 50, 57, 63, 69, so passes 69 at 23. With the offset he
-        // would be 50, 52.1, 53.8, 55.6 and not pass it in time.
+        // would be 50, 54.1, 57.6, 61.2, then 64.7 at 24, and not pass it in time.
         let first = veteran("First Choice")
         func band(_ young: Player, firstChoiceRating: Double, _ parameters: EngineParameters) throws -> ReachBand? {
             let found = try outlooks([first, young], tiers(first: [.D_L: first],

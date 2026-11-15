@@ -10,8 +10,8 @@ import Testing
                         score: Int = 60, reasons: [RemovalReason] = [RemovalReason(text: "In neither eleven", points: 25)],
                         release: Int? = 26_000, mutual: Int? = 14_300, basis: Evidence = .derived) -> RemovalAdvice {
         RemovalAdvice(player: PlayerID(key: key), name: name, level: level, action: action, score: score, reasons: reasons,
-                      tier: nil, outlook: nil, matchesHere: nil, isFalseProspect: false, isMentor: false, releaseCost: release,
-                      mutualCost: mutual, basis: basis)
+                      tier: nil, outlook: nil, matchesHere: nil, keepReason: nil, loanOnlyToStart: false,
+                      isFalseProspect: false, isMentor: false, releaseCost: release, mutualCost: mutual, basis: basis)
     }
 
     private func loan(_ key: String, name: String, verdict: LoanVerdict = .keepToEnd, score: Int = 10,

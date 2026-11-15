@@ -644,6 +644,13 @@ public struct EngineParameters: Sendable {
     public var matchesHereWindowDays: Parameter<Int>
     /// The fewest confirmed matches in the window to judge by; with fewer, his place in the elevens decides.
     public var matchesHereMinimumConfirmed: Parameter<Int>
+    // The numbers behind Player Removal's advice for a young player.
+    /// The youngest age at which a young player worth developing who is not getting matches here is loaned for them;
+    /// younger, he is kept to develop in training.
+    public var loanForMatchesFromAge: Parameter<Int>
+    /// A loan for matches needs more than this many months left on his contract; with this many or fewer, or unknown, he
+    /// is kept and the contract renewed first.
+    public var loanForMatchesMonthsAbove: Parameter<Int>
     /// The numbers behind a fixture's suggested importance.
     public var importanceRules: Parameter<ImportanceSuggestionRules>
     /// What each attribute is worth, per point, when weighing what an arrow gives its target.
@@ -992,8 +999,9 @@ public struct EngineParameters: Sendable {
                 70, .derived,
                 source: "a least squares line, rating = a + b x ability, through the best rating of each of 20 outfield players "
                     + "of the captured first-team and U21 squads (not out on loan) at the slots of the sample 4-2-3-1 where he is "
-                    + "solid in both phases, under the FM27 profile: a = 57.0, b = 0.798, R² 0.82; the offset a ÷ b is 71.5, "
-                    + "rounded to the nearest 5 (EndToEndTests.theRatingOffsetIsCloseToTheCapturedSquadsFit)"),
+                    + "solid in both phases, under the FM27 profile, with injured players kept in (an outfield player being one "
+                    + "with goalkeeper familiarity under the solid level): a = 57.0, b = 0.798, R² 0.82; the offset a ÷ b is "
+                    + "71.5, rounded to the nearest 5 (EndToEndTests.theRatingOffsetIsCloseToTheCapturedSquadsFit)"),
             matchesHereShare: Parameter(
                 1.0 / 3, .derived,
                 source: "derived: docs/Research/fm27-development-matches-vs-training.md gives 15 full matches a season as the least "
@@ -1002,6 +1010,14 @@ public struct EngineParameters: Sendable {
             matchesHereWindowDays: Parameter(60, .derived, source: "the young players' development design: about two months of fixtures"),
             matchesHereMinimumConfirmed: Parameter(
                 6, .derived, source: "the young players' development design: fewer confirmed matches say too little about a share"),
+            loanForMatchesFromAge: Parameter(
+                18, .carriedOverFM26,
+                source: "docs/Research/fm27-development-matches-vs-training.md recommendation 1: at 17 or under keep him, since "
+                    + "he grows mainly in training; from 18 a loan, only where he will start regularly"),
+            loanForMatchesMonthsAbove: Parameter(
+                12, .derived,
+                source: "the young players' development design, 7.3: a loan for matches needs more than 12 months left, so the "
+                    + "contract is not running down while he is away"),
             importanceRules: Parameter(
                 ImportanceSuggestionRules(
                     leagueBase: 80, cupBase: 60, minorCupBase: 30, friendlyBase: 10, unsetBase: 50,

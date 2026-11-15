@@ -3,8 +3,28 @@ import Foundation
 /// How strongly a player of the club's own should be moved on, strongest first.
 public enum RemovalLevel: String, CaseIterable, Sendable { case critical, high, medium, keep }
 
-/// What to do with a player of the club's own.
-public enum RemovalAction: String, CaseIterable, Sendable { case release, loan, terminate, sell, monitor, keep }
+/// What to do with a player of the club's own. `develop`, `play` and `loanForMatches` are given only to a player with an
+/// outlook (`Development.outlooks`), below the high level.
+public enum RemovalAction: String, CaseIterable, Sendable {
+    case release, terminate, sell, monitor
+    /// Keep him and develop him in training.
+    case develop
+    /// Keep him: he is getting his matches here.
+    case play
+    /// Loan him out for the matches he is not getting here. Not a removal: he is not advised to leave.
+    case loanForMatches
+    case keep
+}
+
+/// Why a young player worth developing who is not getting matches is kept and not loaned.
+public enum KeepReason: String, CaseIterable, Sendable {
+    /// Under `loanForMatchesFromAge`: at his age he grows mainly in training.
+    case age
+    /// A youth contract cannot be loaned out.
+    case youthContract
+    /// `loanForMatchesMonthsAbove` months or fewer left, or unknown: renew the contract before a loan.
+    case shortContract
+}
 
 /// One rule that applied, and the points it gave; points may be negative.
 public struct RemovalReason: Equatable, Sendable {
@@ -33,6 +53,10 @@ public struct RemovalAdvice: Equatable, Sendable {
     public let outlook: Outlook?
     /// Whether he is getting enough matches here; with an outlook only.
     public let matchesHere: MatchesHere?
+    /// Why he is kept to develop and not loaned for matches; with `develop` only.
+    public let keepReason: KeepReason?
+    /// A loan for matches at exactly `loanForMatchesFromAge`: worth it only where he will start regularly.
+    public let loanOnlyToStart: Bool
     public let isFalseProspect: Bool
     public let isMentor: Bool
     /// Wages left on the contract, in whole units of the squads' currency: 0 for a player out of contract, or on a
@@ -63,13 +87,14 @@ public struct RemovalReport: Equatable, Sendable {
     public let advice: [RemovalAdvice]
     /// Players on loan at the club: highest score first, then key.
     public let loans: [LoanReview]
-    /// The weekly wages of the critical and high players.
+    /// The weekly wages of the players advised to leave (`advisedToLeave`).
     public let weeklyWagesAtStake: Double
     /// Mean current ability of the club's own first-team players; nil when there are none.
     public let squadAverageAbility: Double?
     /// How the report's figures and reasons write money: the squads' currency, and wages in FMRTE's period.
     public let money: MoneyStyle
-    /// The players the owner is advised to move on: critical or high, to be released, loaned out, terminated or sold.
+    /// The players the owner is advised to move on: critical or high, to be released, terminated or sold. A loan for
+    /// matches is not among them.
     /// The caller passes them to `Training.report` as `leaving`, so nobody is retrained who is advised to go.
     public var advisedToLeave: Set<PlayerID>
 }
@@ -147,15 +172,14 @@ public enum Removal {
             }
             let one = Self.advice(for: player, traits: traits[player.id]!, outlook: outlook, matchesHere: matchesHere,
                                   squad: squad, money: money, parameters: parameters)
-            switch one.level {
-            case .critical, .high: wagesAtStake += player.wagePerWeek
-            case .medium, .keep: break
-            }
             switch (one.level, one.action) {
-            case (.critical, .release), (.critical, .loan), (.critical, .terminate), (.critical, .sell),
-                 (.high, .release), (.high, .loan), (.high, .terminate), (.high, .sell):
+            case (.critical, .release), (.critical, .terminate), (.critical, .sell),
+                 (.high, .release), (.high, .terminate), (.high, .sell):
                 leaving.insert(player.id)
-            case (.critical, .monitor), (.critical, .keep), (.high, .monitor), (.high, .keep), (.medium, _), (.keep, _):
+                wagesAtStake += player.wagePerWeek
+            case (.critical, .monitor), (.critical, .develop), (.critical, .play), (.critical, .loanForMatches),
+                 (.critical, .keep), (.high, .monitor), (.high, .develop), (.high, .play), (.high, .loanForMatches),
+                 (.high, .keep), (.medium, _), (.keep, _):
                 break
             }
             advice.append(one)
@@ -173,7 +197,8 @@ public enum Removal {
 
     /// A player with an outlook is scored on one line in place of the elevens, weakest and ability lines: the better of
     /// his place in the elevens and his reach. His Professionalism and Ambition add no line, since his reach already
-    /// counts them, and a short contract on a player worth keeping says to renew it, at no points.
+    /// counts them, and a short contract on a player worth keeping says to renew it, at no points. His advice is the
+    /// young players' (`youngAction`), and rests also on the evidence of the estimate behind his outlook.
     private static func advice(for player: Player, traits: Traits, outlook: Outlook?, matchesHere: MatchesHere?,
                                squad: SquadFacts, money: MoneyStyle, parameters: EngineParameters) -> RemovalAdvice {
         let rules = parameters.removalRules.value
@@ -206,19 +231,29 @@ public enum Removal {
         let inEither = place.inEither
         // Whether the line added says he is worth keeping: in either eleven, or a reach that could take him there.
         var worthKeeping = inEither
-        if let outlook, let level = outlook.level {
+        if let outlook, let level = outlook.level,
+           let line = AdvisorText.reachLine(outlook, names: { PositionText.plain($0.position) }) {
             let reach = reachPoints(level, rules)
             // Only a place in the elevens competes with his reach; on a tie, the place.
             if inEither && place.reason.points <= reach.points {
                 reasons.list.append(place.reason)
             } else {
-                reasons.add(reach.points, AdvisorText.reachLine(outlook, names: { PositionText.plain($0.position) }))
+                reasons.add(reach.points, line)
                 worthKeeping = reach.worthKeeping
             }
         } else {
             reasons.list.append(place.reason)
         }
-        if reasons.addThinCover(player.id, tier: tier, squad: squad, points: parameters.removalThinCoverPoints.value) {
+        if outlook != nil {
+            evidence += [parameters.growthPerSeason.evidence, parameters.growthProfessionalismRates.evidence,
+                         parameters.ratingAbilityOffset.evidence, parameters.markedlyLowerShare.evidence]
+            if player.age <= parameters.youngestUpToAge.value {
+                evidence.append(parameters.markedlyLowerShareYoungest.evidence)
+            }
+        }
+        let thinCover = reasons.addThinCover(player.id, tier: tier, squad: squad,
+                                             points: parameters.removalThinCoverPoints.value)
+        if thinCover {
             evidence.append(parameters.removalThinCoverPoints.evidence)
         }
         if outlook == nil {
@@ -327,26 +362,70 @@ public enum Removal {
             evidence.append(parameters.contractMonthsAllowance.evidence)
         }
 
+        // A young player on a youth contract can only be kept or released (the owner's statement; FM27 observation), and
+        // a false prospect is sold, not terminated: buyers still pay for his potential.
         let action: RemovalAction
+        var keepReason: KeepReason?
+        var loanOnlyToStart = false
         switch level {
-        case .keep: action = .keep
-        case .medium: action = .monitor
         case .high, .critical:
-            if outOfContract {
+            if outOfContract || (outlook != nil && player.contractType == .youth) {
                 action = .release
+            } else if outlook != nil && isFalseProspect {
+                action = .sell
             } else if level == .critical, let months = player.monthsLeft, months <= rules.terminateWithinMonths,
                       let mutualCost, player.askingPrice.map({ $0 < mutualCost }) ?? true {
                 action = .terminate
             } else {
                 action = .sell
             }
+        case .medium, .keep:
+            if let outlook, let matchesHere {
+                let young = youngAction(player, outlook: outlook, matchesHere: matchesHere, inEither: inEither,
+                                        thinCover: thinCover, parameters: parameters)
+                (action, keepReason, loanOnlyToStart) = (young.action, young.keepReason, young.loanOnlyToStart)
+                evidence += young.evidence
+            } else {
+                action = level == .keep ? .keep : .monitor
+            }
         }
 
         return RemovalAdvice(player: player.id, name: player.name, level: level, action: action, score: score,
                              reasons: reasons.list, tier: tier, outlook: outlook, matchesHere: matchesHere,
-                             isFalseProspect: isFalseProspect,
+                             keepReason: keepReason, loanOnlyToStart: loanOnlyToStart, isFalseProspect: isFalseProspect,
                              isMentor: isMentor, releaseCost: releaseCost, mutualCost: mutualCost,
                              basis: Evidence.weakest(evidence)!)
+    }
+
+    /// The advice for a player with an outlook below the high level, the first rule that applies winning: one not worth
+    /// developing (his reach no more than cover, and in neither eleven) is watched; under `loanForMatchesFromAge` he is
+    /// kept to develop; one getting his matches here is kept to play; one needed for cover is watched; a youth contract
+    /// cannot be loaned, nor a contract with `loanForMatchesMonthsAbove` months or fewer left (or unknown), so he is kept
+    /// to develop; otherwise he is loaned for matches. With the evidence of the parameters the rules read.
+    private static func youngAction(_ player: Player, outlook: Outlook, matchesHere: MatchesHere, inEither: Bool,
+                                    thinCover: Bool, parameters: EngineParameters)
+        -> (action: RemovalAction, keepReason: KeepReason?, loanOnlyToStart: Bool, evidence: [Evidence]) {
+        let notWorthDeveloping: Bool
+        switch outlook.level {
+        case .couldBeCover?, .markedlyLower?: notWorthDeveloping = !inEither
+        case .couldPassFirst?, .couldMakeSecond?, nil: notWorthDeveloping = false
+        }
+        if notWorthDeveloping { return (.monitor, nil, false, []) }
+
+        let fromAge = parameters.loanForMatchesFromAge
+        var evidence = [fromAge.evidence]
+        if player.age < fromAge.value { return (.develop, .age, false, evidence) }
+        evidence += [parameters.matchesHereShare.evidence, parameters.matchesHereWindowDays.evidence,
+                     parameters.matchesHereMinimumConfirmed.evidence]
+        if matchesHere.isEnough { return (.play, nil, false, evidence) }
+        if thinCover { return (.monitor, nil, false, evidence) }
+        if player.contractType == .youth { return (.develop, .youthContract, false, evidence) }
+        let monthsAbove = parameters.loanForMatchesMonthsAbove
+        evidence.append(monthsAbove.evidence)
+        guard let months = player.monthsLeft, months > monthsAbove.value else {
+            return (.develop, .shortContract, false, evidence)
+        }
+        return (.loanForMatches, nil, player.age == fromAge.value, evidence)
     }
 
     // MARK: Players on loan here

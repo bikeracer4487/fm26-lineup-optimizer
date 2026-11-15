@@ -802,12 +802,15 @@ import Testing
         #expect(reasons(lower.reasons, "Contract") == [reason("Contract ends in 9 months", 15)])
     }
 
-    /// The planner's squad with its second-choice left back below solid (familiarity 14), plus a young left back,
-    /// solid (familiarity 20) and markedly lower, rated below him so he stays out of both elevens. The young player's
-    /// Consistency, Important Matches and Temperament are 10, so no rule reads them.
-    func needed(_ secondFamiliarity: Int) throws -> (players: [Player], young: Player) {
-        let young = youngster(all: 6, familiarity: 20, potentialAbility: 80) { p in
+    /// The planner's squad with its second-choice left back below solid (familiarity `secondFamiliarity`), plus a young
+    /// left back, solid (familiarity 20), every other attribute `all` and, with the default potential, markedly lower,
+    /// rated below him so he stays out of both elevens. The young player's Consistency, Important Matches and
+    /// Temperament are 10, so no rule reads them.
+    func needed(_ secondFamiliarity: Int, age: Int = 17, all: Int = 6, potentialAbility: Int = 80,
+                months: Int? = nil) throws -> (players: [Player], young: Player) {
+        let young = youngster(age: age, all: all, familiarity: 20, potentialAbility: potentialAbility) { p in
             for attribute in [Attribute.consistency, .importantMatches, .temperament] { p.attributes[attribute] = 10 }
+            p.monthsLeft = months
         }
         let second = PlannerFixture.id(.D_L, "second")
         let players = try squad(changing: second) { p in
@@ -872,6 +875,272 @@ import Testing
         let spare = try #require(f.advice.first { $0.player == target().id })
         #expect(spare.outlook?.level == .couldBeCover && spare.outlook?.average == nil)
         #expect(!spare.reasons.contains { $0.text == weakest || $0.text.hasPrefix("Current ability") })
+    }
+
+    // MARK: The advice for a young player
+
+    /// The least potential that takes the youngster's reach at left back to the second choice's rating there.
+    func makingPotential() throws -> Int {
+        let probe = youngster(potentialAbility: 80)
+        let (his, _, second) = try ratings(of: probe.id, at: .D_L, in: try squad([probe]))
+        return potential(reaching: second, his: his)
+    }
+
+    /// The youngster, worth developing (his reach makes the second eleven at left back), a backup there, at `age` with
+    /// `months` left on a full-time contract.
+    func prospect(_ name: String = "Young", age: Int, months: Int?,
+                  change: (inout Player) -> Void = { _ in }) throws -> Player {
+        youngster(name, age: age, potentialAbility: try makingPotential()) { p in p.monthsLeft = months; change(&p) }
+    }
+
+    /// Six matches confirmed in the 60 days to 14 November, the first `starts` of them started by `player` at left back.
+    func sixMatches(starting player: PlayerID, starts: Int) -> [ConfirmedLineup] {
+        let days = ["2026-10-01", "2026-10-08", "2026-10-15", "2026-10-22", "2026-10-29", "2026-11-05"]
+        return days.enumerated().map { index, day in
+            ConfirmedLineup(fixture: FixtureID("f\(index)"), date: Day(iso: day)!,
+                            starters: index < starts ? [.D_L: player] : [:])
+        }
+    }
+
+    /// `player`'s advice in the planner's squad and him, with `history` confirmed.
+    func advice(_ player: Player, history: [ConfirmedLineup]) throws -> RemovalAdvice {
+        try #require(try report(try squad([player]), history: history).advice.first { $0.player == player.id })
+    }
+
+    @Test func aSeventeenYearOldWorthKeepingIsDevelopedAndAnEighteenYearOldIsNot() throws {
+        for age in [16, 17] {
+            let a = try advice(try prospect(age: age, months: 24))
+            try #require(a.outlook?.level == .couldMakeSecond && a.tier == .backup)
+            #expect(a.level == .keep)
+            #expect(a.action == .develop && a.keepReason == .age, "\(age)")
+        }
+        // At 18, with 24 months left and no matches here, the age no longer keeps him: a loan for matches.
+        let eighteen = try advice(try prospect(age: 18, months: 24))
+        try #require(eighteen.outlook?.level == .couldMakeSecond)
+        #expect(eighteen.action == .loanForMatches && eighteen.keepReason == nil)
+    }
+
+    @Test func aPlayerGettingMatchesIsKeptToPlay() throws {
+        // Two starts of six confirmed: a third, enough.
+        let young = try prospect(age: 19, months: 24)
+        let playing = try advice(young, history: sixMatches(starting: young.id, starts: 2))
+        try #require(playing.outlook?.level == .couldMakeSecond)
+        #expect(playing.matchesHere?.isEnough == true)
+        #expect(playing.action == .play && playing.keepReason == nil)
+        // One of six is not enough: a loan for matches.
+        let benched = try advice(young, history: sixMatches(starting: young.id, starts: 1))
+        #expect(benched.matchesHere?.isEnough == false)
+        #expect(benched.action == .loanForMatches)
+    }
+
+    @Test func oneNeededForDepthIsWatchedNotLoaned() throws {
+        // A solid young left back of 19 with 24 months left, kept out of both elevens, whose reach makes the second
+        // eleven there, whether the second choice is solid or not.
+        let probe = try needed(20, age: 19, all: 9)
+        let (his, _, second) = try ratings(of: probe.young.id, at: .D_L, in: probe.players)
+        let reaching = potential(reaching: second, his: his)
+        let worthDeveloping: Set<ReachLevel> = [.couldPassFirst, .couldMakeSecond]
+        let (players, young) = try needed(14, age: 19, all: 9, potentialAbility: reaching, months: 24)
+        let a = try advice(young.id, in: players)
+        try #require(a.tier == .backup && a.outlook?.level.map(worthDeveloping.contains) == true)
+        #expect(a.reasons.contains(reason("Cover at left back would be thin without him", -30)))
+        #expect(a.action == .monitor && a.keepReason == nil)
+        // With a solid second choice he is not needed: a loan for matches.
+        let (spare, other) = try needed(20, age: 19, all: 9, potentialAbility: reaching, months: 24)
+        let b = try advice(other.id, in: spare)
+        try #require(b.tier == .backup && b.outlook?.level.map(worthDeveloping.contains) == true)
+        #expect(thinReasons(b).isEmpty)
+        #expect(b.action == .loanForMatches)
+    }
+
+    @Test func aYouthContractIsNeverLoanedOrSold() throws {
+        // Below the high level, worth developing, not getting matches, with 24 months left: kept to develop, where a
+        // full-time contract is loaned for matches.
+        let youth = try advice(try prospect(age: 19, months: 24) { $0.contractType = .youth })
+        #expect(youth.action == .develop && youth.keepReason == .youthContract)
+        #expect(try advice(try prospect(age: 19, months: 24)).action == .loanForMatches)
+        // At the high level (markedly lower, +70): released, where a full-time contract is sold.
+        func lower(_ contract: ContractType, months: Int?) -> Player {
+            target(age: 19, currentAbility: 50, potentialAbility: 50) { $0.contractType = contract; $0.monthsLeft = months }
+        }
+        let high = try advice(lower(.youth, months: nil))
+        #expect(high.level == .high && high.action == .release)
+        #expect(AdvisorText.why(high.action, for: high) == AdvisorText.youthContractNotMarked)
+        #expect(try advice(lower(.fullTime, months: nil)).action == .sell)
+        // At critical with 8 months left and no buyer (+15): released, where a full-time contract is terminated, and
+        // the release is costed.
+        let critical = try advice(lower(.youth, months: 8))
+        #expect(critical.level == .critical && critical.action == .release)
+        #expect(critical.releaseCost == 18_417)
+        #expect(try advice(lower(.fullTime, months: 8)).action == .terminate)
+    }
+
+    @Test func twelveMonthsLeftKeepsHimAndThirteenLoansHim() throws {
+        for months in [1, 12, nil] {
+            let a = try advice(try prospect(age: 19, months: months))
+            try #require(a.outlook?.level == .couldMakeSecond)
+            #expect(a.action == .develop && a.keepReason == .shortContract, "\(String(describing: months))")
+        }
+        let thirteen = try advice(try prospect(age: 19, months: 13))
+        #expect(thirteen.action == .loanForMatches && thirteen.keepReason == nil)
+    }
+
+    @Test func aPlayerNotWorthDevelopingIsWatched() throws {
+        // Could become cover at left back, no more: +15, the keep level, and watched, at 17 as at 19.
+        let probe = youngster(potentialAbility: 80)
+        let (his, first, _) = try ratings(of: probe.id, at: .D_L, in: try squad([probe]))
+        let cover = potential(reaching: 0.8 * first, his: his)
+        for age in [17, 19] {
+            let a = try advice(youngster(age: age, potentialAbility: cover) { $0.monthsLeft = 24 })
+            try #require(a.outlook?.level == .couldBeCover && a.tier == .backup)
+            #expect(a.level == .keep)
+            #expect(a.action == .monitor && a.keepReason == nil, "\(age)")
+        }
+        // Worth developing, the same player is loaned for matches.
+        #expect(try advice(try prospect(age: 19, months: 24)).action == .loanForMatches)
+        // In the first eleven, a lesser reach at the other slot he can play does not make him one to watch: as first
+        // choice he is getting his matches here.
+        let firstID = PlannerFixture.id(.D_L, "first")
+        let other = assignment(.AM_L)
+        let first19 = try advice(firstID, in: try squad(changing: firstID) { p in
+            p.age = 19; p.potentialAbility = 100; p.monthsLeft = 24
+            p.familiarity[other.ipPosition] = 10; p.familiarity[other.oopPosition] = 10
+        })
+        try #require(first19.tier == .first(.D_L))
+        try #require(first19.outlook?.level == .couldBeCover || first19.outlook?.level == .markedlyLower)
+        #expect(first19.action == .play)
+    }
+
+    @Test func aFalseProspectIsSoldNotTerminated() throws {
+        // 120 points in 4 years with Professionalism 11: a false prospect, markedly lower (+70) with 8 months left
+        // (+15), critical, with no buyer: terminated were he not a false prospect.
+        let prospect = try advice(target(age: 20, attributes: [.professionalism: 11], currentAbility: 30,
+                                         potentialAbility: 150) { $0.monthsLeft = 8 })
+        #expect(prospect.isFalseProspect)
+        #expect(prospect.score == 85 && prospect.level == .critical && prospect.mutualCost != nil)
+        #expect(prospect.action == .sell)
+        // The same player with little room to grow is no false prospect, and is terminated.
+        let plain = try advice(target(age: 20, attributes: [.professionalism: 11], currentAbility: 30,
+                                      potentialAbility: 40) { $0.monthsLeft = 8 })
+        #expect(!plain.isFalseProspect)
+        #expect(plain.score == 85 && plain.level == .critical)
+        #expect(plain.action == .terminate)
+    }
+
+    @Test func aLoanForMatchesIsNotAdvisedToLeaveAndHisWageIsNotAtStake() throws {
+        let young = try prospect(age: 19, months: 24) { $0.wagePerWeek = 450 }
+        let players = try squad([young, target("Weak")])
+        let r = try report(players)
+        let a = try #require(r.advice.first { $0.player == young.id })
+        try #require(a.action == .loanForMatches)
+        #expect(!r.advisedToLeave.contains(young.id))
+        // The wages at stake are those of the players advised to leave, the weak one among them, and not his.
+        let wages = Dictionary(uniqueKeysWithValues: players.map { ($0.id, $0.wagePerWeek) })
+        #expect(r.advisedToLeave.contains(target("Weak").id))
+        #expect(r.weeklyWagesAtStake == r.advisedToLeave.map { wages[$0]! }.reduce(0, +))
+    }
+
+    @Test func withNoConfirmedLineupsASecondChoiceIsKeptToPlay() throws {
+        let secondID = PlannerFixture.id(.D_L, "second")
+        let a = try advice(secondID, in: try squad(changing: secondID) { p in
+            p.age = 19; p.potentialAbility = 100; p.monthsLeft = 24
+        })
+        #expect(a.tier == .second(.D_L))
+        #expect(a.matchesHere == MatchesHere(starts: 0, matches: 0, isCounted: false, isEnough: true))
+        #expect(a.action == .play)
+        // A backup with none confirmed is not getting matches.
+        let backup = try advice(try prospect(age: 19, months: 24))
+        #expect(backup.matchesHere == MatchesHere(starts: 0, matches: 0, isCounted: false, isEnough: false))
+        #expect(backup.action == .loanForMatches)
+    }
+
+    @Test func aPlayerOfTwentyFourNeverGetsTheYoungPlayersAdvice() throws {
+        let old: Set<RemovalAction> = [.release, .terminate, .sell, .monitor, .keep]
+        let secondID = PlannerFixture.id(.D_L, "second")
+        func second(age: Int) throws -> RemovalAdvice {
+            try advice(secondID, in: try squad(changing: secondID) { p in
+                p.age = age; p.potentialAbility = 100; p.monthsLeft = 24
+            })
+        }
+        #expect(try second(age: 23).action == .play)
+        let older = try second(age: 24)
+        #expect(older.outlook == nil && older.keepReason == nil)
+        #expect(older.action == .keep)
+        // A backup worth developing at 23 (ability 40, so four seasons' growth takes him past the second choice) is
+        // loaned for matches; at 24 he has no outlook and the old actions.
+        func backup(age: Int) -> Player {
+            youngster(age: age, all: 11, potentialAbility: 200) { $0.currentAbility = 40; $0.monthsLeft = 24 }
+        }
+        let backup23 = try advice(backup(age: 23))
+        try #require(backup23.tier == .backup)
+        try #require(backup23.outlook?.level == .couldPassFirst || backup23.outlook?.level == .couldMakeSecond)
+        #expect(backup23.action == .loanForMatches)
+        let backup24 = try advice(backup(age: 24))
+        #expect(backup24.outlook == nil && old.contains(backup24.action))
+        // On a youth contract at the high level, a player of 24 is sold as before, where at 23 he is released.
+        func weak(age: Int) -> Player {
+            target(age: age, currentAbility: 50, potentialAbility: 50) { $0.contractType = .youth; $0.monthsLeft = nil }
+        }
+        let youth24 = try advice(weak(age: 24))
+        #expect(youth24.level == .high || youth24.level == .critical)
+        #expect(youth24.action == .sell)
+        #expect(try advice(weak(age: 23)).action == .release)
+    }
+
+    // MARK: The evidence behind a young player's advice
+
+    /// The parameters with every one behind a young player's advice carried over from FM26, but `derived`.
+    func labelled(derived: String?) -> EngineParameters {
+        var q = parameters
+        func relabel<T>(_ parameter: inout Parameter<T>, _ name: String) {
+            parameter = Parameter(parameter.value, name == derived ? .derived : .carriedOverFM26, source: parameter.source)
+        }
+        relabel(&q.growthPerSeason, "growthPerSeason")
+        relabel(&q.growthProfessionalismRates, "growthProfessionalismRates")
+        relabel(&q.ratingAbilityOffset, "ratingAbilityOffset")
+        relabel(&q.markedlyLowerShare, "markedlyLowerShare")
+        relabel(&q.markedlyLowerShareYoungest, "markedlyLowerShareYoungest")
+        relabel(&q.loanForMatchesFromAge, "loanForMatchesFromAge")
+        relabel(&q.loanForMatchesMonthsAbove, "loanForMatchesMonthsAbove")
+        relabel(&q.matchesHereShare, "matchesHereShare")
+        relabel(&q.matchesHereWindowDays, "matchesHereWindowDays")
+        relabel(&q.matchesHereMinimumConfirmed, "matchesHereMinimumConfirmed")
+        return q
+    }
+
+    @Test func aYoungPlayersAdviceRestsOnTheEstimate() throws {
+        // Kept to develop at 17, months unknown, the median wage and no thin cover: before the estimate's evidence was
+        // taken in, only the removal rules' (carried over from FM26) were behind it.
+        let seventeen = try prospect(age: 17, months: nil)
+        #expect(try advice(seventeen).basis == .derived)
+        #expect(try advice(seventeen, parameters: labelled(derived: nil)).basis == .carriedOverFM26)
+        for name in ["growthPerSeason", "growthProfessionalismRates", "ratingAbilityOffset", "markedlyLowerShare",
+                     "loanForMatchesFromAge"] {
+            #expect(try advice(seventeen, parameters: labelled(derived: name)).basis == .derived, "\(name)")
+        }
+        // The youngest's share only for a player it applies to.
+        #expect(try advice(seventeen, parameters: labelled(derived: "markedlyLowerShareYoungest")).basis == .carriedOverFM26)
+        let sixteen = try prospect(age: 16, months: nil)
+        #expect(try advice(sixteen, parameters: labelled(derived: "markedlyLowerShareYoungest")).basis == .derived)
+        // A loan for matches also rests on the matches-here numbers and the months a loan needs.
+        let loaned = try prospect(age: 19, months: 24)
+        try #require(try advice(loaned).action == .loanForMatches)
+        #expect(try advice(loaned, parameters: labelled(derived: nil)).basis == .carriedOverFM26)
+        for name in ["matchesHereShare", "matchesHereWindowDays", "matchesHereMinimumConfirmed", "loanForMatchesMonthsAbove"] {
+            #expect(try advice(loaned, parameters: labelled(derived: name)).basis == .derived, "\(name)")
+        }
+    }
+
+    @Test func aPlayerOfTwentyFourKeepsTheBasisHeHad() throws {
+        let older = youngster(age: 24, potentialAbility: 200)
+        let a = try advice(older)
+        #expect(a.outlook == nil)
+        #expect(a.basis == .carriedOverFM26)
+        // None of the young players' parameters is behind his advice.
+        for name in ["growthPerSeason", "ratingAbilityOffset", "markedlyLowerShare", "loanForMatchesMonthsAbove",
+                     "matchesHereShare"] {
+            #expect(try advice(older, parameters: labelled(derived: name)).basis == .carriedOverFM26, "\(name)")
+        }
     }
 
     // MARK: Scores and levels

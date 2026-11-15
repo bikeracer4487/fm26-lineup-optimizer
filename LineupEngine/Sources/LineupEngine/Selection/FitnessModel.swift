@@ -261,6 +261,15 @@ public enum FitnessModel {
                               ("matchesHereMinimumConfirmed", parameters.matchesHereMinimumConfirmed.value)] where count < 1 {
             found.append("\(name) is \(count), not 1 or more")
         }
+        // Player Removal's advice for a young player.
+        let loanFromAge = parameters.loanForMatchesFromAge.value
+        if loanFromAge < 1 {
+            found.append("loanForMatchesFromAge is \(loanFromAge), not 1 or more")
+        }
+        let loanMonths = parameters.loanForMatchesMonthsAbove.value
+        if loanMonths < 0 {
+            found.append("loanForMatchesMonthsAbove is \(loanMonths), not 0 or more")
+        }
         // Learnability is a weighted sum that should stay within 0 to 1.
         for (name, weight) in [("versatilityWeight", learnability.versatilityWeight), ("ageWeight", learnability.ageWeight),
                                ("professionalismWeight", learnability.professionalismWeight),

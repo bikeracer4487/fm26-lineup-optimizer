@@ -1,6 +1,7 @@
 import Foundation
 
-/// The words a young player's outlook uses, written once here: the band names and Player Removal's reach line.
+/// The words a young player's outlook and advice use, written once here: the band names, Player Removal's reach line,
+/// the working behind a reach, where he stands at his best slot and whether he gets matches here.
 extension AdvisorText {
     public static func name(_ band: ReachBand) -> String {
         switch band {
@@ -13,27 +14,106 @@ extension AdvisorText {
 
     /// Player Removal's one line from his reach, for his level: "Could pass Smith at left back", naming his best slot
     /// through `names`; with no best slot, against the first team's average: "Could reach the level of the first team".
-    /// Player Removal adds it only for an outlook with a level.
-    public static func reachLine(_ outlook: Outlook, names: (SlotID) -> String) -> String {
-        guard let level = outlook.level else {
-            preconditionFailure("A reach line needs an outlook with a level")
-        }
-        guard let best = outlook.best else {
-            // Compared with the first team's average: there is no first choice to pass.
+    /// nil for an outlook with no level.
+    public static func reachLine(_ outlook: Outlook, names: (SlotID) -> String) -> String? {
+        guard let level = outlook.level else { return nil }
+        if let best = outlook.best {
+            let position = names(best.slot)
             switch level {
-            case .couldPassFirst, .couldMakeSecond: return "Could reach the level of the first team"
-            case .couldBeCover: return "Could come close to the level of the first team, no more"
-            case .markedlyLower: return "Not expected to reach the level of the first team"
+            case .couldPassFirst:
+                // `best` always has a first choice who is not him; without one the sentences below apply.
+                if let first = best.firstChoice { return "Could pass \(first.name) at \(position)" }
+            case .couldMakeSecond: return "Could make the second eleven at \(position)"
+            case .couldBeCover: return "Could become cover at \(position), no more"
+            case .markedlyLower: return "Not expected to reach the level of the squad at any position"
             }
         }
-        let position = names(best.slot)
+        // Compared with the first team's average: there is no first choice to pass.
         switch level {
-        case .couldPassFirst:
-            // `best` always has a first choice who is not him.
-            return "Could pass \(best.firstChoice?.name ?? "the first choice") at \(position)"
-        case .couldMakeSecond: return "Could make the second eleven at \(position)"
-        case .couldBeCover: return "Could become cover at \(position), no more"
-        case .markedlyLower: return "Not expected to reach the level of the squad at any position"
+        case .couldPassFirst, .couldMakeSecond: return "Could reach the level of the first team"
+        case .couldBeCover: return "Could come close to the level of the first team, no more"
+        case .markedlyLower: return "Not expected to reach the level of the first team"
         }
+    }
+
+    /// Said where a player on a youth contract would be marked to sell or to loan out.
+    public static let youthContractNotMarked = "A player on a youth contract cannot be sold or loaned out, only released."
+
+    /// How his reach was worked out, as a reach figure is never shown without it: "Ability 55, potential 140. At 16 with
+    /// Professionalism 15 this tool expects about 13 points a season now, fewer later: could reach his potential." An
+    /// Ambition or Determination under 10 (where it starts to slow growth, `growthPersonalityFullFrom`) is named after
+    /// the Professionalism, and a Professionalism under 10 is said to be what holds him back. Figures are whole numbers.
+    public static func reachWorking(_ estimate: ReachEstimate) -> String {
+        let figures = "Ability \(estimate.current), potential \(estimate.potential)."
+        // Past the last growth step there are no seasons ahead.
+        guard estimate.bySeason.count > 1 else { return "\(figures) At \(estimate.age) this tool expects no more growth." }
+        var traits = ["Professionalism \(estimate.professionalism)"]
+        if estimate.ambition < personalityNamedBelow { traits.append("Ambition \(estimate.ambition)") }
+        if estimate.determination < personalityNamedBelow { traits.append("Determination \(estimate.determination)") }
+        let named = traits.count == 1 ? traits[0] : traits.dropLast().joined(separator: ", ") + " and " + traits.last!
+        let rate = "about \(points(estimate.seasonGrowth)) a season"
+        let expects = "\(figures) At \(estimate.age) with \(named) this tool expects \(rate) now, fewer later"
+        if Double(estimate.potential - estimate.current) < estimate.seasonGrowth {
+            return "\(expects). His potential is the limit."
+        }
+        if estimate.reachesPotential { return "\(expects): could reach his potential." }
+        let reach = "\(expects): could reach about \(whole(estimate.reach))."
+        guard estimate.professionalism < personalityNamedBelow else { return reach }
+        return "\(reach) At his Professionalism this tool expects \(rate); mentoring could change that."
+    }
+
+    /// Where he stands at his best slot: "Needs about 14 more ability points to match Smith at left back; this tool
+    /// expects about 12 a season. On course.", with " Smith is 31." for a first choice of 30 or over and " Smith is 20 and
+    /// still growing." for one compared at his own reach. Begins "First choice at striker." at a slot he is first choice
+    /// at. nil when he is first choice nowhere and has no slot with a first choice to pass.
+    public static func standing(_ outlook: Outlook, names: (SlotID) -> String) -> String? {
+        var parts: [String] = []
+        if let home = outlook.slots.first(where: \.isFirstChoice) { parts.append("First choice at \(names(home.slot)).") }
+        if let best = outlook.best, let first = best.firstChoice, let needed = best.pointsNeeded, let band = best.band {
+            let need = needed == 0 ? "Needs no more ability points"
+                : "Needs about \(needed) more ability \(needed == 1 ? "point" : "points")"
+            var sentence = "\(need) to match \(first.name) at \(names(best.slot)); this tool expects about "
+                + "\(whole(outlook.estimate.seasonGrowth)) a season. \(name(band))."
+            if first.compared > first.rating {
+                sentence += " \(first.name) is \(first.age) and still growing."
+            } else if first.age >= firstChoiceAgeNamedFrom {
+                sentence += " \(first.name) is \(first.age)."
+            }
+            parts.append(sentence)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
+
+    /// "He has started 1 of the last 9 matches here."; when they are not counted, or none is confirmed, that too few are.
+    public static func matchesHere(_ matches: MatchesHere) -> String {
+        guard matches.isCounted, matches.matches > 0 else { return "Too few matches are confirmed to count his starts." }
+        return "He has started \(matches.starts) of the last \(matches.matches) "
+            + "\(matches.matches == 1 ? "match" : "matches") here."
+    }
+
+    /// Why a young player is kept to develop, for `why(_:for:)`.
+    static func whyDevelop(_ reason: KeepReason?) -> String {
+        switch reason {
+        case .age?: "At his age he grows mainly in training; a loan would add little."
+        case .youthContract?: "He is not getting matches here, and a loan needs a full-time contract."
+        case .shortContract?: "He is not getting matches here: renew his contract before a loan."
+        // Player Removal gives every advice to develop a reason; one built without is said plainly.
+        case nil: "He is worth developing here."
+        }
+    }
+
+    /// The words name an Ambition, Determination or Professionalism under this: from 10 Ambition and Determination no
+    /// longer slow growth (`growthPersonalityFullFrom`), and 10 is where the Professionalism rates' middle anchor sits.
+    private static let personalityNamedBelow = 10
+    /// A first choice this age or over is named with his age: decline is not measured (the design, section 6).
+    private static let firstChoiceAgeNamedFrom = 30
+
+    /// A figure rounded to the nearest whole number.
+    private static func whole(_ x: Double) -> Int { Int(x.rounded()) }
+
+    /// "13 points", "1 point".
+    private static func points(_ x: Double) -> String {
+        let n = whole(x)
+        return n == 1 ? "1 point" : "\(n) points"
     }
 }

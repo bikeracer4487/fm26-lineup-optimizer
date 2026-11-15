@@ -208,7 +208,28 @@ enum Report {
                        + "score \(one.score); \(cost)\(mark(one.basis))")
             for reason in one.reasons { out.append("        \(points(reason.points)) \(reason.text)") }
         }
-        out.append("Medium (monitor): \(count(medium))   Keep: \(count(keep))")
+        out.append("Medium: \(count(medium))   Keep: \(count(keep))")
+        out.append("Young players")
+        let young = report.advice.filter { $0.outlook != nil }
+        if young.isEmpty { out.append("  none") }
+        for one in young {
+            guard let outlook = one.outlook else { continue }
+            out.append("  \(pad(one.name, 22)) \(outlook.estimate.age)  \(AdvisorText.name(one.action).lowercased())"
+                       + "  score \(one.score)\(mark(one.basis))")
+            var lines = [AdvisorText.reachWorking(outlook.estimate)]
+            if let standing = AdvisorText.standing(outlook, names: { PositionText.plain($0.position) }) {
+                lines.append(standing)
+            }
+            let showsMatches: Bool
+            switch one.action {
+            case .play, .loanForMatches: showsMatches = true
+            case .develop: showsMatches = one.keepReason != .age
+            case .release, .terminate, .sell, .monitor, .keep: showsMatches = false
+            }
+            if showsMatches, let matches = one.matchesHere { lines.append(AdvisorText.matchesHere(matches)) }
+            lines.append(AdvisorText.why(one.action, for: one))
+            for line in lines { out.append("        \(line)") }
+        }
         out.append("Loan review")
         if report.loans.isEmpty { out.append("  nobody on loan here") }
         for loan in report.loans {
