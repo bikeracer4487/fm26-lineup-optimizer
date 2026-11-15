@@ -65,8 +65,8 @@ public enum PlanState: Equatable, Sendable {
     /// Empty when no tactic is saved; otherwise one sentence per tactic that a fixture within the horizon would use
     /// and that cannot be used, naming its problems.
     case needsTactic([String])
-    /// Why the plan stopped, in sentences, and the screen where it is put right.
-    case failed([String], fix: Screen)
+    /// Why the plan stopped, in sentences, and the screen where it is put right; nil when no screen can put it right.
+    case failed([String], fix: Screen?)
     /// Confirmed and planned fixtures together, in date order.
     case ready([FixturePlan])
 }

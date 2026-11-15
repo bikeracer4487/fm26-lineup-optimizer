@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import LineupEngine
+@testable import LineupEngine
 @testable import LineupAppCore
 
 /// Every replan runs the planner on the main actor, about 0.1 seconds a fixture in a debug build, so most tests plan two
@@ -509,14 +509,41 @@ import LineupEngine
     }
 
     @Test func eachPlanFailureOffersTheFixThatPutsItRight() {
-        let attribute = RatingError.missingAttribute(player: "Alice Smith", attribute: .ambition)
-        #expect(AppModel.failedPlan(attribute) == .failed([ErrorDescriptions.describe(attribute)], fix: .squad))
-        let familiarity = RatingError.missingFamiliarity(player: "Alice Smith", position: .goalkeeper)
-        #expect(AppModel.failedPlan(familiarity) == .failed([ErrorDescriptions.describe(familiarity)], fix: .squad))
-        let setting = PlanError.badSettings(["Development must be between 0 and 1, but is 2.0"])
-        #expect(AppModel.failedPlan(setting) == .failed([ErrorDescriptions.describe(setting)], fix: .settings))
-        let parameters = PlanError.badParameters(["conditionCurve is empty"])
-        #expect(AppModel.failedPlan(parameters) == .failed([ErrorDescriptions.describe(parameters)], fix: .settings))
+        func fix(_ error: any Error) -> Screen?? {
+            guard case .failed(let sentences, let fix) = AppModel.failedPlan(error) else { return nil }
+            #expect(sentences == [ErrorDescriptions.describe(error)])
+            return .some(fix)
+        }
+        // A player's data: put right by importing his squad again.
+        #expect(fix(RatingError.missingAttribute(player: "Alice Smith", attribute: .ambition)) == .squad)
+        #expect(fix(RatingError.missingFamiliarity(player: "Alice Smith", position: .goalkeeper)) == .squad)
+        #expect(fix(DuplicatePlayerError(id: .fmrte(7), names: ["Alice Smith", "Bob Jones"])) == .squad)
+        // The fixtures: put right on the Fixtures screen.
+        let day = Day(year: 2026, month: 11, day: 17)!
+        #expect(fix(PlanError.fixtureBeforeSnapshot(FixtureID("a"), date: day, asOf: day.adding(days: 1))) == .fixtures)
+        #expect(fix(PlanError.fixturesOnTheSameDay(FixtureID("a"), FixtureID("b"), day)) == .fixtures)
+        // No screen changes a fixture's id: no fix is offered.
+        #expect(fix(PlanError.duplicateFixtureID(FixtureID("a"))) == .some(nil))
+        // The settings, and the engine's parameters, which only the condition floor in Settings changes.
+        #expect(fix(PlanError.badSettings(["Development must be between 0 and 1, but is 2.0"])) == .settings)
+        #expect(fix(PlanError.badParameters(["conditionCurve is empty"])) == .settings)
+    }
+
+    @Test func aPlayersDataPointsToTheSameScreenForThePlanAndTheAdvice() {
+        let errors: [any Error] = [RatingError.missingAttribute(player: "Alice Smith", attribute: .ambition),
+                                   RatingError.missingFamiliarity(player: "Alice Smith", position: .goalkeeper),
+                                   DuplicatePlayerError(id: .fmrte(7), names: ["Alice Smith", "Bob Jones"])]
+        for error in errors {
+            #expect(AppModel.failedPlan(error) == .failed([ErrorDescriptions.describe(error)], fix: .squad))
+            #expect(AppModel.failedAdvice(error) == .failed([ErrorDescriptions.describe(error)], fix: .squad))
+        }
+    }
+
+    @Test func aPlanFailureWithNoFixOffersNoButton() throws {
+        let notReady = try #require(MatchPresentation.notReady(.failed(["Bad."], fix: nil)))
+        #expect(notReady == NotReady(message: "The plan could not be worked out.", problems: ["Bad."], isFailure: true,
+                                     action: nil, screen: nil))
+        #expect(MatchPresentation.notReady(.failed(["Bad."], fix: .fixtures))?.action == "Go to Fixtures")
     }
 
     @Test func theConditionFloorSettingChangesWhoIsLeftOut() throws {

@@ -295,13 +295,25 @@ extension AppModel {
         return .ready(result)
     }
 
-    /// The engine's sentence for why the planner refused, and the screen that puts it right. The checks before the
-    /// planner leave it a player's data, the settings and the parameters to refuse. A player's missing value (planning
-    /// reads Professionalism, Ambition and Determination for every player of the club's own of 23 or under) is put right
-    /// by importing his squad again; the rest is in the settings, or in the engine's parameters, which only the
-    /// condition floor in Settings changes.
+    /// The engine's sentence for why the planner refused, and the screen that puts it right, if one can:
+    /// - a player's data (a missing value, such as the Professionalism, Ambition and Determination planning reads for
+    ///   every player of the club's own of 23 or under, or two players with one identity): the Squad screen, as for the
+    ///   advice (`playerDataFix`);
+    /// - a fixture before the squad was imported, or two on one day: the Fixtures screen. The checks before the planner
+    ///   already keep both from it; the routing holds if they ever miss one;
+    /// - two fixtures, confirmed lineups or played matches with one id: none, since no screen changes an id. The app
+    ///   gives each fixture its own, so only a damaged saved state could do this;
+    /// - the settings, or the engine's parameters, which only the condition floor in Settings changes: Settings.
+    /// Any other error the planner might throw is not one this app knows of, and keeps Settings.
     static func failedPlan(_ error: any Error) -> PlanState {
-        .failed([ErrorDescriptions.describe(error)], fix: error is RatingError ? .squad : .settings)
+        let sentences = [ErrorDescriptions.describe(error)]
+        if let fix = playerDataFix(error) { return .failed(sentences, fix: fix) }
+        guard let error = error as? PlanError else { return .failed(sentences, fix: .settings) }
+        switch error {
+        case .fixtureBeforeSnapshot, .fixturesOnTheSameDay: return .failed(sentences, fix: .fixtures)
+        case .duplicateFixtureID: return .failed(sentences, fix: nil)
+        case .badSettings, .badParameters: return .failed(sentences, fix: .settings)
+        }
     }
 
     /// The saved fixture as the planner is handed it, with its tactic resolved; nil when it has no tactic to use.

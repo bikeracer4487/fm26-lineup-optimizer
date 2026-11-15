@@ -413,8 +413,9 @@ public struct NotReady: Equatable, Sendable {
     public let problems: [String]
     /// The problems are failures, shown in claret; otherwise cautions.
     public let isFailure: Bool
-    public let action: String
-    public let screen: Screen
+    /// The button's words and the screen it goes to; both nil when no screen can put it right, so there is no button.
+    public let action: String?
+    public let screen: Screen?
 }
 
 /// The pick the owner selected: in which fixture, which slot, and who was in it then.
@@ -497,7 +498,7 @@ public enum MatchPresentation {
                             problems: [], isFailure: false, action: goTo(.fixtures), screen: .fixtures)
         case .failed(let failures, let screen):
             return NotReady(message: "The plan could not be worked out.", problems: failures, isFailure: true,
-                            action: goTo(screen), screen: screen)
+                            action: screen.map(goTo), screen: screen)
         }
     }
 

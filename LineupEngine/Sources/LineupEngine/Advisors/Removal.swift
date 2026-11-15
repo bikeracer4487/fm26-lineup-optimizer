@@ -118,9 +118,10 @@ public enum Removal {
     /// Absorbs binary floating-point error (0.3 × 10 may fall just short of 3) before a count is rounded down.
     private static let roundingNoise = 1e-9
 
-    /// Whether `player` is on a youth contract that has not run out, as his advice reads it (`onYouthContract`): one
-    /// with 0 months left is read as no contract; one with months left unknown is still a youth contract. Such a player
-    /// can only be kept or released, so he is never marked to sell or to loan out.
+    /// Whether `player` is on a youth contract that has not run out: one with 0 months left is read as no contract; one
+    /// with months left unknown is still a youth contract. Such a player can only be kept or released, so he is never
+    /// marked to sell or to loan out. The one reading of a youth contract: his advice's `onYouthContract` and the
+    /// planner's mark rule both take it from here.
     public static func isOnYouthContract(_ player: Player) -> Bool {
         if case .youth = player.contractType { return player.monthsLeft != 0 }
         return false
@@ -232,20 +233,18 @@ public enum Removal {
         // checked against the game); unknown months are not.
         let outOfContract: Bool
         let costsKnown: Bool
-        let onYouthContract: Bool
+        let onYouthContract = isOnYouthContract(player)
         switch player.contractType {
         case .fullTime where player.monthsLeft == 0, .youth where player.monthsLeft == 0:
-            (outOfContract, costsKnown, onYouthContract) = (true, true, false)
+            (outOfContract, costsKnown) = (true, true)
             reasons.add(rules.notFullTimePoints, "No contract: 0 months left")
-        case .fullTime:
-            (outOfContract, costsKnown, onYouthContract) = (false, true, false)
-        case .youth:
-            (outOfContract, costsKnown, onYouthContract) = (false, true, true)
+        case .fullTime, .youth:
+            (outOfContract, costsKnown) = (false, true)
         case .outOfContract:
-            (outOfContract, costsKnown, onYouthContract) = (true, true, false)
+            (outOfContract, costsKnown) = (true, true)
             reasons.add(rules.notFullTimePoints, "Not on a full-time contract")
         case .other(let type):
-            (outOfContract, costsKnown, onYouthContract) = (false, false, false)
+            (outOfContract, costsKnown) = (false, false)
             reasons.add(0, "Contract type \(type) is not one this tool reads: no release cost is given")
         }
 

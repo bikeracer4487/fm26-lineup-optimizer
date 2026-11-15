@@ -696,6 +696,20 @@ import Testing
         #expect(every(run(p, .sharpness, marks: [p.id: .toLoanOut]), .shopWindow) == nil)
     }
 
+    @Test func aMarkCountsOnAYouthContractWithNoMonthsLeftAndNotOnOneWithMonthsLeft() {
+        // A youth contract with 0 months left is no contract, as Player Removal reads it: the mark counts.
+        var p = Player.fixture(age: 18, currentAbility: 100, potentialAbility: 100)
+        p.contractType = .youth
+        p.monthsLeft = 0
+        #expect(every(run(p, .low, marks: [p.id: .toSell]), .shopWindow)?.factor == 1.03)
+        #expect(every(run(p, .sharpness, marks: [p.id: .toLoanOut]), .shopWindow)?.factor == 1.03)
+        // With months left, or months unknown, it is a youth contract: the mark means nothing.
+        for months in [1, 24, nil] {
+            p.monthsLeft = months
+            #expect(every(run(p, .low, marks: [p.id: .toSell]), .shopWindow) == nil, "\(String(describing: months))")
+        }
+    }
+
     @Test func aFactorOfOneSwitchesTheRuleOff() {
         var off = EngineParameters.fm27
         off.shopWindowFactor = Parameter(1, .derived, source: "test")

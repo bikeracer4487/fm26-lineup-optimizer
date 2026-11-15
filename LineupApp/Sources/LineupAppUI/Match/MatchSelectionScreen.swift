@@ -318,14 +318,17 @@ struct NamesBySlot: View {
     }
 }
 
-/// What is missing before a plan can be made, or why it stopped, with the button to the screen that fixes it.
+/// What is missing before a plan can be made, or why it stopped, with the button to the screen that fixes it when
+/// one can.
 struct NotReadyView: View {
     let notReady: NotReady
     @Environment(\.showScreen) private var showScreen
 
     var body: some View {
         if notReady.problems.isEmpty {
-            EmptyState(notReady.message, action: notReady.action) { showScreen(notReady.screen) }
+            EmptyState(notReady.message, action: notReady.action, perform: notReady.screen.map { screen in
+                { showScreen(screen) }
+            })
         } else {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 Text(notReady.message)
@@ -341,8 +344,10 @@ struct NotReadyView: View {
                         CautionLine(problem)
                     }
                 }
-                Button(notReady.action) { showScreen(notReady.screen) }
-                    .buttonStyle(.primary)
+                if let action = notReady.action, let screen = notReady.screen {
+                    Button(action) { showScreen(screen) }
+                        .buttonStyle(.primary)
+                }
             }
             .frame(maxWidth: Theme.Layout.readingWidth, alignment: .leading)
         }

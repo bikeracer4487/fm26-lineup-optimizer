@@ -71,11 +71,17 @@ extension AppModel {
     }
 
     /// The engine's sentence for the failure, and the screen that puts it right: a player's data is put right by
-    /// importing his squad again; anything else the advisors refuse is in the engine's parameters, which only the
-    /// condition floor in Settings changes.
+    /// importing his squad again (`playerDataFix`); anything else the advisors refuse is in the engine's parameters,
+    /// which only the condition floor in Settings changes.
     static func failedAdvice(_ error: any Error) -> AdviceState {
-        let fix: Screen = error is RatingError || error is DuplicatePlayerError ? .squad : .settings
-        return .failed([ErrorDescriptions.describe(error)], fix: fix)
+        .failed([ErrorDescriptions.describe(error)], fix: playerDataFix(error) ?? .settings)
+    }
+
+    /// The Squad screen for an error in a player's data, which importing his squad again puts right: a missing value
+    /// (`RatingError`) or two players with one identity (`DuplicatePlayerError`); nil for any other error. The plan and
+    /// the advice both send such an error here.
+    static func playerDataFix(_ error: any Error) -> Screen? {
+        error is RatingError || error is DuplicatePlayerError ? .squad : nil
     }
 
     /// The suggested importance for the fixture as `draft` has it: its date, competition, opponent's strength and
