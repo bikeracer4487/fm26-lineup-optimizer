@@ -15,6 +15,11 @@ public struct FixtureID: Hashable, Codable, Sendable {
 /// The kind of competition a fixture belongs to; the importance suggestion starts from it.
 public enum Competition: String, Codable, CaseIterable, Sendable { case league, cup, minorCup, friendly }
 
+/// Where the club stands in the league, which sets how much a league match is worth; the owner says which.
+public enum LeagueSituation: String, Codable, CaseIterable, Sendable {
+    case titleRaceOrRelegationFight, inContention, midTable, nothingToPlayFor
+}
+
 /// How strong the opponent is compared with the club.
 public enum OpponentStrength: String, Codable, CaseIterable, Sendable {
     case muchStronger, stronger, similar, weaker, muchWeaker

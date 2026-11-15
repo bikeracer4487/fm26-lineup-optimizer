@@ -15,18 +15,19 @@ public enum ImportanceAdvisor {
     /// `tiers` are meant to be the planner's (`SquadTiers.compute`, injured players left out). An injured player is never
     /// counted as unsharp, nor is a first-eleven player missing from `players`, so with tiers that keep injured players
     /// the injured are still not counted (though the fit player who would stand in for one is not counted either).
+    /// `situation` sets a league match's base (this fixture's and the next one's) and nothing else.
     /// Throws `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, or when a score is too large
     /// to give as a whole number.
     public static func suggest(for fixture: Fixture, among fixtures: [Fixture], confirmed: [ConfirmedLineup],
                                players: [Player], tiers: SquadTiers,
-                               parameters: EngineParameters) throws -> ImportanceSuggestion {
+                               situation: LeagueSituation, parameters: EngineParameters) throws -> ImportanceSuggestion {
         let problems = FitnessModel.problems(in: parameters)
         guard problems.isEmpty else { throw PlanError.badParameters(problems) }
         let rules = parameters.importanceRules.value
         let others = fixtures.filter { $0.id != fixture.id }
         var reasons: [String] = []
 
-        let base = try baseScore(competition: fixture.competition, rules: rules)
+        let base = try baseScore(competition: fixture.competition, situation: situation, rules: rules)
         reasons.append(base.reason)
         var score = base.value
         let opponent = opponentFactor(fixture.opponentStrength, rules: rules)
@@ -39,7 +40,7 @@ public enum ImportanceAdvisor {
             .min { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }
         var reduced = false
         if let next {
-            let nextScore = try baseScore(competition: next.competition, rules: rules).value
+            let nextScore = try baseScore(competition: next.competition, situation: situation, rules: rules).value
                 * opponentFactor(next.opponentStrength, rules: rules).value
             let gap = fixture.date.days(to: next.date)
             // The next match must reach the line and be bigger than this one, by base times opponent.
@@ -99,10 +100,17 @@ public enum ImportanceAdvisor {
                                     basis: Evidence.weakest([parameters.importanceRules.evidence])!)
     }
 
-    private static func baseScore(competition: Competition?, rules: ImportanceSuggestionRules) throws -> (value: Double, reason: String) {
+    private static func baseScore(competition: Competition?, situation: LeagueSituation,
+                                           rules: ImportanceSuggestionRules) throws -> (value: Double, reason: String) {
         let (value, name): (Double, String)
         switch competition {
-        case .league: (value, name) = (rules.leagueBase, "League match")
+        case .league:
+            switch situation {
+            case .titleRaceOrRelegationFight: (value, name) = (rules.leagueTitleRaceBase, "League match, title race or relegation fight")
+            case .inContention: (value, name) = (rules.leagueBase, "League match")
+            case .midTable: (value, name) = (rules.leagueMidTableBase, "League match, mid-table")
+            case .nothingToPlayFor: (value, name) = (rules.leagueNothingToPlayForBase, "League match, nothing to play for")
+            }
         case .cup: (value, name) = (rules.cupBase, "Cup match")
         case .minorCup: (value, name) = (rules.minorCupBase, "Minor cup match")
         case .friendly: (value, name) = (rules.friendlyBase, "Friendly")

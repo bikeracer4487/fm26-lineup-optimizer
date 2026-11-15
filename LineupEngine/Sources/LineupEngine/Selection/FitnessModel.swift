@@ -364,7 +364,9 @@ public enum FitnessModel {
         }
         // The suggested importance multiplies a base by these factors and counts days back and ahead.
         let importance = parameters.importanceRules.value
-        for (name, base) in [("leagueBase", importance.leagueBase), ("cupBase", importance.cupBase),
+        for (name, base) in [("leagueBase", importance.leagueBase), ("leagueTitleRaceBase", importance.leagueTitleRaceBase),
+                             ("leagueMidTableBase", importance.leagueMidTableBase),
+                             ("leagueNothingToPlayForBase", importance.leagueNothingToPlayForBase), ("cupBase", importance.cupBase),
                              ("minorCupBase", importance.minorCupBase), ("friendlyBase", importance.friendlyBase),
                              ("unsetBase", importance.unsetBase)] where !base.isFinite {
             found.append("importanceRules \(name) is \(base), not a finite number")

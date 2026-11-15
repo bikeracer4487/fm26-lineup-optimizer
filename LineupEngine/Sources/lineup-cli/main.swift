@@ -18,6 +18,7 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
                          [--first-team <paste.tsv>] [--u21 <paste.tsv>] [--u18 <paste.tsv>] [--own-club <name>]
                          [--history <confirmed.json>] [--fixtures <fixtures.json>] [--intensity low|medium|high]
                          [--profile fm27|carried-over] [--standings <standings.json>]
+                         [--league-situation title-race|in-contention|mid-table|nothing-to-play-for]
        At least one of --first-team, --u21, --u18 is required.
        --profile picks the rating profile: fm27 (FM27 engine tests, the default), carried-over (carried over from FM26),
        or, for select only, both, which prints the FM27 lineup, then the carried-over one, and compares them.
@@ -34,6 +35,9 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        "socialGroup"?: "core|others|secondary:<name>"}: the hierarchy as the game's Dynamics screen shows it. Without it
        nobody stands above Others and no group is suggested. The command line takes no arrow readings: every arrow it
        shows is this tool's guess from the levels, and says so.
+       --league-situation says where the club stands in the league, which sets how much each league match in --fixtures
+       is worth to the suggested importance: title-race (title race or relegation fight), in-contention (the default),
+       mid-table or nothing-to-play-for. It changes nothing else.
        --fixtures is a JSON array of {"id", "date", "opponent", "importance", "overrides"?: {"<slot>": "<player key>"},
        "rejected"?: ["<player key>"], "competition"?: "league|cup|minorCup|friendly",
        "opponentStrength"?: "muchStronger|stronger|similar|weaker|muchWeaker"}. plan ignores competition and
@@ -64,6 +68,7 @@ struct Options {
     var fixtures: String?
     var history: String?
     var standings: String?
+    var leagueSituation: LeagueSituation = .inContention
     var asOf: Day?
     var settings = PlanSettings.standard
 }
@@ -85,7 +90,7 @@ func parse(_ arguments: [String]) throws -> Options {
     let allowed = switch command {
     case .select: shared + ["--importance"]
     case .plan: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--stability", "--saving", "--horizon", "--development"]
-    case .advise: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--standings"]
+    case .advise: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--standings", "--league-situation"]
     }
     let name = command.rawValue
     while let flag = args.popFirst() {
@@ -112,6 +117,14 @@ func parse(_ arguments: [String]) throws -> Options {
         case "--fixtures": options.fixtures = value
         case "--history": options.history = value
         case "--standings": options.standings = value
+        case "--league-situation":
+            switch value {
+            case "title-race": options.leagueSituation = .titleRaceOrRelegationFight
+            case "in-contention": options.leagueSituation = .inContention
+            case "mid-table": options.leagueSituation = .midTable
+            case "nothing-to-play-for": options.leagueSituation = .nothingToPlayFor
+            default: throw UsageError(reason: "--league-situation is title-race, in-contention, mid-table or nothing-to-play-for, not '\(value)'")
+            }
         case "--as-of":
             guard let day = Day(iso: value) else { throw UsageError(reason: "--as-of needs a date in the form YYYY-MM-DD, not '\(value)'") }
             options.asOf = day
@@ -291,7 +304,8 @@ do {
                                                profile: profile, parameters: parameters)
             suggestions = try fixtures.sorted { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }.map { fixture in
                 (fixture, try ImportanceAdvisor.suggest(for: fixture, among: fixtures, confirmed: history, players: players,
-                                                        tiers: tiers, parameters: parameters))
+                                                        tiers: tiers, situation: options.leagueSituation,
+                                                        parameters: parameters))
             }
         }
         let dynamics = Dictionary(uniqueKeysWithValues: (standings ?? [:]).map { (PlayerID(key: $0.key), $0.value) })

@@ -149,3 +149,18 @@ import Testing
         #expect(FitnessModel.problems(in: parameters).isEmpty)
     }
 }
+
+@Suite struct LeagueBaseCheckTests {
+    @Test(arguments: ["leagueTitleRaceBase", "leagueMidTableBase", "leagueNothingToPlayForBase"])
+    func aLeagueBaseThatIsNotFiniteIsReported(_ name: String) {
+        var parameters = EngineParameters.fm27
+        var rules = parameters.importanceRules.value
+        switch name {
+        case "leagueTitleRaceBase": rules.leagueTitleRaceBase = .infinity
+        case "leagueMidTableBase": rules.leagueMidTableBase = .infinity
+        default: rules.leagueNothingToPlayForBase = .infinity
+        }
+        parameters.importanceRules = Parameter(rules, .derived, source: "test")
+        #expect(FitnessModel.problems(in: parameters) == ["importanceRules \(name) is inf, not a finite number"])
+    }
+}

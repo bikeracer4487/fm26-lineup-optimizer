@@ -371,7 +371,7 @@ import Testing
                                            profile: profile, parameters: parameters)
         for fixture in fixtures {
             let suggestion = try ImportanceAdvisor.suggest(for: fixture, among: fixtures, confirmed: history, players: players,
-                                                           tiers: tiers, parameters: parameters)
+                                                           tiers: tiers, situation: .inContention, parameters: parameters)
             #expect(!suggestion.reasons.isEmpty, "\(fixture.id.raw)")
             // A league match against a much stronger side, with only one match in the six days before it.
             if fixture.date == Day(iso: "2026-11-21") { #expect(suggestion.importance == .high, "\(suggestion.reasons)") }

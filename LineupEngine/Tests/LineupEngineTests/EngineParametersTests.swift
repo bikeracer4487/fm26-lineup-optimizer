@@ -622,6 +622,7 @@ import Testing
         #expect(listed["importanceRules"]?.source.contains("docs/Research/player-rotation-guide.md") == true)
         let r = EngineParameters.fm27.importanceRules.value
         #expect([r.leagueBase, r.cupBase, r.minorCupBase, r.friendlyBase, r.unsetBase] == [80, 60, 30, 10, 50])
+        #expect([r.leagueTitleRaceBase, r.leagueMidTableBase, r.leagueNothingToPlayForBase] == [100, 60, 20])
         #expect([r.muchStrongerFactor, r.strongerFactor, r.similarFactor, r.weakerFactor, r.muchWeakerFactor, r.unsetOpponentFactor]
                 == [1.2, 1.1, 1.0, 0.8, 0.6, 1.0])
         #expect(r.biggerMatchFrom == 80)

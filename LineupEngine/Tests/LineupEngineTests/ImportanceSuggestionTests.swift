@@ -34,10 +34,11 @@ import Testing
 
     func suggest(_ f: Fixture, among others: [Fixture] = [], confirmed: [ConfirmedLineup] = [],
                  sharpness: [Double] = [], injured: Int = 0, outside: Double = 1,
+                 situation: LeagueSituation = .inContention,
                  parameters: EngineParameters? = nil) throws -> ImportanceSuggestion {
         let s = squad(sharpness: sharpness, injured: injured, outsideSharpness: outside)
         return try ImportanceAdvisor.suggest(for: f, among: others, confirmed: confirmed, players: s.players, tiers: s.tiers,
-                                             parameters: parameters ?? self.parameters)
+                                             situation: situation, parameters: parameters ?? self.parameters)
     }
 
     /// The standard parameters with the importance rules changed by `change`.
@@ -47,6 +48,57 @@ import Testing
         change(&r)
         q.importanceRules = Parameter(r, .carriedOverFM26, source: "test")
         return q
+    }
+
+    // MARK: League situation
+
+    @Test func eachSituationSetsALeagueMatchsBase() throws {
+        #expect(try suggest(fixture(), situation: .titleRaceOrRelegationFight).importance == .high)   // 100
+        #expect(try suggest(fixture(), situation: .inContention).importance == .medium)               // 80
+        #expect(try suggest(fixture(), situation: .midTable).importance == .medium)                   // 60
+        #expect(try suggest(fixture(), situation: .nothingToPlayFor).importance == .low)              // 20
+        #expect(try suggest(fixture(), situation: .midTable).score == 60)
+    }
+
+    @Test func theSituationDoesNotTouchOtherCompetitions() throws {
+        for competition in [Competition.cup, .minorCup, .friendly, nil] {
+            let usual = try suggest(fixture(competition: competition))
+            for situation in LeagueSituation.allCases {
+                #expect(try suggest(fixture(competition: competition), situation: situation) == usual)
+            }
+        }
+    }
+
+    @Test func inContentionReadsAsBefore() throws {
+        #expect(try suggest(fixture()).reasons.first == "League match: 80")
+    }
+
+    @Test func theReasonNamesAnyOtherSituation() throws {
+        #expect(try suggest(fixture(), situation: .titleRaceOrRelegationFight).reasons.first
+                == "League match, title race or relegation fight: 100")
+        #expect(try suggest(fixture(), situation: .midTable).reasons.first == "League match, mid-table: 60")
+        #expect(try suggest(fixture(), situation: .nothingToPlayFor).reasons.first == "League match, nothing to play for: 20")
+    }
+
+    /// A cup match (60) is followed two days later by a league match: bigger at 80, not bigger at 20.
+    @Test func theBiggerMatchRuleReadsTheSituationForTheNextFixture() throws {
+        let cup = fixture(competition: .cup)
+        let league = fixture("next", daysFromToday: 2)
+        #expect(try suggest(cup, among: [league]).score == 36)                                  // 60 × 0.6
+        #expect(try suggest(cup, among: [league], situation: .nothingToPlayFor).score == 60)
+    }
+
+    @Test func nothingToPlayForIsSharpnessWhereTheSharpnessRuleHolds() throws {
+        let unsharp = try suggest(fixture(), sharpness: [0.5, 0.5, 0.5], situation: .nothingToPlayFor)
+        #expect(unsharp.importance == .sharpness)
+        #expect(try suggest(fixture(), sharpness: [0.5, 0.5], situation: .nothingToPlayFor).importance == .low)
+    }
+
+    /// 20 × 1.2 (much stronger) × 1.1 (rested) = 26.4, the largest it can reach.
+    @Test func nothingToPlayForNeverReachesMedium() throws {
+        let rested = try suggest(fixture(opponent: .muchStronger), confirmed: [confirmed("last", daysFromToday: -8)],
+                                 situation: .nothingToPlayFor)
+        #expect(rested.importance == .low)
     }
 
     // MARK: Base and opponent

@@ -27,6 +27,11 @@ import Testing
         #expect(Importance.allCases.map { AdvisorText.name($0) } == ["High", "Medium", "Low", "Sharpness"])
     }
 
+    @Test func eachLeagueSituationHasItsName() {
+        #expect(LeagueSituation.allCases.map { AdvisorText.name($0) }
+                == ["Title race or relegation fight", "In contention", "Mid-table", "Nothing to play for"])
+    }
+
     @Test func aSuggestionNamesItsImportance() {
         func suggestion(_ importance: Importance) -> ImportanceSuggestion {
             ImportanceSuggestion(importance: importance, score: 6, reasons: ["League match: 6"], basis: .derived)

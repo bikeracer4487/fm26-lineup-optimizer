@@ -99,7 +99,8 @@ extension AppModel {
               let tiers = tiers(for: tactic), let fixture = fixtureForPlanner(stored) else { return nil }
         let among = openFixtures().map(\.fixture).filter { $0.id != draft.id }
         return try? ImportanceAdvisor.suggest(for: fixture, among: among, confirmed: history.map(\.lineup),
-                                              players: squad.book.allPlayers, tiers: tiers, parameters: planParameters)
+                                              players: squad.book.allPlayers, tiers: tiers, situation: .inContention,
+                                              parameters: planParameters)
     }
 
     /// Whether a fixture on `day` is past, so its importance no longer matters: before the game's current date, or
@@ -142,7 +143,8 @@ extension AppModel {
             guard let tiers = tiers(for: tactic) else { continue }
             do {
                 found[fixture.id] = try ImportanceAdvisor.suggest(for: fixture, among: among, confirmed: lineups,
-                                                                  players: players, tiers: tiers, parameters: parameters)
+                                                                  players: players, tiers: tiers, situation: .inContention,
+                                                                  parameters: parameters)
             } catch {
                 continue   // that fixture has no suggestion
             }

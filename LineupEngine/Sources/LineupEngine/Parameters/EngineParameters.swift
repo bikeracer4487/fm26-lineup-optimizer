@@ -411,7 +411,11 @@ public struct BiggerMatchStep: Sendable, Equatable {
 /// The numbers behind the suggested importance of a fixture: a base for the competition, a factor for the opponent,
 /// schedule factors, the lines between the levels and the rule for suggesting Sharpness.
 public struct ImportanceSuggestionRules: Sendable, Equatable {
+    /// A league match's base when the club is in contention (the usual case); the other situations have their own below.
     public var leagueBase: Double
+    public var leagueTitleRaceBase: Double
+    public var leagueMidTableBase: Double
+    public var leagueNothingToPlayForBase: Double
     public var cupBase: Double
     public var minorCupBase: Double
     public var friendlyBase: Double
@@ -443,13 +447,16 @@ public struct ImportanceSuggestionRules: Sendable, Equatable {
     public var sharpnessMinPlayers: Int
     public var sharpnessBelow: Double
 
-    public init(leagueBase: Double, cupBase: Double, minorCupBase: Double, friendlyBase: Double, unsetBase: Double,
+    public init(leagueBase: Double, leagueTitleRaceBase: Double, leagueMidTableBase: Double,
+                leagueNothingToPlayForBase: Double, cupBase: Double, minorCupBase: Double, friendlyBase: Double, unsetBase: Double,
                 muchStrongerFactor: Double, strongerFactor: Double, similarFactor: Double, weakerFactor: Double,
                 muchWeakerFactor: Double, unsetOpponentFactor: Double, biggerMatchFrom: Double,
                 biggerMatchSteps: [BiggerMatchStep], crowdedWindowDays: Int, crowdedMatches: Int, crowdedFactor: Double,
                 restedAfterDays: Int, restedFactor: Double, highFrom: Double, mediumFrom: Double,
                 sharpnessBelowScore: Double, sharpnessMinDaysToNext: Int, sharpnessMinPlayers: Int, sharpnessBelow: Double) {
-        self.leagueBase = leagueBase; self.cupBase = cupBase; self.minorCupBase = minorCupBase
+        self.leagueBase = leagueBase; self.leagueTitleRaceBase = leagueTitleRaceBase
+        self.leagueMidTableBase = leagueMidTableBase; self.leagueNothingToPlayForBase = leagueNothingToPlayForBase
+        self.cupBase = cupBase; self.minorCupBase = minorCupBase
         self.friendlyBase = friendlyBase; self.unsetBase = unsetBase
         self.muchStrongerFactor = muchStrongerFactor; self.strongerFactor = strongerFactor
         self.similarFactor = similarFactor; self.weakerFactor = weakerFactor
@@ -1098,7 +1105,8 @@ public struct EngineParameters: Sendable {
                     + "age and nothing more, since decline is not measured"),
             importanceRules: Parameter(
                 ImportanceSuggestionRules(
-                    leagueBase: 80, cupBase: 60, minorCupBase: 30, friendlyBase: 10, unsetBase: 50,
+                    leagueBase: 80, leagueTitleRaceBase: 100, leagueMidTableBase: 60,
+                    leagueNothingToPlayForBase: 20, cupBase: 60, minorCupBase: 30, friendlyBase: 10, unsetBase: 50,
                     muchStrongerFactor: 1.2, strongerFactor: 1.1, similarFactor: 1.0, weakerFactor: 0.8,
                     muchWeakerFactor: 0.6, unsetOpponentFactor: 1.0, biggerMatchFrom: 80,
                     biggerMatchSteps: [BiggerMatchStep(withinDays: 2, factor: 0.6), BiggerMatchStep(withinDays: 3, factor: 0.7),
@@ -1108,9 +1116,10 @@ public struct EngineParameters: Sendable {
                     sharpnessBelowScore: 50, sharpnessMinDaysToNext: 4, sharpnessMinPlayers: 3, sharpnessBelow: 0.70),
                 .carriedOverFM26,
                 source: "scoring_parameters.py (branch customizable-tactics; its automatic importance tables, never called by the old app); "
-                    + "docs/Research/player-rotation-guide.md. Nothing is published for FM27. The branch's table needed the stage of the "
-                    + "competition and the state of the title race, which a fixture does not carry: league is its in-contention value, "
-                    + "cup lies between its early round and quarter-final"),
+                    + "docs/Research/player-rotation-guide.md. Nothing is published for FM27. The league bases are the old table's four "
+                    + "league values (title race or relegation 100, contention 80, mid-table 60, dead rubber 20); the old table gave "
+                    + "100 only in the last ten league matches, and here the owner says when. A fixture does not carry the stage of "
+                    + "a cup, so cup lies between its early round and quarter-final"),
             mentoringWeights: Parameter(
                 [.professionalism: 3, .pressure: 2, .determination: 1, .ambition: 1], .derived,
                 source: "this design's choice: they only order which group is suggested first"),

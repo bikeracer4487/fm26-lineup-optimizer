@@ -71,6 +71,15 @@ public enum AdvisorText {
         }
     }
 
+    public static func name(_ situation: LeagueSituation) -> String {
+        switch situation {
+        case .titleRaceOrRelegationFight: "Title race or relegation fight"
+        case .inContention: "In contention"
+        case .midTable: "Mid-table"
+        case .nothingToPlayFor: "Nothing to play for"
+        }
+    }
+
     public static func name(_ strength: OpponentStrength) -> String {
         switch strength {
         case .muchStronger: "Much stronger"
