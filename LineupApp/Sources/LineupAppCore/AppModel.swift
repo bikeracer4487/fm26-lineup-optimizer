@@ -116,6 +116,8 @@ public struct AppEnvironment: Sendable {
 
     /// How many times the plan has been worked out, so tests can tell when a change did not replan.
     @ObservationIgnored var timesPlanned = 0
+    /// How many times the plan has worked out whom Player Removal advises to leave (`advisedToLeaveForPlan`).
+    @ObservationIgnored var timesAdvisedToLeaveWorkedOut = 0
     /// How many times the advice, and the elevens of a tactic other than the primary, have been worked out.
     @ObservationIgnored var timesAdvised = 0
     @ObservationIgnored var timesElevensWorkedOut = 0

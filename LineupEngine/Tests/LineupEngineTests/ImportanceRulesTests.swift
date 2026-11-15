@@ -13,23 +13,25 @@ import Testing
     func context(_ importance: Importance, history: [ConfirmedLineup] = [], tiers: SquadTiers? = nil,
                  retraining: [Retraining] = [], marks: [PlayerID: SaleMark] = [:], stability: Double = 0,
                  ownClub: String? = "Oxford City", outlooks: [PlayerID: Outlook] = [:],
-                 development: Double = 1, successorsFavoured: Set<PlayerID>? = nil) -> RuleContext {
+                 development: Double = 1, successorsFavoured: Set<PlayerID>? = nil,
+                 advisedToLeave: Set<PlayerID> = []) -> RuleContext {
         RuleContext(importance: importance, date: date, assignments: assignments, ownClub: ownClub,
                     history: StartHistory(history), tiers: tiers ?? SquadTiers(first: [:], second: [:], ratings: [:]),
                     retraining: retraining, marks: marks, stability: stability, outlooks: outlooks,
-                    development: development, successorsFavoured: successorsFavoured)
+                    development: development, successorsFavoured: successorsFavoured, advisedToLeave: advisedToLeave)
     }
 
     func run(_ player: Player, _ importance: Importance, history: [ConfirmedLineup] = [], tiers: SquadTiers? = nil,
              retraining: [Retraining] = [], marks: [PlayerID: SaleMark] = [:], stability: Double = 0,
              ownClub: String? = "Oxford City", outlooks: [PlayerID: Outlook] = [:], development: Double = 1,
-             successorsFavoured: Set<PlayerID>? = nil, parameters: EngineParameters? = nil)
+             successorsFavoured: Set<PlayerID>? = nil, advisedToLeave: Set<PlayerID> = [],
+             parameters: EngineParameters? = nil)
         -> (everySlot: [Adjustment], bySlot: [SlotID: [Adjustment]]) {
         ImportanceRules.adjustments(
             for: player,
             context: context(importance, history: history, tiers: tiers, retraining: retraining, marks: marks,
                              stability: stability, ownClub: ownClub, outlooks: outlooks, development: development,
-                             successorsFavoured: successorsFavoured),
+                             successorsFavoured: successorsFavoured, advisedToLeave: advisedToLeave),
             parameters: parameters ?? self.parameters)
     }
 
@@ -497,32 +499,110 @@ import Testing
         #expect(floorFactor(run(p, .low, outlooks: nowhere)) == nil)
     }
 
+    /// A 19-year-old with left-back familiarity `familiarity`, being retrained there.
+    func retrainee(_ familiarity: Int) -> Player {
+        Player.fixture(age: 19, attributes: [.professionalism: 15], familiarity: [.defenderLeft: familiarity],
+                       currentAbility: 100, potentialAbility: 130)
+    }
+
+    /// His adjustments by slot as a successor on course at left back, who can also play striker, being retrained at
+    /// left back.
+    func asRetrainingSuccessor(_ p: Player, _ importance: Importance, parameters: EngineParameters? = nil)
+        -> [SlotID: [Adjustment]] {
+        run(p, importance, retraining: retrain(p, .defenderLeft),
+            outlooks: outlooks(p, .couldPassFirst, slots: [at(.D_L, .onCourse)] + playable(.ST_C)),
+            parameters: parameters).bySlot
+    }
+
     @Test func theLargerOfRetrainingAndSuccessorIsKept() {
-        func player(_ familiarity: Int) -> Player {
-            Player.fixture(age: 19, attributes: [.professionalism: 15], familiarity: [.defenderLeft: familiarity],
-                           currentAbility: 100, potentialAbility: 130)
-        }
-        func kept(_ p: Player, _ importance: Importance, parameters: EngineParameters? = nil) -> [Adjustment]? {
-            run(p, importance, retraining: retrain(p, .defenderLeft),
-                outlooks: outlooks(p, .couldPassFirst, slots: [at(.D_L, .onCourse)]), parameters: parameters).bySlot[.D_L]
-        }
-        // Low: both 1.15, so retraining is kept.
-        let low = player(12)
-        #expect(kept(low, .low)?.map(\.kind) == [.retraining])
-        #expect(kept(low, .low)?.first?.factor == 1.15)
-        // Medium: retraining's 1.08 over the successor's 1.05.
-        let medium = player(15)
-        #expect(kept(medium, .medium)?.map(\.kind) == [.retraining])
-        #expect(kept(medium, .medium)?.first?.factor == 1.08)
-        // A smaller retraining factor gives way to the successor's.
+        // Low: the floor and retraining together, 1.07 × 1.15, come to more than the successor's 1.15.
+        let low = retrainee(12)
+        #expect(asRetrainingSuccessor(low, .low)[.D_L]?.map(\.kind) == [.development, .retraining])
+        #expect(asRetrainingSuccessor(low, .low)[.D_L]?.map(\.factor) == [1.07, 1.15])
+        // Medium: no floor, so retraining's 1.08 alone over the successor's 1.05.
+        let medium = retrainee(15)
+        #expect(asRetrainingSuccessor(medium, .medium)[.D_L]?.map(\.kind) == [.retraining])
+        #expect(asRetrainingSuccessor(medium, .medium)[.D_L]?.first?.factor == 1.08)
+        // A retraining factor small enough that the two together come to less gives way to the successor's.
         var smaller = parameters
-        smaller.retrainingFactorLow = Parameter(1.10, .derived, source: "test")
-        #expect(kept(low, .low, parameters: smaller)
+        smaller.retrainingFactorLow = Parameter(1.05, .derived, source: "test")
+        #expect(asRetrainingSuccessor(low, .low, parameters: smaller)[.D_L]
             == [successor(1.15, "On course to pass Smith at left back: favoured for matches there (×1.15)")])
         // With retraining's familiarity outside its range there is no retraining favour, and the successor's stands.
-        #expect(kept(player(18), .low)?.map(\.kind) == [.successor])
-        #expect(kept(player(9), .low)?.map(\.kind) == [.successor])
-        #expect(kept(player(14), .medium)?.map(\.kind) == [.successor])
+        #expect(asRetrainingSuccessor(retrainee(18), .low)[.D_L]?.map(\.kind) == [.successor])
+        #expect(asRetrainingSuccessor(retrainee(9), .low)[.D_L]?.map(\.kind) == [.successor])
+        #expect(asRetrainingSuccessor(retrainee(14), .medium)[.D_L]?.map(\.kind) == [.successor])
+    }
+
+    @Test func aRetrainingSuccessorGetsWhicheverTotalIsLargerAndNeverAllThree() {
+        let p = retrainee(12)
+        // The floor and retraining at left back, as a retrainee who is no successor has them; no successor's favour.
+        let larger = asRetrainingSuccessor(p, .low)
+        let asNonSuccessor = run(p, .low, retraining: retrain(p, .defenderLeft), outlooks: outlooks(p)).bySlot[.D_L]
+        #expect(asNonSuccessor?.map(\.kind) == [.development, .retraining])
+        #expect(larger[.D_L] == asNonSuccessor)
+        #expect(larger[.D_L]?.contains { $0.kind == .successor } == false)
+        // His other slot keeps the floor alone.
+        #expect(larger[.ST_C] == [floor(1.07)])
+        for importance in [Importance.low, .sharpness, .medium] {
+            for familiarity in [9, 12, 15, 18] {
+                let kinds = asRetrainingSuccessor(retrainee(familiarity), importance)[.D_L]?.map(\.kind) ?? []
+                #expect(!(kinds.contains(.successor) && (kinds.contains(.development) || kinds.contains(.retraining))),
+                        "\(importance), familiarity \(familiarity)")
+            }
+        }
+        // Where the successor's favour is larger (here 1.30 against 1.07 × 1.15), he has it alone.
+        var bigger = parameters
+        bigger.successorFactorLow = Parameter(1.30, .derived, source: "test")
+        #expect(asRetrainingSuccessor(p, .low, parameters: bigger)[.D_L]
+            == [successor(1.30, "On course to pass Smith at left back: favoured for matches there (×1.30)")])
+        #expect(asRetrainingSuccessor(p, .low, parameters: bigger)[.ST_C] == [floor(1.07)])
+    }
+
+    @Test func onATieTheFloorAndRetrainingAreKept() {
+        // Factors exact in binary: 1.125 × 1.125 is 1.265625, the successor's favour.
+        var tie = parameters
+        tie.developmentFactors = Parameter([AgeFactor(upToAge: 23, factor: 1.125)], .derived, source: "test")
+        tie.retrainingFactorLow = Parameter(1.125, .derived, source: "test")
+        tie.successorFactorLow = Parameter(1.265625, .derived, source: "test")
+        let kept = asRetrainingSuccessor(retrainee(12), .low, parameters: tie)[.D_L]
+        #expect(kept?.map(\.kind) == [.development, .retraining])
+        #expect(kept?.map(\.factor) == [1.125, 1.125])
+        // A hair more for the successor and his favour is kept alone.
+        tie.successorFactorLow = Parameter(1.2657, .derived, source: "test")
+        #expect(asRetrainingSuccessor(retrainee(12), .low, parameters: tie)[.D_L]?.map(\.kind) == [.successor])
+    }
+
+    @Test func aSuccessorWhoseRetrainingWinsTakesNoPlaceAtMedium() {
+        // A is closest, at left back, and retrained there with familiarity `familiarity`; B and C are further off.
+        func players(_ familiarity: Int) -> (a: Player, b: Player, c: Player, found: [PlayerID: Outlook]) {
+            let a = Player.fixture(name: "Young A", age: 19, attributes: [.professionalism: 15],
+                                   familiarity: [.defenderLeft: familiarity], potentialAbility: 130)
+            let b = Player.fixture(name: "Young B", age: 19, attributes: [.professionalism: 15], potentialAbility: 130)
+            let c = Player.fixture(name: "Young C", age: 19, attributes: [.professionalism: 15], potentialAbility: 130)
+            let found: [PlayerID: Outlook] = [
+                a.id: outlook(a, .couldPassFirst, slots: [at(.D_L, .close, rating: 103)]),
+                b.id: outlook(b, .couldPassFirst, slots: [at(.ST_C, .onCourse, rating: 100)]),
+                c.id: outlook(c, .couldPassFirst, slots: [at(.D_R, .onCourse, rating: 98)])]
+            return (a, b, c, found)
+        }
+        // Familiarity 15: retraining's 1.08 beats the successor's 1.05 at his only successor slot, so B and C are the two.
+        let won = players(15)
+        let wonContext = context(.medium, retraining: retrain(won.a, .defenderLeft), outlooks: won.found)
+        #expect(ImportanceRules.successors(players: [won.a, won.b, won.c], context: wonContext, parameters: parameters)
+            == [won.b.id, won.c.id])
+        let a = run(won.a, .medium, retraining: retrain(won.a, .defenderLeft), outlooks: won.found,
+                    successorsFavoured: [won.b.id, won.c.id])
+        #expect(a.bySlot[.D_L]?.map(\.kind) == [.retraining])
+        // Familiarity 14 is below the medium retraining range: no retraining favour, so he takes his place as before.
+        let stands = players(14)
+        let standsContext = context(.medium, retraining: retrain(stands.a, .defenderLeft), outlooks: stands.found)
+        #expect(ImportanceRules.successors(players: [stands.a, stands.b, stands.c], context: standsContext,
+                                           parameters: parameters) == [stands.a.id, stands.b.id])
+        // A retraining at a slot he is no successor at leaves his place alone.
+        let elsewhere = context(.medium, retraining: retrain(won.a, .defenderRight), outlooks: won.found)
+        #expect(ImportanceRules.successors(players: [won.a, won.b, won.c], context: elsewhere, parameters: parameters)
+            == [won.a.id, won.b.id])
     }
 
     @Test func theFloorAndRetrainingStillMultiply() {
@@ -653,6 +733,83 @@ import Testing
         #expect(run(p, .low, outlooks: found, parameters: off).bySlot[.D_L]?.map(\.kind) == [.development])
         #expect(run(p, .medium, outlooks: found, parameters: off).bySlot.values.allSatisfy { $0.isEmpty })
         #expect(every(run(p, .sharpness, outlooks: found, parameters: off), .needsSharpness) == nil)
+    }
+
+    // MARK: Advised to leave
+
+    @Test func aPlayerAdvisedToLeaveLosesTheFloor() {
+        let p = young(19)
+        let someoneElse = PlayerID(key: "someone else")
+        for importance in [Importance.low, .sharpness] {
+            #expect(floorFactor(run(p, importance, outlooks: outlooks(p))) == 1.07, "\(importance)")
+            #expect(floorFactor(run(p, importance, outlooks: outlooks(p), advisedToLeave: [someoneElse])) == 1.07,
+                    "\(importance)")
+            let leaving = run(p, importance, outlooks: outlooks(p), advisedToLeave: [p.id])
+            #expect(leaving.everySlot.isEmpty, "\(importance)")
+            #expect(leaving.bySlot.values.allSatisfy { $0.isEmpty }, "\(importance)")
+        }
+    }
+
+    @Test func aPlayerAdvisedToLeaveLosesTheSuccessorsFavourAtLowAndMedium() {
+        let p = young(19)
+        let found = outlooks(p, .couldPassFirst, slots: [at(.D_L, .onCourse)] + playable(.ST_C))
+        // Low: neither the successor's favour at left back nor the floor at striker.
+        let low = run(p, .low, outlooks: found)
+        #expect(low.bySlot[.D_L] == [successor(1.15, "On course to pass Smith at left back: favoured for matches there (×1.15)")])
+        #expect(low.bySlot[.ST_C] == [floor(1.07)])
+        let lowLeaving = run(p, .low, outlooks: found, advisedToLeave: [p.id])
+        #expect(lowLeaving.everySlot.isEmpty)
+        #expect(lowLeaving.bySlot.values.allSatisfy { $0.isEmpty })
+        // Medium.
+        #expect(run(p, .medium, outlooks: found).bySlot[.D_L]
+            == [successor(1.05, "On course to pass Smith at left back: favoured for matches there (×1.05)")])
+        let mediumLeaving = run(p, .medium, outlooks: found, advisedToLeave: [p.id])
+        #expect(mediumLeaving.bySlot.values.allSatisfy { $0.isEmpty })
+        // Someone else advised to leave changes nothing.
+        #expect(run(p, .low, outlooks: found, advisedToLeave: [PlayerID(key: "someone else")]).bySlot == low.bySlot)
+        // Nor is he got sharp as a successor in a sharpness fixture: he is no longer one this fixture favours.
+        let unsharp = Player.fixture(age: 19, attributes: [.professionalism: 15], currentAbility: 100, potentialAbility: 130,
+                                     sharpness: 0.705)
+        let unsharpFound = outlooks(unsharp, .couldPassFirst, slots: [at(.D_L, .onCourse)])
+        #expect(every(run(unsharp, .sharpness, outlooks: unsharpFound), .needsSharpness) != nil)
+        #expect(every(run(unsharp, .sharpness, outlooks: unsharpFound, advisedToLeave: [unsharp.id]), .needsSharpness) == nil)
+        // In the elevens the sharpness rule treats him as it treats anyone there.
+        #expect(every(run(unsharp, .sharpness, tiers: tiers(unsharp, tier: 2), outlooks: unsharpFound,
+                          advisedToLeave: [unsharp.id]), .needsSharpness) != nil)
+    }
+
+    @Test func aSuccessorAdvisedToLeaveTakesNoPlaceAmongTheTwoAtMedium() {
+        let a = Player.fixture(name: "Young A", age: 19, attributes: [.professionalism: 15], potentialAbility: 130)
+        let b = Player.fixture(name: "Young B", age: 19, attributes: [.professionalism: 15], potentialAbility: 130)
+        let c = Player.fixture(name: "Young C", age: 19, attributes: [.professionalism: 15], potentialAbility: 130)
+        let found: [PlayerID: Outlook] = [
+            a.id: outlook(a, .couldPassFirst, slots: [at(.D_L, .close, rating: 103)]),
+            b.id: outlook(b, .couldPassFirst, slots: [at(.ST_C, .onCourse, rating: 100)]),
+            c.id: outlook(c, .couldPassFirst, slots: [at(.D_R, .onCourse, rating: 98)])]
+        #expect(ImportanceRules.successors(players: [a, b, c], context: context(.medium, outlooks: found),
+                                           parameters: parameters) == [a.id, b.id])
+        #expect(ImportanceRules.successors(players: [a, b, c],
+                                           context: context(.medium, outlooks: found, advisedToLeave: [a.id]),
+                                           parameters: parameters) == [b.id, c.id])
+        // The other two are favoured at medium; he is not.
+        let favoured: Set<PlayerID> = [b.id, c.id]
+        func medium(_ p: Player, _ s: SlotID) -> Adjustment? {
+            slot(run(p, .medium, outlooks: found, successorsFavoured: favoured, advisedToLeave: [a.id]), s, .successor)
+        }
+        #expect(medium(b, .ST_C)?.factor == 1.05)
+        #expect(medium(c, .D_R)?.factor == 1.05)
+        #expect(medium(a, .D_L) == nil)
+    }
+
+    @Test func aMarkedPlayerAdvisedToLeaveKeepsTheShopWindowFavour() {
+        let p = Player.fixture(age: 19, currentAbility: 100, potentialAbility: 130)
+        for importance in [Importance.low, .sharpness] {
+            let r = run(p, importance, marks: [p.id: .toSell], outlooks: outlooks(p), advisedToLeave: [p.id])
+            #expect(r.everySlot == [Adjustment(kind: .shopWindow, factor: 1.03,
+                                               reason: "Marked to sell: favoured for minutes, an untested way to bring offers (×1.03)")],
+                    "\(importance)")
+            #expect(r.bySlot.values.allSatisfy { $0.isEmpty }, "\(importance)")
+        }
     }
 
     // MARK: Marked to sell or loan out

@@ -258,7 +258,7 @@ extension AppModel {
             fixtures: withinReach.compactMap(fixtureForPlanner),   // every one has a tactic: checked above
             players: players, ownClub: ownClub, asOf: asOf, confirmed: history.map(\.lineup),
             played: countedSinceImport(players).map(\.lineup), retraining: retrainingForPlan, marks: marks,
-            settings: settings.plan)
+            advisedToLeave: advisedToLeaveForPlan, settings: settings.plan)
         let plan: Plan
         do {
             plan = try Planner(catalog: catalog, profile: profile, parameters: parameters).plan(request)
@@ -293,6 +293,28 @@ extension AppModel {
                                ignoredOverrides: ignored)
         }
         return .ready(result)
+    }
+
+    /// Whom Player Removal advises to release, sell or terminate, for the planner, which gives them no development
+    /// favour: worked out by the engine's Player Removal on the inputs the advice uses (the squads, the club, the primary
+    /// tactic, the history, the plan's starting day and the retrainings handed to the planner), apart from the advice,
+    /// which is worked out only when read. Empty, and not worked out, with the Development setting at 0, since no favour
+    /// is then given. Empty when it cannot be worked out (no squad, no usable primary tactic, or a failure in the
+    /// engine): the plan is still made, with nobody left out, and the advice screens show their own failure.
+    var advisedToLeaveForPlan: Set<PlayerID> {
+        guard settings.plan.development > 0 else { return [] }
+        let players = squad.book.allPlayers
+        guard !players.isEmpty, let asOf = planStartDay, let primary = primaryTactic,
+              unusableSentence(primary.tactic) == nil else { return [] }
+        timesAdvisedToLeaveWorkedOut += 1
+        do {
+            return try Removal.report(
+                tactic: primary.tactic, players: players, ownClub: ownClub, money: squad.book.moneyStyle,
+                history: StartHistory(history.map(\.lineup)), asOf: asOf, retraining: retrainingForPlan,
+                catalog: catalog, profile: profile, parameters: planParameters).advisedToLeave
+        } catch {
+            return []   // the advice says why; the plan leaves nobody out
+        }
     }
 
     /// The engine's sentence for why the planner refused, and the screen that puts it right, if one can:

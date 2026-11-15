@@ -19,14 +19,18 @@ public struct RuleContext: Sendable {
     /// The only successors who may be favoured (`ImportanceRules.successors`), which the planner sets for a medium
     /// fixture; nil means no cap applies.
     public var successorsFavoured: Set<PlayerID>? = nil
+    /// The players Player Removal advises to move on (`RemovalReport.advisedToLeave`), as the planner is handed them:
+    /// neither development favour goes to them.
+    public var advisedToLeave: Set<PlayerID> = []
 
     public init(importance: Importance, date: Day, assignments: [SlotAssignment], ownClub: String?, history: StartHistory,
                 tiers: SquadTiers, retraining: [Retraining], marks: [PlayerID: SaleMark] = [:], stability: Double,
-                outlooks: [PlayerID: Outlook] = [:], development: Double = 1, successorsFavoured: Set<PlayerID>? = nil) {
+                outlooks: [PlayerID: Outlook] = [:], development: Double = 1, successorsFavoured: Set<PlayerID>? = nil,
+                advisedToLeave: Set<PlayerID> = []) {
         self.importance = importance; self.date = date; self.assignments = assignments; self.ownClub = ownClub
         self.history = history; self.tiers = tiers; self.retraining = retraining; self.marks = marks
         self.stability = stability; self.outlooks = outlooks; self.development = development
-        self.successorsFavoured = successorsFavoured
+        self.successorsFavoured = successorsFavoured; self.advisedToLeave = advisedToLeave
     }
 }
 
@@ -54,19 +58,13 @@ public enum ImportanceRules {
         for assignment in context.assignments {
             var found: [Adjustment] = []
             let retrained = retraining(player, assignment, context, parameters)
+            // The floor is the same at every slot he can play; it is kept in each slot's own list so the successor's
+            // favour can take its place at one. It and retraining multiply.
+            let asNonSuccessor = (playable.contains(assignment.slot) ? floor : []) + retrained
             if let favour = successor[assignment.slot] {
-                // The successor's favour takes the floor's place. It and retraining both reward matches at this slot,
-                // so only the larger is kept, retraining on a tie.
-                if let retrainingFavour = retrained.first, retrainingFavour.factor >= favour.factor {
-                    found += retrained
-                } else {
-                    found.append(favour)
-                }
+                found += atSuccessorSlot(favour, asNonSuccessor: asNonSuccessor, retrained: retrained)
             } else {
-                // The floor is the same at every slot he can play; it is kept in each slot's own list so the
-                // successor's favour can take its place at one. It and retraining multiply.
-                if playable.contains(assignment.slot) { found += floor }
-                found += retrained
+                found += asNonSuccessor
             }
             found += stability(recent, assignment, context, parameters)
             bySlot[assignment.slot] = found.sorted(by: inKindOrder)
@@ -80,9 +78,20 @@ public enum ImportanceRules {
     /// choice's rating over his successor slots, where a first choice rated 0 counts as already passed (infinitely
     /// close); ties go to the lower key. The planner puts the result in `RuleContext.successorsFavoured` for a medium
     /// fixture; low and sharpness fixtures have no cap.
+    /// A player advised to leave takes no place, nor does one who would carry the successor's favour at none of his
+    /// successor slots, because the floor and retraining together come to at least as much at each (`atSuccessorSlot`).
     public static func successors(players: [Player], context: RuleContext, parameters: EngineParameters) -> Set<PlayerID> {
+        guard let factor = successorFactor(context, parameters) else { return [] }
         let ranked: [(id: PlayerID, closeness: Double)] = players.compactMap { player in
-            let slots = successorSlots(player, context, parameters)
+            guard !context.advisedToLeave.contains(player.id) else { return nil }
+            let floor = developmentFloor(player, context, parameters)
+            let playable = Set(context.outlooks[player.id]?.slots.map(\.slot) ?? [])
+            let slots = successorSlots(player, context, parameters).filter { found in
+                guard let assignment = context.assignments.first(where: { $0.slot == found.slot.slot }) else { return false }
+                let retrained = retraining(player, assignment, context, parameters)
+                let asNonSuccessor = (playable.contains(assignment.slot) ? floor : []) + retrained
+                return retrained.isEmpty || !keepsTheFloorAndRetraining(factor, asNonSuccessor)
+            }
             guard !slots.isEmpty, !hasHadHisMatches(player, context, parameters) else { return nil }
             let closeness = slots.map { $0.rival.rating > 0 ? $0.slot.rating / $0.rival.rating : .infinity }.max()!
             return (player.id, closeness)
@@ -91,6 +100,22 @@ public enum ImportanceRules {
             a.closeness != b.closeness ? a.closeness > b.closeness : a.id.key < b.id.key
         }
         return Set(closestFirst.prefix(max(0, parameters.successorsFavouredAtMedium.value)).map(\.id))
+    }
+
+    /// At a slot where he is a successor, the successor's favour takes the floor's place. Where he also has a retraining
+    /// favour, all three reward matches at the slot, so he gets whichever is larger: the successor's favour alone, or
+    /// the floor (where it applies) and retraining together, as a player who is no successor would have them there; the
+    /// floor and retraining on a tie. Never all three.
+    private static func atSuccessorSlot(_ favour: Adjustment, asNonSuccessor: [Adjustment],
+                                        retrained: [Adjustment]) -> [Adjustment] {
+        guard !retrained.isEmpty else { return [favour] }
+        return keepsTheFloorAndRetraining(favour.factor, asNonSuccessor) ? asNonSuccessor : [favour]
+    }
+
+    /// Whether the floor and retraining, `asNonSuccessor`, multiplied in their order, come to at least the successor's
+    /// `factor`.
+    private static func keepsTheFloorAndRetraining(_ factor: Double, _ asNonSuccessor: [Adjustment]) -> Bool {
+        asNonSuccessor.map(\.factor).reduce(1, *) >= factor
     }
 
     private static func inKindOrder(_ a: Adjustment, _ b: Adjustment) -> Bool {
@@ -171,7 +196,8 @@ public enum ImportanceRules {
     /// aged `developingUpToAge` or under, with potential at least `prospectHeadroom` times his ability and an outlook
     /// that is not markedly lower. Its size is what a match is worth to his growth at his age (`developmentFactors`, or
     /// `developmentFactorLowProfessionalism` for a young teenager with low Professionalism), scaled by the Development
-    /// setting. He has none once he has had his matches for the month (`hasHadHisMatches`).
+    /// setting. He has none once he has had his matches for the month (`hasHadHisMatches`), nor when he is advised to
+    /// leave (`RuleContext.advisedToLeave`).
     private static func developmentFloor(_ player: Player, _ context: RuleContext,
                                          _ parameters: EngineParameters) -> [Adjustment] {
         switch context.importance {
@@ -179,7 +205,8 @@ public enum ImportanceRules {
         case .low, .sharpness: break
         }
         // The margin absorbs binary floating-point error: 1.10 × 100 is 110.00000000000001.
-        guard context.development > 0, player.age <= parameters.developingUpToAge.value,
+        guard context.development > 0, !context.advisedToLeave.contains(player.id),
+              player.age <= parameters.developingUpToAge.value,
               Double(player.potentialAbility) + 1e-9 >= parameters.prospectHeadroom.value * Double(player.currentAbility),
               let outlook = context.outlooks[player.id], !outlook.isMarkedlyLower,
               !hasHadHisMatches(player, context, parameters)
@@ -202,19 +229,12 @@ public enum ImportanceRules {
     /// The successor's favour at each slot of the fixture's tactic where he is a successor (`successorSlots`):
     /// `successorFactorLow` in a low or sharpness fixture, `successorFactorMedium` in a medium one and nothing in a high
     /// one, scaled by the Development setting as the floor is. None once he has had his matches for the month, nor in a
-    /// fixture whose cap (`RuleContext.successorsFavoured`) leaves him out.
+    /// fixture whose cap (`RuleContext.successorsFavoured`) leaves him out, nor when he is advised to leave.
     private static func successorFavour(_ player: Player, _ context: RuleContext,
                                         _ parameters: EngineParameters) -> [SlotID: Adjustment] {
-        let base: Double
-        switch context.importance {
-        case .high: return [:]
-        case .medium: base = parameters.successorFactorMedium.value
-        case .low, .sharpness: base = parameters.successorFactorLow.value
-        }
-        guard context.development > 0, context.successorsFavoured?.contains(player.id) ?? true,
+        guard let factor = successorFactor(context, parameters), !context.advisedToLeave.contains(player.id),
+              context.successorsFavoured?.contains(player.id) ?? true,
               !hasHadHisMatches(player, context, parameters) else { return [:] }
-        let factor = 1 + (base - 1) * context.development
-        guard factor != 1 else { return [:] }
         var found: [SlotID: Adjustment] = [:]
         for (slot, rival, isClose) in successorSlots(player, context, parameters) {
             found[slot.slot] = Adjustment(
@@ -223,6 +243,20 @@ public enum ImportanceRules {
                                               factor: factor))
         }
         return found
+    }
+
+    /// The successor's favour in the fixture, scaled by the Development setting; nil in a high fixture, with the setting
+    /// at 0, or where it comes to 1.
+    private static func successorFactor(_ context: RuleContext, _ parameters: EngineParameters) -> Double? {
+        let base: Double
+        switch context.importance {
+        case .high: return nil
+        case .medium: base = parameters.successorFactorMedium.value
+        case .low, .sharpness: base = parameters.successorFactorLow.value
+        }
+        guard context.development > 0 else { return nil }
+        let factor = 1 + (base - 1) * context.development
+        return factor != 1 ? factor : nil
     }
 
     /// The slots of the fixture's tactic where he is a successor, in his outlook's order, each with the first choice he

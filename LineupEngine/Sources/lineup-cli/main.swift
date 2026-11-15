@@ -24,7 +24,8 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
 
        select chooses the lineup for the next fixture.
        plan chooses the lineups for the next fixtures in date order, every one with the --tactic tactic, projecting
-       fitness from the day the squads were exported (--as-of) and printing a table of who starts where.
+       fitness from the day the squads were exported (--as-of) and printing a table of who starts where. A player
+       Player Removal advises to release, sell or terminate (as advise works it out) is given no development favour.
        advise prints the advisors' reports for the --tactic tactic as of --as-of: the first and second elevens, depth
        at each slot, who needs rest, who could retrain to cover thin slots, who to sell, loan out or release, and the
        loan review; with --fixtures, a suggested importance beside each fixture's own; then, for each squad given,
@@ -252,9 +253,24 @@ do {
         let fixtures = resolveFixtures(fixtureEntries ?? [], file: options.fixtures!, tactic: tactic, book: book)
         let profile = profiles[0]
         let parameters = EngineParameters.fm27
+        // Whom Player Removal advises to move on, from the inputs `advise` uses, so neither development favour goes to
+        // them. With Development at 0 no favour is given, so it is not worked out. Advice that cannot be worked out
+        // leaves nobody out, and says why; the plan is made all the same.
+        var leaving: Set<PlayerID> = []
+        if options.settings.development > 0 {
+            do {
+                leaving = try Removal.report(
+                    tactic: tactic, players: book.allPlayers, ownClub: ownClub, money: book.moneyStyle,
+                    history: StartHistory(history), asOf: options.asOf!, retraining: [], catalog: catalog,
+                    profile: profile, parameters: parameters).advisedToLeave
+            } catch {
+                FileHandle.standardError.write(Data(("Player Removal could not be worked out, so nobody is left out of the "
+                    + "development favours: \(ErrorDescriptions.describe(error))\n").utf8))
+            }
+        }
         let plan = try Planner(catalog: catalog, profile: profile, parameters: parameters).plan(PlanRequest(
             fixtures: fixtures, players: book.allPlayers, ownClub: ownClub, asOf: options.asOf!, confirmed: history,
-            retraining: [], settings: options.settings))
+            retraining: [], advisedToLeave: leaving, settings: options.settings))
         output = Report.render(header, plan: plan, fixtures: fixtures, history: history, asOf: options.asOf!,
                                profile: profile, parameters: parameters, settings: options.settings)
 

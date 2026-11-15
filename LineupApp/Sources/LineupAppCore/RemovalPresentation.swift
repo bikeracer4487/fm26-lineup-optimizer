@@ -140,7 +140,8 @@ public struct YoungRow: Identifiable, Equatable, Sendable {
     /// The engine's name for his action: "Keep and develop".
     public let actionText: String
     /// His action stamped in the tone of his level's stamp in the table (`RemovalPresentation.stamp`), so a player
-    /// advised to go stands out here as he does there.
+    /// advised to go stands out here as he does there; a loan for matches, which asks the owner to act, in ink where his
+    /// level's tone would be muted (`RemovalPresentation.youngStampTone`).
     public let stamp: StatusStamp
     /// The engine's sentences, as written and in its order (`AdvisorText.youngLines`).
     public let lines: [String]
@@ -157,7 +158,7 @@ public struct YoungRow: Identifiable, Equatable, Sendable {
         id = advice.player
         titleText = ([advice.name, String(age)] + [position].compactMap { $0 }).joined(separator: " · ")
         actionText = AdvisorText.name(advice.action)
-        stamp = StatusStamp(text: actionText, tone: RemovalPresentation.stamp(advice.level).tone)
+        stamp = StatusStamp(text: actionText, tone: RemovalPresentation.youngStampTone(advice))
         lines = AdvisorText.youngLines(advice, names: RemovalPresentation.positionName)
         let head = ([advice.name, "Age \(age)"] + [position].compactMap { $0 } + [actionText]).joined(separator: ", ")
         spokenText = "\(head). " + lines.joined(separator: " ")
@@ -343,6 +344,14 @@ public enum RemovalPresentation {
         case .keep: tone = .muted
         }
         return StatusStamp(text: AdvisorText.name(level), tone: tone)
+    }
+
+    /// The tone of a young player's stamp in the Young players part: his level's tone, except that a loan for matches
+    /// is drawn in ink where that tone is muted, since it asks the owner to do something and should not recede as
+    /// keeping a player does.
+    static func youngStampTone(_ advice: RemovalAdvice) -> StampTone {
+        let tone = stamp(advice.level).tone
+        return advice.action == .loanForMatches && tone == .muted ? .ink : tone
     }
 
     /// The verdict's stamp, in the engine's words: ending early in red, not extending in amber, making permanent in

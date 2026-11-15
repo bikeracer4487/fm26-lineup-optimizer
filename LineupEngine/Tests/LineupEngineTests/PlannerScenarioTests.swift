@@ -22,9 +22,11 @@ import Testing
     }
 
     func plan(_ fixtures: [Fixture], _ players: [Player], retraining: [Retraining] = [],
-              settings: PlanSettings = .standard, marks: [PlayerID: SaleMark] = [:]) throws -> Plan {
+              settings: PlanSettings = .standard, marks: [PlayerID: SaleMark] = [:],
+              advisedToLeave: Set<PlayerID> = []) throws -> Plan {
         try planner.plan(PlanRequest(fixtures: fixtures, players: players, ownClub: "Oxford City", asOf: day0,
-                                     confirmed: [], retraining: retraining, marks: marks, settings: settings))
+                                     confirmed: [], retraining: retraining, marks: marks, advisedToLeave: advisedToLeave,
+                                     settings: settings))
     }
 
     func id(_ slot: SlotID, _ tier: String = "first") -> PlayerID { PlannerFixture.id(slot, tier) }
@@ -342,6 +344,55 @@ import Testing
         }
         #expect(by == [young.id])
         #expect(kinds == [.successor])
+    }
+
+    @Test func advisedToLeaveHeDoesNotStartTheMediumOrLowFixtureOnTheFavour() throws {
+        let young = successor([.finishing: 15, .composure: 15])
+        let players = try PlannerFixture.squad(first: 14, second: 12) + [young]
+        try #require(abs(try successorShare(young, in: players) - 100.0 / 104) < 0.005)
+        let settings = PlanSettings(savingPlayers: 0)
+        for importance in [Importance.medium, .low] {
+            let favoured = try plan([fixture("f", importance, day: 0)], players, settings: settings).fixtures[0]
+            #expect(pick(favoured, .ST_C)?.player == young.id, "\(importance)")
+            // Advised to leave, he loses the favour, and the first choice starts.
+            let leaving = try plan([fixture("f", importance, day: 0)], players, settings: settings,
+                                   advisedToLeave: [young.id]).fixtures[0]
+            #expect(pick(leaving, .ST_C)?.player == id(.ST_C), "\(importance)")
+            #expect(!starters(leaving).contains(young.id), "\(importance)")
+            // Someone else advised to leave changes nothing.
+            #expect(try plan([fixture("f", importance, day: 0)], players, settings: settings,
+                             advisedToLeave: [id(.GK, "second")]).fixtures[0] == favoured, "\(importance)")
+        }
+        // Fixed at striker by the owner, he plays with neither favour.
+        var fixed = fixture("f", .low, day: 0)
+        fixed.overrides = [.ST_C: young.id]
+        let forced = try #require(pick(try plan([fixed], players, settings: settings, advisedToLeave: [young.id]).fixtures[0],
+                                       .ST_C))
+        #expect(forced.player == young.id)
+        #expect(!forced.adjustments.contains { $0.kind == .development || $0.kind == .successor })
+    }
+
+    @Test func aLoanedInYoungPlayerGetsNeitherFavour() throws {
+        // The owner's word: a loanee is used when needed and no more; his own players are developed. The same young
+        // striker, on loan from another club, fixed at striker so his adjustments can be read.
+        var loanee = successor([.finishing: 15, .composure: 15])
+        loanee.club = "Elsewhere FC"
+        let players = try PlannerFixture.squad(first: 14, second: 12) + [loanee]
+        let outlooks = try planner.developmentOutlooks(for: fixture("m", .medium, day: 0), players: players,
+                                                       ownClub: "Oxford City", retraining: [])
+        #expect(outlooks[loanee.id] == nil)
+        let settings = PlanSettings(savingPlayers: 0)
+        for importance in [Importance.medium, .low, .sharpness] {
+            // In a sharpness fixture the first choice, sharp already, is held back, and still the loanee does not start.
+            let unfixed = try plan([fixture("f", importance, day: 0)], players, settings: settings).fixtures[0]
+            #expect(!starters(unfixed).contains(loanee.id), "\(importance)")
+            var fixed = fixture("f", importance, day: 0)
+            fixed.overrides = [.ST_C: loanee.id]
+            let pick = try #require(pick(try plan([fixed], players, settings: settings).fixtures[0], .ST_C))
+            #expect(pick.player == loanee.id, "\(importance)")
+            #expect(pick.adjustments.contains { $0.kind == .loanedIn }, "\(importance)")
+            #expect(!pick.adjustments.contains { $0.kind == .development || $0.kind == .successor }, "\(importance)")
+        }
     }
 
     @Test func atNinetyEightHeDoesNot() throws {

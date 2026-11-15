@@ -482,6 +482,23 @@ import Testing
         }
     }
 
+    @Test func aLoanForMatchesRowIsStampedInInkWhereHisLevelWouldBeMuted() throws {
+        // A loan for matches asks the owner to do something, so it does not recede as keeping does.
+        let given = [young("l", name: "Loa", age: 19, action: .loanForMatches, level: .keep),
+                     young("m", name: "Med", age: 19, action: .loanForMatches, level: .medium),
+                     young("p", name: "Pla", age: 20, action: .play, level: .keep),
+                     young("d", name: "Dev", age: 16, action: .develop, level: .keep)]
+        let sheet = RemovalPresentation.sheet(report(given), squads: [:], ages: [:])
+        func stamp(_ key: String) throws -> StatusStamp { try #require(sheet.young.first { $0.id.key == key }).stamp }
+        #expect(try stamp("l") == StatusStamp(text: "Loan for matches", tone: .ink))
+        #expect(try stamp("m") == StatusStamp(text: "Loan for matches", tone: .ink))
+        // Every other row keeps his level's tone.
+        #expect(try stamp("p") == StatusStamp(text: "Keep and play", tone: .muted))
+        #expect(try stamp("d") == StatusStamp(text: "Keep and develop", tone: .muted))
+        // The table above keeps the level's stamp.
+        #expect(sheet.rows.first { $0.id.key == "l" }?.stamp == StatusStamp(text: "Keep", tone: .muted))
+    }
+
     @Test func aYoungRowNamesHisBestPositionInWordsAndNeverAKey() throws {
         let cases = [young("fmrte:7", name: "Tom Reed", age: 16, slot: .ST_C),
                      young("fmrte:8", name: "Ann Lee", age: 18, slot: .D_CL),

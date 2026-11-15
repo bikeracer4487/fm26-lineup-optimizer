@@ -18,14 +18,18 @@ public struct PlanRequest: Sendable {
     public var retraining: [Retraining]
     /// The players the owner has marked to sell or to loan out.
     public var marks: [PlayerID: SaleMark]
+    /// The players Player Removal advises to move on (`RemovalReport.advisedToLeave`), worked out by the caller from the
+    /// same squads; neither development favour goes to them. Empty when the advice could not be worked out, and not
+    /// read with the Development setting at 0.
+    public var advisedToLeave: Set<PlayerID>
     public var settings: PlanSettings
 
     public init(fixtures: [Fixture], players: [Player], ownClub: String?, asOf: Day, confirmed: [ConfirmedLineup],
                 played: [ConfirmedLineup] = [], retraining: [Retraining], marks: [PlayerID: SaleMark] = [:],
-                settings: PlanSettings) {
+                advisedToLeave: Set<PlayerID> = [], settings: PlanSettings) {
         self.fixtures = fixtures; self.players = players; self.ownClub = ownClub; self.asOf = asOf
         self.confirmed = confirmed; self.played = played; self.retraining = retraining; self.marks = marks
-        self.settings = settings
+        self.advisedToLeave = advisedToLeave; self.settings = settings
     }
 }
 
@@ -151,7 +155,8 @@ public struct Planner: Sendable {
             var context = RuleContext(importance: fixture.importance, date: fixture.date, assignments: assignments,
                                       ownClub: request.ownClub, history: history, tiers: tiersByFixture[index], retraining: retraining,
                                       marks: request.marks, stability: settings.stability,
-                                      outlooks: outlooksByFixture[index], development: settings.development)
+                                      outlooks: outlooksByFixture[index], development: settings.development,
+                                      advisedToLeave: request.advisedToLeave)
             // In an ordinary match only the closest successors are favoured; in a lesser one any successor is. Only
             // players the selector could pick for this fixture take a place among them.
             switch fixture.importance {

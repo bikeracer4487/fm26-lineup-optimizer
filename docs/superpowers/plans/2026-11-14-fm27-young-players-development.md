@@ -560,6 +560,13 @@ What was decided while building, where it differs from the design or from the pl
 - **The young row's stamp comes from Core.** It was built in the view in one tone. It is now the action in the tone of his level's stamp in the table above, so a young player advised to go stands out in the Young players part as he does in the table, and a kept one recedes.
 - **The Development explanation uses the app's words.** It said "lesser", "ordinary" and "biggest" fixtures and overstated who is favoured in a medium one. It now names the importances as the app does (Low, Sharpness, Medium, High) and reads its age and the count of successors favoured in a medium fixture from the engine's parameters.
 
+### After the owner read the result (15 November 2026)
+
+- **A loaned-in player stays without a development favour.** In the owner's words, loaned players "get used when I need them and no more, priority is on developing my own players". Nothing changed; a planner test now pins that a loaned-in young successor, fixed in the lineup, carries the loan mark-down and neither favour in medium, low and sharpness fixtures.
+- **A player Player Removal advises to leave gets no development favour.** A player advised to release, sell or terminate (critical or high) gets neither the floor nor the successor's favour, at any slot, in any fixture, and takes no place among the two successors favoured in a medium fixture; since he is no longer a successor the fixture favours, he is not got sharp as one in a sharpness fixture either. The mark to sell or loan out, rest, sharpness and the other rules still apply to him as to anyone. The planner is handed the set beside the marks (`PlanRequest.advisedToLeave`) and does not work the advice out itself; the app and the command line's `plan` work it out with Player Removal on the inputs the advice uses (the primary tactic, the history, the day and the accepted retrainings). With Development at 0 it is not worked out; when it cannot be worked out the plan is made with nobody left out, and the advice screens show their own failure. On the captures no pick changed: the U21 19-year-old advised to be released has a reach markedly lower than the squad, so he had no favour before either, and the other player advised to leave is 25.
+- **A successor who is retraining at the same slot gets whichever total is larger.** At such a slot he gets the successor's favour alone, or the floor and the retraining favour together as a player who is no successor would have them there (just the retraining favour where the floor does not apply, as in a medium fixture), whichever is larger, the floor and retraining on a tie; never all three. A successor who would carry the successor's favour at none of his slots in a medium fixture takes no place among the two favoured there, and the closest are ranked over the slots where he would carry it.
+- **"Loan for matches" stands out in the Young players part.** Its stamp is drawn in ink where the player's level would draw it muted; every other stamp keeps its level's tone, and the table above is unchanged.
+
 ## Known limits and small faults left
 
 Known before building (the design's section 11):
@@ -576,9 +583,8 @@ Found while building:
 - With fewer than six confirmed matches the advice reads a player's place in the elevens in place of his starts, so a second choice at a slot he is not solid at reads as not getting matches until six are confirmed.
 - The favour by age can bring a young first choice back into a lesser fixture he would have been rested for, until four starts in thirty days are on record. The sample history holds only two confirmed matches; with a real history a regular starter has four.
 - A youth-contract player marked before this plan keeps the mark's label, with the refusal shown, until any squad is next imported (the app checks every mark after each import), and the planner ignores the mark meanwhile; the owner cannot clear it by hand before then.
-- A successor who is retraining at the same slot gets the larger of the two favours (×1.15), which is less than the floor and retraining multiplied together (about ×1.23) would give a player who is not a successor.
 - A loaned-in young player of 21 or under no longer has the old floor in lesser fixtures.
-- A medium fixture's cap of two can spend a place on a successor whose retraining favour wins at his only successor slot, or on one the owner has overridden into the lineup; the cap's test of who can be picked does not count the owner's overrides.
+- A medium fixture's cap of two can spend a place on a successor the owner has overridden into the lineup; the cap's test of who can be picked does not count the owner's overrides.
 - The planner still works out its tiers for each fixture, though they depend only on the tactic.
 - "First choice" is read from the outlook, so a stand-in first choice at a slot he cannot play (an outfield player in goal) is not seen as one.
 - The advice for a loan for matches and the successor's favour in a medium fixture are tested on built players and on the app's sample; the captures show a successor's favour only in lesser fixtures and on the two U21 and first-team wide attacking midfielders.
@@ -600,11 +606,9 @@ Found while building:
 - The sample's expected order of young rows has no tie-break on the player's key.
 - The engine's sentences for the three fixture planning errors name fixtures by id; the app's own checks stop them.
 - A young player with an outlook but no level (no slot compares him with a first choice other than himself) who is outside both elevens now reads "renew it" at no points where he used to get the contract's points; no test pins it.
-- The planner favours a young player by his reach alone, so one whom Player Removal advises to leave for other faults (a contract ending, low Consistency) can still be favoured in lesser fixtures.
 - A youth contract in its last month (0 months left) is read as no contract, so he can be marked and the mark counts.
 - The standing line gives the season's growth rate even for a player already at his potential.
 - A markedly lower player who is in the second eleven of a thin squad is kept to play until someone better arrives.
 - Loan for matches can be advised on a contract type the tool does not read.
-- "Loan for matches" at the keep level is drawn in the muted tone in the Young players part, as "Keep and play" is, because the stamp takes the tone of the player's level; an advice to act on may be expected to stand out more.
 - A comment in Player Removal's code says a player not worth developing is "first choice nowhere", where the rule is first choice at no slot he can play, and the same comment has a stray short line.
 - The build was installed with `tools/build_app.sh` after both suites passed on a clean build with no warnings. The hands-on check of the real app is left to the owner; opening the real app on saved state from before this plan has been checked by tests only.
