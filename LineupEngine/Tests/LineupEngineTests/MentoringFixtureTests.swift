@@ -74,15 +74,14 @@ import Testing
         let byID = Dictionary(uniqueKeysWithValues: players.map { ($0.id, $0) })
         let counted = Mentoring.counted(q)
         for suggestion in report.suggestions {
-            for from in suggestion.members {
-                for to in suggestion.members where to.player != from.player {
-                    guard let read = readings.first(where: { $0.from == from.player && $0.to == to.player }),
-                          read.strength > .none else { continue }
-                    for attribute in counted {
-                        let source = Mentoring.worth(attribute, byID[from.player]!.attributes[attribute]!, parameters: q)
-                        let target = Mentoring.worth(attribute, byID[to.player]!.attributes[attribute]!, parameters: q)
-                        #expect(source >= target, "\(from.name) → \(to.name) in \(attribute.rawValue)")
-                    }
+            // Every arrow listed is above None, read or guessed; one not listed is None and harms nobody.
+            for listed in suggestion.arrows {
+                let arrow = listed.arrow
+                #expect(arrow.strength > .none)
+                for attribute in counted {
+                    let source = Mentoring.worth(attribute, byID[arrow.from]!.attributes[attribute]!, parameters: q)
+                    let target = Mentoring.worth(attribute, byID[arrow.to]!.attributes[attribute]!, parameters: q)
+                    #expect(source >= target, "\(listed.fromName) → \(listed.toName) in \(attribute.rawValue)")
                 }
             }
             #expect(suggestion.arrows.contains { !$0.pulls.isEmpty }, "\(suggestion.id) has no arrow with a pull")

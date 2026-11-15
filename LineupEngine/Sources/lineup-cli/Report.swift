@@ -250,12 +250,12 @@ enum Report {
             if report.suggestions.isEmpty { out.append("  " + AdvisorText.noGroupToSuggest) }
             for group in report.suggestions {
                 out.append("  " + group.members.map(\.name).joined(separator: ", ") + mark(group.basis))
+                // The command line passes no readings, so every arrow is the guess.
                 for arrow in group.arrows {
-                    let seen = arrow.arrow.readOn.map { "read \($0.iso)" } ?? AdvisorText.expectedNotRead
                     let pulls = arrow.pulls.isEmpty
                         ? AdvisorText.nothingToGain : arrow.pulls.map(AdvisorText.pull).joined(separator: " · ")
                     out.append("    " + AdvisorText.arrowTitle(arrow) + "   " + AdvisorText.name(arrow.arrow.strength)
-                               + " · " + seen + "   " + pulls)
+                               + " · " + AdvisorText.expectedNotRead + "   " + pulls)
                 }
                 if !group.isRead { out.append("    " + AdvisorText.setAndRecordArrows) }
                 let names = Dictionary(uniqueKeysWithValues: group.members.map { ($0.player, $0.name) })
