@@ -91,6 +91,9 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
     public let mark: SaleMark?
     /// The mark in the engine's words: "To sell"; nil when he has none.
     public let markText: String?
+    /// The engine's sentence on why he cannot be marked, shown in place of the mark control, for a player on a youth
+    /// contract as his advice reads it; nil for anyone else.
+    public let markRefusalText: String?
 
     /// Critical and high rows are open until the owner closes them; medium and keep rows closed until opened.
     public var opensByDefault: Bool {
@@ -122,6 +125,35 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
         noteText = AdvisorText.note(for: advice.basis).map { "(\($0))" }
         self.mark = mark
         markText = mark.map(AdvisorText.name)
+        markRefusalText = advice.onYouthContract ? AdvisorText.youthContractNotMarked : nil
+    }
+}
+
+/// A young player as the Young players part of Player Removal shows him: who he is, the action, and the engine's lines
+/// on how far he could grow, where he stands, whether he gets matches here and why that action.
+public struct YoungRow: Identifiable, Equatable, Sendable {
+    public let id: PlayerID
+    /// "Tom Reed · 16 · striker": his name, his age and his best slot's position in words, the position left out when
+    /// he has no best slot.
+    public let titleText: String
+    /// The engine's name for his action: "Keep and develop".
+    public let actionText: String
+    /// The engine's sentences, as written and in its order (`AdvisorText.youngLines`).
+    public let lines: [String]
+    /// The row as said to assistive technology: "Tom Reed, Age 16, striker, Keep and develop. " and the lines.
+    public let spokenText: String
+
+    /// Nil for a player without an outlook, who has no place in the part.
+    init?(_ advice: RemovalAdvice) {
+        guard let outlook = advice.outlook else { return nil }
+        let age = outlook.estimate.age
+        let position = outlook.best.map { RemovalPresentation.positionName($0.slot) }
+        id = advice.player
+        titleText = ([advice.name, String(age)] + [position].compactMap { $0 }).joined(separator: " · ")
+        actionText = AdvisorText.name(advice.action)
+        lines = AdvisorText.youngLines(advice, names: RemovalPresentation.positionName)
+        let head = ([advice.name, "Age \(age)"] + [position].compactMap { $0 } + [actionText]).joined(separator: ", ")
+        spokenText = "\(head). " + lines.joined(separator: " ")
     }
 }
 
@@ -219,6 +251,8 @@ public struct RemovalSheet: Equatable, Sendable {
     public let rows: [RemovalRow]
     /// In the engine's order: highest score first.
     public let loans: [LoanBlock]
+    /// Every player with an outlook: oldest first, then by name and key.
+    public let young: [YoungRow]
 
     public func rows(_ filter: RemovalFilter) -> [RemovalRow] {
         rows.filter { filter.includes($0.level) }
@@ -243,6 +277,11 @@ public struct RemovalSheet: Equatable, Sendable {
     public var loansEmptyText: String? {
         loans.isEmpty ? RemovalPresentation.noLoans : nil
     }
+
+    /// "No player of 23 or under." when the Young players part lists nobody; nil otherwise.
+    public var youngEmptyText: String? {
+        young.isEmpty ? RemovalPresentation.youngEmptyText : nil
+    }
 }
 
 public enum RemovalPresentation {
@@ -260,9 +299,22 @@ public enum RemovalPresentation {
     public static let markChoices = [MarkChoice(mark: nil, title: "No mark")]
         + SaleMark.allCases.map { MarkChoice(mark: $0, title: AdvisorText.name($0)) }
     public static let averageLabel = "First team's average ability"
+    public static let youngHeading = "Young players"
+    /// Who the Young players part lists, and how far to trust its figures, in one line: the age is the engine's.
+    public static var youngExplanation: String {
+        "Every player of the club's own aged \(youngUpToAge) or under, except those out on loan. How far each could "
+            + "grow is \(AdvisorText.note(for: .derived) ?? "")."   // a derived figure always has its note
+    }
+    /// The line in place of the Young players part when it lists nobody.
+    public static var youngEmptyText: String { "No player of \(youngUpToAge) or under." }
+    /// The oldest age with an outlook, as the engine reads it.
+    private static var youngUpToAge: Int { EngineParameters.fm27.developingUpToAge.value }
     public static let wagesLabel = "Wages of the critical and high players"
     /// The table's headings, in its order.
     public static let columns = RemovalColumn.allCases.map(\.title)
+
+    /// A position in a sentence, as Player Removal's reasons name it: "centre-back" for either centre-back slot.
+    static func positionName(_ slot: SlotID) -> String { PositionText.plain(slot.position) }
 
     /// What a row says to assistive technology about whether its reasons show.
     public static func openText(_ isOpen: Bool) -> String {
@@ -302,7 +354,7 @@ public enum RemovalPresentation {
     /// The sheet for `report`, with each player's squad and age from `squads` and `ages`, and the owner's mark on him
     /// from `marks`. The average ability is shown to the nearest whole number, and only when the report has one. Money
     /// is written as the report writes it: the squads' currency, the wages in FMRTE's period. The loans to the club take
-    /// no mark.
+    /// no mark. Every player with an outlook is also in the Young players part, oldest first, then by name and key.
     public static func sheet(_ report: RemovalReport, squads: [PlayerID: Squad], ages: [PlayerID: Int],
                              marks: [PlayerID: SaleMark] = [:]) -> RemovalSheet {
         let average = report.squadAverageAbility.map {
@@ -316,7 +368,13 @@ public enum RemovalPresentation {
                 RemovalRow($0, squad: squads[$0.player], age: ages[$0.player], mark: marks[$0.player],
                            money: report.money)
             },
-            loans: report.loans.map(LoanBlock.init))
+            loans: report.loans.map(LoanBlock.init),
+            young: report.advice.filter { $0.outlook != nil }
+                .sorted { a, b in
+                    let (ageA, ageB) = (a.outlook?.estimate.age ?? 0, b.outlook?.estimate.age ?? 0)
+                    return (ageB, a.name, a.player.key) < (ageA, b.name, b.player.key)
+                }
+                .compactMap(YoungRow.init))
     }
 }
 

@@ -490,6 +490,35 @@ import LineupEngine
         #expect(plans(model).count == 1)
     }
 
+    @Test func aPlanFailingForAMissingPlayerValuePointsToTheSquadNotSettings() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 1, t)
+        #expect(plans(model).count == 1)
+        // Planning reads Professionalism for every player of the club's own aged 23 or under.
+        var players = try #require(model.squad.book.current[.firstTeam])
+        let index = try #require(players.firstIndex { $0.age <= EngineParameters.fm27.developingUpToAge.value })
+        let name = players[index].name
+        players[index].attributes[.professionalism] = nil
+        _ = model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: [], money: .weeklyPounds),
+                                   to: .firstTeam)
+        model.replan()
+        #expect(model.planState == .failed(
+            [ErrorDescriptions.describe(RatingError.missingAttribute(player: name, attribute: .professionalism))],
+            fix: .squad))
+        #expect(MatchPresentation.notReady(model.planState)?.screen == .squad)
+    }
+
+    @Test func eachPlanFailureOffersTheFixThatPutsItRight() {
+        let attribute = RatingError.missingAttribute(player: "Alice Smith", attribute: .ambition)
+        #expect(AppModel.failedPlan(attribute) == .failed([ErrorDescriptions.describe(attribute)], fix: .squad))
+        let familiarity = RatingError.missingFamiliarity(player: "Alice Smith", position: .goalkeeper)
+        #expect(AppModel.failedPlan(familiarity) == .failed([ErrorDescriptions.describe(familiarity)], fix: .squad))
+        let setting = PlanError.badSettings(["Development must be between 0 and 1, but is 2.0"])
+        #expect(AppModel.failedPlan(setting) == .failed([ErrorDescriptions.describe(setting)], fix: .settings))
+        let parameters = PlanError.badParameters(["conditionCurve is empty"])
+        #expect(AppModel.failedPlan(parameters) == .failed([ErrorDescriptions.describe(parameters)], fix: .settings))
+    }
+
     @Test func theConditionFloorSettingChangesWhoIsLeftOut() throws {
         let t = try TestModel()
         let model = try squad(fixtures: 2, t)

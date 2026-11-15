@@ -385,6 +385,60 @@ public enum SampleData {
         return model
     }
 
+    /// The U21 player `modelWithYoungPlayers` makes a 16-year-old on a youth contract worth developing.
+    static let youngToDevelopName = "Brayden Daniel"
+    /// The U21 player `modelWithYoungPlayers` makes a 16-year-old on a youth contract markedly below the squad.
+    static let youngToReleaseName = "Kauan Bitencourt de Oliveira"
+    /// The U21 player of 19 `modelWithYoungPlayers` gives two years left on his contract.
+    static let youngToLoanName = "Tyrae Njogu"
+
+    /// The sample model with three U21 players changed in its copy of the squads, as an import of the changed squads
+    /// would change them, and four more matches confirmed before the import, so each young player's starts are counted:
+    /// a 16-year-old on a youth contract worth developing, kept to develop; a 16-year-old on a youth contract markedly
+    /// below the squad (ability 20, potential 30, and every attribute but his personality halved), released; and a
+    /// 19-year-old worth developing with two years left who has not started, loaned for matches. The first team's first
+    /// choices are kept to play.
+    @MainActor public static func modelWithYoungPlayers(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        let changed = [youngToDevelopName, youngToReleaseName, youngToLoanName]
+        guard Set(model.players.map(\.name)).isSuperset(of: changed), model.history.count == 2 else {
+            throw SampleDataError(description: "The sample model lacks \(changed.joined(separator: ", ")) or its two "
+                                  + "confirmed lineups.")
+        }
+        // The sample's two lineups again, alternately, three and four days apart before them: six confirmed in all.
+        let earlier = [Day(year: 2026, month: 10, day: 24)!, Day(year: 2026, month: 10, day: 27)!,
+                       Day(year: 2026, month: 10, day: 31)!, Day(year: 2026, month: 11, day: 3)!]
+        let copies = earlier.enumerated().map { index, day in
+            var record = model.history[index % 2]
+            record.lineup.fixture = FixtureID("\(day.iso)-played")
+            record.lineup.date = day
+            return record
+        }
+        model.history = copies + model.history
+        model.save(.history)
+        edit(model) { player in
+            switch player.name {
+            case youngToDevelopName:
+                player.age = 16
+                player.contractType = .youth
+                player.monthsLeft = 24
+            case youngToReleaseName:
+                player.age = 16
+                player.contractType = .youth
+                player.monthsLeft = 24
+                player.currentAbility = 20
+                player.potentialAbility = 30
+                for attribute in Attribute.allCases where ![.professionalism, .ambition, .determination].contains(attribute) {
+                    if let value = player.attributes[attribute] { player.attributes[attribute] = max(1, value / 2) }
+                }
+            case youngToLoanName:
+                player.monthsLeft = 24
+            default: break
+            }
+        }
+        return model
+    }
+
     /// The sample model with the first team's hierarchy entered, as the owner enters it: the three oldest first-team
     /// players of the club's own raised, the oldest to Team Leader, the next to Highly Influential and the third to
     /// Influential, all three in the core social group, and the two youngest in secondary group A; nobody else has an

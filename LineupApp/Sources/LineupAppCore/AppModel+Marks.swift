@@ -3,11 +3,13 @@ import LineupEngine
 extension AppModel {
     /// Marks `player` to sell or to loan out, or with nil takes his mark off, then plans again: the planner favours a
     /// marked player slightly in low-importance and sharpness fixtures. Only a player in the squads who is not on loan
-    /// here can be marked; for anyone else nothing happens. A mark can be taken off whoever holds it.
+    /// here and not on a youth contract (as the engine reads one: `Removal.isOnYouthContract`) can be marked; for anyone
+    /// else nothing happens. A mark can be taken off whoever holds it.
     public func setMark(_ mark: SaleMark?, for player: PlayerID) {
         if mark != nil {
             guard let held = squad.book.allPlayers.first(where: { $0.id == player }) else { return }
             if case .loanedIn = squad.book.loanStatus(of: held, override: settings.clubOverride) { return }
+            if Removal.isOnYouthContract(held) { return }
         }
         guard marks[player] != mark else { return }
         marks[player] = mark
@@ -20,6 +22,7 @@ extension AppModel {
     /// nil when the club's name changes. A mark goes when its player:
     /// - is on loan here (he was sold and loaned back, or the club's name now reads him so);
     /// - was marked to loan out and is now out on loan, so he is not favoured again the day he comes back;
+    /// - is on a youth contract, so he can only be kept or released;
     /// - is in no squad, once every squad held has been imported without him.
     /// The caller plans again.
     func dropSpentMarks(imported target: Squad? = nil) {
@@ -36,6 +39,10 @@ extension AppModel {
                 continue
             }
             marksAbsentFrom[id] = nil
+            if Removal.isOnYouthContract(player) {
+                kept[id] = nil
+                continue
+            }
             switch (mark, squad.book.loanStatus(of: player, override: settings.clubOverride)) {
             case (_, .loanedIn), (.toLoanOut, .loanedOut): kept[id] = nil
             case (.toLoanOut, .own), (.toSell, .own), (.toSell, .loanedOut): break

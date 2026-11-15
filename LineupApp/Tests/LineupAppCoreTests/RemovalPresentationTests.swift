@@ -370,6 +370,168 @@ import Testing
         #expect(sheet.loansEmptyText == "Nobody is on loan here.")
     }
 
+    // MARK: Young players
+
+    /// A young player's advice: aged `age`, best at `slot` behind Smith (no slot when nil), his matches here on
+    /// `basis`, with `action`, `keepReason` and whether he is on a youth contract.
+    private func young(_ key: String, name: String, age: Int, action: RemovalAction = .play, slot: SlotID? = .ST_C,
+                       basis: MatchesHereBasis = .startedTooFew, keepReason: KeepReason? = nil,
+                       onYouthContract: Bool = false, score: Int = -20) -> RemovalAdvice {
+        let estimate = ReachEstimate(age: age, current: 55, potential: 140, professionalism: 15, ambition: 10,
+                                     determination: 10, seasonGrowth: 13.3, bySeason: [55, 68, 140],
+                                     reachesPotential: true, ambitionSlows: false, determinationSlows: false,
+                                     professionalismHoldsBack: false)
+        let best = slot.map { slot in
+            SlotOutlook(slot: slot, rating: 50, reachRating: 75, isFirstChoice: false,
+                        firstChoice: Rival(player: PlayerID(key: "smith"), name: "Smith", age: 31, rating: 70,
+                                           compared: 70, isAgeNamed: true),
+                        secondChoice: nil, band: .onCourse, pointsNeeded: 14, level: .couldPassFirst)
+        }
+        let outlook = Outlook(player: PlayerID(key: key), estimate: estimate, slots: best.map { [$0] } ?? [], best: best,
+                              level: .couldPassFirst, average: slot == nil ? 70 : nil)
+        return RemovalAdvice(player: PlayerID(key: key), name: name, level: .keep, action: action, score: score,
+                             reasons: [], tier: nil, outlook: outlook,
+                             matchesHere: MatchesHere(starts: 1, matches: 9, basis: basis), keepReason: keepReason,
+                             watchReason: nil, loanOnlyToStart: false, onYouthContract: onYouthContract,
+                             isFalseProspect: false, isMentor: false, releaseCost: nil, mutualCost: nil, basis: .derived)
+    }
+
+    /// Positions in sentences, as the engine names them in Player Removal's reasons.
+    private let names: (SlotID) -> String = { PositionText.plain($0.position) }
+
+    @Test func theYoungPartListsEveryPlayerWithAnOutlookOldestFirst() {
+        let given = [advice("old", name: "Josh Ashby", level: .keep, action: .keep, score: 0),
+                     young("b", name: "Bea", age: 19), young("t", name: "Tom Reed", age: 16, action: .develop,
+                                                             keepReason: .age),
+                     young("a", name: "Abe", age: 19), young("d", name: "Dan", age: 23),
+                     young("a2", name: "Abe", age: 19)]
+        let sheet = RemovalPresentation.sheet(report(given), squads: [:], ages: [:])
+        #expect(sheet.young.map(\.id.key) == ["d", "a", "a2", "b", "t"])
+        // The table keeps every row, in the engine's order.
+        #expect(sheet.rows.map(\.id.key) == ["old", "b", "t", "a", "d", "a2"])
+        #expect(sheet.youngEmptyText == nil)
+    }
+
+    @Test func withNoYoungPlayerThePartSaysSo() {
+        let sheet = RemovalPresentation.sheet(report(everyLevel), squads: [:], ages: [:])
+        #expect(sheet.young.isEmpty)
+        #expect(sheet.youngEmptyText == "No player of 23 or under.")
+        #expect(sheet.youngEmptyText == RemovalPresentation.youngEmptyText)
+    }
+
+    @Test func theYoungPartsWordsReadTheEnginesAge() {
+        let age = EngineParameters.fm27.developingUpToAge.value
+        #expect(RemovalPresentation.youngHeading == "Young players")
+        #expect(RemovalPresentation.youngEmptyText == "No player of \(age) or under.")
+        #expect(RemovalPresentation.youngExplanation.contains("\(age) or under"))
+        #expect(RemovalPresentation.youngExplanation.contains(AdvisorText.note(for: .derived)!))
+        #expect(!RemovalPresentation.youngExplanation.contains("\n"))
+    }
+
+    @Test func aYoungRowCarriesTheEnginesSentencesAsWritten() throws {
+        let cases = [young("p", name: "Tom Reed", age: 20, action: .play, basis: .firstChoice),
+                     young("l", name: "Lee", age: 19, action: .loanForMatches),
+                     young("d", name: "Dev", age: 16, action: .develop, keepReason: .age),
+                     young("r", name: "Rex", age: 16, action: .release, onYouthContract: true),
+                     young("n", name: "Nob", age: 18, action: .play, slot: nil, basis: .solidSecondChoice)]
+        let sheet = RemovalPresentation.sheet(report(cases), squads: [:], ages: [:])
+        for given in cases {
+            let row = try #require(sheet.young.first { $0.id == given.player })
+            #expect(row.lines == AdvisorText.youngLines(given, names: names))
+            #expect(row.actionText == AdvisorText.name(given.action))
+        }
+        // Each line is the engine's own sentence.
+        let play = try #require(sheet.young.first { $0.id.key == "p" })
+        let outlook = try #require(cases[0].outlook)
+        #expect(play.lines == [AdvisorText.reachWorking(outlook.estimate),
+                               try #require(AdvisorText.standing(outlook, names: names)),
+                               AdvisorText.matchesHere(try #require(cases[0].matchesHere)),
+                               AdvisorText.why(.play, for: cases[0])])
+        #expect(play.lines[1] == "Needs about 14 more ability points to match Smith at striker; this tool expects about "
+                + "13 a season. On course. Smith is 31.")
+        #expect(play.actionText == "Keep and play")
+        #expect(play.spokenText == "Tom Reed, Age 20, striker, Keep and play. " + play.lines.joined(separator: " "))
+        // With no standing, no line for it.
+        let unplaced = try #require(sheet.young.first { $0.id.key == "n" })
+        #expect(unplaced.lines == [AdvisorText.reachWorking(try #require(cases[4].outlook).estimate),
+                                   "He is second choice here, and too few matches are confirmed to count his starts."])
+        #expect(unplaced.spokenText == "Nob, Age 18, Keep and play. " + unplaced.lines.joined(separator: " "))
+    }
+
+    @Test func aYoungRowNamesHisBestPositionInWordsAndNeverAKey() throws {
+        let cases = [young("fmrte:7", name: "Tom Reed", age: 16, slot: .ST_C),
+                     young("fmrte:8", name: "Ann Lee", age: 18, slot: .D_CL),
+                     young("fmrte:9", name: "Nobody Placed", age: 19, slot: nil)]
+        let sheet = RemovalPresentation.sheet(report(cases), squads: [:], ages: [:])
+        func title(_ key: String) -> String? { sheet.young.first { $0.id.key == key }?.titleText }
+        #expect(title("fmrte:7") == "Tom Reed · 16 · striker")
+        // Named as the engine names the position in his lines, so the title and the lines agree.
+        #expect(title("fmrte:8") == "Ann Lee · 18 · centre-back")
+        #expect(sheet.young.first { $0.id.key == "fmrte:8" }?.lines[1].contains("to match Smith at centre-back;") == true)
+        // With no slot, the position is left out.
+        #expect(title("fmrte:9") == "Nobody Placed · 19")
+        for row in sheet.young {
+            #expect(!row.titleText.contains("fmrte") && !row.spokenText.contains("fmrte"))
+            for code in SlotID.allCases.map(\.rawValue) {
+                #expect(!row.titleText.contains(code) && !row.lines.joined().contains(code))
+            }
+        }
+    }
+
+    @Test func aRowsActionIsTheEnginesNameForEachNewAction() throws {
+        let given = [young("d", name: "Dev", age: 16, action: .develop, keepReason: .age),
+                     young("p", name: "Pla", age: 20, action: .play, basis: .firstChoice),
+                     young("l", name: "Loa", age: 19, action: .loanForMatches)]
+        let sheet = RemovalPresentation.sheet(report(given), squads: [:], ages: [:])
+        #expect(sheet.rows.map(\.actionText) == ["Keep and develop", "Keep and play", "Loan for matches"])
+        #expect(sheet.rows.map(\.actionText) == given.map { AdvisorText.name($0.action) })
+        #expect(sheet.rows.map(\.whyText) == given.map { AdvisorText.why($0.action, for: $0) })
+    }
+
+    @Test func aYouthContractRowCarriesTheRefusalAndOthersDoNot() throws {
+        let given = [young("y", name: "Youth Deal", age: 16, action: .release, onYouthContract: true),
+                     young("f", name: "Full Time", age: 19, action: .loanForMatches),
+                     advice("o", name: "Older One")]
+        let sheet = RemovalPresentation.sheet(report(given), squads: [:], ages: [:])
+        func refusal(_ key: String) -> String? { sheet.rows.first { $0.id.key == key }?.markRefusalText }
+        #expect(refusal("y") == AdvisorText.youthContractNotMarked)
+        #expect(refusal("y") == "A player on a youth contract cannot be sold or loaned out, only released.")
+        #expect(refusal("f") == nil)
+        #expect(refusal("o") == nil)
+    }
+
+    @Test func theSampleWithYoungPlayersShowsEachAdvice() throws {
+        let model = try SampleData.modelWithYoungPlayers(repositoryRoot: Captures.repositoryRoot)
+        guard case .ready(let report) = model.adviceState else {
+            Issue.record("expected advice, got \(model.adviceState)")
+            return
+        }
+        let actions = Set(report.removal.advice.map(\.action))
+        for action in [RemovalAction.develop, .release, .loanForMatches, .play] {
+            #expect(actions.contains(action), "no player is advised to \(AdvisorText.name(action))")
+        }
+        func advice(_ name: String) throws -> RemovalAdvice {
+            try #require(report.removal.advice.first { $0.name == name })
+        }
+        let develop = try advice(SampleData.youngToDevelopName)
+        #expect(develop.action == .develop && develop.onYouthContract && develop.outlook?.estimate.age == 16)
+        let release = try advice(SampleData.youngToReleaseName)
+        #expect(release.action == .release && release.onYouthContract && release.outlook?.estimate.age == 16)
+        #expect(release.outlook?.level == .markedlyLower)
+        let loan = try advice(SampleData.youngToLoanName)
+        #expect(loan.action == .loanForMatches && !loan.onYouthContract && loan.outlook?.estimate.age == 19)
+        #expect(loan.matchesHere?.isCounted == true && loan.matchesHere?.starts == 0)
+
+        let sheet = model.removalSheet(report)
+        let young = report.removal.advice.filter { $0.outlook != nil }
+            .sorted { ($1.outlook!.estimate.age, $0.name) < ($0.outlook!.estimate.age, $1.name) }
+        #expect(sheet.young.map(\.id) == young.map(\.player))
+        #expect(Set(sheet.young.map(\.actionText)).isSuperset(of: ["Keep and develop", "Release", "Loan for matches",
+                                                                   "Keep and play"]))
+        let refused = Set(sheet.rows.filter { $0.markRefusalText != nil }.map(\.name))
+        #expect(refused == [SampleData.youngToDevelopName, SampleData.youngToReleaseName])
+    }
+
     // MARK: Empty squad and words
 
     @Test func withNoPlayerOfTheClubsOwnThereIsNobodyToAssess() {

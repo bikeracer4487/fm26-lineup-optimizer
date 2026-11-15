@@ -118,6 +118,14 @@ public enum Removal {
     /// Absorbs binary floating-point error (0.3 × 10 may fall just short of 3) before a count is rounded down.
     private static let roundingNoise = 1e-9
 
+    /// Whether `player` is on a youth contract that has not run out, as his advice reads it (`onYouthContract`): one
+    /// with 0 months left is read as no contract; one with months left unknown is still a youth contract. Such a player
+    /// can only be kept or released, so he is never marked to sell or to loan out.
+    public static func isOnYouthContract(_ player: Player) -> Bool {
+        if case .youth = player.contractType { return player.monthsLeft != 0 }
+        return false
+    }
+
     /// Advice for every player of the club's own and a review of every player on loan at the club; players out on loan
     /// get neither, and injured players are assessed. The squad average ability and the median wage are over the club's
     /// own first-team players, so a large youth squad on low wages does not move them; with no first-team player, the

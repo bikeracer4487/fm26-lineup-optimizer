@@ -398,6 +398,96 @@ import Testing
                 == "Too few matches are confirmed to count his starts.")
     }
 
+    // MARK: A young player's lines
+
+    /// A young player's advice: `action`, with the standing outlook behind Smith (or with no slot to pass when `smith`
+    /// is nil), his matches here on `basis` (none when nil), and `keepReason`.
+    func young(_ action: RemovalAction, _ basis: MatchesHereBasis?, keepReason: KeepReason? = nil,
+               smith rival: Rival? = Rival(player: PlayerID(key: "smith"), name: "Smith", age: 28, rating: 70,
+                                           compared: 70, isAgeNamed: false)) -> RemovalAdvice {
+        RemovalAdvice(player: PlayerID(key: "young"), name: "Young", level: .keep, action: action, score: 0, reasons: [],
+                      tier: nil, outlook: standingOutlook(smith: rival),
+                      matchesHere: basis.map { MatchesHere(starts: 1, matches: 9, basis: $0) }, keepReason: keepReason,
+                      watchReason: nil, loanOnlyToStart: false, onYouthContract: false, isFalseProspect: false,
+                      isMentor: false, releaseCost: nil, mutualCost: nil, basis: .derived)
+    }
+
+    /// What `youngLines` should give for `advice`: the working, the standing, the matches line when `showsMatches`,
+    /// then why.
+    func expectedLines(_ advice: RemovalAdvice, showsMatches: Bool) throws -> [String] {
+        let outlook = try #require(advice.outlook)
+        let names: (SlotID) -> String = { PositionText.plain($0.position) }
+        return [AdvisorText.reachWorking(outlook.estimate), AdvisorText.standing(outlook, names: names),
+                showsMatches ? advice.matchesHere.map(AdvisorText.matchesHere) : nil,
+                AdvisorText.why(advice.action, for: advice)].compactMap { $0 }
+    }
+
+    @Test func aYoungPlayersLinesShowHisMatchesWhereTheWhyDoesNotSayThem() throws {
+        let names: (SlotID) -> String = { PositionText.plain($0.position) }
+        let shown: [RemovalAdvice] = [
+            young(.play, .firstChoice), young(.play, .startedEnough),
+            young(.loanForMatches, .startedTooFew),
+            young(.develop, .startedTooFew, keepReason: .youthContract),
+            young(.develop, .startedTooFew, keepReason: .shortContract),
+        ]
+        for advice in shown {
+            let lines = AdvisorText.youngLines(advice, names: names)
+            #expect(lines == (try expectedLines(advice, showsMatches: true)))
+            #expect(lines.contains("He has started 1 of the last 9 matches here."))
+        }
+        // The lines in full, in their order.
+        let counted = young(.play, .firstChoice)
+        #expect(AdvisorText.youngLines(counted, names: names) == [
+            AdvisorText.reachWorking(try #require(counted.outlook).estimate),
+            "Needs about 14 more ability points to match Smith at left back; this tool expects about 12 a season. "
+                + "On course.",
+            "He has started 1 of the last 9 matches here.",
+            "He is first choice here."])
+    }
+
+    @Test func aYoungPlayersLinesLeaveOutTheMatchesWhereTheWhySaysThemOrTheyDoNotCount() throws {
+        let names: (SlotID) -> String = { PositionText.plain($0.position) }
+        let hidden: [RemovalAdvice] = [
+            // When his starts were not counted the why says so.
+            young(.play, .solidSecondChoice),
+            young(.loanForMatches, .tooFewConfirmed),
+            young(.develop, .tooFewConfirmed, keepReason: .youthContract),
+            young(.develop, .tooFewConfirmed, keepReason: .shortContract),
+            // At his age the matches do not come into it.
+            young(.develop, .startedTooFew, keepReason: .age),
+            // Any other action says nothing about matches.
+            young(.release, .startedTooFew), young(.terminate, .startedTooFew), young(.sell, .startedTooFew),
+            young(.monitor, .startedTooFew), young(.keep, .startedTooFew),
+            // No matches worked out: none to show.
+            young(.play, nil),
+        ]
+        for advice in hidden {
+            let lines = AdvisorText.youngLines(advice, names: names)
+            #expect(lines == (try expectedLines(advice, showsMatches: false)))
+            #expect(!lines.contains("He has started 1 of the last 9 matches here."))
+        }
+        // The why still says the starts were not counted, once.
+        let solid = AdvisorText.youngLines(young(.play, .solidSecondChoice), names: names)
+        #expect(solid.last == "He is second choice here, and too few matches are confirmed to count his starts.")
+        #expect(solid.filter { $0.contains("too few matches are confirmed") || $0.contains("Too few matches") }.count == 1)
+    }
+
+    @Test func aYoungPlayersLinesLeaveOutAStandingHeHasNot() throws {
+        let advice = young(.play, .firstChoice, smith: nil)
+        let lines = AdvisorText.youngLines(advice, names: { PositionText.plain($0.position) })
+        #expect(lines == [AdvisorText.reachWorking(try #require(advice.outlook).estimate),
+                          "He has started 1 of the last 9 matches here.", "He is first choice here."])
+    }
+
+    @Test func aYoungPlayersLinesNameHisPositionThroughTheFunctionHandedIn() {
+        let lines = AdvisorText.youngLines(young(.play, .firstChoice), names: { _ in "the flank" })
+        #expect(lines[1].contains("to match Smith at the flank;"))
+    }
+
+    @Test func aPlayerWithNoOutlookHasNoYoungLines() {
+        #expect(AdvisorText.youngLines(removal(action: .keep, release: nil, mutual: nil), names: { _ in "x" }).isEmpty)
+    }
+
     @Test func eachReachBandHasItsName() {
         #expect(ReachBand.allCases.map { AdvisorText.name($0) } == ["Close", "On course", "Possible", "Not expected"])
     }

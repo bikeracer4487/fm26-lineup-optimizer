@@ -58,6 +58,16 @@ import LineupEngine
         #expect(AppSettings.savingPlayersText(2) == "2.0")
     }
 
+    @Test func developmentReadsAsAPercentageAndOffAtZero() {
+        #expect(AppSettings.developmentText(0) == "Off")
+        #expect(AppSettings.developmentText(1) == "100%")
+        #expect(AppSettings.developmentText(0.5) == "50%")
+        #expect(AppSettings.developmentText(0.05) == "5%")
+        // A slider's step read back with floating-point error still reads as the step.
+        #expect(AppSettings.developmentText(0.35000000000000003) == "35%")
+        #expect(AppSettings.developmentText(0.15000000000000002) == "15%")
+    }
+
     @Test func horizonTextCountsFixtures() {
         #expect(AppSettings.horizonText(1) == "1 fixture")
         #expect(AppSettings.horizonText(5) == "5 fixtures")

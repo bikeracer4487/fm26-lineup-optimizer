@@ -986,6 +986,18 @@ import Testing
         #expect(try advice(lower(.fullTime, months: 8)).action == .terminate)
     }
 
+    @Test func whoIsOnAYouthContractIsReadAsTheAdviceReadsIt() throws {
+        let cases: [(ContractType, Int?, Bool)] = [
+            (.youth, 24, true), (.youth, nil, true), (.youth, 0, false),
+            (.fullTime, 24, false), (.fullTime, 0, false), (.outOfContract, nil, false), (.other("Amateur"), 24, false),
+        ]
+        for (contract, months, expected) in cases {
+            let player = target(age: 17) { $0.contractType = contract; $0.monthsLeft = months }
+            #expect(Removal.isOnYouthContract(player) == expected, "\(contract) \(String(describing: months))")
+            #expect(try advice(player).onYouthContract == expected, "\(contract) \(String(describing: months))")
+        }
+    }
+
     @Test func twelveMonthsLeftKeepsHimAndThirteenLoansHim() throws {
         for months in [1, 12, nil] {
             let a = try advice(try prospect(age: 19, months: months))

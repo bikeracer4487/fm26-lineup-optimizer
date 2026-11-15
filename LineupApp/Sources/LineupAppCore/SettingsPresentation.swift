@@ -51,6 +51,11 @@ extension AppSettings {
         value == 0 ? "Off" : String(format: "%.1f", value)
     }
 
+    /// "Off" for 0, else the share of each development favour that applies, in whole percent: "100%".
+    public static func developmentText(_ value: Double) -> String {
+        value == 0 ? "Off" : "\(percent(value))%"
+    }
+
     /// "1 fixture", "5 fixtures".
     public static func horizonText(_ count: Int) -> String {
         count == 1 ? "1 fixture" : "\(count) fixtures"

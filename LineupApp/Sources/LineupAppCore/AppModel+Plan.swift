@@ -263,8 +263,7 @@ extension AppModel {
         do {
             plan = try Planner(catalog: catalog, profile: profile, parameters: parameters).plan(request)
         } catch {
-            // The checks before this leave the planner only the settings and the parameters to refuse.
-            return .failed([ErrorDescriptions.describe(error)], fix: .settings)
+            return Self.failedPlan(error)
         }
 
         let names = Dictionary(players.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
@@ -294,6 +293,15 @@ extension AppModel {
                                ignoredOverrides: ignored)
         }
         return .ready(result)
+    }
+
+    /// The engine's sentence for why the planner refused, and the screen that puts it right. The checks before the
+    /// planner leave it a player's data, the settings and the parameters to refuse. A player's missing value (planning
+    /// reads Professionalism, Ambition and Determination for every player of the club's own of 23 or under) is put right
+    /// by importing his squad again; the rest is in the settings, or in the engine's parameters, which only the
+    /// condition floor in Settings changes.
+    static func failedPlan(_ error: any Error) -> PlanState {
+        .failed([ErrorDescriptions.describe(error)], fix: error is RatingError ? .squad : .settings)
     }
 
     /// The saved fixture as the planner is handed it, with its tactic resolved; nil when it has no tactic to use.

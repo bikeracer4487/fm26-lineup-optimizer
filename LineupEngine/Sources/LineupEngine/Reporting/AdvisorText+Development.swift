@@ -109,6 +109,29 @@ extension AdvisorText {
             + "\(matches.matches == 1 ? "match" : "matches") here."
     }
 
+    /// The lines that show a young player's outlook and advice, in order: how his reach was worked out, where he stands
+    /// at his best slot when he has a standing, whether he gets matches here when that line adds something, and why the
+    /// action. The matches line is shown for a player kept to play, loaned for matches or kept to develop, except where
+    /// the why already says his starts were not counted (a second choice kept to play, or too few matches confirmed) or
+    /// where matches do not come into it (kept to develop at his age). Positions are named through `names`. Empty for a
+    /// player without an outlook.
+    public static func youngLines(_ advice: RemovalAdvice, names: (SlotID) -> String) -> [String] {
+        guard let outlook = advice.outlook else { return [] }
+        var lines = [reachWorking(outlook.estimate)]
+        if let standing = standing(outlook, names: names) { lines.append(standing) }
+        let basis = advice.matchesHere?.basis
+        let showsMatches: Bool
+        switch advice.action {
+        case .play: showsMatches = basis != .solidSecondChoice
+        case .loanForMatches: showsMatches = basis != .tooFewConfirmed
+        case .develop: showsMatches = advice.keepReason != .age && basis != .tooFewConfirmed
+        case .release, .terminate, .sell, .monitor, .keep: showsMatches = false
+        }
+        if showsMatches, let matches = advice.matchesHere { lines.append(matchesHere(matches)) }
+        lines.append(why(advice.action, for: advice))
+        return lines
+    }
+
     /// Why a young player is kept to develop, for `why(_:for:)`. When his starts were not counted (`basis` is too few
     /// confirmed), it says he has no solid place in the elevens, not that he is not getting matches.
     static func whyDevelop(_ reason: KeepReason?, _ basis: MatchesHereBasis?) -> String {

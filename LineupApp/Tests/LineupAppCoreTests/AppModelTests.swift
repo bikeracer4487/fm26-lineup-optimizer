@@ -55,6 +55,48 @@ import LineupEngine
         #expect(t.reopened().settings.currentDate == day("2026-12-01"))
     }
 
+    @Test func settingsSavedBeforeDevelopmentOpenWithNoNoticeAndLoseNothing() throws {
+        let t = try TestModel()
+        var settings = t.model.settings
+        settings.currentDate = day("2026-12-01")
+        settings.clubName = "Oxford City"
+        settings.conditionFloor = 0.8
+        settings.fmrteConfigPath = "/tmp/config.json"
+        settings.plan.trainingIntensity = .high
+        settings.plan.stability = 0.4
+        settings.plan.savingPlayers = 1.5
+        settings.plan.horizon = 3
+        t.model.update(settings)
+        let saved = t.model.settings
+        #expect(saved.plan.development == 1)
+
+        // The file as the app wrote it before the Development setting: no "development" key.
+        let file = t.directory.appendingPathComponent("settings.json")
+        var root = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        var value = try #require(root["value"] as? [String: Any])
+        var plan = try #require(value["plan"] as? [String: Any])
+        #expect(plan["development"] != nil)
+        plan.removeValue(forKey: "development")
+        value["plan"] = plan
+        root["value"] = value
+        try JSONSerialization.data(withJSONObject: root).write(to: file)
+
+        let reopened = t.reopened()
+        #expect(reopened.notices.isEmpty)
+        #expect(reopened.settings == saved)
+        #expect(reopened.settings.plan.development == 1)
+
+        // Its next change writes the key.
+        var changed = reopened.settings
+        changed.plan.horizon = 4
+        reopened.update(changed)
+        let written = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        #expect(((written["value"] as? [String: Any])?["plan"] as? [String: Any])?["development"] as? Double == 1)
+        let again = t.reopened()
+        #expect(again.notices.isEmpty)
+        #expect(again.settings == changed)
+    }
+
     @Test func aFileKeptAsideIsWrittenAfreshSoTheNextStartFindsIt() throws {
         let t = try TestModel()
         t.model.addFixture(date: day("2026-11-14"), opponent: "Rovers", importance: .high)

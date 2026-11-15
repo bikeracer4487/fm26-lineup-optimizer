@@ -217,21 +217,9 @@ enum Report {
             guard let outlook = one.outlook else { continue }
             out.append("  \(pad(one.name, 22)) \(outlook.estimate.age)  \(AdvisorText.name(one.action).lowercased())"
                        + "  score \(one.score)\(mark(one.basis))")
-            var lines = [AdvisorText.reachWorking(outlook.estimate)]
-            if let standing = AdvisorText.standing(outlook, names: { PositionText.plain($0.position) }) {
-                lines.append(standing)
+            for line in AdvisorText.youngLines(one, names: { PositionText.plain($0.position) }) {
+                out.append("        \(line)")
             }
-            let showsMatches: Bool
-            switch one.action {
-            // When his starts were not counted, the why says so: the matches line would say it again.
-            case .play: showsMatches = one.matchesHere?.basis != .solidSecondChoice
-            case .loanForMatches: showsMatches = one.matchesHere?.basis != .tooFewConfirmed
-            case .develop: showsMatches = one.keepReason != .age && one.matchesHere?.basis != .tooFewConfirmed
-            case .release, .terminate, .sell, .monitor, .keep: showsMatches = false
-            }
-            if showsMatches, let matches = one.matchesHere { lines.append(AdvisorText.matchesHere(matches)) }
-            lines.append(AdvisorText.why(one.action, for: one))
-            for line in lines { out.append("        \(line)") }
         }
         out.append("Loan review")
         if report.loans.isEmpty { out.append("  nobody on loan here") }
