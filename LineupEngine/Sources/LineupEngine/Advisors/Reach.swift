@@ -66,6 +66,7 @@ public enum Reach {
         let rates = parameters.growthProfessionalismRates.value
         let low = rates[1]!, middle = rates[10]!, high = rates[20]!
         let x = Double(level)
+        // Import already keeps Professionalism within 1 to 20; the clamp only guards a player built by hand.
         let rate: Double
         if level <= 1 {
             rate = low
@@ -83,6 +84,7 @@ public enum Reach {
     private static func personalityFactor(_ level: Int, atOne: Double, _ parameters: EngineParameters) -> Double {
         let full = parameters.growthPersonalityFullFrom.value
         guard level < full else { return 1 }
+        // Import already keeps these within 1 to 20; the clamp to 1 only guards a player built by hand.
         return atOne + (1 - atOne) * Double(max(level, 1) - 1) / Double(full - 1)
     }
 }

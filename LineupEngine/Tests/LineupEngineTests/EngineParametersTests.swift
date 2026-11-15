@@ -524,14 +524,15 @@ import Testing
             ("developingUpToAge", .carriedOverFM26, "player-rotation-guide.md"),
             ("growthPerSeason", .derived, "fm27-development-matches-vs-training.md"),
             ("growthProfessionalismRates", .carriedOverFM26, "skill-potential-factors.md"),
-            ("growthAmbitionAtOne", .carriedOverFM26, "finding 10"),
-            ("growthDeterminationAtOne", .carriedOverFM26, "finding 10"),
-            ("growthPersonalityFullFrom", .carriedOverFM26, "finding 10")]
+            ("growthAmbitionAtOne", .carriedOverFM26, "fm27-development-matches-vs-training.md finding 10"),
+            ("growthDeterminationAtOne", .carriedOverFM26, "fm27-development-matches-vs-training.md finding 10"),
+            ("growthPersonalityFullFrom", .carriedOverFM26, "fm27-development-matches-vs-training.md finding 10")]
         for (name, evidence, quoted) in expected {
             #expect(listed[name]?.evidence == evidence, "\(name)")
             #expect(listed[name]?.source.contains(quoted) == true, "\(name) source")
         }
         let q = EngineParameters.fm27
+        #expect(listed["growthPersonalityFullFrom"]?.source.contains("recommendation 4") == true)
         #expect(q.developingUpToAge.value == 23)
         #expect(q.growthPerSeason.value == [GrowthStep(upToAge: 18, points: 18), GrowthStep(upToAge: 20, points: 14),
                                             GrowthStep(upToAge: 26, points: 12)])
@@ -556,11 +557,15 @@ import Testing
             $0.growthPerSeason = Parameter([GrowthStep(upToAge: 20, points: .nan)], .derived, source: "test")
         }.count == 1)
         #expect(problems { $0.growthProfessionalismRates = Parameter([1: 2.4, 20: 17], .derived, source: "test") }
-            == ["growthProfessionalismRates does not have an entry for each of Professionalism 1, 10 and 20"])
+            == ["growthProfessionalismRates has anchors at 1 and 20, not at exactly 1, 10 and 20"])
         #expect(problems { $0.growthProfessionalismRates = Parameter([1: 2.4, 10: 0, 20: 17], .derived, source: "test") }
             == ["growthProfessionalismRates has a rate that is not a finite number above 0"])
         #expect(problems { $0.growthProfessionalismRates = Parameter([1: 9, 10: 8.2, 20: 17], .derived, source: "test") }
             == ["growthProfessionalismRates does not rise from Professionalism 1 to 10 to 20"])
+        #expect(problems { $0.growthProfessionalismRates = Parameter([1: 2.4, 5: 4, 10: 8.2, 20: 17], .derived, source: "test") }
+            == ["growthProfessionalismRates has anchors at 1, 5, 10 and 20, not at exactly 1, 10 and 20"])
+        #expect(problems { $0.growthProfessionalismRates = Parameter([1: 2.4, 20: 17], .derived, source: "test") }
+            == ["growthProfessionalismRates has anchors at 1 and 20, not at exactly 1, 10 and 20"])
         #expect(problems { $0.growthAmbitionAtOne = Parameter(1.2, .derived, source: "test") }
             == ["growthAmbitionAtOne is 1.2, not between 0 and 1"])
         #expect(problems { $0.growthDeterminationAtOne = Parameter(-0.1, .derived, source: "test") }

@@ -965,11 +965,14 @@ public struct EngineParameters: Sendable {
             growthProfessionalismRates: Parameter(
                 [1: 2.4, 10: 8.2, 20: 17], .carriedOverFM26, source: "docs/Research/skill-potential-factors.md"),
             growthAmbitionAtOne: Parameter(
-                0.731, .carriedOverFM26, source: "docs/Research/skill-potential-factors.md finding 10"),
+                0.731, .carriedOverFM26,
+                source: "docs/Research/fm27-development-matches-vs-training.md finding 10: Ambition 1 gives 73.1% of the growth at 10 (harvestgreen22, FM-Arena thread 13975)"),
             growthDeterminationAtOne: Parameter(
-                0.66, .carriedOverFM26, source: "docs/Research/skill-potential-factors.md finding 10"),
+                0.66, .carriedOverFM26,
+                source: "docs/Research/fm27-development-matches-vs-training.md finding 10: Determination 1 gives 66% of the growth at 10 (harvestgreen22, FM-Arena thread 13975)"),
             growthPersonalityFullFrom: Parameter(
-                10, .carriedOverFM26, source: "docs/Research/skill-potential-factors.md finding 10: no bonus above 10"),
+                10, .carriedOverFM26,
+                source: "docs/Research/fm27-development-matches-vs-training.md finding 10 (Ambition 20 gives 104.9%, Determination 20 gives 101%) and its recommendation 4: no bonus above 10"),
             importanceRules: Parameter(
                 ImportanceSuggestionRules(
                     leagueBase: 80, cupBase: 60, minorCupBase: 30, friendlyBase: 10, unsetBase: 50,

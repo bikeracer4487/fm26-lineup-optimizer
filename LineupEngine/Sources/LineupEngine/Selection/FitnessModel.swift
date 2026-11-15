@@ -209,11 +209,13 @@ public enum FitnessModel {
             }
         }
         let rates = parameters.growthProfessionalismRates.value
-        let anchors = [1, 10, 20].map { rates[$0] }
-        if anchors.contains(where: { $0 == nil }) {
-            found.append("growthProfessionalismRates does not have an entry for each of Professionalism 1, 10 and 20")
+        let anchorLevels = rates.keys.sorted()
+        if anchorLevels != [1, 10, 20] {
+            let list = anchorLevels.map(String.init)
+            let named = list.count > 1 ? list.dropLast().joined(separator: ", ") + " and " + list.last! : (list.first ?? "none")
+            found.append("growthProfessionalismRates has anchors at \(named), not at exactly 1, 10 and 20")
         } else {
-            let values = anchors.compactMap { $0 }
+            let values = anchorLevels.map { rates[$0]! }
             if !values.allSatisfy({ $0.isFinite && $0 > 0 }) {
                 found.append("growthProfessionalismRates has a rate that is not a finite number above 0")
             } else if !(values[0] < values[1] && values[1] < values[2]) {
