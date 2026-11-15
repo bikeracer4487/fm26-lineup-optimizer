@@ -201,6 +201,24 @@ import Testing
         #expect(result.notPlaced == [NotPlaced(player: id("Adams"), name: "Adams", age: 18, reason: .influencersTaken)])
     }
 
+    @Test func anInfluencerStillFreeIsNotCalledTaken() throws {
+        // X leads Y and Z, who gain most; S is left free with K, and no third player is free to join them.
+        let dynamics = levels(["X": .teamLeader, "S": .influential])
+        let players = [senior("X"), senior("S"), player("Y", 18, [.professionalism: 1]),
+                       player("Z", 18, [.professionalism: 1]), player("K", 18)]
+        let sFree = try report(players, dynamics: dynamics)
+        #expect(shape(sFree) == [["x", "y", "z"]])
+        #expect(sFree.notPlaced == [NotPlaced(player: id("K"), name: "K", age: 18, reason: .noThirdFree)])
+        #expect(sFree.notPlaced.map(AdvisorText.notPlaced)
+                == ["K (18): no third player is left free to make a group with him and a player who could influence him."])
+
+        // Two more juniors who gain most give S a group too: then every player who could influence K is taken.
+        let sTaken = try report(players + [player("W1", 18, [.professionalism: 1]), player("W2", 18, [.professionalism: 1])],
+                                dynamics: dynamics)
+        #expect(shape(sTaken) == [["w1", "w2", "x"], ["s", "y", "z"]])
+        #expect(notPlaced(sTaken) == ["k": .influencersTaken])
+    }
+
     @Test func tiesGoToFewerSeniorsThenMoreArrowsReadThenTheLowestKeys() throws {
         // Kid gains 60 from Lead, and Abel's 32 adds nothing beside it; Zane, at Others, gives and gains nothing. Lead
         // would harm K1 and K2 in Ambition; Abel leads them.
@@ -350,6 +368,14 @@ import Testing
         let otherSquad = ArrowReading(from: id("Lead"), to: id("Kid"), squad: .u21, strength: .none, readOn: today)
         for extra in [otherSquad, reading("Away", "Kid", .none), reading("Ghost", "Kid", .none)] {
             #expect(try report(players, dynamics: dynamics, arrows: base + [extra]) == baseline, "\(extra)")
+        }
+
+        // A reading above None into him would end his taking nothing, if it were used.
+        let lightOtherSquad = ArrowReading(from: id("Lead"), to: id("Kid"), squad: .u21, strength: .light, readOn: today)
+        for extra in [lightOtherSquad, reading("Away", "Kid", .light), reading("Ghost", "Kid", .light)] {
+            let withLight = try report(players, dynamics: dynamics, arrows: base + [reading("S3", "Kid", .none), extra])
+            #expect(arrowsIntoKid(withLight).isEmpty, "\(extra)")
+            #expect(withLight == third, "\(extra)")
         }
     }
 

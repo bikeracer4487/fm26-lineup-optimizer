@@ -89,6 +89,8 @@ extension AdvisorText {
         case .nothingToGain: "\(who): nobody who influences him is better where it counts."
         case .tooFewFree: "\(who): there are not three players free to make a group with him."
         case .wouldHarm: "\(who): every group that would help him would pull a player down."
+        case .noThirdFree:
+            "\(who): no third player is left free to make a group with him and a player who could influence him."
         case .influencersTaken: "\(who): the players who could influence him are already in a group."
         }
     }

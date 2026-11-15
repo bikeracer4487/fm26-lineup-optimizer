@@ -78,6 +78,8 @@ import Testing
         #expect(sentence(.nothingToGain) == "Dunn (17): nobody who influences him is better where it counts.")
         #expect(sentence(.tooFewFree) == "Dunn (17): there are not three players free to make a group with him.")
         #expect(sentence(.wouldHarm) == "Dunn (17): every group that would help him would pull a player down.")
+        #expect(sentence(.noThirdFree)
+                == "Dunn (17): no third player is left free to make a group with him and a player who could influence him.")
         #expect(sentence(.influencersTaken) == "Dunn (17): the players who could influence him are already in a group.")
     }
 

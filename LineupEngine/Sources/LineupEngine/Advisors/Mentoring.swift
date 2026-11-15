@@ -105,7 +105,10 @@ public enum NotPlacedReason: Equatable, Sendable {
     /// A player free to be grouped has an arrow into him with something to give, and groups of three free players can
     /// be formed with him and such a player, but every one that would give it holds a harmful arrow.
     case wouldHarm
-    /// The players who could influence him are in a suggested or recorded group.
+    /// A free player with something to give him is still in no suggested group, and groups that would help him can be
+    /// formed among the free players, but none of them is left unused with a third player who would harm nobody.
+    case noThirdFree
+    /// Every free player with something to give him is in a suggested group; any others are in recorded groups.
     case influencersTaken
 }
 
@@ -199,7 +202,7 @@ extension Mentoring {
         let notPlaced = candidates.filter { !used.contains($0) }.map { index in
             let person = people[index]
             return NotPlaced(player: person.player.id, name: person.player.name, age: person.player.age,
-                             reason: judge.reason(for: index, pool: pool))
+                             reason: judge.reason(for: index, pool: pool, used: used))
         }
 
         let groups = request.groups.filter { $0.isLive && $0.squad == request.squad }.sorted {
@@ -395,8 +398,8 @@ extension Mentoring {
         }
 
         /// The first reason that applies, judged against every squad player not out on loan, members of recorded
-        /// groups included. It never changes which groups are formed.
-        func reason(for index: Int, pool: [Int]) -> NotPlacedReason {
+        /// groups included; `used` are the members of the suggested groups. It never changes which groups are formed.
+        func reason(for index: Int, pool: [Int], used: Set<Int>) -> NotPlacedReason {
             if takesNothing[index] { return .takesNothing }
             let others = people.indices.filter { $0 != index }
             let influencing = others.filter { arrows[$0][index].strength > .none }
@@ -412,6 +415,7 @@ extension Mentoring {
                     }
                 }
                 if !helped { return .wouldHarm }
+                if free.contains(where: { gains[$0][index] > 0 && !used.contains($0) }) { return .noThirdFree }
             }
             return .influencersTaken
         }
