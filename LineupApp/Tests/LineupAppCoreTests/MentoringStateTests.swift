@@ -27,6 +27,9 @@ import LineupEngine
                                        members: [MentoringMember(player: alice, joinedOn: first, leftOn: first.adding(days: 2))])]
         state.names = [alice: "Alice"]
         state.record([player(alice, professionalism: 8)], on: first)
+        state.setArrow(from: alice, to: bob, in: .firstTeam, strength: .significant, on: first)
+        state.setArrow(from: bob, to: alice, in: .u21, strength: ArrowStrength.none, on: first.adding(days: 1))
+        #expect(state.arrows.count == 2)
         let data = try JSONEncoder().encode(state)
         #expect(try JSONDecoder().decode(MentoringState.self, from: data) == state)
     }
@@ -76,5 +79,85 @@ import LineupEngine
         state.record([player(alice, professionalism: 8), player(bob, professionalism: 12)], on: first)
         #expect(state.readings[alice]?.first?.values[.professionalism] == 8)
         #expect(state.readings[bob]?.first?.values[.professionalism] == 12)
+    }
+
+    // MARK: Arrows
+
+    private let carol = PlayerID.fmrte(3)
+
+    private func reading(_ state: MentoringState, _ from: PlayerID, _ to: PlayerID,
+                         in squad: Squad = .firstTeam) -> ArrowReading? {
+        state.arrows.first { $0.from == from && $0.to == to && $0.squad == squad }
+    }
+
+    @Test func settingAnArrowReplacesThePairsReading() {
+        var state = MentoringState()
+        state.setArrow(from: alice, to: bob, in: .firstTeam, strength: .light, on: first)
+        state.setArrow(from: alice, to: bob, in: .firstTeam, strength: .significant, on: first.adding(days: 7))
+        #expect(state.arrows == [ArrowReading(from: alice, to: bob, squad: .firstTeam, strength: .significant,
+                                              readOn: first.adding(days: 7))])
+        // The other way round is another pair.
+        state.setArrow(from: bob, to: alice, in: .firstTeam, strength: .average, on: first)
+        #expect(state.arrows.count == 2)
+        #expect(reading(state, alice, bob)?.strength == .significant)
+        #expect(reading(state, bob, alice)?.strength == .average)
+    }
+
+    @Test func theSameStrengthKeepsItsDay() {
+        var state = MentoringState()
+        state.setArrow(from: alice, to: bob, in: .firstTeam, strength: .average, on: first)
+        state.setArrow(from: alice, to: bob, in: .firstTeam, strength: .average, on: first.adding(days: 7))
+        #expect(reading(state, alice, bob)?.readOn == first)
+        #expect(state.arrows.count == 1)
+        // A different strength takes the new day.
+        state.setArrow(from: alice, to: bob, in: .firstTeam, strength: .light, on: first.adding(days: 7))
+        #expect(reading(state, alice, bob)?.readOn == first.adding(days: 7))
+    }
+
+    @Test func notReadTakesTheReadingAway() {
+        var state = MentoringState()
+        state.setArrow(from: alice, to: bob, in: .firstTeam, strength: ArrowStrength.none, on: first)
+        state.setArrow(from: bob, to: alice, in: .firstTeam, strength: .light, on: first)
+        state.setArrow(from: alice, to: bob, in: .firstTeam, strength: nil, on: first.adding(days: 1))
+        #expect(reading(state, alice, bob) == nil)
+        #expect(reading(state, bob, alice)?.strength == .light)
+        // Taking away a pair with no reading changes nothing.
+        let before = state
+        state.setArrow(from: alice, to: carol, in: .firstTeam, strength: nil, on: first)
+        #expect(state == before)
+    }
+
+    @Test func readingsAreKeptInOrderWhateverOrderTheyWereSet() throws {
+        let sets: [(PlayerID, PlayerID, Squad)] = [(carol, alice, .firstTeam), (alice, carol, .u21), (bob, alice, .firstTeam),
+                                                   (alice, bob, .firstTeam), (alice, carol, .firstTeam), (bob, carol, .u18)]
+        var forwards = MentoringState(), backwards = MentoringState()
+        for (from, to, squad) in sets {
+            forwards.setArrow(from: from, to: to, in: squad, strength: .light, on: first)
+        }
+        for (from, to, squad) in sets.reversed() {
+            backwards.setArrow(from: from, to: to, in: squad, strength: .light, on: first)
+        }
+        #expect(forwards == backwards)
+        // Encoded as the store encodes, the same bytes.
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+        #expect(try encoder.encode(forwards) == encoder.encode(backwards))
+        // By squad in book order, then from key, then to key.
+        #expect(forwards.arrows.map { [$0.squad.rawValue, $0.from.key, $0.to.key] } == [
+            ["firstTeam", alice.key, bob.key], ["firstTeam", alice.key, carol.key], ["firstTeam", bob.key, alice.key],
+            ["firstTeam", carol.key, alice.key], ["u21", alice.key, carol.key], ["u18", bob.key, carol.key]])
+    }
+
+    @Test func aPairHasOneReadingInEachSquad() {
+        var state = MentoringState()
+        state.setArrow(from: alice, to: bob, in: .firstTeam, strength: .light, on: first)
+        state.setArrow(from: alice, to: bob, in: .u21, strength: .significant, on: first)
+        #expect(state.arrows.count == 2)
+        state.setArrow(from: alice, to: bob, in: .u21, strength: .average, on: first.adding(days: 2))
+        #expect(state.arrows.count == 2)
+        #expect(reading(state, alice, bob, in: .firstTeam)?.strength == .light)
+        #expect(reading(state, alice, bob, in: .u21)?.strength == .average)
+        state.setArrow(from: alice, to: bob, in: .u21, strength: nil, on: first)
+        #expect(state.arrows.map(\.squad) == [.firstTeam])
     }
 }

@@ -36,7 +36,7 @@ import Testing
         let request = MentoringRequest(
             squad: squad, players: players, ownClub: club, dynamics: state.dynamics(for: squad),
             dynamicsUpdatedOn: state.dynamicsUpdatedOn[squad], groups: state.groups, readings: state.readings,
-            arrows: [], names: state.names, leaving: [], asOf: day ?? asOf)
+            arrows: state.arrows, names: state.names, leaving: [], asOf: day ?? asOf)
         return .ready(try Mentoring.report(request, parameters: parameters))
     }
 
@@ -214,6 +214,13 @@ import Testing
         #expect(line.strengthText == "Average · read Sat 14 Nov")
     }
 
+    @Test func anArrowIsSpokenAsOneToTheOtherAndShownWithTheArrowSign() {
+        let line = ArrowLine(arrow(hart, "McEachran", young, "Clark", .light))
+        #expect(line.titleText == "McEachran → Clark")
+        #expect(line.spokenParts == ["McEachran to Clark", "Light · expected, not read", "nothing to gain"])
+        #expect(!line.spokenParts.contains { $0.contains("→") })
+    }
+
     // MARK: Suggested groups
 
     private var suggestion: SuggestedGroup {
@@ -261,8 +268,8 @@ import Testing
     @Test func aSuggestedCardIsSpokenWithEverythingOnIt() throws {
         let card = try #require(try sheet([], advice: pinned(suggestions: [suggestion])).suggested.first)
         #expect(card.spokenText == "Hart, Young, Reid, "
-                + "Hart → Young, Average · expected, not read, Professionalism 8, towards 17 · Pressure 4, towards 6, "
-                + "Hart → Reid, Average · expected, not read, nothing to gain, "
+                + "Hart to Young, Average · expected, not read, Professionalism 8, towards 17 · Pressure 4, towards 6, "
+                + "Hart to Reid, Average · expected, not read, nothing to gain, "
                 + "Set this group in the game and record its arrows., "
                 + "Caution: Hart is on loan here: the group ends when he goes back., "
                 + "Caution: Hart is advised to leave: the group ends when he goes., FM26-era numbers")
@@ -291,6 +298,12 @@ import Testing
         #expect(Set(shown.notPlaced).count == reasons.count)
         #expect(shown.notPlaced[0] == "Pike (17): he has taken nothing from the players tried with him so far.")
         #expect(shown.notPlaced[4] == "Pike (17): every group that would help him would pull a player down.")
+    }
+
+    @Test func aSuggestedCardCarriesItsMembersForTheArrowsButton() throws {
+        let card = try #require(try sheet([], advice: pinned(suggestions: [suggestion])).suggested.first)
+        #expect(card.arrowsDraftMembers == [hart, young, reid])
+        #expect(!card.spokenText.contains("→"))
     }
 
     // MARK: Recorded groups
@@ -392,8 +405,8 @@ import Testing
     @Test func aRecordedCardIsSpokenWithEverythingOnIt() throws {
         let card = try #require(try sheet([], advice: pinned(groups: [review(stopped: false)])).yours.first)
         #expect(card.spokenText == "Okafor, Lane, Pike, since Mon 12 Oct, "
-                + "Okafor → Lane, Significant · read Sat 14 Nov, Professionalism 10, towards 15, "
-                + "Okafor → Pike, Light · expected, not read, nothing to gain, "
+                + "Okafor to Lane, Significant · read Sat 14 Nov, Professionalism 10, towards 15, "
+                + "Okafor to Pike, Light · expected, not read, nothing to gain, "
                 + "Record this group's arrows from the game: 5 of them are still guesses., "
                 + "Warning: Okafor's influence on Pike is expected to be Light, and Okafor's Ambition is 6 against "
                 + "Pike's 9., "
@@ -402,6 +415,27 @@ import Testing
                 + "Lane (20), Professionalism 9 to 10 in 5 weeks · Pressure 5, no change, "
                 + "Pike (17), No reading yet: values are read at each import, "
                 + "this tool's estimate")
+    }
+
+    @Test func aRecordedCardCarriesItsMembersForTheArrowsButton() throws {
+        // Pike has left the group; Young joined after him.
+        var group = recorded
+        group.members[2].leftOn = asOf
+        group.members.append(MentoringMember(player: young, joinedOn: asOf))
+        let given = GroupReview(group: group, members: review().members, arrows: recordedArrows, unreadArrows: 4,
+                                hasNoInfluence: false, warnings: [], isDoingHarm: false, hasStoppedWorking: false,
+                                basis: .derived)
+        let card = try #require(try sheet([], advice: pinned(groups: [given])).yours.first)
+        // The group's current members, by key, as Edit opens with them.
+        #expect(card.arrowsDraftMembers == [okafor, young, lane])
+        #expect(card.arrowsDraftMembers == card.draft.members)
+        #expect(!card.spokenText.contains("→"))
+
+        // The same when the advice stopped and the card is named from the saved state.
+        var state = MentoringState()
+        state.groups = [group]
+        let saved = try #require(try sheet([], state, advice: .failed(["Something"])).yours.first)
+        #expect(saved.arrowsDraftMembers == [okafor, young, lane])
     }
 
     @Test func aSquadWithNoGroupRecordedSaysSo() throws {
@@ -755,5 +789,99 @@ import Testing
         #expect(MentoringEditing.hierarchy(.u21).id != MentoringEditing.hierarchy(.firstTeam).id)
         let draft = MentoringGroupDraft(squad: .firstTeam)
         #expect(MentoringEditing.group(draft).id != MentoringEditing.hierarchy(.firstTeam).id)
+    }
+
+    // MARK: The arrows sheet
+
+    private func arrowsDraft(_ members: [PlayerID], squad: Squad = .firstTeam,
+                             strengths: [ArrowsDraft.Pair: ArrowStrength] = [:]) -> ArrowsDraft {
+        ArrowsDraft(id: UUID(), squad: squad, members: members, strengths: strengths)
+    }
+
+    @Test func theSheetHasSixRowsOnceThreeAreChosenAndNoneBefore() {
+        let names = [hart: "Hart", young: "Young", reid: "Reid"]
+        #expect(MentoringPresentation.arrowRows(arrowsDraft([]), names: names).isEmpty)
+        #expect(MentoringPresentation.arrowRows(arrowsDraft([hart]), names: names).isEmpty)
+        let two = arrowsDraft([hart, young], strengths: [ArrowsDraft.Pair(from: hart, to: young): .light])
+        #expect(MentoringPresentation.arrowRows(two, names: names).isEmpty)
+
+        let pair = ArrowsDraft.Pair(from: young, to: reid)
+        let three = arrowsDraft([hart, young, reid], strengths: [pair: .significant])
+        let rows = MentoringPresentation.arrowRows(three, names: names)
+        #expect(rows.map(\.titleText) == ["Hart → Young", "Hart → Reid", "Young → Hart", "Young → Reid", "Reid → Hart",
+                                          "Reid → Young"])
+        #expect(rows.map(\.id) == [ArrowsDraft.Pair(from: hart, to: young), ArrowsDraft.Pair(from: hart, to: reid),
+                                   ArrowsDraft.Pair(from: young, to: hart), pair, ArrowsDraft.Pair(from: reid, to: hart),
+                                   ArrowsDraft.Pair(from: reid, to: young)])
+        #expect(rows.map(\.strength) == [nil, nil, nil, .significant, nil, nil])
+
+        // A player with no name known is never shown by his key.
+        let unnamed = MentoringPresentation.arrowRows(three, names: [hart: "Hart"])
+        #expect(unnamed.allSatisfy { !$0.titleText.contains(young.key) && !$0.titleText.contains(reid.key) })
+        #expect(unnamed[1].titleText == "Hart → \(TrainingPresentation.unnamed)")
+    }
+
+    @Test func theStrengthChoicesAreNotReadThenTheGamesFour() {
+        #expect(MentoringPresentation.strengthChoices.map(\.0) == [nil, ArrowStrength.none, .light, .average, .significant])
+        #expect(MentoringPresentation.strengthChoices.map(\.1) == ["Not read", "None", "Light", "Average", "Significant"])
+        #expect(Array(MentoringPresentation.strengthChoices.map(\.1).dropFirst())
+                == ArrowStrength.allCases.map(AdvisorText.name))
+    }
+
+    @Test func theArrowsLabels() {
+        #expect(MentoringPresentation.recordArrowsTitle == "Record arrows")
+        #expect(MentoringPresentation.arrowsTitle == "Arrows")
+        #expect(Squad.allCases.map(MentoringPresentation.arrowsEditorTitle)
+                == ["Record first-team arrows", "Record U21 arrows", "Record U18 arrows"])
+        #expect(MentoringPresentation.arrowsEditorHint
+                == "Choose three players, then set each arrow as the game's Mentoring screen shows it.")
+        let draft = arrowsDraft([hart])
+        #expect(MentoringEditing.arrows(draft).id != MentoringEditing.group(MentoringGroupDraft(squad: .firstTeam)).id)
+        #expect(MentoringEditing.arrows(draft).id != MentoringEditing.hierarchy(.firstTeam).id)
+        #expect(MentoringEditing.arrows(draft).id == MentoringEditing.arrows(arrowsDraft([hart, young]).withID(draft.id)).id)
+    }
+
+    @Test func theArrowsChooserListsAPlayerInAGroupAndMarksThoseChosen() {
+        // Okafor, Lane and Pike are in a recorded group; Reid is out on loan.
+        let players = [player(okafor, "Okafor", age: 30), player(lane, "Lane", age: 20), player(pike, "Pike", age: 17),
+                       player(young, "Young", age: 18), player(reid, "Reid", age: 19, loanedTo: "Rovers"),
+                       player(hart, "Hart", age: 34)]
+        var state = MentoringState()
+        enter([hart: PlayerDynamics(standing: .teamLeader)], into: &state)
+        state.groups = [recorded]
+
+        let one = MentoringPresentation.arrowChoices(arrowsDraft([lane]), players: players, ownClub: club, state: state)
+        #expect(one.map(\.id) == [okafor, lane, pike, young, hart])
+        #expect(one.map(\.name) == ["Okafor", "Lane", "Pike", "Young", "Hart"])
+        #expect(one.map(\.detailText) == ["30 · Others", "20 · Others", "17 · Others", "18 · Others", "34 · Team Leader"])
+        #expect(one.map(\.isChosen) == [false, true, false, false, false])
+        #expect(one.allSatisfy { $0.unavailableText == nil && $0.canToggle })
+
+        // Three chosen: only they can be taken out, and nobody else put in.
+        let three = MentoringPresentation.arrowChoices(arrowsDraft([lane, okafor, hart]), players: players,
+                                                       ownClub: club, state: state)
+        #expect(three.map(\.isChosen) == [true, true, false, false, true])
+        #expect(three.map(\.canToggle) == [true, true, false, false, true])
+    }
+
+    @Test func aChosenPlayerWhoCannotBeChosenIsListedFirstToTakeOut() {
+        // Lane is out on loan and Pike has gone, both still in the draft, as a recorded card's members can be.
+        let players = [player(okafor, "Okafor", age: 30), player(lane, "Lane", age: 20, loanedTo: "Rovers")]
+        var state = MentoringState()
+        state.names = [pike: "Pike"]
+        let choices = MentoringPresentation.arrowChoices(arrowsDraft([okafor, lane, pike]), players: players,
+                                                         ownClub: club, state: state)
+        #expect(choices.map(\.id) == [lane, pike, okafor])
+        #expect(choices.map(\.name) == ["Lane", "Pike", "Okafor"])
+        #expect(choices.map(\.unavailableText) == ["Out on loan", "No longer in the squad", nil])
+        #expect(choices.map(\.canToggle) == [true, true, true])
+        let out = MentoringPresentation.arrowChoices(arrowsDraft([okafor]), players: players, ownClub: club, state: state)
+        #expect(out.map(\.id) == [okafor])
+    }
+}
+
+private extension ArrowsDraft {
+    func withID(_ id: UUID) -> ArrowsDraft {
+        ArrowsDraft(id: id, squad: squad, members: members, strengths: strengths)
     }
 }

@@ -13,15 +13,18 @@ public struct FixtureEditing: Identifiable, Equatable, Sendable {
     }
 }
 
-/// What the Mentoring tab has open for editing: a squad's hierarchy, or a group being added or changed.
+/// What the Mentoring tab has open for editing: a squad's hierarchy, a group being added or changed, or the arrows of
+/// three players being recorded.
 public enum MentoringEditing: Identifiable, Equatable, Sendable {
     case hierarchy(Squad)
     case group(MentoringGroupDraft)
+    case arrows(ArrowsDraft)
 
     public var id: String {
         switch self {
         case .hierarchy(let squad): "hierarchy-\(squad.rawValue)"
         case .group(let draft): "group-\(draft.id.uuidString)"
+        case .arrows(let draft): "arrows-\(draft.id.uuidString)"
         }
     }
 }

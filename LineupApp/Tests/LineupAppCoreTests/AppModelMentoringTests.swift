@@ -570,7 +570,7 @@ import LineupEngine
         let request = MentoringRequest(
             squad: squad, players: model.squad.book.allPlayers, ownClub: model.ownClub,
             dynamics: model.mentoring.dynamics(for: squad), dynamicsUpdatedOn: model.mentoring.dynamicsUpdatedOn[squad],
-            groups: model.mentoring.groups, readings: model.mentoring.readings, arrows: [],
+            groups: model.mentoring.groups, readings: model.mentoring.readings, arrows: model.mentoring.arrows,
             names: model.mentoring.names, leaving: leaving, asOf: model.settings.currentDate)
         return try Mentoring.report(request, parameters: .fm27)
     }
@@ -723,6 +723,378 @@ import LineupEngine
         #expect(choices.dropFirst(3).allSatisfy { $0.unavailableText == nil })
     }
 
+    // MARK: Arrows
+
+    private typealias Pair = ArrowsDraft.Pair
+
+    /// The six ordered pairs of three players, in member order.
+    private func pairs(_ members: [PlayerID]) -> [Pair] {
+        members.flatMap { from in members.filter { $0 != from }.map { Pair(from: from, to: $0) } }
+    }
+
+    /// A draft of the three with every one of their six arrows set to `strength`.
+    private func everyArrow(_ model: AppModel, _ squad: Squad, _ members: [PlayerID],
+                            _ strength: ArrowStrength) -> ArrowsDraft {
+        var draft = model.arrowsDraft(for: squad, members: members)
+        for pair in pairs(members) { draft.strengths[pair] = strength }
+        return draft
+    }
+
+    private func setDate(_ model: AppModel, _ day: Day) {
+        var settings = model.settings
+        settings.currentDate = day
+        model.update(settings)
+    }
+
+    private func reading(_ model: AppModel, _ pair: Pair, in squad: Squad = .firstTeam) -> ArrowReading? {
+        model.mentoring.arrows.first { $0.from == pair.from && $0.to == pair.to && $0.squad == squad }
+    }
+
+    /// The first team with its first player loaned to Rovers, the club named.
+    private func withOneOutOnLoan() throws -> (t: TestModel, away: Player) {
+        let t = try TestModel()
+        var settings = t.model.settings
+        settings.clubName = "Oxford City"
+        t.model.update(settings)
+        // Cell 96 of a row is the club the player is loaned to.
+        var cells = rows(try Captures.firstTeam)
+            .map { $0.split(separator: "\t", omittingEmptySubsequences: false).map(String.init) }
+        cells[0][96] = "\"Rovers\""
+        t.importSquad(.firstTeam, paste: cells.map { $0.joined(separator: "\t") }.joined(separator: "\r\n") + "\r\n",
+                      grids: try Captures.firstTeamGrids)
+        let away = try #require((t.model.squad.book.current[.firstTeam] ?? []).first { player in
+            if case .loanedOut = t.model.squad.book.loanStatus(of: player, override: "Oxford City") { return true }
+            return false
+        })
+        return (t, away)
+    }
+
+    @Test func aMentoringFileFromTheInstalledAppOpensWithNoNoticeAndLosesNothing() throws {
+        let t = try both()
+        let squad = ids(t.model, .firstTeam)
+        t.model.setDynamics([squad[0]: PlayerDynamics(standing: .teamLeader, socialGroup: .core)], for: .firstTeam)
+        t.model.saveGroup(MentoringGroupDraft(squad: .firstTeam, members: Array(squad[0..<3])))
+        let saved = t.model.mentoring
+        #expect(!saved.hierarchy.isEmpty && !saved.groups.isEmpty && !saved.readings.isEmpty && !saved.names.isEmpty)
+        #expect(saved.arrows.isEmpty)
+
+        // The file as the installed app writes it: no "arrows" key.
+        let file = t.directory.appendingPathComponent("mentoring.json")
+        var root = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        var value = try #require(root["value"] as? [String: Any])
+        #expect(value["arrows"] != nil)
+        value.removeValue(forKey: "arrows")
+        root["value"] = value
+        try JSONSerialization.data(withJSONObject: root).write(to: file)
+
+        let reopened = t.reopened()
+        #expect(reopened.notices.isEmpty)
+        #expect(reopened.mentoring == saved)
+        #expect(reopened.mentoring.hierarchy == saved.hierarchy)
+        #expect(reopened.mentoring.dynamicsUpdatedOn == saved.dynamicsUpdatedOn)
+        #expect(reopened.mentoring.groups == saved.groups)
+        #expect(reopened.mentoring.readings == saved.readings)
+        #expect(reopened.mentoring.names == saved.names)
+        #expect(reopened.mentoring.arrows.isEmpty)
+
+        // Its next change writes the key.
+        reopened.saveArrows(everyArrow(reopened, .firstTeam, Array(squad[0..<3]), .light))
+        let written = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        #expect(((written["value"] as? [String: Any])?["arrows"] as? [Any])?.count == 6)
+        let again = t.reopened()
+        #expect(again.notices.isEmpty)
+        #expect(again.mentoring == reopened.mentoring)
+        #expect(again.mentoring.groups == saved.groups && again.mentoring.readings == saved.readings)
+    }
+
+    @Test func savingTheSheetKeepsSixReadingsFromToday() throws {
+        let t = try both()
+        let trio = Array(ids(t.model, .firstTeam)[0..<3])
+        var draft = t.model.arrowsDraft(for: .firstTeam, members: trio)
+        #expect(draft.strengths.isEmpty)
+        let strengths: [ArrowStrength] = [.none, .light, .average, .significant, .light, .none]
+        for (pair, strength) in zip(pairs(trio), strengths) { draft.strengths[pair] = strength }
+        #expect(t.model.arrowsProblem(of: draft) == nil)
+        t.model.saveArrows(draft)
+        #expect(t.model.mentoring.arrows.count == 6)
+        for (pair, strength) in zip(pairs(trio), strengths) {
+            #expect(reading(t.model, pair) == ArrowReading(from: pair.from, to: pair.to, squad: .firstTeam,
+                                                           strength: strength, readOn: today))
+        }
+        #expect(t.reopened().mentoring.arrows == t.model.mentoring.arrows)
+    }
+
+    @Test func savingItAgainUnchangedKeepsEveryDay() throws {
+        let t = try both()
+        let trio = Array(ids(t.model, .firstTeam)[0..<3])
+        t.model.saveArrows(everyArrow(t.model, .firstTeam, trio, .average))
+        let first = t.model.mentoring.arrows
+        let generation = t.model.mentoringGeneration
+        setDate(t.model, today.adding(days: 7))
+        t.model.saveArrows(t.model.arrowsDraft(for: .firstTeam, members: trio))
+        #expect(t.model.mentoring.arrows == first)
+        #expect(t.model.mentoringGeneration == generation)
+
+        // One arrow changed takes the new day; the others keep theirs.
+        var changed = t.model.arrowsDraft(for: .firstTeam, members: trio)
+        let pair = pairs(trio)[2]
+        changed.strengths[pair] = .significant
+        t.model.saveArrows(changed)
+        #expect(reading(t.model, pair)?.readOn == today.adding(days: 7))
+        #expect(t.model.mentoring.arrows.filter { $0.readOn == today }.count == 5)
+    }
+
+    @Test func settingAnArrowBackToNotReadRemovesIt() throws {
+        let t = try both()
+        let trio = Array(ids(t.model, .firstTeam)[0..<3])
+        t.model.saveArrows(everyArrow(t.model, .firstTeam, trio, .light))
+        var draft = t.model.arrowsDraft(for: .firstTeam, members: trio)
+        let pair = pairs(trio)[4]
+        draft.strengths[pair] = nil
+        t.model.saveArrows(draft)
+        #expect(t.model.mentoring.arrows.count == 5)
+        #expect(reading(t.model, pair) == nil)
+        #expect(t.reopened().mentoring.arrows.count == 5)
+    }
+
+    @Test func theDraftIsFilledFromEarlierReadings() throws {
+        let t = try both()
+        let trio = Array(ids(t.model, .firstTeam)[0..<3])
+        var draft = t.model.arrowsDraft(for: .firstTeam, members: trio)
+        let read = Array(pairs(trio).prefix(3))
+        for pair in read { draft.strengths[pair] = .significant }
+        t.model.saveArrows(draft)
+
+        let reopened = t.reopened().arrowsDraft(for: .firstTeam, members: trio)
+        #expect(reopened.strengths == Dictionary(uniqueKeysWithValues: read.map { ($0, ArrowStrength.significant) }))
+        #expect(reopened.members == trio)
+        #expect(reopened.id != draft.id)
+        // In another order the same pairs are filled.
+        let shuffled = [trio[2], trio[0], trio[1]]
+        #expect(t.model.arrowsDraft(for: .firstTeam, members: shuffled).strengths == reopened.strengths)
+        // Readings are the squad's: the same three in another squad have none.
+        #expect(t.model.arrowsDraft(for: .u21, members: trio).strengths.isEmpty)
+    }
+
+    @Test func aTrioNeedsThreeCurrentPlayersNotOutOnLoan() throws {
+        let t = try both()
+        let first = ids(t.model, .firstTeam), young = ids(t.model, .u21)
+        func draft(_ members: [PlayerID]) -> ArrowsDraft { everyArrow(t.model, .firstTeam, members, .light) }
+        let problems: [([PlayerID], String)] = [
+            (Array(first[0..<2]), AppModel.MentoringProblemLabel.notThree),
+            (Array(first[0..<4]), AppModel.MentoringProblemLabel.notThree),
+            ([first[0], first[0], first[1]], AppModel.MentoringProblemLabel.notThree),
+            ([first[0], first[1], young[0]], AppModel.MentoringProblemLabel.notInSquad),
+            ([first[0], first[1], .fmrte(999_999)], AppModel.MentoringProblemLabel.notInSquad)]
+        for (members, sentence) in problems {
+            #expect(t.model.arrowsProblem(of: draft(members)) == sentence)
+            t.model.saveArrows(draft(members))
+        }
+        #expect(t.model.mentoring.arrows.isEmpty)
+        #expect(t.model.arrowsProblem(of: draft(Array(first[0..<3]))) == nil)
+
+        let (loaned, away) = try withOneOutOnLoan()
+        let others = (loaned.model.squad.book.current[.firstTeam] ?? []).filter { $0.id != away.id }.prefix(2).map(\.id)
+        let withAway = everyArrow(loaned.model, .firstTeam, others + [away.id], .light)
+        #expect(loaned.model.arrowsProblem(of: withAway) == AppModel.MentoringProblemLabel.onLoan)
+        loaned.model.saveArrows(withAway)
+        #expect(loaned.model.mentoring.arrows.isEmpty)
+    }
+
+    @Test func aPlayerInAGroupCanStillHaveHisArrowsRecorded() throws {
+        let t = try both()
+        let squad = ids(t.model, .firstTeam)
+        t.model.saveGroup(MentoringGroupDraft(squad: .firstTeam, members: Array(squad[0..<3])))
+        // His own group's three, and a trio with one of them and two players in no group.
+        for trio in [Array(squad[0..<3]), [squad[0], squad[3], squad[4]]] {
+            let draft = everyArrow(t.model, .firstTeam, trio, .average)
+            #expect(t.model.arrowsProblem(of: draft) == nil)
+            t.model.saveArrows(draft)
+        }
+        #expect(t.model.mentoring.arrows.count == 12)
+    }
+
+    @Test func aReadingStaysWhenItsPlayerMovesSquadAndIsNotUsed() throws {
+        let t = try bothTeamGrids()
+        let youth = try youthRows()
+        func u21Player(_ row: Int) throws -> Player {
+            try #require(t.model.squad.book.current[.u21]?.first { youth[row].contains("\"\($0.name)\"") })
+        }
+        let moving = [try u21Player(1), try u21Player(2)].map(\.id)
+        // One who stays, chosen as the sheet offers him: not out on loan.
+        let stays = try #require(t.model.arrowChoices(for: t.model.arrowsDraft(for: .u21, members: moving))
+            .first { !$0.isChosen && $0.canToggle }).id
+        let trio = moving + [stays]
+        #expect(t.model.arrowsProblem(of: everyArrow(t.model, .u21, trio, .significant)) == nil)
+        t.model.saveArrows(everyArrow(t.model, .u21, trio, .significant))
+        let readings = t.model.mentoring.arrows
+        #expect(readings.count == 6)
+
+        // Both move to the first team.
+        try importFirstTeam(t, try firstRows() + [youth[1], youth[2]])
+        #expect(Set(lastChange(t.model)?.movedIn ?? []) == Set(moving))
+        try importU21(t, youth.enumerated().filter { ![1, 2].contains($0.offset) }.map(\.element))
+        #expect(t.reopened().mentoring.arrows == readings)
+
+        // A first-team group of the two: their arrows there are guesses.
+        let firstTrio = moving + [ids(t.model, .firstTeam)[0]]
+        let firstGroup = MentoringGroupDraft(squad: .firstTeam, members: firstTrio)
+        #expect(t.model.mentoringProblem(of: firstGroup) == nil)
+        t.model.saveGroup(firstGroup)
+        let there = try #require(try report(t.model, .firstTeam).groups.first { $0.id == firstGroup.id })
+        #expect(there.unreadArrows == 6)
+        #expect(!there.arrows.contains { $0.arrow.isRead })
+        #expect(t.model.mentoringSheet(for: .firstTeam).yours.allSatisfy { $0.arrows.allSatisfy(\.isGuess) })
+
+        // Back in the U21s, the readings are used again.
+        t.input.uptime += 10
+        t.model.endGroup(firstGroup.id)
+        try importU21(t, youth)
+        #expect(Set(lastChange(t.model)?.movedIn ?? []) == Set(moving))
+        let youthGroup = MentoringGroupDraft(squad: .u21, members: trio)
+        #expect(t.model.mentoringProblem(of: youthGroup) == nil)
+        t.model.saveGroup(youthGroup)
+        let back = try #require(try report(t.model, .u21).groups.first { $0.id == youthGroup.id })
+        #expect(back.unreadArrows == 0)
+        #expect(back.arrows.count == 6)
+        #expect(back.arrows.allSatisfy { $0.arrow.readOn == today && $0.arrow.strength == .significant })
+        #expect(t.model.mentoring.arrows == readings)
+    }
+
+    @Test func theAdviceUsesTheReadings() throws {
+        let t = try both()
+        let players = t.model.squad.book.current[.firstTeam] ?? []
+        let lead = try #require(players.max { ($0.age, $1.name) < ($1.age, $0.name) })
+        let juniors = Array(players.filter { $0.id != lead.id && $0.age <= 23 }.prefix(2))
+        try #require(juniors.count == 2)
+        let (one, two) = (juniors[0], juniors[1])
+        t.model.setDynamics([lead.id: PlayerDynamics(standing: .teamLeader)], for: .firstTeam)
+        t.model.saveGroup(MentoringGroupDraft(squad: .firstTeam, members: [lead.id, one.id, two.id]))
+
+        func line(_ junior: Player) throws -> ArrowLine? {
+            try #require(t.model.mentoringSheet(for: .firstTeam).yours.first).arrows
+                .first { $0.titleText == "\(lead.name) → \(junior.name)" }
+        }
+        // Before: both arrows are the Team Leader's guessed Average.
+        let guessed = "\(AdvisorText.name(ArrowStrength.average)) · \(AdvisorText.expectedNotRead)"
+        #expect(try line(one)?.strengthText == guessed)
+        #expect(try line(two)?.strengthText == guessed)
+
+        var draft = t.model.arrowsDraft(for: .firstTeam, members: [lead.id, one.id, two.id])
+        draft.strengths[Pair(from: lead.id, to: one.id)] = .significant
+        draft.strengths[Pair(from: lead.id, to: two.id)] = ArrowStrength.none
+        t.model.saveArrows(draft)
+
+        #expect(try line(one)?.strengthText == "Significant · read \(DayText.short(today))")
+        #expect(try line(one)?.isGuess == false)
+        // Read as None: the guessed arrow is gone.
+        #expect(try line(two) == nil)
+        #expect(t.model.mentoringRequest(for: .firstTeam, asOf: today).arrows == t.model.mentoring.arrows)
+        #expect(t.model.mentoringAdvice(for: .firstTeam) == .ready(try engineReport(t.model, .firstTeam, leaving: [])))
+    }
+
+    @Test func recordingArrowsDoesNotReplan() throws {
+        let t = try both()
+        let planned = t.model.timesPlanned
+        let generation = t.model.mentoringGeneration
+        t.model.saveArrows(everyArrow(t.model, .firstTeam, Array(ids(t.model, .firstTeam)[0..<3]), .light))
+        #expect(t.model.timesPlanned == planned)
+        #expect(t.model.mentoringGeneration > generation)
+    }
+
+    @Test func savingANewGroupLeadsToItsArrowsAndAChangeDoesNot() throws {
+        let t = try both()
+        let squad = ids(t.model, .firstTeam)
+        let trio = [squad[2], squad[0], squad[1]]
+        var earlier = t.model.arrowsDraft(for: .firstTeam, members: trio)
+        earlier.strengths[Pair(from: squad[0], to: squad[2])] = .average
+        t.model.saveArrows(earlier)
+
+        let new = MentoringGroupDraft(squad: .firstTeam, members: trio)
+        t.model.saveGroup(new)
+        let next = try #require(t.model.arrowsDraft(afterSaving: new))
+        #expect(next.squad == .firstTeam)
+        #expect(next.members == trio)
+        #expect(next.strengths == [Pair(from: squad[0], to: squad[2]): .average])
+        #expect(next == t.model.arrowsDraft(for: .firstTeam, members: trio).withID(next.id))
+
+        // A change to the group leads nowhere.
+        var change = MentoringGroupDraft(editing: try #require(live(t.model).first))
+        change.toggle(squad[1])
+        change.toggle(squad[3])
+        t.model.saveGroup(change)
+        #expect(t.model.arrowsDraft(afterSaving: change) == nil)
+        // Nor does a new group that could not be saved.
+        let two = MentoringGroupDraft(squad: .firstTeam, members: [squad[4], squad[5]])
+        t.model.saveGroup(two)
+        #expect(t.model.arrowsDraft(afterSaving: two) == nil)
+    }
+
+    @Test func namesAreKeptForPlayersInReadings() throws {
+        let t = try both()
+        let players = Array((t.model.squad.book.current[.firstTeam] ?? []).prefix(3))
+        t.model.saveArrows(everyArrow(t.model, .firstTeam, players.map(\.id), .light))
+        for player in players { #expect(t.model.mentoring.names[player.id] == player.name) }
+        #expect(t.reopened().mentoring.names == t.model.mentoring.names)
+    }
+
+    @Test func togglingAPlayerKeepsTheDraftAndTheStrengthsSetForPairsThatStay() throws {
+        let t = try both()
+        let squad = ids(t.model, .firstTeam)
+        var draft = t.model.arrowsDraft(for: .firstTeam, members: Array(squad[0..<3]))
+        draft.strengths[Pair(from: squad[0], to: squad[1])] = .significant
+        draft.strengths[Pair(from: squad[2], to: squad[0])] = .light
+        let out = t.model.arrowsDraft(draft, toggling: squad[2])
+        #expect(out.id == draft.id)
+        #expect(out.squad == draft.squad)
+        #expect(out.members == [squad[0], squad[1]])
+        // His pairs' strengths go; the pair that stays keeps what was set in the sheet.
+        #expect(out.strengths == [Pair(from: squad[0], to: squad[1]): .significant])
+        let back = t.model.arrowsDraft(out, toggling: squad[3])
+        #expect(back.id == draft.id)
+        #expect(back.members == [squad[0], squad[1], squad[3]])
+        #expect(back.strengths == [Pair(from: squad[0], to: squad[1]): .significant])
+    }
+
+    @Test func aPlayerPutBackHasHisPairsFilledFromTheKeptReadings() throws {
+        let t = try both()
+        let squad = ids(t.model, .firstTeam)
+        let trio = Array(squad[0..<3])
+        var kept = t.model.arrowsDraft(for: .firstTeam, members: trio)
+        kept.strengths[Pair(from: squad[0], to: squad[2])] = .average
+        t.model.saveArrows(kept)
+
+        var draft = t.model.arrowsDraft(for: .firstTeam, members: trio)
+        draft.strengths[Pair(from: squad[0], to: squad[2])] = .significant
+        draft.strengths[Pair(from: squad[2], to: squad[1])] = .light
+        let out = t.model.arrowsDraft(draft, toggling: squad[2])
+        let back = t.model.arrowsDraft(out, toggling: squad[2])
+        #expect(back.members == [squad[0], squad[1], squad[2]])
+        #expect(back.strengths == [Pair(from: squad[0], to: squad[2]): .average])
+        // And it agrees with a draft opened afresh.
+        #expect(back == t.model.arrowsDraft(for: .firstTeam, members: back.members).withID(back.id))
+    }
+
+    @Test func aFourthPlayerIsNotPutIn() throws {
+        let t = try both()
+        let squad = ids(t.model, .firstTeam)
+        let draft = everyArrow(t.model, .firstTeam, Array(squad[0..<3]), .light)
+        #expect(t.model.arrowsDraft(draft, toggling: squad[3]) == draft)
+    }
+
+    @Test func theArrowsChooserLeavesOutPlayersOutOnLoanAndOfAnotherSquad() throws {
+        let (t, away) = try withOneOutOnLoan()
+        try t.importU21()
+        let squad = ids(t.model, .firstTeam)
+        let draft = t.model.arrowsDraft(for: .firstTeam, members: [])
+        let choices = t.model.arrowChoices(for: draft)
+        #expect(choices.map(\.id) == squad.filter { $0 != away.id })
+        #expect(!choices.contains { ids(t.model, .u21).contains($0.id) })
+        #expect(choices == MentoringPresentation.arrowChoices(
+            draft, players: t.model.squad.book.current[.firstTeam] ?? [], ownClub: t.model.ownClub,
+            state: t.model.mentoring))
+    }
+
     // MARK: The squads imported
 
     @Test func theSquadsImportedAreThoseWithPlayers() throws {
@@ -844,5 +1216,12 @@ import LineupEngine
         #expect(!sheet.yours.isEmpty)
         #expect(isReady(model.mentoringAdvice(for: .u21)))
         guard case .ready = model.adviceState else { Issue.record("expected advice, got \(model.adviceState)"); return }
+    }
+}
+
+private extension ArrowsDraft {
+    /// The same draft under another id, to compare a draft changed in the sheet with one opened afresh.
+    func withID(_ id: UUID) -> ArrowsDraft {
+        ArrowsDraft(id: id, squad: squad, members: members, strengths: strengths)
     }
 }

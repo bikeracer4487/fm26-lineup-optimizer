@@ -2,8 +2,8 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// What the Mentoring tab has open, as a sheet over the Training screen: a squad's hierarchy, or a group's members.
-/// `close` closes it, after a save or on Cancel.
+/// What the Mentoring tab has open, as a sheet over the Training screen: a squad's hierarchy, a group's members, or the
+/// arrows of three players. `close` closes it, after a save or on Cancel.
 struct MentoringEditorSheet: View {
     let model: AppModel
     let editing: MentoringEditing
@@ -18,6 +18,19 @@ struct MentoringEditorSheet: View {
             }, cancel: close)
         case .group(let draft):
             GroupEditor(model: model, draft: draft, done: close)
+        case .arrows(let draft):
+            // Only its frame and title until the arrows sheet is drawn.
+            EditorPanel(title: MentoringPresentation.arrowsEditorTitle(draft.squad),
+                        hint: MentoringPresentation.arrowsEditorHint, note: nil) {
+                EmptyView()
+            } rows: {
+                EmptyView()
+            } footer: {
+                Spacer(minLength: 0)
+                Button(MentoringPresentation.cancelTitle, role: .cancel, action: close)
+                    .buttonStyle(.secondary)
+                    .keyboardShortcut(.cancelAction)
+            }
         }
     }
 }
@@ -230,8 +243,9 @@ private struct EditorName: View {
     }
 }
 
-/// An editor's frame: its title, its hint and a second muted line under it, the headings over its rows, a heavy rule, the rows scrolling, and the row
-/// of what sits by its buttons and the buttons at the foot, on the board's white at the editors' size.
+/// An editor's frame: its title, its hint and a second muted line under it, the headings over its rows, a heavy rule,
+/// the rows scrolling, and the row of what sits by its buttons and the buttons at the foot, on the board's white at the
+/// editors' size.
 private struct EditorPanel<Headings: View, Rows: View, Footer: View>: View {
     let title: String
     let hint: String?

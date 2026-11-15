@@ -1,8 +1,9 @@
 import Foundation
 import LineupEngine
 
-/// The Mentoring tab for one squad: the hierarchy as entered, the suggested groups, the owner's own groups and the young
-/// players the advice could not place, every sentence about the advice in the engine's words.
+/// The Mentoring tab for one squad: the hierarchy as entered, the suggested groups, the owner's own groups and the
+/// players of the club's own, of any age, with something to gain whom the advice could not place, every sentence about
+/// the advice in the engine's words.
 public struct MentoringSheet: Equatable, Sendable {
     public let squad: Squad
     /// "The U21s have not been imported yet." while the squad has not been; everything below is then empty.
@@ -26,7 +27,7 @@ public struct MentoringSheet: Equatable, Sendable {
     public let noteText: String
     public let suggested: [SuggestedGroupCard]
     public let yours: [RecordedGroupCard]
-    /// The engine's sentence for each young player not placed.
+    /// The engine's sentence for each player not placed.
     public let notPlaced: [String]
 }
 
@@ -43,12 +44,15 @@ public struct ArrowLine: Identifiable, Equatable, Sendable {
     public let detailText: String
     /// The tool's guess, not read in the game.
     public let isGuess: Bool
+    /// "McEachran to Clark": the title as said, since a screen reader reads the arrow sign as "right arrow".
+    private let spokenTitle: String
 
-    var spokenParts: [String] { [titleText, strengthText, detailText] }
+    var spokenParts: [String] { [spokenTitle, strengthText, detailText] }
 
     init(_ arrow: GroupArrow) {
         id = "\(arrow.arrow.from.key)→\(arrow.arrow.to.key)"
         titleText = AdvisorText.arrowTitle(arrow)
+        spokenTitle = "\(arrow.fromName) to \(arrow.toName)"
         let read = arrow.arrow.readOn.map(MentoringPresentation.readOn) ?? AdvisorText.expectedNotRead
         strengthText = "\(AdvisorText.name(arrow.arrow.strength)) · \(read)"
         detailText = MentoringPresentation.joined(arrow.pulls.map(AdvisorText.pull)) ?? AdvisorText.nothingToGain
@@ -84,6 +88,8 @@ public struct SuggestedGroupCard: Identifiable, Equatable, Sendable {
     public let cautions: [String]
     /// The evidence note in brackets: "(FM26-era numbers)"; nil for FM27 evidence.
     public let noteText: String?
+    /// Its three members in the suggestion's order, for its Arrows button.
+    public let arrowsDraftMembers: [PlayerID]
     private let spokenNote: String?
 
     /// The card as said to assistive technology: its title, each arrow, the prompt, the cautions and the note.
@@ -102,11 +108,12 @@ public struct SuggestedGroupCard: Identifiable, Equatable, Sendable {
         cautions = suggestion.cautions.map { AdvisorText.caution($0, names: names) }
         spokenNote = AdvisorText.note(for: suggestion.basis)
         noteText = spokenNote.map { "(\($0))" }
+        arrowsDraftMembers = suggestion.members.map(\.player)
     }
 }
 
 /// One of the owner's groups as its card shows it. When the advice for the squad stopped, the card has only its title,
-/// its since-text and what Edit opens with.
+/// its since-text, what Edit opens with and its members for its Arrows button.
 public struct RecordedGroupCard: Identifiable, Equatable, Sendable {
     public let id: UUID
     /// The members' names: "Okafor, Lane, Pike".
@@ -126,6 +133,8 @@ public struct RecordedGroupCard: Identifiable, Equatable, Sendable {
     public let noteText: String?
     /// What Edit opens with.
     public let draft: MentoringGroupDraft
+    /// Its current members, for its Arrows button.
+    public let arrowsDraftMembers: [PlayerID]
     private let spokenNote: String?
 
     /// The card as said to assistive technology: its title and since when, each arrow, the prompt, the warnings, the
@@ -156,6 +165,7 @@ public struct RecordedGroupCard: Identifiable, Equatable, Sendable {
         let names = Dictionary(review.members.map { ($0.player, $0.name) }, uniquingKeysWith: { first, _ in first })
         warnings = review.warnings.map { AdvisorText.warning($0, names: names) }
         draft = MentoringGroupDraft(editing: review.group)
+        arrowsDraftMembers = review.group.current.map(\.player)
         spokenNote = AdvisorText.note(for: review.basis)
         noteText = spokenNote.map { "(\($0))" }
     }
@@ -171,6 +181,7 @@ public struct RecordedGroupCard: Identifiable, Equatable, Sendable {
         members = []
         warnings = []
         draft = MentoringGroupDraft(editing: group)
+        arrowsDraftMembers = group.current.map(\.player)
         spokenNote = nil
         noteText = nil
     }
@@ -186,19 +197,28 @@ public struct DynamicsRow: Identifiable, Equatable, Sendable {
     public var dynamics: PlayerDynamics
 }
 
-/// One player the group editor offers.
+/// One player the group editor or the arrows sheet offers.
 public struct MemberChoice: Identifiable, Equatable, Sendable {
     public let id: PlayerID
     public let name: String
     /// His age and level: "18 · Others"; nil for a member who is no longer imported in the squad.
     public let detailText: String?
     public let isChosen: Bool
-    /// Why he cannot be put in: "In another group", or, for a member of the group being changed, "No longer in the
-    /// squad" or "Out on loan"; nil when he can.
+    /// Why he cannot be put in: "In another group" (never in the arrows sheet), or, for a member of the group being
+    /// changed or a player in the arrows draft, "No longer in the squad" or "Out on loan"; nil when he can.
     public let unavailableText: String?
     /// Whether ticking his row does anything: a player chosen can always be taken out; one not chosen can be put in
     /// when nothing stops him and fewer than three are chosen.
     public let canToggle: Bool
+}
+
+/// One arrow in the arrows sheet: who to whom, and the strength set for it.
+public struct ArrowRow: Identifiable, Equatable, Sendable {
+    public let id: ArrowsDraft.Pair
+    /// "Hart → Young".
+    public let titleText: String
+    /// Nil: not read.
+    public let strength: ArrowStrength?
 }
 
 public enum MentoringPresentation {
@@ -219,6 +239,9 @@ public enum MentoringPresentation {
     static let outOnLoan = "Out on loan"
     static let notEntered = "Not entered"
     static let noGroupRecorded = "No group recorded yet."
+    static let notRead = "Not read"
+    public static let recordArrowsTitle = "Record arrows"
+    public static let arrowsTitle = "Arrows"
     /// The letters of the secondary social groups the game shows.
     static let secondaryGroups = ["A", "B", "C", "D"]
 
@@ -229,6 +252,10 @@ public enum MentoringPresentation {
     public static let socialGroupChoices: [(SocialGroup?, String)] =
         [(nil, notEntered)]
         + ([SocialGroup.core] + secondaryGroups.map(SocialGroup.secondary) + [.others]).map { ($0, AdvisorText.name($0)) }
+
+    /// Not read, then the game's four strengths in the engine's names, weakest first.
+    public static let strengthChoices: [(ArrowStrength?, String)] =
+        [(nil, notRead)] + ArrowStrength.allCases.map { ($0, AdvisorText.name($0)) }
 
     /// The engine's sentence when the squad has no group to suggest; nil when it has one, when it has not been
     /// imported, and when its advice stopped.
@@ -335,16 +362,35 @@ public enum MentoringPresentation {
     static func memberChoices(_ draft: MentoringGroupDraft, players: [Player], ownClub: String?,
                               state: MentoringState) -> [MemberChoice] {
         let elsewhere = Set(state.groups.filter { $0.isLive && $0.id != draft.id }.flatMap(\.current).map(\.player))
-        let chosen = Set(draft.members)
+        let saved = draft.isNew ? [] : state.groups.first { $0.id == draft.id }?.current.map(\.player) ?? []
+        return choices(squad: draft.squad, members: draft.members, alsoListed: saved, inAnotherGroup: elsewhere,
+                       players: players, ownClub: ownClub, state: state)
+    }
+
+    /// The arrows sheet's choices, as the group editor's are made: first any player in the draft who is not among the
+    /// squad's players not out on loan, saying why, who can only be taken out; then the squad's players not out on
+    /// loan, in squad order, those in the draft chosen. A player in a recorded group is listed and can be chosen:
+    /// arrows may be read for any three. Nobody else can be put in once three are chosen.
+    static func arrowChoices(_ draft: ArrowsDraft, players: [Player], ownClub: String?,
+                             state: MentoringState) -> [MemberChoice] {
+        choices(squad: draft.squad, members: draft.members, alsoListed: [], inAnotherGroup: [], players: players,
+                ownClub: ownClub, state: state)
+    }
+
+    /// The rows of a chooser of three for the squad. `members` are those chosen; `alsoListed` are players listed first
+    /// with them when they are not offered; `elsewhere` are offered as in another group, and cannot be put in.
+    private static func choices(squad: Squad, members: [PlayerID], alsoListed: [PlayerID],
+                                inAnotherGroup elsewhere: Set<PlayerID>, players: [Player], ownClub: String?,
+                                state: MentoringState) -> [MemberChoice] {
+        let chosen = Set(members)
         let isFull = chosen.count >= Mentoring.groupSize
         let offered = notOutOnLoan(players, ownClub: ownClub)
         let offeredIDs = Set(offered.map(\.id))
         let held = Dictionary(players.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let saved = draft.isNew ? [] : state.groups.first { $0.id == draft.id }?.current.map(\.player) ?? []
-        let dynamics = state.dynamics(for: draft.squad)
+        let dynamics = state.dynamics(for: squad)
 
         var gone: [PlayerID] = []
-        for id in saved + draft.members where !offeredIDs.contains(id) && !gone.contains(id) { gone.append(id) }
+        for id in alsoListed + members where !offeredIDs.contains(id) && !gone.contains(id) { gone.append(id) }
         let goneRows = gone.map { id in
             let player = held[id]
             return MemberChoice(id: id, name: state.names[id] ?? player?.name ?? TrainingPresentation.unnamed,
@@ -400,6 +446,31 @@ public enum MentoringPresentation {
         case .firstTeam: "Add a first-team group"
         case .u21: "Add a U21 group"
         case .u18: "Add a U18 group"
+        }
+    }
+
+    /// "Record first-team arrows".
+    public static func arrowsEditorTitle(_ squad: Squad) -> String {
+        switch squad {
+        case .firstTeam: "Record first-team arrows"
+        case .u21: "Record U21 arrows"
+        case .u18: "Record U18 arrows"
+        }
+    }
+
+    public static let arrowsEditorHint =
+        "Choose three players, then set each arrow as the game's Mentoring screen shows it."
+
+    /// The six arrows of the draft's three once three different players are chosen, in member order (the first to each
+    /// of the others, then the second, then the third), each with the strength set; none before. Named from `names`,
+    /// never by a key.
+    public static func arrowRows(_ draft: ArrowsDraft, names: [PlayerID: String]) -> [ArrowRow] {
+        guard draft.members.count == Mentoring.groupSize, Set(draft.members).count == Mentoring.groupSize else {
+            return []
+        }
+        let name = { (id: PlayerID) in names[id] ?? TrainingPresentation.unnamed }
+        return draft.pairs.map { pair in
+            ArrowRow(id: pair, titleText: "\(name(pair.from)) → \(name(pair.to))", strength: draft.strengths[pair])
         }
     }
 

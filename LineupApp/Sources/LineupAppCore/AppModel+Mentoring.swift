@@ -2,7 +2,8 @@ import Foundation
 import LineupEngine
 
 extension AppModel {
-    /// Why a draft cannot be saved, in plain words, as labels the owner reads.
+    /// Why a draft cannot be saved, in plain words, as labels the owner reads. The first three serve the arrows sheet
+    /// too: the three whose arrows are read are a group in the game.
     enum MentoringProblemLabel {
         static let notThree = "A group is exactly three players."
         static let notInSquad = "Every member must be a current player of this squad."
@@ -28,8 +29,9 @@ extension AppModel {
     }
 
     /// Records a suggested group as set up in the game from today, its three members joining today, and says so in a
-    /// notice naming them in the suggestion's order. Nothing happens if one of them is in a live group already, or within `trainingActionInterval` of the last
-    /// training action: the card moves under the pointer, as a training card does.
+    /// notice naming them in the suggestion's order. Nothing happens if one of them is in a live group already, or
+    /// within `trainingActionInterval` of the last training action: the card moves under the pointer, as a training
+    /// card does.
     public func recordGroup(_ suggestion: SuggestedGroup, in squad: Squad) {
         trainingAction {
             let named = suggestion.members.map { ($0.player, $0.name) }
@@ -48,16 +50,7 @@ extension AppModel {
 
     /// The sentence saying why the draft cannot be saved; nil when it can.
     public func mentoringProblem(of draft: MentoringGroupDraft) -> String? {
-        guard draft.members.count == Mentoring.groupSize, Set(draft.members).count == Mentoring.groupSize else {
-            return MentoringProblemLabel.notThree
-        }
-        let held = Dictionary((squad.book.current[draft.squad] ?? []).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        guard draft.members.allSatisfy({ held[$0] != nil }) else { return MentoringProblemLabel.notInSquad }
-        for id in draft.members {
-            if case .loanedOut = squad.book.loanStatus(of: held[id]!, override: settings.clubOverride) {
-                return MentoringProblemLabel.onLoan
-            }
-        }
+        if let problem = trioProblem(draft.members, in: draft.squad) { return problem }
         if draft.members.contains(where: { isInLiveGroup($0, except: draft.id) }) { return MentoringProblemLabel.inAnotherGroup }
         return nil
     }
@@ -93,6 +86,91 @@ extension AppModel {
         }
     }
 
+    // MARK: Arrows
+
+    /// A new draft of the arrows of `members` in the squad, filled from the readings kept for their pairs there: for
+    /// opening the arrows sheet.
+    public func arrowsDraft(for squad: Squad, members: [PlayerID]) -> ArrowsDraft {
+        var draft = ArrowsDraft(id: UUID(), squad: squad, members: members, strengths: [:])
+        draft.strengths = keptStrengths(of: draft.pairs, in: squad)
+        return draft
+    }
+
+    /// The same draft (same id) with the player put in or taken out. Taking him out drops his pairs' strengths;
+    /// putting him in fills the new pairs from the readings kept. A fourth player is not put in. Strengths set in the
+    /// sheet for pairs that stay are kept as set.
+    public func arrowsDraft(_ draft: ArrowsDraft, toggling player: PlayerID) -> ArrowsDraft {
+        var changed = draft
+        if let index = changed.members.firstIndex(of: player) {
+            changed.members.remove(at: index)
+            changed.strengths = changed.strengths.filter { $0.key.from != player && $0.key.to != player }
+        } else {
+            guard changed.members.count < Mentoring.groupSize else { return draft }
+            changed.members.append(player)
+            let new = changed.pairs.filter { $0.from == player || $0.to == player }
+            changed.strengths.merge(keptStrengths(of: new, in: draft.squad)) { set, _ in set }
+        }
+        return changed
+    }
+
+    /// The sentence saying why the arrows cannot be saved; nil when they can: exactly three different players, every
+    /// one a current player of the draft's squad and not out on loan. A player in a recorded group can be in it.
+    public func arrowsProblem(of draft: ArrowsDraft) -> String? {
+        trioProblem(draft.members, in: draft.squad)
+    }
+
+    /// Keeps the six arrows of the draft's three: a strength set becomes the pair's reading, dated the game's current
+    /// date unless the strength kept is the same; a pair with none set loses its reading. The three's names are kept,
+    /// as a group's members' are. Nothing happens while the draft has a problem. Saves without replanning; not under
+    /// the half-second guard, since the sheet closes on Save.
+    public func saveArrows(_ draft: ArrowsDraft) {
+        guard arrowsProblem(of: draft) == nil else { return }
+        let today = settings.currentDate
+        let held = Dictionary((squad.book.current[draft.squad] ?? []).map { ($0.id, $0.name) },
+                              uniquingKeysWith: { first, _ in first })
+        changeMentoring { state in
+            for pair in draft.pairs {
+                state.setArrow(from: pair.from, to: pair.to, in: draft.squad, strength: draft.strengths[pair],
+                               on: today)
+            }
+            for id in draft.members { state.names[id] = held[id] }
+        }
+    }
+
+    /// The arrows sheet to open after a new group is saved: its three members, in the draft's order; nil for a change
+    /// to a group, and for a new group that was not saved.
+    public func arrowsDraft(afterSaving draft: MentoringGroupDraft) -> ArrowsDraft? {
+        guard draft.isNew, mentoring.groups.contains(where: { $0.id == draft.id }) else { return nil }
+        return arrowsDraft(for: draft.squad, members: draft.members)
+    }
+
+    /// Why the players cannot be a trio of the squad, a group's or one whose arrows are recorded: not exactly three
+    /// different players, one not a current player of the squad, or one out on loan. Nil when they can.
+    private func trioProblem(_ members: [PlayerID], in squad: Squad) -> String? {
+        guard members.count == Mentoring.groupSize, Set(members).count == Mentoring.groupSize else {
+            return MentoringProblemLabel.notThree
+        }
+        let held = Dictionary((self.squad.book.current[squad] ?? []).map { ($0.id, $0) },
+                              uniquingKeysWith: { first, _ in first })
+        guard members.allSatisfy({ held[$0] != nil }) else { return MentoringProblemLabel.notInSquad }
+        for id in members {
+            if case .loanedOut = self.squad.book.loanStatus(of: held[id]!, override: settings.clubOverride) {
+                return MentoringProblemLabel.onLoan
+            }
+        }
+        return nil
+    }
+
+    /// The readings kept in the squad for those of `pairs` that have one.
+    private func keptStrengths(of pairs: [ArrowsDraft.Pair], in squad: Squad) -> [ArrowsDraft.Pair: ArrowStrength] {
+        var strengths: [ArrowsDraft.Pair: ArrowStrength] = [:]
+        for reading in mentoring.arrows where reading.squad == squad {
+            let pair = ArrowsDraft.Pair(from: reading.from, to: reading.to)
+            if pairs.contains(pair) { strengths[pair] = reading.strength }
+        }
+        return strengths
+    }
+
     /// Ends the group as of the game's current date and keeps it. Nothing happens within `trainingActionInterval` of the
     /// last training action, or for a group that is gone or has already ended.
     public func endGroup(_ id: UUID) {
@@ -113,10 +191,10 @@ extension AppModel {
 
     // MARK: The advice
 
-    /// The mentoring advice for the squad: every imported player, the club, the saved hierarchy, groups, readings and
-    /// names, the game's current date, and as leaving Player Removal's list while the other advice is ready (none while
-    /// it is not, so no tactic is needed). Worked out when first read after a change to the squads, the hierarchy or
-    /// the groups, or to the game's date, and kept until the next.
+    /// The mentoring advice for the squad: every imported player, the club, the saved hierarchy, groups, readings,
+    /// arrows and names, the game's current date, and as leaving Player Removal's list while the other advice is ready
+    /// (none while it is not, so no tactic is needed). Worked out when first read after a change to the squads, the
+    /// hierarchy, the groups or the arrows, or to the game's date, and kept until the next.
     public func mentoringAdvice(for squad: Squad) -> MentoringAdvice {
         _ = mentoringGeneration
         _ = adviceGeneration
@@ -152,14 +230,27 @@ extension AppModel {
                                             state: mentoring)
     }
 
-    /// What the engine is handed for the squad's mentoring advice. No arrow read in the game is kept yet, so it is
-    /// handed none and every arrow is the engine's guess.
+    /// The players the arrows sheet offers for the draft.
+    public func arrowChoices(for draft: ArrowsDraft) -> [MemberChoice] {
+        MentoringPresentation.arrowChoices(draft, players: squad.book.current[draft.squad] ?? [], ownClub: ownClub,
+                                           state: mentoring)
+    }
+
+    /// The arrows sheet's six rows for the draft once three are chosen, each named from the imported players or the
+    /// saved names.
+    public func arrowRows(for draft: ArrowsDraft) -> [ArrowRow] {
+        MentoringPresentation.arrowRows(draft,
+                                        names: mentoring.names.merging(importedNames) { _, imported in imported })
+    }
+
+    /// What the engine is handed for the squad's mentoring advice, the arrows read in the game among it: the engine
+    /// uses only the squad's own, and guesses every other.
     func mentoringRequest(for squad: Squad, asOf: Day) -> MentoringRequest {
         let leaving = AdvicePresentation.report(adviceState)?.removal.advisedToLeave ?? []
         return MentoringRequest(
             squad: squad, players: self.squad.book.allPlayers, ownClub: ownClub,
             dynamics: mentoring.dynamics(for: squad), dynamicsUpdatedOn: mentoring.dynamicsUpdatedOn[squad],
-            groups: mentoring.groups, readings: mentoring.readings, arrows: [], names: mentoring.names,
+            groups: mentoring.groups, readings: mentoring.readings, arrows: mentoring.arrows, names: mentoring.names,
             leaving: leaving, asOf: asOf)
     }
 
