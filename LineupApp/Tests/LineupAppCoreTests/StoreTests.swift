@@ -124,6 +124,19 @@ import LineupEngine
         }
     }
 
+    @Test func aFixturesReadingOfAnOpponentsSquadRoundTrips() throws {
+        try withStore { store, _ in
+            var withReading = fixture
+            withReading.opponentReading = OpponentReading(
+                club: "Banbury United", day: day, theirTotal: 1500, ownTotal: 1600, strength: .similar,
+                awayOnLoanAt: ["Oxford City"])
+            try store.save([withReading], to: .fixtures)
+            let loaded = store.load(.fixtures, as: [StoredFixture].self, otherwise: [])
+            #expect(loaded.notice == nil)
+            #expect(loaded.value == [withReading])
+        }
+    }
+
     @Test func aFixturesFileWithoutRememberedElevensOrACompetitionLoadsWithNone() throws {
         try withStore { store, dir in
             let saved = #"""

@@ -23,14 +23,10 @@ extension AppModel {
     }
 
     private func attemptImport(_ target: Squad) -> ImportOutcome {
-        guard let text = environment.clipboard(), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return .failed(target, reason: "The clipboard is empty. Copy the rows in FMRTE first.")
-        }
-        let config: Data
-        do {
-            config = try environment.fmrteConfig(settings.fmrteConfigPath)
-        } catch {
-            return .failed(target, reason: describeConfigFailure(error))
+        let text: String, config: Data
+        switch readClipboardAndConfig() {
+        case .success(let read): (text, config) = read
+        case .failure(let failure): return .failed(target, reason: failure.reason)
         }
         let result: ImportResult
         do {
@@ -76,9 +72,27 @@ extension AppModel {
         }
     }
 
+    /// A reason the clipboard rows and FMRTE's settings file could not be read, in plain words.
+    struct ReadFailure: Error { let reason: String }
+
+    static let emptyClipboardSentence = "The clipboard is empty. Copy the rows in FMRTE first."
+
+    /// The rows on the clipboard and FMRTE's settings file, or why either could not be read. Shared by the squad
+    /// import and the opponent's paste.
+    func readClipboardAndConfig() -> Result<(text: String, config: Data), ReadFailure> {
+        guard let text = environment.clipboard(), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .failure(ReadFailure(reason: Self.emptyClipboardSentence))
+        }
+        do {
+            return .success((text, try environment.fmrteConfig(settings.fmrteConfigPath)))
+        } catch {
+            return .failure(ReadFailure(reason: describeConfigFailure(error)))
+        }
+    }
+
     /// A file that is not there names the path looked at; any other failure is the engine's sentence for an
     /// unreadable configuration.
-    private func describeConfigFailure(_ error: any Error) -> String {
+    func describeConfigFailure(_ error: any Error) -> String {
         if let cocoa = error as? CocoaError, cocoa.code == .fileReadNoSuchFile || cocoa.code == .fileNoSuchFile {
             let path = cocoa.filePath ?? cocoa.url?.path ?? settings.fmrteConfigPath
             let place = path.map { "at \($0)" } ?? "in its usual place"

@@ -24,6 +24,9 @@ enum Captures {
 
     static var firstTeam: String { get throws { try text("first-team.tsv") } }
     static var firstTeamGrids: Data { get throws { try data("first-team.grids.json") } }
+    /// The same men as `firstTeam`, from a grid that has FMRTE's `Id` column, so they are keyed by id.
+    static var firstTeamWithID: String { get throws { try text("first-team-with-id.tsv") } }
+    static var firstTeamWithIDGrids: Data { get throws { try data("first-team-with-id.grids.json") } }
     static var u21: String { get throws { try text("u21.tsv") } }
     static var u21Grids: Data { get throws { try data("u21.grids.json") } }
 
@@ -69,6 +72,9 @@ enum Captures {
     }
 
     func importFirstTeam() throws { importSquad(.firstTeam, paste: try Captures.firstTeam, grids: try Captures.firstTeamGrids) }
+    func importFirstTeamWithID() throws {
+        importSquad(.firstTeam, paste: try Captures.firstTeamWithID, grids: try Captures.firstTeamWithIDGrids)
+    }
     func importU21() throws { importSquad(.u21, paste: try Captures.u21, grids: try Captures.u21Grids) }
 
     /// The first team as FMRTE pastes it when set to show wages monthly in dollars.

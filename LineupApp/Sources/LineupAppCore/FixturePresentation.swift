@@ -51,6 +51,10 @@ public struct FixtureDraft: Equatable, Sendable {
     public var competition: Competition?
     /// Nil until the owner says.
     public var opponentStrength: OpponentStrength?
+    /// What the last pasted squad showed; nil until one was pasted. Picking a strength by hand leaves it as it was.
+    public var opponentReading: OpponentReading?
+    /// Why the last paste was refused, in plain words; nil after a paste that worked. Not saved with the fixture.
+    public var pasteProblem: String?
     /// The other saved fixtures' opponents by day, the first in date order where a day has several: a club plays one
     /// match a day. The model fills it in.
     public var otherMatches: [Day: String] = [:]
@@ -58,13 +62,14 @@ public struct FixtureDraft: Equatable, Sendable {
     /// A new fixture of medium importance on the primary tactic.
     public init(date: Day) {
         self.id = nil; self.date = date; self.opponent = ""; self.importance = .medium; self.tacticID = nil
-        self.competition = nil; self.opponentStrength = nil
+        self.competition = nil; self.opponentStrength = nil; self.opponentReading = nil
     }
 
     public init(_ fixture: StoredFixture) {
         self.id = fixture.id; self.date = fixture.date; self.opponent = fixture.opponent
         self.importance = fixture.importance; self.tacticID = fixture.tacticID
         self.competition = fixture.competition; self.opponentStrength = fixture.opponentStrength
+        self.opponentReading = fixture.opponentReading
     }
 
     public var isNew: Bool { id == nil }
@@ -77,6 +82,13 @@ public struct FixtureDraft: Equatable, Sendable {
     /// The opponent menu: "Not set", then each strength in the engine's words, strongest first.
     public static var opponentChoices: [(value: OpponentStrength?, title: String)] {
         [(nil, notSet)] + OpponentStrength.allCases.map { (OpponentStrength?.some($0), AdvisorText.name($0)) }
+    }
+
+    public static let pasteButtonTitle = "Paste their squad"
+
+    /// The engine's sentence for the reading, with the day it was made; nil when none was pasted.
+    public var opponentReadingText: String? {
+        opponentReading.map { AdvisorText.opponentReading($0, on: DayText.short($0.day)) }
     }
 
     public static let notSet = "Not set"
@@ -236,7 +248,8 @@ extension AppModel {
             let id = FixtureID(UUID().uuidString)
             fixtures.append(StoredFixture(id: id, date: draft.date, opponent: opponent, importance: draft.importance,
                                           tacticID: draft.tacticID, competition: draft.competition,
-                                          opponentStrength: draft.opponentStrength))
+                                          opponentStrength: draft.opponentStrength,
+                                          opponentReading: draft.opponentReading))
             fixtures.sort(by: Self.dateOrder)
             save(.fixtures)
             replan()
@@ -249,6 +262,7 @@ extension AppModel {
         fixture.tacticID = draft.tacticID
         fixture.competition = draft.competition
         fixture.opponentStrength = draft.opponentStrength
+        fixture.opponentReading = draft.opponentReading
         update(fixture)
         return id
     }

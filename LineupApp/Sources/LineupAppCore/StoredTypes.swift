@@ -38,19 +38,23 @@ public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
     public var competition: Competition?
     /// How strong the opponent is compared with the club; nil until the owner says.
     public var opponentStrength: OpponentStrength?
+    /// What the last pasted squad of the opponent's showed; nil until one was pasted. The opponent's players are not kept.
+    public var opponentReading: OpponentReading?
 
     public init(
         id: FixtureID, date: Day, opponent: String, importance: Importance, tacticID: UUID? = nil,
         overrides: [SlotID: PlayerID] = [:], rejected: Set<PlayerID> = [], lastPlanned: PlannedEleven? = nil,
-        competition: Competition? = nil, opponentStrength: OpponentStrength? = nil
+        competition: Competition? = nil, opponentStrength: OpponentStrength? = nil,
+        opponentReading: OpponentReading? = nil
     ) {
         self.id = id; self.date = date; self.opponent = opponent; self.importance = importance
         self.tacticID = tacticID; self.overrides = overrides; self.rejected = rejected; self.lastPlanned = lastPlanned
         self.competition = competition; self.opponentStrength = opponentStrength
+        self.opponentReading = opponentReading
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, date, opponent, importance, tacticID, overrides, rejected, lastPlanned, competition, opponentStrength
+        case id, date, opponent, importance, tacticID, overrides, rejected, lastPlanned, competition, opponentStrength, opponentReading
     }
 
     public init(from decoder: any Decoder) throws {
@@ -67,6 +71,8 @@ public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
         // A fixture saved before competitions were kept has neither.
         competition = try c.decodeIfPresent(Competition.self, forKey: .competition)
         opponentStrength = try c.decodeIfPresent(OpponentStrength.self, forKey: .opponentStrength)
+        // A fixture saved before squads could be pasted has no reading.
+        opponentReading = try c.decodeIfPresent(OpponentReading.self, forKey: .opponentReading)
     }
 
     /// `rejected` is written as an array in key order, because a set has no fixed order of its own.
@@ -82,6 +88,7 @@ public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
         try c.encodeIfPresent(lastPlanned, forKey: .lastPlanned)
         try c.encodeIfPresent(competition, forKey: .competition)
         try c.encodeIfPresent(opponentStrength, forKey: .opponentStrength)
+        try c.encodeIfPresent(opponentReading, forKey: .opponentReading)
     }
 }
 

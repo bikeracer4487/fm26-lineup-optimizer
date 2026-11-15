@@ -887,3 +887,279 @@ import Testing
         #expect(t.model.todayInTheGameText == "Today in the game: Thursday 12 November 2026")
     }
 }
+
+// MARK: Pasting the opponent's squad
+
+@MainActor @Suite struct OpponentPasteTests {
+    private let today = TestModel.today
+
+    /// A model with the owner's squad imported keyed by FMRTE's id, and the opponent's paste (the same men keyed by name)
+    /// on the clipboard.
+    private func ready(importOwn: Bool = true) throws -> TestModel {
+        let t = try TestModel()
+        if importOwn { try t.importFirstTeamWithID() }
+        var settings = t.model.settings
+        settings.clubName = "Oxford City"
+        t.model.update(settings)
+        try putTheirsOnTheClipboard(t)
+        return t
+    }
+
+    private func putTheirsOnTheClipboard(_ t: TestModel) throws {
+        t.input.clipboard = try Captures.firstTeam
+        t.input.config = .data(try Captures.firstTeamGrids)
+    }
+
+    private func draft(_ t: TestModel, opponent: String = "Banbury United") -> FixtureDraft {
+        var draft = t.model.newFixtureDraft()
+        draft.opponent = opponent
+        return draft
+    }
+
+    private func theirs() throws -> [Player] {
+        try Importer.importPlayers(clipboard: try Captures.firstTeam, fmrteConfig: try Captures.firstTeamGrids,
+                                   squad: .firstTeam).players
+    }
+
+    private func expectedReading(_ t: TestModel) throws -> OpponentReading {
+        try OpponentAdvisor.read(theirs: try theirs(), named: "Banbury United", own: t.model.squad.book.allPlayers,
+                                 ownClub: t.model.ownClub, on: today, parameters: t.model.planParameters)
+    }
+
+    private func fixturesBytes(_ t: TestModel) -> Data? {
+        try? Data(contentsOf: t.directory.appendingPathComponent("fixtures.json"))
+    }
+
+    @Test func aPasteSetsTheStrengthAndTheReading() throws {
+        let t = try ready()
+        var draft = draft(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        let expected = try expectedReading(t)
+        #expect(draft.opponentReading == expected)
+        #expect(expected.club == "Banbury United")
+        #expect(expected.day == today)
+        #expect(draft.opponentStrength == expected.strength)
+        #expect(draft.pasteProblem == nil)
+        #expect(draft.opponentReadingText == AdvisorText.opponentReading(expected, on: DayText.short(today)))
+        #expect(FixtureDraft.pasteButtonTitle == "Paste their squad")
+    }
+
+    @Test func nothingIsSavedUntilTheFixtureIs() throws {
+        let t = try ready()
+        t.model.addFixture(date: today.adding(days: 3), opponent: "Elsewhere", importance: .low)
+        var draft = draft(t)
+        let bytes = fixturesBytes(t)
+        let fixtures = t.model.fixtures
+        let planned = t.model.timesPlanned, advised = t.model.timesAdvised
+        t.model.pasteOpponentSquad(into: &draft)
+        #expect(fixturesBytes(t) == bytes)
+        #expect(t.model.fixtures == fixtures)
+        #expect(t.model.timesPlanned == planned)
+        #expect(t.model.timesAdvised == advised)
+
+        let id = try #require(t.model.save(draft))
+        let stored = try #require(t.model.fixtures.first { $0.id == id })
+        #expect(stored.opponentStrength == draft.opponentStrength)
+        #expect(stored.opponentReading == draft.opponentReading)
+        #expect(stored.opponentReading != nil)
+        let reopened = t.reopened().fixtures.first { $0.id == id }
+        #expect(reopened?.opponentReading == draft.opponentReading)
+        #expect(reopened?.opponentStrength == draft.opponentStrength)
+    }
+
+    @Test func aPasteLeavesTheSquadBookAsItWas() throws {
+        let t = try ready()
+        let squad = t.model.squad, marks = t.model.marks, mentoring = t.model.mentoring, training = t.model.training
+        let squadFile = try Data(contentsOf: t.directory.appendingPathComponent("squad.json"))
+        var draft = draft(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        #expect(draft.opponentReading != nil)
+        #expect(t.model.squad == squad)
+        #expect(t.model.marks == marks)
+        #expect(t.model.mentoring == mentoring)
+        #expect(t.model.training == training)
+        #expect(try Data(contentsOf: t.directory.appendingPathComponent("squad.json")) == squadFile)
+    }
+
+    @Test func pastingTheOwnSquadIsRefused() throws {
+        let t = try ready()
+        t.input.clipboard = try Captures.firstTeamWithID
+        t.input.config = .data(try Captures.firstTeamWithIDGrids)
+        var draft = draft(t)
+        let before = draft
+        t.model.pasteOpponentSquad(into: &draft)
+        #expect(draft.pasteProblem == ErrorDescriptions.describe(OpponentReadingError.ownSquadPasted))
+        var cleared = draft
+        cleared.pasteProblem = nil
+        #expect(cleared == before)
+    }
+
+    @Test func withABlankOpponentThePasteIsRefused() throws {
+        let t = try ready()
+        var draft = draft(t, opponent: "   ")
+        t.model.pasteOpponentSquad(into: &draft)
+        #expect(draft.pasteProblem == ErrorDescriptions.describe(OpponentReadingError.noClubName))
+        #expect(draft.opponentReading == nil)
+        #expect(draft.opponentStrength == nil)
+    }
+
+    @Test func withTooFewOwnPlayersThePasteIsRefused() throws {
+        let t = try ready(importOwn: false)
+        try t.importU21()
+        try putTheirsOnTheClipboard(t)
+        var draft = draft(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        var expected: String?
+        do { _ = try expectedReading(t) } catch { expected = ErrorDescriptions.describe(error) }
+        #expect(expected != nil)
+        #expect(draft.pasteProblem == expected)
+        #expect(draft.pasteProblem?.isEmpty == false)
+        #expect(draft.opponentReading == nil)
+    }
+
+    @Test func anEmptyClipboardIsRefused() throws {
+        let t = try ready()
+        t.input.clipboard = "  \n "
+        var draft = draft(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        #expect(draft.pasteProblem == "The clipboard is empty. Copy the rows in FMRTE first.")
+        #expect(draft.opponentReading == nil)
+        t.input.clipboard = nil
+        t.model.pasteOpponentSquad(into: &draft)
+        #expect(draft.pasteProblem == "The clipboard is empty. Copy the rows in FMRTE first.")
+    }
+
+    @Test func rowsTheImporterRefusesGiveItsSentence() throws {
+        let t = try ready()
+        t.input.clipboard = "Oxford City 2 Banbury United 1"
+        var draft = draft(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        var expected: String?
+        do {
+            _ = try Importer.importPlayers(clipboard: "Oxford City 2 Banbury United 1",
+                                           fmrteConfig: try Captures.firstTeamGrids, squad: .firstTeam)
+        } catch { expected = ErrorDescriptions.describe(error) }
+        #expect(expected != nil)
+        #expect(draft.pasteProblem == expected)
+        #expect(draft.opponentReading == nil)
+    }
+
+    @Test func aSettingsFileThatCannotBeReadGivesItsSentence() throws {
+        let t = try ready()
+        t.input.config = .failure(CocoaError(.fileReadNoSuchFile))
+        var draft = draft(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        let problem = try #require(draft.pasteProblem)
+        #expect(problem.hasPrefix("FMRTE's settings file was not found"))
+        #expect(draft.opponentReading == nil)
+    }
+
+    @Test func withNoSquadImportedThePasteIsRefused() throws {
+        let t = try ready(importOwn: false)
+        var draft = draft(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        #expect(draft.pasteProblem == ErrorDescriptions.describe(OpponentReadingError.noOwnSquad))
+        #expect(draft.opponentReading == nil)
+    }
+
+    @Test func aRefusalKeepsAnEarlierReading() throws {
+        let t = try ready()
+        var draft = draft(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        let reading = try #require(draft.opponentReading)
+        draft.opponentStrength = .muchStronger
+        t.input.clipboard = ""
+        t.model.pasteOpponentSquad(into: &draft)
+        #expect(draft.pasteProblem != nil)
+        #expect(draft.opponentReading == reading)
+        #expect(draft.opponentStrength == .muchStronger)
+    }
+
+    @Test func aLaterPasteReplacesTheReadingAndClearsTheProblem() throws {
+        let t = try ready()
+        var draft = draft(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        t.input.clipboard = ""
+        t.model.pasteOpponentSquad(into: &draft)
+        #expect(draft.pasteProblem != nil)
+
+        var settings = t.model.settings
+        settings.currentDate = today.adding(days: 2)
+        t.model.update(settings)
+        try putTheirsOnTheClipboard(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        #expect(draft.pasteProblem == nil)
+        #expect(draft.opponentReading?.day == today.adding(days: 2))
+    }
+
+    @Test func pickingAStrengthByHandKeepsTheReading() throws {
+        let t = try ready()
+        var draft = draft(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        let reading = try #require(draft.opponentReading)
+        let picked = OpponentStrength.allCases.first { $0 != reading.strength }!
+        draft.opponentStrength = picked
+        let id = try #require(t.model.save(draft))
+        let stored = try #require(t.model.fixtures.first { $0.id == id })
+        #expect(stored.opponentStrength == picked)
+        #expect(stored.opponentReading == reading)
+    }
+
+    @Test func aPasteWithoutAnIdColumnIsReadWithNoWarning() throws {
+        let t = try ready()
+        var draft = draft(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        #expect(draft.opponentReading != nil)
+        #expect(draft.pasteProblem == nil)
+    }
+
+    @Test func aFixtureFromBeforeThisPlanOpensWithNoReading() throws {
+        let t = try TestModel()
+        let saved = #"""
+        {"version": 1, "value": [{"id": "f1", "date": "2026-11-13", "opponent": "Rovers", "importance": "high",
+          "overrides": {}, "rejected": [], "opponentStrength": "weaker"}]}
+        """#
+        try Data(saved.utf8).write(to: t.directory.appendingPathComponent("fixtures.json"))
+        let reopened = t.reopened()
+        #expect(reopened.notices.isEmpty)
+        #expect(reopened.fixtures.first?.opponentReading == nil)
+        #expect(reopened.fixtures.first?.opponentStrength == .weaker)
+    }
+
+    @Test func editingAFixtureShowsItsSavedReading() throws {
+        let t = try ready()
+        var draft = draft(t)
+        t.model.pasteOpponentSquad(into: &draft)
+        let id = try #require(t.model.save(draft))
+        let stored = try #require(t.model.fixtures.first { $0.id == id })
+        let editing = t.model.fixtureDraft(for: stored)
+        #expect(editing.opponentReading == draft.opponentReading)
+        #expect(editing.opponentReadingText == draft.opponentReadingText)
+        #expect(editing.pasteProblem == nil)
+    }
+}
+
+extension FixturePresentationTests {
+    @Test func useItInTheTableKeepsTheReading() throws {
+        let c = try clockedSample()
+        defer { try? FileManager.default.removeItem(at: c.directory) }
+        let fixture = try fixturesShowingALine(c.model, count: 1)[0]
+        // The sample squad is keyed by name, so the paste keyed by FMRTE's id reads as another club's.
+        c.input.clipboard = try Captures.firstTeamWithID
+        c.input.config = .data(try Captures.firstTeamWithIDGrids)
+        var draft = c.model.fixtureDraft(for: fixture)
+        c.model.pasteOpponentSquad(into: &draft)
+        #expect(draft.pasteProblem == nil, "\(draft.pasteProblem ?? "")")
+        let reading = try #require(draft.opponentReading)
+        // The paste moved nothing in the saved fixture; saving the draft keeps its importance and adds the reading.
+        c.model.save(draft)
+        let current = try #require(c.model.fixtures.first { $0.id == fixture.id })
+        let line = try #require(c.model.suggestionLine(for: current))
+        c.model.useSuggestion(for: fixture.id)
+        let after = try #require(c.model.fixtures.first { $0.id == fixture.id })
+        #expect(after.importance == line.importance)
+        #expect(after.importance != fixture.importance)
+        #expect(after.opponentReading == reading)
+        #expect(after.opponentStrength == reading.strength)
+    }
+}
