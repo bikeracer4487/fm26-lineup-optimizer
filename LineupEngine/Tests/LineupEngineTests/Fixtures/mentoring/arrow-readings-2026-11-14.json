@@ -1,0 +1,450 @@
+{
+  "what": "The arrows Football Manager 27 showed between the three players of each mentoring group, read by the owner from his own first team.",
+  "readOn": "2026-11-14",
+  "strengths": [
+    "none",
+    "light",
+    "average",
+    "significant"
+  ],
+  "howToRead": "Each group lists its three members and every arrow that was above none. Every other ordered pair in the group was none.",
+  "groups": [
+    {
+      "set": "the game's own groups",
+      "members": [
+        "Darnell Johnson",
+        "Samuel Onyekachukwu",
+        "Deago Nelson"
+      ],
+      "arrows": [
+        {
+          "from": "Darnell Johnson",
+          "to": "Deago Nelson",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "the game's own groups",
+      "members": [
+        "Canice Carroll",
+        "Keegan Bloom",
+        "Evan Humphries"
+      ],
+      "arrows": [
+        {
+          "from": "Canice Carroll",
+          "to": "Keegan Bloom",
+          "strength": "light"
+        },
+        {
+          "from": "Canice Carroll",
+          "to": "Evan Humphries",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "the game's own groups",
+      "members": [
+        "Josh Ashby",
+        "Dejan Tetek",
+        "Scott Pollock"
+      ],
+      "arrows": [
+        {
+          "from": "Josh Ashby",
+          "to": "Dejan Tetek",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "the game's own groups",
+      "members": [
+        "Zac McEachran",
+        "Dillon De Silva",
+        "Ellis Brown"
+      ],
+      "arrows": []
+    },
+    {
+      "set": "the groups the app suggested",
+      "members": [
+        "Darnell Johnson",
+        "Keegan Bloom",
+        "Deago Nelson"
+      ],
+      "arrows": [
+        {
+          "from": "Darnell Johnson",
+          "to": "Keegan Bloom",
+          "strength": "light"
+        },
+        {
+          "from": "Darnell Johnson",
+          "to": "Deago Nelson",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "the groups the app suggested",
+      "members": [
+        "Alfie Potter",
+        "Ewan Clark",
+        "Canice Carroll"
+      ],
+      "arrows": [
+        {
+          "from": "Alfie Potter",
+          "to": "Ewan Clark",
+          "strength": "light"
+        },
+        {
+          "from": "Canice Carroll",
+          "to": "Ewan Clark",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "the groups the app suggested",
+      "members": [
+        "Fernando Forestieri",
+        "Samuel Onyekachukwu",
+        "Evan Humphries"
+      ],
+      "arrows": [
+        {
+          "from": "Fernando Forestieri",
+          "to": "Evan Humphries",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "the groups the app suggested",
+      "members": [
+        "Matty Taylor",
+        "Dejan Tetek",
+        "Dillon De Silva"
+      ],
+      "arrows": []
+    },
+    {
+      "set": "first test round",
+      "members": [
+        "Matty Taylor",
+        "Deago Nelson",
+        "Ewan Clark"
+      ],
+      "arrows": [
+        {
+          "from": "Ewan Clark",
+          "to": "Deago Nelson",
+          "strength": "light"
+        },
+        {
+          "from": "Matty Taylor",
+          "to": "Deago Nelson",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "first test round",
+      "members": [
+        "Canice Carroll",
+        "Dillon De Silva",
+        "Samuel Onyekachukwu"
+      ],
+      "arrows": []
+    },
+    {
+      "set": "first test round",
+      "members": [
+        "Darnell Johnson",
+        "Dejan Tetek",
+        "Ellis Brown"
+      ],
+      "arrows": [
+        {
+          "from": "Darnell Johnson",
+          "to": "Ellis Brown",
+          "strength": "light"
+        },
+        {
+          "from": "Darnell Johnson",
+          "to": "Dejan Tetek",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "first test round",
+      "members": [
+        "Scott Pollock",
+        "Evan Humphries",
+        "Jack Thompson"
+      ],
+      "arrows": []
+    },
+    {
+      "set": "first test round",
+      "members": [
+        "Zac McEachran",
+        "Keegan Bloom",
+        "Jonny Maxted"
+      ],
+      "arrows": [
+        {
+          "from": "Jonny Maxted",
+          "to": "Keegan Bloom",
+          "strength": "average"
+        },
+        {
+          "from": "Zac McEachran",
+          "to": "Keegan Bloom",
+          "strength": "significant"
+        }
+      ]
+    },
+    {
+      "set": "second test round",
+      "members": [
+        "Matty Taylor",
+        "Evan Humphries",
+        "Scott Pollock"
+      ],
+      "arrows": [
+        {
+          "from": "Matty Taylor",
+          "to": "Evan Humphries",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "second test round",
+      "members": [
+        "Zac McEachran",
+        "Dejan Tetek",
+        "Ewan Clark"
+      ],
+      "arrows": [
+        {
+          "from": "Zac McEachran",
+          "to": "Ewan Clark",
+          "strength": "significant"
+        },
+        {
+          "from": "Zac McEachran",
+          "to": "Dejan Tetek",
+          "strength": "light"
+        },
+        {
+          "from": "Dejan Tetek",
+          "to": "Ewan Clark",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "second test round",
+      "members": [
+        "Josh Ashby",
+        "Keegan Bloom",
+        "Ellis Brown"
+      ],
+      "arrows": [
+        {
+          "from": "Josh Ashby",
+          "to": "Keegan Bloom",
+          "strength": "average"
+        }
+      ]
+    },
+    {
+      "set": "second test round",
+      "members": [
+        "Fernando Forestieri",
+        "Deago Nelson",
+        "Jack Thompson"
+      ],
+      "arrows": [
+        {
+          "from": "Fernando Forestieri",
+          "to": "Deago Nelson",
+          "strength": "light"
+        },
+        {
+          "from": "Fernando Forestieri",
+          "to": "Jack Thompson",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "second test round",
+      "members": [
+        "Darnell Johnson",
+        "Dillon De Silva",
+        "Ludwig Francillette"
+      ],
+      "arrows": []
+    },
+    {
+      "set": "third test round",
+      "members": [
+        "Zac McEachran",
+        "Evan Humphries",
+        "Samuel Onyekachukwu"
+      ],
+      "arrows": [
+        {
+          "from": "Zac McEachran",
+          "to": "Evan Humphries",
+          "strength": "average"
+        }
+      ]
+    },
+    {
+      "set": "third test round",
+      "members": [
+        "Josh Ashby",
+        "Ewan Clark",
+        "Deago Nelson"
+      ],
+      "arrows": [
+        {
+          "from": "Josh Ashby",
+          "to": "Ewan Clark",
+          "strength": "significant"
+        },
+        {
+          "from": "Josh Ashby",
+          "to": "Deago Nelson",
+          "strength": "significant"
+        },
+        {
+          "from": "Ewan Clark",
+          "to": "Deago Nelson",
+          "strength": "light"
+        }
+      ],
+      "note": "Clark to Nelson first read as None; corrected to Light by the owner on re-checking."
+    },
+    {
+      "set": "third test round",
+      "members": [
+        "Matty Taylor",
+        "Keegan Bloom",
+        "Ellis Brown"
+      ],
+      "arrows": [
+        {
+          "from": "Matty Taylor",
+          "to": "Keegan Bloom",
+          "strength": "light"
+        },
+        {
+          "from": "Matty Taylor",
+          "to": "Ellis Brown",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "third test round",
+      "members": [
+        "Jonny Maxted",
+        "Dejan Tetek",
+        "Jack Thompson"
+      ],
+      "arrows": [
+        {
+          "from": "Jonny Maxted",
+          "to": "Jack Thompson",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "re-read to check surprising arrows",
+      "members": [
+        "Matty Taylor",
+        "Ewan Clark",
+        "Dejan Tetek"
+      ],
+      "arrows": [
+        {
+          "from": "Dejan Tetek",
+          "to": "Ewan Clark",
+          "strength": "light"
+        }
+      ]
+    },
+    {
+      "set": "re-read to check surprising arrows",
+      "members": [
+        "Zac McEachran",
+        "Ellis Brown",
+        "Samuel Onyekachukwu"
+      ],
+      "arrows": []
+    }
+  ],
+  "confirmedOnReReading": [
+    {
+      "from": "Matty Taylor",
+      "to": "Ewan Clark",
+      "strength": "none"
+    },
+    {
+      "from": "Matty Taylor",
+      "to": "Dejan Tetek",
+      "strength": "none"
+    },
+    {
+      "from": "Dejan Tetek",
+      "to": "Ewan Clark",
+      "strength": "light"
+    },
+    {
+      "from": "Zac McEachran",
+      "to": "Ellis Brown",
+      "strength": "none"
+    },
+    {
+      "from": "Josh Ashby",
+      "to": "Ellis Brown",
+      "strength": "none"
+    },
+    {
+      "from": "Jonny Maxted",
+      "to": "Dejan Tetek",
+      "strength": "none"
+    },
+    {
+      "from": "Darnell Johnson",
+      "to": "Samuel Onyekachukwu",
+      "strength": "none"
+    },
+    {
+      "from": "Fernando Forestieri",
+      "to": "Samuel Onyekachukwu",
+      "strength": "none"
+    },
+    {
+      "from": "Canice Carroll",
+      "to": "Samuel Onyekachukwu",
+      "strength": "none"
+    },
+    {
+      "from": "Zac McEachran",
+      "to": "Samuel Onyekachukwu",
+      "strength": "none"
+    }
+  ]
+}
