@@ -33,7 +33,7 @@ import LineupEngine
     private var settings: AppSettings {
         var s = AppSettings(currentDate: day)
         s.clubName = "Oxford City"; s.primaryTacticID = tacticID; s.conditionFloor = 80
-        s.fmrteConfigPath = "/tmp/config.json"
+        s.fmrteConfigPath = "/tmp/config.json"; s.leagueSituation = .nothingToPlayFor
         return s
     }
     private var squad: SquadState {

@@ -18,6 +18,7 @@ extension AppModel {
     /// all such fixtures, with the planner's tiers for the fixture's own tactic. Empty while the advice is not ready; a
     /// fixture whose suggestion cannot be worked out has none.
     public var suggestions: [FixtureID: ImportanceSuggestion] {
+        _ = settings   // observed: a change of the league situation tells a view reading this, kept or not
         guard case .ready = adviceState else { return [:] }
         if let suggestions = adviceCache?.suggestions { return suggestions }
         let suggestions = workedOutSuggestions()
@@ -99,7 +100,7 @@ extension AppModel {
               let tiers = tiers(for: tactic), let fixture = fixtureForPlanner(stored) else { return nil }
         let among = openFixtures().map(\.fixture).filter { $0.id != draft.id }
         return try? ImportanceAdvisor.suggest(for: fixture, among: among, confirmed: history.map(\.lineup),
-                                              players: squad.book.allPlayers, tiers: tiers, situation: .inContention,
+                                              players: squad.book.allPlayers, tiers: tiers, situation: settings.situation,
                                               parameters: planParameters)
     }
 
@@ -143,7 +144,7 @@ extension AppModel {
             guard let tiers = tiers(for: tactic) else { continue }
             do {
                 found[fixture.id] = try ImportanceAdvisor.suggest(for: fixture, among: among, confirmed: lineups,
-                                                                  players: players, tiers: tiers, situation: .inContention,
+                                                                  players: players, tiers: tiers, situation: settings.situation,
                                                                   parameters: parameters)
             } catch {
                 continue   // that fixture has no suggestion

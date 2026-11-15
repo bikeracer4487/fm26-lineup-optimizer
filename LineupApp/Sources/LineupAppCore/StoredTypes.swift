@@ -130,6 +130,11 @@ public struct AppSettings: Equatable, Codable, Sendable {
     public var conditionFloor: Double?
     /// Nil: FMRTE's usual location under Application Support.
     public var fmrteConfigPath: String?
+    /// Where the club stands in the league, as the owner says; nil in a file from before it was kept.
+    public var leagueSituation: LeagueSituation?
+
+    /// The situation the suggestions use: the owner's, or in contention until he says.
+    public var situation: LeagueSituation { leagueSituation ?? .inContention }
 
     public init(currentDate: Day) {
         self.currentDate = currentDate
@@ -138,6 +143,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         self.primaryTacticID = nil
         self.conditionFloor = nil
         self.fmrteConfigPath = nil
+        self.leagueSituation = nil
     }
 }
 

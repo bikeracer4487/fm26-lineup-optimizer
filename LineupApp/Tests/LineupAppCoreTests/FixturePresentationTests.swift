@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 @testable import LineupEngine
 @testable import LineupAppCore
@@ -499,6 +500,132 @@ import Testing
             #expect(model.suggestionLine(for: shown) == nil)
             #expect(model.suggestion(for: model.fixtureDraft(for: shown)) == nil)
         }
+    }
+
+    // MARK: The league situation
+
+    private func leagueFixture(_ model: AppModel) throws -> StoredFixture {
+        try #require(model.fixtures.first { $0.competition == .league && $0.opponentStrength == .weaker })
+    }
+
+    @Test func theSituationChangesALeagueFixturesSuggestion() throws {
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let fixture = try leagueFixture(model)
+        let before = try #require(model.suggestions[fixture.id])
+        model.setLeagueSituation(.nothingToPlayFor)
+        let after = try #require(model.suggestions[fixture.id])
+        #expect(after.importance != before.importance)
+        #expect([Importance.low, .sharpness].contains(after.importance))
+        #expect(after.reasons.first == "League match, nothing to play for: 20")
+        let expected = try engineSuggestion(model, for: try #require(model.fixtureForPlanner(fixture)),
+                                            among: model.fixtures)
+        #expect(after.importance != expected.importance || after.reasons.first != expected.reasons.first
+                || expected.reasons.first == "League match, nothing to play for: 20")
+    }
+
+    @Test func theSituationDoesNotChangeACupFixturesSuggestion() throws {
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let cup = try #require(model.fixtures.first { $0.competition == .cup })
+        let before = try #require(model.suggestions[cup.id])
+        model.setLeagueSituation(.nothingToPlayFor)
+        #expect(model.suggestions[cup.id] == before)
+    }
+
+    @Test func changingTheSituationDoesNotPlanAgain() throws {
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        _ = model.suggestions
+        let planned = model.timesPlanned, advised = model.timesAdvised, plan = model.planState
+        model.setLeagueSituation(.midTable)
+        _ = model.suggestions
+        #expect(model.timesPlanned == planned)
+        #expect(model.timesAdvised == advised)
+        #expect(model.planState == plan)
+    }
+
+    @Test func theSituationIsSavedAndReadBack() throws {
+        let t = try TestModel()
+        #expect(t.model.settings.situation == .inContention)
+        t.model.setLeagueSituation(.midTable)
+        #expect(t.reopened().settings.situation == .midTable)
+    }
+
+    @Test func theEditorsSuggestionFollowsTheSituation() throws {
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let draft = model.fixtureDraft(for: try leagueFixture(model))
+        let before = try #require(model.suggestionNote(for: draft))
+        model.setLeagueSituation(.nothingToPlayFor)
+        let after = try #require(model.suggestionNote(for: draft))
+        #expect(after.reasons.first == "League match, nothing to play for: 20")
+        #expect(after != before)
+    }
+
+    @Test func aViewReadingTheSuggestionsIsToldWhenTheSituationChanges() throws {
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        for warm in [false, true] {
+            if warm { _ = model.suggestions }   // the kept path as well as the first read
+            let told = Mutex(false)
+            withObservationTracking { _ = model.suggestions } onChange: { told.withLock { $0 = true } }
+            model.setLeagueSituation(model.settings.situation == .midTable ? .inContention : .midTable)
+            #expect(told.withLock { $0 })
+        }
+    }
+
+    /// The settings file as the store writes it, with `leagueSituation` set to `value` (removed for nil).
+    private func writeSettings(in t: TestModel, leagueSituation value: String?) throws {
+        var settings = AppSettings(currentDate: TestModel.today)
+        settings.leagueSituation = .midTable
+        try Store(directory: t.directory).save(settings, to: .settings)
+        let file = t.directory.appendingPathComponent("settings.json")
+        // The store wraps what it saves with a version, so the settings are one level down.
+        var wrapper = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        let key = try #require(wrapper.first { $0.value is [String: Any] }?.key)
+        var object = try #require(wrapper[key] as? [String: Any])
+        #expect(object["leagueSituation"] as? String == "midTable")
+        if let value { object["leagueSituation"] = value } else { object.removeValue(forKey: "leagueSituation") }
+        wrapper[key] = object
+        try JSONSerialization.data(withJSONObject: wrapper).write(to: file)
+    }
+
+    @Test func settingsFromBeforeThisPlanOpenAsInContention() throws {
+        let t = try TestModel()
+        try writeSettings(in: t, leagueSituation: nil)
+        let reopened = t.reopened()
+        #expect(reopened.settings.situation == .inContention)
+        #expect(reopened.settings.leagueSituation == nil)
+        #expect(reopened.notices.isEmpty)
+    }
+
+    @Test func aSettingsFileWithAnUnknownSituationIsKeptAsideWithANotice() throws {
+        let t = try TestModel()
+        try writeSettings(in: t, leagueSituation: "playOffPush")
+        let reopened = t.reopened()
+        #expect(reopened.notices.count == 1)
+        #expect(reopened.settings.situation == .inContention)
+        #expect(FileManager.default.fileExists(atPath: t.directory.appendingPathComponent("settings.unreadable-1.json").path))
+    }
+
+    @Test func theMenuListsTheFourSituationsInTheEnginesWords() {
+        #expect(AppModel.leagueSituationChoices.map(\.value) == LeagueSituation.allCases)
+        #expect(AppModel.leagueSituationChoices.map(\.title) == LeagueSituation.allCases.map { AdvisorText.name($0) })
+        #expect(AppModel.leagueSituationChoices.count == 4)
+        #expect(AppModel.leagueSituationLabel == "League situation")
+    }
+
+    @Test func aChangeToTheSituationThroughUpdateAlsoClearsTheKeptSuggestions() throws {
+        let model = try sample()
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let fixture = try leagueFixture(model)
+        let before = try #require(model.suggestions[fixture.id])
+        var settings = model.settings
+        settings.leagueSituation = .nothingToPlayFor
+        model.update(settings)
+        #expect(model.suggestions[fixture.id] != before)
+        #expect(model.suggestions[fixture.id]?.reasons.first == "League match, nothing to play for: 20")
     }
 
     // MARK: How the suggestion is shown
