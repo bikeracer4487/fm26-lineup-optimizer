@@ -196,15 +196,32 @@ import Testing
         #expect(why(nil) == "Not enough against him to act: watch how he does")
     }
 
-    @Test func whyAYoungPlayerNotWorthDevelopingIsWatchedFollowsHisLevel() {
-        func why(_ level: ReachLevel?, at slot: SlotID? = .D_L) -> String {
-            let watched = RemovalAdvice(
-                player: PlayerID(key: "young"), name: "Young", level: .keep, action: .monitor, score: 0, reasons: [],
-                tier: nil, outlook: outlook(level, at: slot), matchesHere: MatchesHere(starts: 0, matches: 6, basis: .startedTooFew),
-                keepReason: nil, watchReason: .notWorthDeveloping, loanOnlyToStart: false, onYouthContract: false,
-                isFalseProspect: false, isMentor: false, releaseCost: nil, mutualCost: nil, basis: .derived)
-            return AdvisorText.why(.monitor, for: watched)
+    /// Why a young player at `level` (best at `slot`, or compared with the average when nil) is watched for `reason`.
+    func whyWatched(_ reason: WatchReason, _ level: ReachLevel?, at slot: SlotID? = .D_L) -> String {
+        let watched = RemovalAdvice(
+            player: PlayerID(key: "young"), name: "Young", level: .keep, action: .monitor, score: 0, reasons: [],
+            tier: nil, outlook: outlook(level, at: slot), matchesHere: MatchesHere(starts: 0, matches: 6, basis: .startedTooFew),
+            keepReason: nil, watchReason: reason, loanOnlyToStart: false, onYouthContract: false,
+            isFalseProspect: false, isMentor: false, releaseCost: nil, mutualCost: nil, basis: .derived)
+        return AdvisorText.why(.monitor, for: watched)
+    }
+
+    @Test func whyAYoungPlayerNeededForCoverIsWatchedFollowsHisLevel() {
+        let loan = "He is needed as cover here, so a loan would leave the squad short."
+        let stays = "He is needed as cover here: he stays until the squad has someone better there."
+        // Worth developing, or with no level: a loan would leave the squad short.
+        for level in [ReachLevel.couldPassFirst, .couldMakeSecond, nil] {
+            #expect(whyWatched(.neededForCover, level) == loan, "\(String(describing: level))")
         }
+        // Not worth developing: never considered for a loan, so the sentence does not speak of one.
+        for level in [ReachLevel.couldBeCover, .markedlyLower] {
+            #expect(whyWatched(.neededForCover, level) == stays, "\(level)")
+            #expect(whyWatched(.neededForCover, level, at: nil) == stays, "\(level)")
+        }
+    }
+
+    @Test func whyAYoungPlayerNotWorthDevelopingIsWatchedFollowsHisLevel() {
+        func why(_ level: ReachLevel?, at slot: SlotID? = .D_L) -> String { whyWatched(.notWorthDeveloping, level, at: slot) }
         #expect(why(.couldBeCover) == "This tool expects him to become cover at best: watch how he does.")
         #expect(why(.markedlyLower) == "This tool does not expect him to reach the level of the squad: watch how he does.")
         // Compared with the first team's average, the same sentences.

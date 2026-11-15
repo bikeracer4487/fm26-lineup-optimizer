@@ -829,8 +829,10 @@ import Testing
         #expect(a.reasons == [reason("Not expected to reach the level of the squad at any position", 70),
                               reason("Cover at left back would be thin without him", -30)])
         #expect(a.score == 40 && a.level == .medium && a.action == .monitor)
-        // Not worth developing, and needed for cover: watched for that.
+        // Not worth developing, and needed for cover: watched for that, with no word of a loan.
         #expect(a.watchReason == .neededForCover)
+        #expect(AdvisorText.why(a.action, for: a)
+                == "He is needed as cover here: he stays until the squad has someone better there.")
     }
 
     @Test func oneNotNeededScoresSeventy() throws {
@@ -1132,7 +1134,8 @@ import Testing
             try #require(a.matchesHere?.isEnough == false)
             #expect(thinReasons(a) == [reason("Cover at left back would be thin without him", -30)], "\(age)")
             #expect(a.action == .monitor && a.watchReason == .neededForCover, "\(age)")
-            #expect(AdvisorText.why(a.action, for: a) == "He is needed as cover here, so a loan would leave the squad short.")
+            #expect(AdvisorText.why(a.action, for: a)
+                    == "He is needed as cover here: he stays until the squad has someone better there.")
         }
     }
 

@@ -20,7 +20,8 @@ public enum RemovalAction: String, CaseIterable, Sendable {
 public enum WatchReason: String, CaseIterable, Sendable {
     /// His reach is no more than cover, and he is neither kept to play nor needed as cover.
     case notWorthDeveloping
-    /// He is needed as cover, whether or not he is worth developing: a loan would leave the squad short.
+    /// He is needed as cover, whether or not he is worth developing: a loan would leave the squad short, and one not
+    /// worth developing stays until the squad has someone better there.
     case neededForCover
 }
 

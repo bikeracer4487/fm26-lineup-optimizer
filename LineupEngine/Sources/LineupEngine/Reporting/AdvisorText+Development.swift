@@ -186,10 +186,18 @@ extension AdvisorText {
     }
 
     /// Why a player is watched; a player without an outlook keeps the general sentence. One not worth developing is
-    /// told how far his reach goes, from `level`, his outlook's level.
+    /// told how far his reach goes, from `level`, his outlook's level; needed for cover, he is told he stays until the
+    /// squad has someone better, since he is never considered for a loan.
     static func whyWatch(_ reason: WatchReason?, level: ReachLevel?) -> String {
         let general = "Not enough against him to act: watch how he does"
         switch reason {
+        case .neededForCover?:
+            switch level {
+            case .couldBeCover?, .markedlyLower?:
+                return "He is needed as cover here: he stays until the squad has someone better there."
+            case .couldPassFirst?, .couldMakeSecond?, nil:
+                return "He is needed as cover here, so a loan would leave the squad short."
+            }
         case .notWorthDeveloping?:
             switch level {
             case .couldBeCover?: return "This tool expects him to become cover at best: watch how he does."
@@ -198,7 +206,6 @@ extension AdvisorText {
             // plainly.
             case .couldPassFirst?, .couldMakeSecond?, nil: return general
             }
-        case .neededForCover?: return "He is needed as cover here, so a loan would leave the squad short."
         case nil: return general
         }
     }

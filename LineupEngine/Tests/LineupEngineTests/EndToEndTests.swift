@@ -433,6 +433,8 @@ import Testing
         let eighteen = try #require(young.first { $0.squad == .u21 && $0.age == 18 })
         let watched = try #require(removal.advice.first { $0.player == eighteen.id })
         #expect(watched.tier == .backup && watched.watchReason == .neededForCover)
+        // Worth developing, so the loan sentence.
+        #expect(watched.outlook?.level == .couldPassFirst || watched.outlook?.level == .couldMakeSecond)
         #expect(AdvisorText.why(watched.action, for: watched)
                 == "He is needed as cover here, so a loan would leave the squad short.")
         // An outfield player who is the second eleven's goalkeeper is not getting his matches because of it.
