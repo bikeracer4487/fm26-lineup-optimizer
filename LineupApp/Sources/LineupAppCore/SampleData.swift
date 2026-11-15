@@ -462,6 +462,59 @@ public enum SampleData {
         return model
     }
 
+    /// The hierarchy sample with the six arrows of the advice's first suggested first-team group read today, each at
+    /// the strength the tool guessed, as the owner records them in the arrows sheet, so that group rests on readings;
+    /// the other suggestions still rest on guesses.
+    @MainActor public static func modelWithArrowsRead(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithHierarchy(repositoryRoot: repositoryRoot)
+        let group = try firstSuggestion(model)
+        var draft = model.arrowsDraft(for: .firstTeam, members: group.members.map(\.player))
+        for pair in draft.pairs {
+            draft.strengths[pair] = group.arrows.first { $0.arrow.from == pair.from && $0.arrow.to == pair.to }?
+                .arrow.strength ?? ArrowStrength.none
+        }
+        try saveArrows(draft, in: model)
+        return model
+    }
+
+    /// The warning sample with its Team Leader's harmful arrow, in Ambition, read today as Significant in the arrows
+    /// sheet; the group's other arrows are still guesses. His Ambition is the same at both readings, so the group is
+    /// not doing harm.
+    @MainActor public static func modelWithHarmfulArrow(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithMentoringWarning(repositoryRoot: repositoryRoot)
+        guard case .ready(let report) = model.mentoringAdvice(for: .firstTeam), let review = report.groups.first,
+              let (from, to) = review.warnings.lazy.compactMap({ warning -> (PlayerID, PlayerID)? in
+                  guard case .harmfulArrow(let from, let to, _, _, .ambition, _, _) = warning else { return nil }
+                  return (from, to)
+              }).first else {
+            throw SampleDataError(description: "The warning sample's group has no harmful arrow in Ambition.")
+        }
+        var draft = model.arrowsDraft(for: .firstTeam, members: review.group.current.map(\.player))
+        draft.strengths[ArrowsDraft.Pair(from: from, to: to)] = .significant
+        try saveArrows(draft, in: model)
+        return model
+    }
+
+    /// The group sample with its group's six arrows read today as None in the arrows sheet, so it shows no influence.
+    @MainActor public static func modelWithNoInfluence(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithMentoringGroup(repositoryRoot: repositoryRoot)
+        guard let group = model.mentoring.groups.first(where: \.isLive) else {
+            throw SampleDataError(description: "The group sample has no group.")
+        }
+        var draft = model.arrowsDraft(for: .firstTeam, members: group.current.map(\.player))
+        for pair in draft.pairs { draft.strengths[pair] = ArrowStrength.none }
+        try saveArrows(draft, in: model)
+        return model
+    }
+
+    /// Saves the arrows as the sheet's Save does, or says why the sample could not.
+    @MainActor private static func saveArrows(_ draft: ArrowsDraft, in model: AppModel) throws {
+        if let problem = model.arrowsProblem(of: draft) {
+            throw SampleDataError(description: "The sample's arrows could not be saved: \(problem)")
+        }
+        model.saveArrows(draft)
+    }
+
     /// The group sample with the first first-team player of the club's own given no Pressure value in its copy of the
     /// squads, so the first team's mentoring advice stops; the U21s' and the other advice do not.
     @MainActor public static func modelWithMentoringFailure(repositoryRoot: URL) throws -> AppModel {

@@ -881,9 +881,9 @@ import LineupEngine
         let first = ids(t.model, .firstTeam), young = ids(t.model, .u21)
         func draft(_ members: [PlayerID]) -> ArrowsDraft { everyArrow(t.model, .firstTeam, members, .light) }
         let problems: [([PlayerID], String)] = [
-            (Array(first[0..<2]), AppModel.MentoringProblemLabel.notThree),
-            (Array(first[0..<4]), AppModel.MentoringProblemLabel.notThree),
-            ([first[0], first[0], first[1]], AppModel.MentoringProblemLabel.notThree),
+            (Array(first[0..<2]), AppModel.ArrowsProblemLabel.notThree),
+            (Array(first[0..<4]), AppModel.ArrowsProblemLabel.notThree),
+            ([first[0], first[0], first[1]], AppModel.ArrowsProblemLabel.notThree),
             ([first[0], first[1], young[0]], AppModel.MentoringProblemLabel.notInSquad),
             ([first[0], first[1], .fmrte(999_999)], AppModel.MentoringProblemLabel.notInSquad)]
         for (members, sentence) in problems {
@@ -892,6 +892,9 @@ import LineupEngine
         }
         #expect(t.model.mentoring.arrows.isEmpty)
         #expect(t.model.arrowsProblem(of: draft(Array(first[0..<3]))) == nil)
+        // The group editor keeps its own sentence for the same two.
+        #expect(t.model.mentoringProblem(of: MentoringGroupDraft(squad: .firstTeam, members: Array(first[0..<2])))
+            == AppModel.MentoringProblemLabel.notThree)
 
         let (loaned, away) = try withOneOutOnLoan()
         let others = (loaned.model.squad.book.current[.firstTeam] ?? []).filter { $0.id != away.id }.prefix(2).map(\.id)
@@ -1190,6 +1193,58 @@ import LineupEngine
         let card = try #require(model.mentoringSheet(for: .firstTeam).yours.first)
         #expect(card.stateText == nil)
         #expect(!card.warnings.isEmpty)
+    }
+
+    @Test func theArrowsReadSampleHasAFirstSuggestionRestingOnReadingsAndAnotherOnGuesses() throws {
+        let model = try SampleData.modelWithArrowsRead(repositoryRoot: Captures.repositoryRoot)
+        let report = try report(model)
+        let first = try #require(report.suggestions.first)
+        #expect(first.isRead)
+        #expect(!first.arrows.isEmpty)
+        #expect(first.arrows.allSatisfy { $0.arrow.readOn == model.settings.currentDate })
+        // The same three the hierarchy sample suggests first: reading the guesses as they were changed no choice.
+        let plain = try self.report(try SampleData.modelWithHierarchy(repositoryRoot: Captures.repositoryRoot))
+        #expect(first.members == plain.suggestions.first?.members)
+        // Another suggestion still rests on guesses, so a read arrow and a guess show on one screen.
+        #expect(report.suggestions.dropFirst().contains { !$0.isRead && $0.arrows.contains { !$0.arrow.isRead } })
+        let cards = model.mentoringSheet(for: .firstTeam).suggested
+        #expect(cards.first?.arrows.allSatisfy { !$0.isGuess } == true)
+        #expect(cards.dropFirst().contains { $0.arrows.contains { $0.isGuess } })
+        #expect(model.mentoring.groups.isEmpty)
+        #expect(model.notices.isEmpty)
+    }
+
+    @Test func theHarmSampleHasAReadSignificantArrowFromAMemberWithALowerAmbition() throws {
+        let model = try SampleData.modelWithHarmfulArrow(repositoryRoot: Captures.repositoryRoot)
+        let review = try #require(try report(model).groups.first)
+        let read = review.warnings.filter { warning in
+            if case .harmfulArrow(_, _, .significant, true, .ambition, let fromValue, let toValue) = warning {
+                return fromValue < toValue
+            }
+            return false
+        }
+        #expect(read.count == 1)
+        // His Ambition was the same at both readings: the group is not doing harm.
+        #expect(!review.isDoingHarm)
+        let card = try #require(model.mentoringSheet(for: .firstTeam).yours.first)
+        #expect(card.stateText == nil)
+        #expect(!card.warnings.isEmpty)
+        #expect(card.arrows.contains { !$0.isGuess } && card.arrows.contains { $0.isGuess })
+        #expect(model.notices.isEmpty)
+    }
+
+    @Test func theNoInfluenceSampleHasAGroupWhoseSixArrowsAreReadAsNone() throws {
+        let model = try SampleData.modelWithNoInfluence(repositoryRoot: Captures.repositoryRoot)
+        let review = try #require(try report(model).groups.first)
+        #expect(review.hasNoInfluence)
+        #expect(!review.hasStoppedWorking && !review.isDoingHarm)
+        #expect(review.unreadArrows == 0)
+        #expect(review.arrows.isEmpty)
+        let card = try #require(model.mentoringSheet(for: .firstTeam).yours.first)
+        #expect(card.stateText == AdvisorText.state(of: review, parameters: model.planParameters))
+        #expect(card.stateText != nil)
+        #expect(card.arrowsPromptText == nil)
+        #expect(model.notices.isEmpty)
     }
 
     @Test func theStoppedSampleIsFourteenWeeksOldWithNoChange() throws {

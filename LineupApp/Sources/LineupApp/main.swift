@@ -74,13 +74,21 @@
 //                                              ("training-mentoring-warning-…"), with a group fourteen weeks old
 //                                              that has stopped working ("training-mentoring-stopped-…"), with a
 //                                              first-team player missing a Pressure value
-//                                              ("training-mentoring-failed-…"), and the warning's state in the
-//                                              smallest window's width, tall ("training-mentoring-small-…").
+//                                              ("training-mentoring-failed-…"), the warning's state in the
+//                                              smallest window's width, tall ("training-mentoring-small-…"),
+//                                              with the arrows of the first suggested group read so it rests on
+//                                              readings beside suggestions on guesses
+//                                              ("training-mentoring-arrows-read-…"), with the recorded group's
+//                                              harmful arrow read as Significant
+//                                              ("training-mentoring-arrows-harm-…"), and with its six arrows
+//                                              read as None ("training-mentoring-arrows-none-…").
 //                                              Its editors are drawn on their own: the first team's hierarchy
 //                                              as entered ("training-mentoring-hierarchy-editor-…"), the U21s'
-//                                              ("training-mentoring-hierarchy-editor-u21-…"), and a new group
+//                                              ("training-mentoring-hierarchy-editor-u21-…"), a new group
 //                                              with two ticked beside a player in the recorded group
-//                                              ("training-mentoring-group-editor-…").
+//                                              ("training-mentoring-group-editor-…"), and the arrows of the
+//                                              three first-team players with the longest names, two of them set
+//                                              ("training-mentoring-arrows-sheet-…").
 //                                              The Player Removal screen ("removal-…", its critical and high
 //                                              rows open) is drawn with every row open, tall enough for a
 //                                              medium and a keep row's reasons ("removal-all-open-…"), and
@@ -155,6 +163,7 @@ enum SampleState {
     case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, nothingToRetrain, loanee
     case differingSuggestion
     case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
+    case arrowsRead, harmfulArrow, noInfluence
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -187,6 +196,9 @@ enum SampleState {
         case .mentoringWarning: return try SampleData.modelWithMentoringWarning(repositoryRoot: url)
         case .stoppedGroup: return try SampleData.modelWithStoppedGroup(repositoryRoot: url)
         case .mentoringFailure: return try SampleData.modelWithMentoringFailure(repositoryRoot: url)
+        case .arrowsRead: return try SampleData.modelWithArrowsRead(repositoryRoot: url)
+        case .harmfulArrow: return try SampleData.modelWithHarmfulArrow(repositoryRoot: url)
+        case .noInfluence: return try SampleData.modelWithNoInfluence(repositoryRoot: url)
         }
     } catch {
         fail("\(error)")
@@ -336,6 +348,9 @@ let narrowWindow = CGSize(width: 800, height: 700)
         ("mentoring-failed", sampleModel(root, .mentoringFailure), size, mentoring),
         ("mentoring-small", sampleModel(root, .mentoringWarning),
          CGSize(width: Theme.Layout.minimumWindow.width, height: Theme.Layout.minimumWindow.height * 4), mentoring),
+        ("mentoring-arrows-read", sampleModel(root, .arrowsRead), tall, mentoring),
+        ("mentoring-arrows-harm", sampleModel(root, .harmfulArrow), tall, mentoring),
+        ("mentoring-arrows-none", sampleModel(root, .noInfluence), tall, mentoring),
     ]
     for (variant, model, window, start) in pictures {
         try ScreenPictures.write(model: model, to: directory, size: window, variant: variant, screens: [.training],
@@ -358,6 +373,17 @@ let narrowWindow = CGSize(width: 800, height: 700)
     for choice in choices.suffix(from: max(0, taken - 2)).filter(\.canToggle).prefix(2) { draft.toggle(choice.id) }
     try ScreenPictures.writeMentoringEditor(model: recorded, editing: .group(draft), to: directory,
                                             name: "training-mentoring-group-editor")
+
+    // The arrows of the three first-team players with the longest names, so the longest pair shows, the first two set.
+    let longest = (entered.squad.book.current[.firstTeam] ?? []).sorted {
+        ($1.name.count, $0.name) < ($0.name.count, $1.name)
+    }.prefix(3).map(\.id)
+    var arrows = entered.arrowsDraft(for: .firstTeam, members: longest)
+    for (row, strength) in zip(entered.arrowRows(for: arrows), [ArrowStrength.light, .average]) {
+        arrows.strengths[row.id] = strength
+    }
+    try ScreenPictures.writeMentoringEditor(model: entered, editing: .arrows(arrows), to: directory,
+                                            name: "training-mentoring-arrows-sheet")
 }
 
 /// The Player Removal screen with every row open, with a loanee, and with two players marked: see the usage at the top.

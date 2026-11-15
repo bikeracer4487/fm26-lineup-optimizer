@@ -2,13 +2,19 @@ import Foundation
 import LineupEngine
 
 extension AppModel {
-    /// Why a draft cannot be saved, in plain words, as labels the owner reads. The first three serve the arrows sheet
-    /// too: the three whose arrows are read are a group in the game.
+    /// Why a draft cannot be saved, in plain words, as labels the owner reads. The second and third serve the arrows
+    /// sheet too: the three whose arrows are read are a group in the game.
     enum MentoringProblemLabel {
         static let notThree = "A group is exactly three players."
         static let notInSquad = "Every member must be a current player of this squad."
         static let onLoan = "A player out on loan cannot be in a group."
         static let inAnotherGroup = "A player already in another group cannot be added."
+    }
+
+    /// The arrows sheet's own words while it does not hold three different players: it records arrows, it makes no
+    /// group.
+    enum ArrowsProblemLabel {
+        static let notThree = "Choose three players."
     }
 
     /// Replaces the entries of the squad's current players among those given, each recorded as entered for this squad
@@ -50,7 +56,9 @@ extension AppModel {
 
     /// The sentence saying why the draft cannot be saved; nil when it can.
     public func mentoringProblem(of draft: MentoringGroupDraft) -> String? {
-        if let problem = trioProblem(draft.members, in: draft.squad) { return problem }
+        if let problem = trioProblem(draft.members, in: draft.squad, notThree: MentoringProblemLabel.notThree) {
+            return problem
+        }
         if draft.members.contains(where: { isInLiveGroup($0, except: draft.id) }) { return MentoringProblemLabel.inAnotherGroup }
         return nil
     }
@@ -116,7 +124,7 @@ extension AppModel {
     /// The sentence saying why the arrows cannot be saved; nil when they can: exactly three different players, every
     /// one a current player of the draft's squad and not out on loan. A player in a recorded group can be in it.
     public func arrowsProblem(of draft: ArrowsDraft) -> String? {
-        trioProblem(draft.members, in: draft.squad)
+        trioProblem(draft.members, in: draft.squad, notThree: ArrowsProblemLabel.notThree)
     }
 
     /// Keeps the six arrows of the draft's three: a strength set becomes the pair's reading, dated the game's current
@@ -145,10 +153,11 @@ extension AppModel {
     }
 
     /// Why the players cannot be a trio of the squad, a group's or one whose arrows are recorded: not exactly three
-    /// different players, one not a current player of the squad, or one out on loan. Nil when they can.
-    private func trioProblem(_ members: [PlayerID], in squad: Squad) -> String? {
+    /// different players (`notThree`, the asker's words), one not a current player of the squad, or one out on loan.
+    /// Nil when they can.
+    private func trioProblem(_ members: [PlayerID], in squad: Squad, notThree: String) -> String? {
         guard members.count == Mentoring.groupSize, Set(members).count == Mentoring.groupSize else {
-            return MentoringProblemLabel.notThree
+            return notThree
         }
         let held = Dictionary((self.squad.book.current[squad] ?? []).map { ($0.id, $0) },
                               uniquingKeysWith: { first, _ in first })

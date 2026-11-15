@@ -3,8 +3,8 @@ import LineupEngine
 import SwiftUI
 
 /// The Training screen's Mentoring tab for the squad the menu shows: the engine's standing note, then four parts down
-/// the screen (the hierarchy as entered, the suggested groups, the owner's own groups, and the young players not placed
-/// when there are any), or, while the squad has not been imported, only that. A squad whose advice stopped shows the
+/// the screen (the hierarchy as entered, the suggested groups, the owner's own groups, and the players not placed when
+/// there are any), or, while the squad has not been imported, only that. A squad whose advice stopped shows the
 /// engine's sentences where the suggested groups would be.
 struct MentoringTab: View {
     let model: AppModel
@@ -23,10 +23,13 @@ struct MentoringTab: View {
                 EmptyState(notReady, action: MatchPresentation.goTo(.squad)) { showScreen(.squad) }
             } else {
                 HierarchyPart(sheet: sheet) { navigation.mentoringEditing = .hierarchy(sheet.squad) }
-                SuggestedPart(sheet: sheet) { model.recordGroup($0, in: sheet.squad) }
-                YourGroupsPart(sheet: sheet, add: {
+                SuggestedPart(sheet: sheet, recordArrows: { openArrows(of: $0, in: sheet.squad) }) {
+                    model.recordGroup($0, in: sheet.squad)
+                }
+                YourGroupsPart(sheet: sheet, recordArrows: { openArrows(of: [], in: sheet.squad) }, add: {
                     navigation.mentoringEditing = .group(MentoringGroupDraft(squad: sheet.squad))
-                }, edit: { navigation.mentoringEditing = .group($0) }, end: { model.endGroup($0) })
+                }, arrows: { openArrows(of: $0, in: sheet.squad) },
+                edit: { navigation.mentoringEditing = .group($0) }, end: { model.endGroup($0) })
                 if let heading = MentoringPresentation.notPlacedHeading(sheet) {
                     NotPlacedPart(heading: heading, lines: sheet.notPlaced)
                 }
@@ -34,8 +37,14 @@ struct MentoringTab: View {
         }
         .frame(maxWidth: Theme.Training.columnMaximumWidth, alignment: .leading)
         .sheet(item: $navigation.mentoringEditing) { editing in
-            MentoringEditorSheet(model: model, editing: editing) { navigation.mentoringEditing = nil }
+            MentoringEditorSheet(model: model, editing: editing, close: { navigation.mentoringEditing = nil },
+                                 open: { navigation.mentoringEditing = $0 })
         }
+    }
+
+    /// Opens the arrows sheet on the players, filled from the readings kept.
+    private func openArrows(of members: [PlayerID], in squad: Squad) {
+        navigation.mentoringEditing = .arrows(model.arrowsDraft(for: squad, members: members))
     }
 }
 
@@ -123,6 +132,7 @@ private struct HierarchyNote: View {
 /// stopped, the engine's sentences saying why.
 private struct SuggestedPart: View {
     let sheet: MentoringSheet
+    let recordArrows: ([PlayerID]) -> Void
     let record: (SuggestedGroup) -> Void
 
     var body: some View {
@@ -142,25 +152,33 @@ private struct SuggestedPart: View {
                     .foregroundStyle(Theme.Colour.mutedInk)
             }
             ForEach(sheet.suggested) { card in
-                SuggestedGroupCardView(card: card) { record(card.suggestion) }
+                SuggestedGroupCardView(card: card, recordArrows: { recordArrows(card.arrowsDraftMembers) },
+                                       record: { record(card.suggestion) })
             }
         }
     }
 }
 
-/// A card for each of the owner's groups, or a muted line saying there is none, with Add a group beside the heading.
+/// A card for each of the owner's groups, or a muted line saying there is none, with Record arrows and Add a group
+/// beside the heading.
 private struct YourGroupsPart: View {
     let sheet: MentoringSheet
+    let recordArrows: () -> Void
     let add: () -> Void
+    let arrows: ([PlayerID]) -> Void
     let edit: (MentoringGroupDraft) -> Void
     let end: (UUID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             PartHeading(title: MentoringPresentation.headings.yours) {
-                Button(MentoringPresentation.addTitle, action: add)
-                    .buttonStyle(.secondary)
-                    .fixedSize()
+                HStack(spacing: Theme.Spacing.s) {
+                    Button(MentoringPresentation.recordArrowsTitle, action: recordArrows)
+                        .buttonStyle(.secondary)
+                    Button(MentoringPresentation.addTitle, action: add)
+                        .buttonStyle(.secondary)
+                }
+                .fixedSize()
             }
             if let none = MentoringPresentation.noRecordedGroupsText(sheet) {
                 Text(none)
@@ -168,13 +186,14 @@ private struct YourGroupsPart: View {
                     .foregroundStyle(Theme.Colour.mutedInk)
             }
             ForEach(sheet.yours) { card in
-                RecordedGroupCardView(card: card, edit: { edit(card.draft) }, end: { end(card.id) })
+                RecordedGroupCardView(card: card, arrows: { arrows(card.arrowsDraftMembers) },
+                                      edit: { edit(card.draft) }, end: { end(card.id) })
             }
         }
     }
 }
 
-/// The engine's sentence for each young player not placed, each over a faint rule.
+/// The engine's sentence for each player not placed, each over a faint rule.
 private struct NotPlacedPart: View {
     let heading: String
     let lines: [String]

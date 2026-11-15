@@ -637,17 +637,24 @@ public enum Theme {
     // MARK: Mentoring
 
     public enum Mentoring {
-        /// The column a member's name and age, or an arrow's two names, take on a group's card; a longer one wraps to a
-        /// second line.
-        public static let memberNameWidth: CGFloat = 210
+        /// The column an arrow's two names take on a group's card and in the arrows sheet, and a member's name and age
+        /// on a recorded group's card: room for the longest pair in the sample squads on one line, "Fernando Forestieri
+        /// → Ludwig Francillette"; a longer pair wraps, never cut.
+        public static let arrowTitleWidth: CGFloat = 290
+        /// The column an arrow's strength and whether it was read take on a card, room for the longest:
+        /// "Significant · expected, not read".
+        public static let arrowStrengthWidth: CGFloat = 215
+        /// The least what an arrow gives keeps beside its strength; below it, it goes under the strength. Every card is
+        /// as wide as the next, so the columns are the same on every card.
+        public static let arrowDetailMinimum: CGFloat = 220
         /// The most lines a name wraps to.
         public static let nameLines = 2
         /// The note saying the hierarchy is old, or that the advice needs it, is no wider than this.
         public static let noteMaximumWidth: CGFloat = Layout.readingWidth
         /// The pink band across the top of a card whose group is doing harm or has stopped working.
         public static let stateNote = Note.warning
-        /// The hierarchy editor and the group editor, each a sheet over the Training screen: no taller than the
-        /// smallest window, their rows scrolling.
+        /// The hierarchy editor, the group editor and the arrows sheet, each a sheet over the Training screen: no
+        /// taller than the smallest window, their rows scrolling.
         public static let editorSize = CGSize(width: 640, height: 540)
         /// A player's name and age in an editor's row; a longer name wraps to a second line.
         public static let editorNameWidth: CGFloat = 230

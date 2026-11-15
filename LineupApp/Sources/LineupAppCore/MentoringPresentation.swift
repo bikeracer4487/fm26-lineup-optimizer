@@ -88,8 +88,10 @@ public struct SuggestedGroupCard: Identifiable, Equatable, Sendable {
     public let cautions: [String]
     /// The evidence note in brackets: "(FM26-era numbers)"; nil for FM27 evidence.
     public let noteText: String?
-    /// Its three members in the suggestion's order, for its Arrows button.
+    /// Its three members in the suggestion's order, for its Record arrows button.
     public let arrowsDraftMembers: [PlayerID]
+    /// "Record arrows" beside Record as set while the group rests on a guess; nil once it rests on readings.
+    public let recordArrowsTitle: String?
     private let spokenNote: String?
 
     /// The card as said to assistive technology: its title, each arrow, the prompt, the cautions and the note.
@@ -109,6 +111,7 @@ public struct SuggestedGroupCard: Identifiable, Equatable, Sendable {
         spokenNote = AdvisorText.note(for: suggestion.basis)
         noteText = spokenNote.map { "(\($0))" }
         arrowsDraftMembers = suggestion.members.map(\.player)
+        recordArrowsTitle = suggestion.isRead ? nil : MentoringPresentation.recordArrowsTitle
     }
 }
 
@@ -217,6 +220,8 @@ public struct ArrowRow: Identifiable, Equatable, Sendable {
     public let id: ArrowsDraft.Pair
     /// "Hart → Young".
     public let titleText: String
+    /// "Hart to Young": the title as said, for its menu, since a screen reader reads the arrow sign as "right arrow".
+    public let spokenTitle: String
     /// Nil: not read.
     public let strength: ArrowStrength?
 }
@@ -470,7 +475,8 @@ public enum MentoringPresentation {
         }
         let name = { (id: PlayerID) in names[id] ?? TrainingPresentation.unnamed }
         return draft.pairs.map { pair in
-            ArrowRow(id: pair, titleText: "\(name(pair.from)) → \(name(pair.to))", strength: draft.strengths[pair])
+            ArrowRow(id: pair, titleText: "\(name(pair.from)) → \(name(pair.to))",
+                     spokenTitle: "\(name(pair.from)) to \(name(pair.to))", strength: draft.strengths[pair])
         }
     }
 

@@ -3,11 +3,13 @@ import LineupEngine
 import SwiftUI
 
 /// What the Mentoring tab has open, as a sheet over the Training screen: a squad's hierarchy, a group's members, or the
-/// arrows of three players. `close` closes it, after a save or on Cancel.
+/// arrows of three players. `close` closes it, after a save or on Cancel; `open` puts another in its place, as the
+/// arrows of a group just added.
 struct MentoringEditorSheet: View {
     let model: AppModel
     let editing: MentoringEditing
     let close: () -> Void
+    var open: (MentoringEditing?) -> Void = { _ in }
 
     var body: some View {
         switch editing {
@@ -17,20 +19,11 @@ struct MentoringEditorSheet: View {
                 close()
             }, cancel: close)
         case .group(let draft):
-            GroupEditor(model: model, draft: draft, done: close)
-        case .arrows(let draft):
-            // Only its frame and title until the arrows sheet is drawn.
-            EditorPanel(title: MentoringPresentation.arrowsEditorTitle(draft.squad),
-                        hint: MentoringPresentation.arrowsEditorHint, note: nil) {
-                EmptyView()
-            } rows: {
-                EmptyView()
-            } footer: {
-                Spacer(minLength: 0)
-                Button(MentoringPresentation.cancelTitle, role: .cancel, action: close)
-                    .buttonStyle(.secondary)
-                    .keyboardShortcut(.cancelAction)
+            GroupEditor(model: model, draft: draft, done: close) { saved in
+                open(model.arrowsDraft(afterSaving: saved).map(MentoringEditing.arrows))
             }
+        case .arrows(let draft):
+            ArrowsEditor(model: model, draft: draft, done: close)
         }
     }
 }
@@ -118,14 +111,18 @@ private struct HierarchyRow: View {
 
 /// A group's three members chosen from the squad: one ruled row for each player, ticked when chosen. A row that cannot
 /// be ticked says why. How many are chosen and why the group cannot be saved yet sit by Save, which waits until it can.
+/// Save hands the draft saved to `saved`, which says what opens next.
 struct GroupEditor: View {
     let model: AppModel
     let done: () -> Void
+    let saved: (MentoringGroupDraft) -> Void
     @State private var draft: MentoringGroupDraft
 
-    init(model: AppModel, draft: MentoringGroupDraft, done: @escaping () -> Void) {
+    init(model: AppModel, draft: MentoringGroupDraft, done: @escaping () -> Void,
+         saved: @escaping (MentoringGroupDraft) -> Void) {
         self.model = model
         self.done = done
+        self.saved = saved
         _draft = State(initialValue: draft)
     }
 
@@ -155,6 +152,62 @@ struct GroupEditor: View {
                 .keyboardShortcut(.cancelAction)
             Button(MentoringPresentation.saveTitle) {
                 model.saveGroup(draft)
+                saved(draft)
+            }
+            .buttonStyle(.primary)
+            .keyboardShortcut(.defaultAction)
+            .disabled(problem != nil)
+        }
+    }
+}
+
+/// The arrows of three players as the game's Mentoring screen shows them: once three are chosen, a row for each of
+/// their six arrows with a menu of its strength, above the heavy rule, and under it the squad's players to choose from,
+/// as the group editor offers them. How many are chosen and why the arrows cannot be saved yet sit by Save, which
+/// waits until they can.
+struct ArrowsEditor: View {
+    let model: AppModel
+    let done: () -> Void
+    @State private var draft: ArrowsDraft
+
+    init(model: AppModel, draft: ArrowsDraft, done: @escaping () -> Void) {
+        self.model = model
+        self.done = done
+        _draft = State(initialValue: draft)
+    }
+
+    var body: some View {
+        let problem = model.arrowsProblem(of: draft)
+        EditorPanel(title: MentoringPresentation.arrowsEditorTitle(draft.squad),
+                    hint: MentoringPresentation.arrowsEditorHint, note: nil) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(model.arrowRows(for: draft)) { row in
+                    ArrowMenuRow(row: row, strength: Binding(get: { draft.strengths[row.id] },
+                                                             set: { draft.strengths[row.id] = $0 }))
+                }
+            }
+        } rows: {
+            ForEach(model.arrowChoices(for: draft)) { choice in
+                MemberChoiceRow(choice: choice) { draft = model.arrowsDraft(draft, toggling: choice.id) }
+                FaintRule()
+            }
+        } footer: {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                Text(MentoringPresentation.chosenText(draft.members.count))
+                    .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
+                if let problem {
+                    Text(problem)
+                        .font(Theme.Typeface.text(Theme.TypeSize.small))
+                        .foregroundStyle(Theme.Colour.mutedInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button(MentoringPresentation.cancelTitle, role: .cancel, action: done)
+                .buttonStyle(.secondary)
+                .keyboardShortcut(.cancelAction)
+            Button(MentoringPresentation.saveTitle) {
+                model.saveArrows(draft)
                 done()
             }
             .buttonStyle(.primary)
@@ -164,8 +217,37 @@ struct GroupEditor: View {
     }
 }
 
-/// One player the group editor offers: the box, his name over his age and level, and why he cannot be ticked when he
-/// cannot. A row that cannot be ticked is not a button, so its words are not dimmed as a disabled control's.
+/// One arrow in the arrows sheet: who to whom in the column the cards give an arrow's names, then the menu of its
+/// strength, Not read first.
+private struct ArrowMenuRow: View {
+    let row: ArrowRow
+    @Binding var strength: ArrowStrength?
+
+    var body: some View {
+        HStack(alignment: .center, spacing: Theme.Spacing.m) {
+            Text(row.titleText)
+                .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
+                .foregroundStyle(Theme.Colour.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(width: Theme.Mentoring.arrowTitleWidth, alignment: .leading)
+                .accessibilityHidden(true)
+            Spacer(minLength: 0)
+            Picker(row.spokenTitle, selection: $strength) {
+                ForEach(MentoringPresentation.strengthChoices, id: \.0) { choice in
+                    Text(choice.1).tag(choice.0)
+                }
+            }
+            .labelsHidden()
+            .frame(width: Theme.Mentoring.editorMenuWidth, alignment: .leading)
+        }
+        .font(Theme.Typeface.text())
+        .padding(.vertical, Theme.Spacing.xs)
+    }
+}
+
+/// One player the group editor or the arrows sheet offers: the box, his name over his age and level, and why he cannot
+/// be ticked when he cannot. A row that cannot be ticked is not a button, so its words are not dimmed as a disabled
+/// control's.
 private struct MemberChoiceRow: View {
     let choice: MemberChoice
     let toggle: () -> Void
@@ -197,8 +279,8 @@ private struct MemberChoiceRow: View {
     }
 }
 
-/// The box before a player in the group editor: an ink outline, filled in marker blue with a tick when he is chosen;
-/// faint when it cannot be ticked.
+/// The box before a player in the group editor and the arrows sheet: an ink outline, filled in marker blue with a tick
+/// when he is chosen; faint when it cannot be ticked.
 private struct TickBox: View {
     let isTicked: Bool
     let isEnabled: Bool

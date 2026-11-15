@@ -306,6 +306,15 @@ import Testing
         #expect(!card.spokenText.contains("→"))
     }
 
+    @Test func aSuggestionOnGuessesOffersRecordArrowsAndOneReadDoesNot() throws {
+        let guessed = try #require(try sheet([], advice: pinned(suggestions: [suggestion])).suggested.first)
+        #expect(guessed.recordArrowsTitle == "Record arrows")
+        let given = SuggestedGroup(members: suggestion.members, arrows: suggestion.arrows, isRead: true, cautions: [],
+                                   basis: .derived)
+        let read = try #require(try sheet([], advice: pinned(suggestions: [given])).suggested.first)
+        #expect(read.recordArrowsTitle == nil)
+    }
+
     // MARK: Recorded groups
 
     private let started = Day(year: 2026, month: 10, day: 12)!
@@ -814,6 +823,9 @@ import Testing
                                    ArrowsDraft.Pair(from: young, to: hart), pair, ArrowsDraft.Pair(from: reid, to: hart),
                                    ArrowsDraft.Pair(from: reid, to: young)])
         #expect(rows.map(\.strength) == [nil, nil, nil, .significant, nil, nil])
+        // Said with "to", since a screen reader reads the arrow sign as "right arrow".
+        #expect(rows.map(\.spokenTitle) == ["Hart to Young", "Hart to Reid", "Young to Hart", "Young to Reid",
+                                            "Reid to Hart", "Reid to Young"])
 
         // A player with no name known is never shown by his key.
         let unnamed = MentoringPresentation.arrowRows(three, names: [hart: "Hart"])
