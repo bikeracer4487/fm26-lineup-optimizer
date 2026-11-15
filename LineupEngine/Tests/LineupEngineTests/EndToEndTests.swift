@@ -409,6 +409,9 @@ import Testing
             }
             #expect((a.action == .develop) == (a.keepReason != nil), "\(player.id.key)")
             #expect((a.action == .monitor) == (a.watchReason != nil), "\(player.id.key)")
+            if a.matchesHere?.isCounted == false {
+                #expect(!AdvisorText.why(a.action, for: a).contains("not getting matches"), "\(player.id.key)")
+            }
             #expect(a.onYouthContract == (player.contractType == .youth && player.monthsLeft != 0), "\(player.id.key)")
         }
         // The U21 18-year-old, a backup who could pass the first choice, is watched because he is needed as cover.
@@ -428,6 +431,13 @@ import Testing
             }
         }
         #expect(standIns == 1)
+        // The first-team 23-year-old attacking midfielder, second choice at a slot he is not solid at, is kept to
+        // develop and told his starts were not counted, not that he is not getting matches.
+        let notCounted = removal.advice.filter { $0.action == .develop && $0.matchesHere?.basis == .tooFewConfirmed }
+        #expect(!notCounted.isEmpty)
+        for a in notCounted {
+            #expect(AdvisorText.why(a.action, for: a).hasSuffix("Too few matches are confirmed to count his starts."))
+        }
     }
 
     @Test func mentoringRunsOnTheCapturedSquads() throws {

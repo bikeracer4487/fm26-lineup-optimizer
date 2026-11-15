@@ -153,6 +153,41 @@ import Testing
                     + "Only where he will start regularly; otherwise he grows nearly as well here.")
     }
 
+    @Test func whenHisStartsWereNotCountedTheWhySaysSo() {
+        func why(_ action: RemovalAction, _ keepReason: KeepReason? = nil, _ basis: MatchesHereBasis,
+                 loanOnlyToStart: Bool = false) -> String {
+            AdvisorText.why(action, for: removal(action: action, release: nil, mutual: nil,
+                                                 matchesHere: MatchesHere(starts: 1, matches: 2, basis: basis),
+                                                 keepReason: keepReason, loanOnlyToStart: loanOnlyToStart))
+        }
+        // Too few matches confirmed: his starts were not counted.
+        #expect(why(.develop, .youthContract, .tooFewConfirmed)
+                == "He has no solid place in the first or second eleven, and a loan needs a full-time contract. "
+                    + "Too few matches are confirmed to count his starts.")
+        #expect(why(.develop, .shortContract, .tooFewConfirmed)
+                == "He has no solid place in the first or second eleven: renew his contract before a loan. "
+                    + "Too few matches are confirmed to count his starts.")
+        #expect(why(.loanForMatches, nil, .tooFewConfirmed)
+                == "He is worth developing and has no solid place in the first or second eleven: a loan gives him "
+                    + "matches. Too few matches are confirmed to count his starts.")
+        #expect(why(.loanForMatches, nil, .tooFewConfirmed, loanOnlyToStart: true)
+                == "He is worth developing and has no solid place in the first or second eleven: a loan gives him "
+                    + "matches. Too few matches are confirmed to count his starts. "
+                    + "Only where he will start regularly; otherwise he grows nearly as well here.")
+        // Counted, and he started too few: today's sentences.
+        #expect(why(.develop, .youthContract, .startedTooFew)
+                == "He is not getting matches here, and a loan needs a full-time contract.")
+        #expect(why(.develop, .shortContract, .startedTooFew)
+                == "He is not getting matches here: renew his contract before a loan.")
+        #expect(why(.loanForMatches, nil, .startedTooFew)
+                == "He is worth developing and is not getting matches here: a loan gives him matches.")
+        #expect(why(.loanForMatches, nil, .startedTooFew, loanOnlyToStart: true)
+                == "He is worth developing and is not getting matches here: a loan gives him matches. "
+                    + "Only where he will start regularly; otherwise he grows nearly as well here.")
+        // At his age the matches do not come into it.
+        #expect(why(.develop, .age, .tooFewConfirmed) == "At his age he grows mainly in training; a loan would add little.")
+    }
+
     @Test func whyAYoungPlayerIsWatched() {
         func why(_ reason: WatchReason?) -> String {
             AdvisorText.why(.monitor, for: removal(action: .monitor, release: nil, mutual: nil, watchReason: reason))

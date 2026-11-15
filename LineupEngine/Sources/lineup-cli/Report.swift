@@ -222,10 +222,10 @@ enum Report {
             }
             let showsMatches: Bool
             switch one.action {
-            // A second choice kept to play while too few matches are confirmed is told so in the why.
+            // When his starts were not counted, the why says so: the matches line would say it again.
             case .play: showsMatches = one.matchesHere?.basis != .solidSecondChoice
-            case .loanForMatches: showsMatches = true
-            case .develop: showsMatches = one.keepReason != .age
+            case .loanForMatches: showsMatches = one.matchesHere?.basis != .tooFewConfirmed
+            case .develop: showsMatches = one.keepReason != .age && one.matchesHere?.basis != .tooFewConfirmed
             case .release, .terminate, .sell, .monitor, .keep: showsMatches = false
             }
             if showsMatches, let matches = one.matchesHere { lines.append(AdvisorText.matchesHere(matches)) }

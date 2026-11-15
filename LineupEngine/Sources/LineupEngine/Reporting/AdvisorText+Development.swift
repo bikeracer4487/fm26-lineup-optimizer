@@ -90,19 +90,48 @@ extension AdvisorText {
 
     /// "He has started 1 of the last 9 matches here."; when they are not counted, or none is confirmed, that too few are.
     public static func matchesHere(_ matches: MatchesHere) -> String {
-        guard matches.isCounted, matches.matches > 0 else { return "Too few matches are confirmed to count his starts." }
+        guard matches.isCounted, matches.matches > 0 else { return tooFewToCount }
         return "He has started \(matches.starts) of the last \(matches.matches) "
             + "\(matches.matches == 1 ? "match" : "matches") here."
     }
 
-    /// Why a young player is kept to develop, for `why(_:for:)`.
-    static func whyDevelop(_ reason: KeepReason?) -> String {
+    /// Why a young player is kept to develop, for `why(_:for:)`. When his starts were not counted (`basis` is too few
+    /// confirmed), it says he has no solid place in the elevens, not that he is not getting matches.
+    static func whyDevelop(_ reason: KeepReason?, _ basis: MatchesHereBasis?) -> String {
+        let uncounted = startsNotCounted(basis)
         switch reason {
-        case .age?: "At his age he grows mainly in training; a loan would add little."
-        case .youthContract?: "He is not getting matches here, and a loan needs a full-time contract."
-        case .shortContract?: "He is not getting matches here: renew his contract before a loan."
+        case .age?: return "At his age he grows mainly in training; a loan would add little."
+        case .youthContract?:
+            return uncounted
+                ? "He has no solid place in the first or second eleven, and a loan needs a full-time contract. "
+                    + tooFewToCount
+                : "He is not getting matches here, and a loan needs a full-time contract."
+        case .shortContract?:
+            return uncounted
+                ? "He has no solid place in the first or second eleven: renew his contract before a loan. " + tooFewToCount
+                : "He is not getting matches here: renew his contract before a loan."
         // Player Removal gives every advice to develop a reason; one built without is said plainly.
-        case nil: "He is worth developing here."
+        case nil: return "He is worth developing here."
+        }
+    }
+
+    /// Why a young player is loaned for matches, read from `basis` as `whyDevelop` reads it, with the sentence for a
+    /// loan at the youngest age for one after it.
+    static func whyLoanForMatches(_ basis: MatchesHereBasis?, onlyToStart: Bool) -> String {
+        let reason = startsNotCounted(basis)
+            ? "He is worth developing and has no solid place in the first or second eleven: a loan gives him matches. "
+                + tooFewToCount
+            : "He is worth developing and is not getting matches here: a loan gives him matches."
+        return reason + (onlyToStart ? " Only where he will start regularly; otherwise he grows nearly as well here." : "")
+    }
+
+    private static let tooFewToCount = "Too few matches are confirmed to count his starts."
+
+    /// His starts were not counted: too few matches confirmed, and no solid place to decide it for him.
+    private static func startsNotCounted(_ basis: MatchesHereBasis?) -> Bool {
+        switch basis {
+        case .tooFewConfirmed?: true
+        case .firstChoice?, .startedEnough?, .startedTooFew?, .solidSecondChoice?, nil: false
         }
     }
 

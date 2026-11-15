@@ -165,11 +165,9 @@ public enum AdvisorText {
             advice.onYouthContract
                 ? "He is on a youth contract, so he cannot be sold or loaned out: releasing him is the only way to move him on"
                 : "He is out of contract, so releasing him costs nothing"
-        case .develop: whyDevelop(advice.keepReason)
+        case .develop: whyDevelop(advice.keepReason, advice.matchesHere?.basis)
         case .play: whyPlay(advice.matchesHere?.basis)
-        case .loanForMatches:
-            "He is worth developing and is not getting matches here: a loan gives him matches."
-                + (advice.loanOnlyToStart ? " Only where he will start regularly; otherwise he grows nearly as well here." : "")
+        case .loanForMatches: whyLoanForMatches(advice.matchesHere?.basis, onlyToStart: advice.loanOnlyToStart)
         case .terminate: "His contract is nearly over and no fee is likely to beat the cost of ending it"
         case .sell: "Selling is the way left: nothing cheaper applies"
         case .monitor: whyWatch(advice.watchReason)
