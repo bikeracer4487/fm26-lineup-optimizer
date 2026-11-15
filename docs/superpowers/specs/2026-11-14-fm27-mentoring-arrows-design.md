@@ -18,7 +18,7 @@ All from the owner's first team, FM27, 14 November 2026. Evidence label for ever
 | Finding | Readings behind it |
 |---|---|
 | A pair's arrow was the same in every group it was read in. | Two pairs with an arrow were each read in two groups with a different third player; every re-read of a surprising pair agreed. |
-| Team Leaders are far stronger than anyone else. | Of the 8 arrows the two Team Leaders gave, 6 were Average or Significant. Of 22 arrows from every other senior, 1 was. |
+| Team Leaders are far stronger than anyone else. | Of the 8 arrows the two Team Leaders gave, 6 were Average or Significant. Of 18 arrows from every other senior with a level, 1 was. |
 | A player at "Others" gives nothing, whatever his age. | Dozens of pairs, including seniors five and six years older in the same social group. One exception, confirmed on re-reading. |
 | Age alone creates no influence. | A group of three at "Others" aged 25, 20 and 19 had no arrow. An Influential player of 23 gave Light to a 20-year-old. |
 | Players of 24 and over rarely receive. | Of four such players, one took Light from two seniors; the rest took nothing in eight tries. |
