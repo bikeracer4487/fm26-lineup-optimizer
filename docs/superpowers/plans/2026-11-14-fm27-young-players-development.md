@@ -265,7 +265,7 @@ Decisions: a first choice at any slot has enough, whatever he has started. Other
 
 Decisions, for a player with an outlook (the rest are scored exactly as today):
 
-- **One line in place of three.** The tier line is worked out as today (−40, −20, +15) and the reach line from `outlook.level` (`couldPassFirst` −40, `couldMakeSecond` −20, `couldBeCover` +15, `markedlyLower` +70: the four are `firstElevenPoints`, `secondElevenPoints`, `neitherElevenPoints` and the sum `neitherElevenPoints + weakestPoints + farBelowAveragePoints`, read from the rules, not written again). The one with fewer points is added; on a tie, the tier line. With `outlook.level` nil the tier line stands. The weakest-30% line and the ability-against-average line are not added.
+- **One line in place of three.** The tier line is worked out as today (−40, −20, +15) and the reach line from `outlook.level` (`couldPassFirst` −40, `couldMakeSecond` −20, `couldBeCover` +15, `markedlyLower` +70: the four are `firstElevenPoints`, `secondElevenPoints`, `neitherElevenPoints` and the sum `neitherElevenPoints + weakestPoints + farBelowAveragePoints`, read from the rules, not written again). Only a place in the first or second eleven competes with the reach line, and on a tie the place; a backup takes the reach line (corrected at the close: the text here first said the one with fewer points is added). With `outlook.level` nil the tier line stands. The weakest-30% line and the ability-against-average line are not added.
 - **The reach line's sentences** (`AdvisorText.reachLine`): "Could pass Smith at left back", "Could make the second eleven at left back", "Could become cover at left back, no more", "Not expected to reach the level of the squad at any position"; with no slot: "Could reach the level of the first team", "Could come close to the level of the first team, no more", "Not expected to reach the level of the first team". The slot named is the one that gives the level (`best`, or the slot with the better level).
 - **Professionalism and Ambition** add no line.
 - **Contract ending**: where the line added above is −40 or −20, the contract line reads "Contract ends in N months: renew it" with 0 points; otherwise as today.
@@ -482,10 +482,10 @@ Documents only. If source code seems to need changing, stop and report it.
 **Files:**
 - Modify: `CLAUDE.md`; this plan (its closing sections); the design (its Status line only)
 
-- [ ] **Step 1: Run everything**: both suites and the full picture run to `LineupApp/.build/pictures-development`. Put the three results in the report.
-- [ ] **Step 2: Update `CLAUDE.md`**, reading the code as built: this plan and its design in the list of plans; the research file is already covered by the Research line; in "How the engine works", the Planning bullet (the favour by age, the successor's favour and its limits, the Development setting, the monthly stop) and the Advisors bullet (Player Removal judges a player of 23 or under on his reach against his position's first and second choice; the four kinds of advice; youth contracts kept or released only; what replaced the prospect rules); the `plan` command's `--development`; in the app section, the Young players part, the mark refused on a youth contract, the setting, and `removal-young*` among the checked pictures in `.build/pictures-development`. Replace statements this plan made false; match the file's plain style.
-- [ ] **Step 3: Close this plan**: fill the three sections below from what the tasks reported, in plain sentences with no task numbers, agent names or commit ids; mark the design built. Record that the install and the hands-on check are left to the controller and the owner.
-- [ ] **Step 4: Commit**: "Close the young players' development plan: record what changed and what is left".
+- [x] **Step 1: Run everything**: both suites and the full picture run to `LineupApp/.build/pictures-development`. Put the three results in the report.
+- [x] **Step 2: Update `CLAUDE.md`**, reading the code as built: this plan and its design in the list of plans; the research file is already covered by the Research line; in "How the engine works", the Planning bullet (the favour by age, the successor's favour and its limits, the Development setting, the monthly stop) and the Advisors bullet (Player Removal judges a player of 23 or under on his reach against his position's first and second choice; the four kinds of advice; youth contracts kept or released only; what replaced the prospect rules); the `plan` command's `--development`; in the app section, the Young players part, the mark refused on a youth contract, the setting, and `removal-young*` among the checked pictures in `.build/pictures-development`. Replace statements this plan made false; match the file's plain style.
+- [x] **Step 3: Close this plan**: fill the three sections below from what the tasks reported, in plain sentences with no task numbers, agent names or commit ids; mark the design built. Record that the install and the hands-on check are left to the controller and the owner.
+- [x] **Step 4: Commit**: "Close the young players' development plan: record what changed and what is left".
 
 ---
 
@@ -497,11 +497,60 @@ Documents only. If source code seems to need changing, stop and report it.
 
 ## What the advice showed on the captured squads
 
-(Filled in from Tasks 5 and 7.)
+The advice was worked out on the captured first team and U21 squad with the sample 4-2-3-1, as `advise` and `plan` print it, and the lineup plan was run with Development at 1 (the default) and at 0. The captured squads have no goalkeeper, no youth contract and nobody of 17 or under; the goalkeeper slot is filled by an outfield player rated about 4.
+
+Every player of 23 or under, as the advice stands at the end of the build. Players are named by squad, age and position only.
+
+| Squad, age, position | Advice |
+|---|---|
+| U21, 19, centre-back, contract out | Release, at the high level. |
+| U21, 19, centre-back, 10 months left, second choice | Keep and play: he is markedly lower, but he is in the second eleven and, with too few matches confirmed, a solid second choice counts as getting his matches. |
+| U21, 19, defensive midfield, 10 months left, second-eleven goalkeeper only as a stand-in | Watch: "This tool does not expect him to reach the level of the squad: watch how he does." His reach is below the bar at both defensive midfield slots. |
+| U21, 20, right attacking midfield, second choice | Keep and play. |
+| U21, 18, left attacking midfield, backup | Watch, needed as cover: a loan would leave the squad short. He could pass or make the second eleven, so he is worth developing. |
+| First team, 23, defensive midfield, first choice | Keep and play. |
+| First team, 23, right attacking midfield, second choice at a slot he is not solid at | Keep and develop, renew his contract first. He could pass the first choice; with fewer than six matches confirmed, his place in the elevens says nothing about his starts, so the sentence says that too few matches are confirmed and does not say he is not getting matches. |
+| First team, 20, left back, first choice | Keep and play. |
+| First team, 23, right back, second choice | Keep and play. |
+| First team, 20, right back, first choice | Keep and play. |
+
+- Nobody is newly advised to leave. The two who are advised to leave are the same two as before the build: the first-team 25-year-old (critical, terminate) and the U21 19-year-old centre-back whose contract is out (high, release). The wages at stake are unchanged.
+- The three U21 19-year-olds of ability 25 are markedly lower. The first estimate, which scaled a rating in proportion to ability, called one of them able to pass the first choice at centre-back, because ratings here run about 72 at ability 25 and about 118 at ability 66. Scaling from an offset removed that, and the bar then kept the weak second choice on a thin squad from lifting two of them to "could make the second eleven" and "renew his contract", and "loan for matches".
+- No young player on the captures is advised a loan for matches; that advice is tested on built players and on the app's sample.
+
+Development at 1 against 0, over the five fixtures of the sample plan (14, 17, 21, 24 and 28 November). Nothing differs at 21 November, a high fixture.
+
+- 14 November, a low fixture. At right defensive midfield the first-team 23-year-old defensive midfielder starts in place of a first-team 30-year-old defensive midfielder. He is first choice there; the consecutive-starts rule (×0.90) would rest him after two starts in a row, and the age favour (×1.10) brings him back. This is the favour reaching a player who already gets his matches, which is a known limit below. At right attacking midfield the first-team 23-year-old wide attacking midfielder starts in place of a first-team 37-year-old wide attacking midfielder: he is close to passing him there, and the successor's favour (×1.15) takes him past.
+- 17 November, a medium fixture. The 23-year-old defensive midfielder is rested again in favour of the 30-year-old, since he has started three in a row at 1 and no favour acts at his slot in a medium fixture. The U21 20-year-old wide attacking midfielder keeps his place at right attacking midfield with the successor's medium favour (×1.05), but the pick is the same at 0.
+- 24 November, a sharpness fixture. The goalkeeper slot and left attacking midfield swap between players of the first team as a knock-on of the earlier fixtures' fitness; neither carries a development reason. The 23-year-old wide attacking midfielder keeps right attacking midfield with the successor's favour (×1.15).
+- 28 November, a medium fixture. The goalkeeper slot goes to the first-team 23-year-old wide attacking midfielder and right defensive midfield to the 23-year-old defensive midfielder, both as knock-ons of earlier fixtures, with no development reason at this fixture.
+- A first-team 20-year-old left back and a first-team 20-year-old right back carry the age favour (×1.07) on 14 November and start either way.
+- The three U21 19-year-olds of ability 25 are never picked and never favoured at either setting.
 
 ## Changes made while building
 
-(Filled in as the plan is built.)
+What was decided while building, where it differs from the design or from the plan's text. The design was corrected in the three places it names.
+
+- **A rating is scaled with ability from an offset, not in proportion.** The design scaled a rating by reach over current ability. On the captured squads that called a U21 19-year-old of ability 25 and potential 41 able to pass the first choice at centre-back. A rating is now scaled by (offset + ability) ÷ (offset + current ability) wherever a rating is taken from one ability to another, including the points a player needs. The offset is a new parameter, 70, taken from a straight line through the best rating of each of 20 outfield players of the captured squads (rating = 57.0 + 0.798 × ability, R² 0.82, offset about 71.5, rounded to 5). It is loosely pinned: very roughly 45 to 110 fixes the fault found. At 0 it is the old behaviour. On the captures the three U21 19-year-olds of ability 25 went from "could pass the first choice" to "could make the second eleven" and nobody was newly advised to leave.
+- **Which line competes with the reach line.** The plan said the one with fewer points is added. Only a place in the first or second eleven competes with the reach line, and on a tie the place; a backup takes the reach line. The plan's Task 4 sentence has been corrected with a note.
+- **A reach below the bar is markedly lower whoever the second choice is.** The bar is 80% of the first choice's rating, 70% at 16 or under. Before, a reach at or above the second choice's gave "could make the second eleven", and on a thin squad the second choice is another weak young player: two U21 19-year-olds of ability 25 were told "renew his contract" and "loan for matches". A reach at or above the bar is "could make the second eleven" when it reaches the second choice's rating or there is none, and "could become cover" otherwise.
+- **A player not worth developing is never advised to develop or to be loaned.** Worth developing means he could pass the first choice or make the second eleven. One who is not is kept to play when he is in an eleven and playing, and otherwise watched, with a sentence that follows his level: "This tool expects him to become cover at best: watch how he does." or "This tool does not expect him to reach the level of the squad: watch how he does." One needed as cover reads "He is needed as cover here: he stays until the squad has someone better there." where the loan sentence would be untrue of a player never considered for a loan.
+- **A youth contract is released at any age and read in one way.** The owner's statement has no age, so a youth contract is released, never sold, terminated or loaned, whatever the age and whether or not he has an outlook. One engine function says whether a player is on one (a youth contract with 0 months left is read as no contract, one with months unknown is still a youth contract); the advice, the mark rule in the planner and the app all take it from there.
+- **Watch reasons.** A watched young player now says why: not worth developing, or needed as cover. The generic sentence was not the reason.
+- **Getting matches here.** A first choice always has enough. With fewer than six matches confirmed in the last 60 days, a second choice counts as getting matches only at a slot he is solid at (familiarity 15 or over in both phases); a stand-in, such as an outfield player who is the second eleven's goalkeeper, a backup, or a player the elevens did not rate, does not. When starts were not counted the develop and loan sentences say that he has no solid place in the first or second eleven and that too few matches are confirmed, and do not say he is not getting matches; a sentence that says "He is getting his matches here." says first choice, getting matches, or second choice with starts not counted, as the basis was.
+- **The standing at a like-named slot.** A young player's standing line leaves out the comparison with a first choice at another slot of the same position words (two defensive midfield slots), since it read as comparing him with himself.
+- **The thresholds in the words became parameters.** Professionalism 10 (where it holds growth back) and age 30 (where a first choice is named with his age) are `EngineParameters` entries with flags on the estimate and on the rival, in keeping with the rule that no rule number sits outside them.
+- **The reach is labelled as an estimate.** A young player's advice carries the weakest evidence behind it, which now includes the reach's derived growth numbers, so a release on an estimate is not labelled as firmly as one on the removal rules alone.
+- **No floor for a loaned-in young player.** The floor comes from the outlook, which exists only for the club's own players, and the owner's aim is the growth of his own players. A loanee of 21 or under loses the old ×1.10 in lesser fixtures.
+- **The floor applies only at slots he can play.** A 19-year-old outfield player was "favoured for minutes" in goal. The floor goes to the slots in his outlook, and the successor's favour replaces it at a slot where he is one.
+- **A first choice is nobody's successor.** A player who is first choice at any slot of the tactic gets no successor's favour: on the captures it only swapped two defensive midfielders between slots and gave an odd reason.
+- **The cap of two goes to players who can be picked.** In a medium fixture the two successors favoured are chosen among those who could be picked for the fixture; an injured one took a place nobody could use.
+- **Outlooks are worked out once per tactic.** They depend on the fixture only through its tactic, so a plan works them out once for each distinct tactic. The plan comes out identical, and planning is faster.
+- **A failed plan's fix is chosen for each kind of failure.** A player value that is missing or duplicated goes to Squad, a fixture problem to Fixtures, bad settings or parameters to Settings, and a duplicated fixture id offers no button, since no screen changes it. The planner now needs personality values for a developing player, so a missing one must not send the owner to Settings. The advice and the plan send the same player data to the same screen.
+- **One engine function gives a young player's lines.** The sentences of a young player's row (his reach with its working, his standing, his advice and its reason, and whether the matches line is shown) come from `AdvisorText.youngLines`, so the app and the command line share them, and every line ends with a full stop.
+- **A young row's title names the slot he is first choice at**, the first such slot in his outlook in the tactic's order; failing that his first-eleven slot from the elevens, and failing that his best slot. The fallback can name a slot his standing line does not mention.
+- **Development setting.** It runs from 0 to 1, defaults to 1, and saved settings from before read as 1. Each favour is 1 + (factor − 1) × the setting.
+- **A mark on a youth contract.** The app refuses a new mark and shows the engine's sentence in place of the control; the planner ignores one held from before.
 
 ## Known limits and small faults left
 
@@ -509,7 +558,37 @@ Known before building (the design's section 11):
 
 - The growth numbers come from FM24 and FM26 tests whose conditions are mostly not stated; if the bases were measured on average players, reach is underestimated below Professionalism 20, which errs toward release.
 - The estimate is weakest for the youngest. Professionalism can be raised by mentoring.
-- A rating is assumed to rise in proportion to ability.
+- A rating is assumed to rise with ability along one straight line from an offset (70), the same at every position. The offset comes from 20 outfield players of the captured squads and is loosely pinned; it would be better fitted within a position, or on more squads. Pace arrives early and stops near 21, so a slow 20-year-old is overrated.
 - The bar is today's squad. Depth is counted by familiarity, not quality.
 - The tool cannot see youth-team matches, loan offers, or the level of a club that would take a loanee.
 - No captured squad has a youth contract or a player of 17 or under: those cases are tested on built players only.
+
+Found while building:
+
+- With fewer than six confirmed matches the advice reads a player's place in the elevens in place of his starts, so a second choice at a slot he is not solid at reads as not getting matches until six are confirmed.
+- The favour by age can bring a young first choice back into a lesser fixture he would have been rested for, until four starts in thirty days are on record. The sample history holds only two confirmed matches; with a real history a regular starter has four.
+- A youth-contract player marked before this plan keeps the mark's label, with the refusal shown, until his squad is next imported, and the planner ignores the mark meanwhile; the owner cannot clear it by hand before then.
+- A successor who is retraining at the same slot gets the larger of the two favours (×1.15), which is less than the floor and retraining multiplied together (about ×1.23) would give a player who is not a successor.
+- A loaned-in young player of 21 or under no longer has the old floor in lesser fixtures.
+- A medium fixture's cap of two can spend a place on a successor whose retraining favour wins at his only successor slot, or on one the owner has overridden into the lineup; the cap's test of who can be picked does not count the owner's overrides.
+- The planner still works out its tiers for each fixture, though they depend only on the tactic.
+- "First choice" is read from the outlook, so a stand-in first choice at a slot he cannot play (an outfield player in goal) is not seen as one.
+- The advice for a loan for matches and the successor's favour in a medium fixture are tested on built players and on the app's sample; the captures show a successor's favour only in lesser fixtures and on the two U21 and first-team wide attacking midfielders.
+- A youth contract with 0 months left is told "out of contract", and below the high level "renew his contract before a loan".
+- Some step-order tests are missing: a 17-year-old on a youth contract that gets the age sentence before the youth-contract one, a short contract before a false prospect, and a youth contract with a false prospect at high.
+- A test in the end-to-end suite uses a literal 15 for "not solid" in place of the parameter.
+- `Development.matchesHere` treats a second choice whose slot is missing from the assignments as having too few matches confirmed without saying so; it cannot happen through Player Removal.
+- A reach working or a standing line can print "about 0 points a season".
+- The matches line says "Too few matches are confirmed" when no matches are confirmed at all on a counted basis, which cannot happen in practice.
+- A test of the successor rule has a developing first choice rated 60 against 50 where equal ratings were intended, and the second-choice comparison, the bar, the "possible" band and the points needed with a developing rival are not pinned by a test that would fail on the wrong rating being used.
+- Some tests are weaker than they look: one would pass if Ambition and Determination were ignored (a test of a factor of one); one has a check that can no longer fail (a false prospect adding no line); a second-eleven player whose reach is only cover has no test of his own; a test asserts the order the enum declares and not an order the code produces; the successor's age check has no test; the 60-day boundary of the matches window is pinned only through a 3-day override, and there is no test of an unrated player with six or more matches; and a test of a slot with no first choice does not assert the level and average it gives.
+- No parameter check keeps the successor's favour at or above the largest floor factor.
+- A plain `//` heading comment sits in the parameter list where its neighbours use `///`; the planner works out each fixture's assignments again though it holds them; the age factor repeats the age step's shape; a comment in the app's plan code about the planner refusing settings is out of date.
+- The Development explanation in Settings says "lesser", "ordinary" and "biggest" where the app's names are Low, Sharpness, Medium and High, overstates who gets the age favour, and restates engine rules by hand.
+- The young row's stamp tone is set in the view and not in Core.
+- Development is not rounded to its step as Saving players is, so a value like 0.35000000000000003 can be saved, and the Development text reads "0%" for a value between 0 and 0.005, which the slider cannot produce.
+- A slider saves only when a drag ends, so a change by keyboard or VoiceOver may show and not save. This is older than this plan and holds for every slider.
+- The young explanation's fallback to an empty string can never be used and its test unwraps the note.
+- The sample's expected order of young rows has no tie-break on the player's key.
+- The engine's sentences for the three fixture planning errors name fixtures by id; the app's own checks stop them.
+- The install and the hands-on check of the real app are left to the owner: the build ends with the suites and the pictures, and the real app has not been opened on this change.

@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: young players judged on where they could reach
 
 Date: 14 November 2026
-Status: approved by the owner on 14 November 2026 ("your young player development plan is approved, so please proceed"), with the defaults of section 12 as written. Not built.
+Status: approved by the owner on 14 November 2026 ("your young player development plan is approved, so please proceed"), with the defaults of section 12 as written. Built, on 15 November 2026. The installed app and the hands-on check are left to the owner.
 
 Research behind it: `docs/Research/fm27-development-matches-vs-training.md` (the owner's, added 14 November 2026), `docs/Research/fm27-selling-and-loans.md`, and the FM26 files `skill-potential-factors.md`, `player-retention-strategy.md` and `player-rotation-guide.md`. No test of attribute growth exists for FM27; every growth number here is carried over from FM24 and FM26 tests, on the owner's rule that growth research carries over.
 
@@ -102,9 +102,9 @@ For a player of the club's own aged 23 or under, the three lines that compare to
 | His reach rating at his best slot | Points | Sentence |
 |---|---|---|
 | At or above the first choice's rating | −40 | "Could pass Smith at left back", with the band |
-| At or above the second choice's | −20 | "Could make the second eleven at left back" |
+| At or above the bar, and at or above the second choice's (or there is no second choice) (corrected while building) | −20 | "Could make the second eleven at left back" |
 | At or above the bar (below) | +15 | "Could become cover at left back, no more" |
-| Below the bar at every slot he can play: **markedly lower** | +70 | "Not expected to reach the level of the squad at any position" |
+| Below the bar at his best slot, whoever the second choice is: **markedly lower** (corrected while building) | +70 | "Not expected to reach the level of the squad at any position" |
 
 - **The bar** is 80% of the first choice's rating: the share Training already asks of a player worth retraining for a slot, from the research's "cover can be about 20% worse than the first choice" (carried over from FM26). **For a player of 16 or under it is 70%** (derived): the estimate adds up the most seasons for the youngest and is least reliable for them, and a release cannot be undone.
 - −40, −20 and +15 are today's points for the first eleven, the second eleven and neither. +70 is what the three replaced lines give a weak player today.
@@ -124,10 +124,12 @@ No new rule. The engine already takes 30 points off a player who is first choice
 | Advice | When |
 |---|---|
 | **Release** (youth contract), or **sell** or **terminate** as now (other contracts) | His score reaches the high level: in practice markedly lower and not needed for depth, or a lesser reach with other faults. |
-| **Keep and develop** | Aged 17 or under, reach at or above the second choice's. The sentence says that at his age he grows mainly in training and a loan would add little. |
-| **Keep and play** | Aged 18 to 23, reach at or above the second choice's, and getting matches here. |
-| **Loan for matches** | Aged 18 to 23, not on a youth contract, reach at or above the second choice's, not getting matches here, not needed for depth, more than 12 months left on his contract. At 18 the sentence adds: "only where he will start regularly; otherwise he grows nearly as well here". |
+| **Keep and develop** | Aged 17 or under, worth developing (could pass the first choice or make the second eleven) (corrected while building). The sentence says that at his age he grows mainly in training and a loan would add little. |
+| **Keep and play** | Aged 18 to 23, worth developing (could pass the first choice or make the second eleven) (corrected while building), and getting matches here. |
+| **Loan for matches** | Aged 18 to 23, not on a youth contract, worth developing (could pass the first choice or make the second eleven) (corrected while building), not getting matches here, not needed for depth, more than 12 months left on his contract. At 18 the sentence adds: "only where he will start regularly; otherwise he grows nearly as well here". |
 | **Watch** | Everything between. |
+
+A player not worth developing is kept to play when he is in an eleven and playing, and is otherwise watched (corrected while building).
 
 The table is read from the top: a score at the high level wins over every row below it. Every player keeps a level from his score, as now, and stays in the main list; for a player of 23 or under the action shown beside it is the advice above. A player advised a loan for matches therefore sits at the keep level, not at high or critical.
 
@@ -138,7 +140,7 @@ The table is read from the top: a score at the high level wins over every row be
 
 ### 7.4 Youth contracts
 
-A player on a youth contract can only be kept or released (the owner's statement; FM27 observation). Where the rules give a sale or a termination the advice is a release. Where they would give a loan for matches the advice is "Keep and develop", with the sentence that a loan needs a full-time contract. He cannot be marked to sell or to loan out: the app does not offer the control and shows the engine's sentence saying why in its place, the model ignores such a mark, a mark already held is dropped when he is next imported on a youth contract, and the planner ignores one.
+A player on a youth contract can only be kept or released (the owner's statement; FM27 observation). He is released at any age (corrected while building). Where the rules give a sale or a termination the advice is a release. Where they would give a loan for matches the advice is "Keep and develop", with the sentence that a loan needs a full-time contract. He cannot be marked to sell or to loan out: the app does not offer the control and shows the engine's sentence saying why in its place, the model ignores such a mark, a mark already held is dropped when he is next imported on a youth contract, and the planner ignores one.
 
 ## 8. The planner
 
