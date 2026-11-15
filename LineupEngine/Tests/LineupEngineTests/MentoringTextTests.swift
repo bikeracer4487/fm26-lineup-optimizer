@@ -78,8 +78,8 @@ import Testing
         #expect(sentence(.nothingToGain) == "Dunn (17): nobody who influences him is better where it counts.")
         #expect(sentence(.tooFewFree) == "Dunn (17): there are not three players free to make a group with him.")
         #expect(sentence(.wouldHarm) == "Dunn (17): every group that would help him would pull a player down.")
-        #expect(sentence(.noThirdFree)
-                == "Dunn (17): no third player is left free to make a group with him and a player who could influence him.")
+        #expect(sentence(.noThirdFree) == "Dunn (17): no third player is left free who could join him and a player "
+                + "who could influence him without pulling a player down.")
         #expect(sentence(.influencersTaken) == "Dunn (17): the players who could influence him are already in a group.")
     }
 
@@ -145,9 +145,9 @@ import Testing
     @Test func arrowsStillToReadAreCounted() {
         #expect(AdvisorText.arrowsToRead(review(unread: 0)) == nil)
         #expect(AdvisorText.arrowsToRead(review(unread: 1))
-                == "Record this group's arrows from the game: 1 of them is still a guess.")
-        #expect(AdvisorText.arrowsToRead(review(unread: 4))
-                == "Record this group's arrows from the game: 4 of them are still guesses.")
+                == "Record this group's arrows from the game: 1 is still a guess. An arrow expected to be None is not listed.")
+        #expect(AdvisorText.arrowsToRead(review(unread: 5))
+                == "Record this group's arrows from the game: 5 are still guesses. An arrow expected to be None is not listed.")
         #expect(AdvisorText.arrowsToRead(review(noInfluence: true)) == nil)
     }
 

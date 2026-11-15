@@ -470,14 +470,33 @@ public enum MentoringPresentation {
     /// of the others, then the second, then the third), each with the strength set; none before. Named from `names`,
     /// never by a key.
     public static func arrowRows(_ draft: ArrowsDraft, names: [PlayerID: String]) -> [ArrowRow] {
-        guard draft.members.count == Mentoring.groupSize, Set(draft.members).count == Mentoring.groupSize else {
-            return []
-        }
+        guard hasThree(draft) else { return [] }
         let name = { (id: PlayerID) in names[id] ?? TrainingPresentation.unnamed }
         return draft.pairs.map { pair in
             ArrowRow(id: pair, titleText: "\(name(pair.from)) → \(name(pair.to))",
                      spokenTitle: "\(name(pair.from)) to \(name(pair.to))", strength: draft.strengths[pair])
         }
+    }
+
+    /// The same draft (same id) with every pair of its three that has no strength set to None, and those set kept: the
+    /// game shows only the arrows above None, so the rest are None. Unchanged unless three different players are chosen.
+    public static func settingTheRestToNone(_ draft: ArrowsDraft) -> ArrowsDraft {
+        guard hasThree(draft) else { return draft }
+        var changed = draft
+        for pair in draft.pairs where changed.strengths[pair] == nil { changed.strengths[pair] = ArrowStrength.none }
+        return changed
+    }
+
+    /// "Set the rest to None", with the engine's name for None; nil when there is nothing to set: fewer than three
+    /// chosen, or every pair set.
+    public static func setTheRestToNoneTitle(_ draft: ArrowsDraft) -> String? {
+        guard hasThree(draft), draft.pairs.contains(where: { draft.strengths[$0] == nil }) else { return nil }
+        return "Set the rest to \(AdvisorText.name(ArrowStrength.none))"
+    }
+
+    /// Three different players are chosen.
+    private static func hasThree(_ draft: ArrowsDraft) -> Bool {
+        draft.members.count == Mentoring.groupSize && Set(draft.members).count == Mentoring.groupSize
     }
 
     /// "2 of 3 chosen".

@@ -97,18 +97,20 @@ public enum NotPlacedReason: Equatable, Sendable {
     case takesNothing
     /// No arrow into him, read or guessed, is above None.
     case noInfluence
-    /// No arrow into him above None has anything to give him.
+    /// Nobody with an arrow into him above None is better than him in any counted attribute.
     case nothingToGain
     /// A player free to be grouped has an arrow into him with something to give, but fewer than three players, himself
     /// included, are free to be grouped at all.
     case tooFewFree
-    /// A player free to be grouped has an arrow into him with something to give, and groups of three free players can
-    /// be formed with him and such a player, but every one that would give it holds a harmful arrow.
+    /// Nothing can help him without harm: either nobody who influences him gains him anything overall, though one is
+    /// better than him somewhere (and so worse elsewhere, which makes that arrow harmful to him), or every group of three
+    /// free players that would give him a gain holds a harmful arrow.
     case wouldHarm
-    /// A free player with something to give him is still in no suggested group, and groups that would help him can be
-    /// formed among the free players, but none of them is left unused with a third player who would harm nobody.
+    /// A helper (a free player with something to give him who makes a valid group of three with him among the free
+    /// players, members of suggested groups included) is in no suggested group, but no third player is left unused
+    /// with whom the two would harm nobody.
     case noThirdFree
-    /// Every free player with something to give him is in a suggested group; any others are in recorded groups.
+    /// Every helper is in a suggested group, or every player with something to give him is in a recorded group.
     case influencersTaken
 }
 
@@ -430,18 +432,28 @@ extension Mentoring {
             let others = people.indices.filter { $0 != index }
             let influencing = others.filter { arrows[$0][index].strength > .none }
             if influencing.isEmpty { return .noInfluence }
-            if !influencing.contains(where: { gains[$0][index] > 0 }) { return .nothingToGain }
+            if !influencing.contains(where: { gains[$0][index] > 0 }) {
+                // One better than him somewhere, with no gain overall, is worse than him elsewhere: his arrow harms.
+                let target = people[index].values
+                let anyPull = influencing.contains {
+                    !Mentoring.pulls(from: people[$0].values, to: target, counted: counted,
+                                     parameters: parameters).isEmpty
+                }
+                return anyPull ? .wouldHarm : .nothingToGain
+            }
             let free = pool.filter { $0 != index }
             if free.contains(where: { gains[$0][index] > 0 }) {
                 // "Free" is the pool, himself included: no group of three can be formed from fewer.
                 if pool.count < Mentoring.groupSize { return .tooFewFree }
-                let helped = free.indices.contains { i in
-                    free[(i + 1)...].contains { other in
-                        option([index, free[i], other].sorted())?.restsOn.contains { $0.to == index } == true
+                // A helper gives him a gain and makes a valid group with him and some other free player; such a
+                // group then rests on an arrow into him, since he is a candidate.
+                let helpers = free.filter { helper in
+                    gains[helper][index] > 0 && free.contains { other in
+                        other != helper && option([index, helper, other].sorted()) != nil
                     }
                 }
-                if !helped { return .wouldHarm }
-                if free.contains(where: { gains[$0][index] > 0 && !used.contains($0) }) { return .noThirdFree }
+                if helpers.isEmpty { return .wouldHarm }
+                if helpers.contains(where: { !used.contains($0) }) { return .noThirdFree }
             }
             return .influencersTaken
         }

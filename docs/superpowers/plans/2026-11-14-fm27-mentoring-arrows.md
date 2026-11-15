@@ -554,7 +554,7 @@ None of the three has a harmful arrow, read or guessed. Not placed: Dillon De Si
 
 ## Changes made while building
 
-- Two reasons for not placing a player that the plan did not have. A player with a source of gain among the free players but fewer than three players free is now "there are not three players free to make a group with him", and a player whose sources of gain are not all in suggested groups, but who has no third player left, is now "no third player is left free to make a group with him and a player who could influence him". The plan's fall-through would have given the harmful-group sentence or "his possible influencers are already taken" where neither was true.
+- Two reasons for not placing a player that the plan did not have. A player with a source of gain among the free players but fewer than three players free is now "there are not three players free to make a group with him", and a player whose sources of gain are not all in suggested groups, but who has no third player left, is now "no third player is left free to make a group with him and a player who could influence him". The plan's fall-through would have given the harmful-group sentence or "his possible influencers are already taken" where neither was true. The second sentence was reworded again after the whole-branch review (below).
 - The harmful-arrow warning was reworded to name both players: "Ashby's influence on Nelson is Significant, and Ashby's Ambition is 6 against Nelson's 13." The sentence the design gave could be read as Nelson's Ambition, which turns it the wrong way round.
 - The count of arrows from Highly Influential and Influential players is 18, not 22, as the owner's readings give; the design and the parameter's source were corrected. Team Leaders gave 8 arrows, 6 of them Average or Significant, as before.
 - A suggested card carries its three members, so its "Record arrows" button can open the arrows sheet on them without the view working anything out.
@@ -565,7 +565,9 @@ None of the three has a harmful arrow, read or guessed. Not placed: Dillon De Si
 - The prompt that counts the guesses sits beside the buttons on both cards.
 - A read arrow is bold and a guess is muted, so the two cannot be taken for each other.
 - A reading is the latest for a pair when a pair was read twice; a hierarchy level missing from the guess table guesses None and is reported as a problem.
-- Task 5 brought up to date several app tests that the plan's list had left out, and replaced two unused measures in `Theme`.
+- The whole-branch review found three reasons for not placing a player that could say something untrue, and they were made true. "Nobody who influences him is better where it counts" is now said only when nobody with an arrow into him is better than him in any counted value; an influencer better in one value and worse by more in another gains him nothing overall but would pull him down, so that case now gets "every group that would help him would pull a player down". "No third player free" is now said only when a player who could really help him (one with a gain who makes a group with him free of harmful arrows) is left out of the suggestions; a free player whose own arrow into him is harmful no longer counts, so a player helped only through someone already grouped now reads "the players who could influence him are already in a group". Its sentence now reads "no third player is left free who could join him and a player who could influence him without pulling a player down", because thirds can be free yet each make a harmful group.
+- The prompt on a recorded group's card now reads "Record this group's arrows from the game: 5 are still guesses. An arrow expected to be None is not listed." The count is of every pair still guessed while the card lists only the arrows above None, so "5 of them" under a list of two read as a contradiction; the new words say why the two differ and do not say "six", since a group with a member gone has fewer pairs.
+- The arrows sheet has a "Set the rest to None" button under its six rows, shown while any of them is not read. The owner reads off the game only the arrows above None; the rest are None, and until each was set by hand the group's prompt kept asking for them. Core works out both the filled draft and whether the button shows, and the name None is the engine's. The group editor's `open` closure was also made required, so no caller can get a Save that saves and never closes.
 
 ## Known limits and small faults left
 
@@ -579,14 +581,18 @@ Known before building:
 - Whether an arrow changes with time is not known; the day each was read is shown, and nothing asks for a re-reading.
 - Social groups are still entered and kept, and change nothing.
 - Not placed lists every player of the club's own with something to gain, of any age, so players of 24 and over each show that nobody is expected to influence them. The design has it so, since age acts through the arrows; it makes a long list.
-- On a recorded card, "N of them are still guesses" counts all six arrows while the card lists only those above None, so it can read oddly beside a list of two.
 - Opening the arrows sheet straight after a new group is saved (the group editor gives way to the sheet) has not been checked in the running app. Only SwiftUI's own behaviour on replacing a presented sheet is unseen.
-- Once three players are chosen, the arrows sheet shows about three and a half players under its rows, which makes swapping a member awkward.
+- Once three players are chosen, the arrows sheet shows only about two and a half players under its rows while "Set the rest to None" is shown, which makes swapping a member awkward.
 - A pair of values can break across two lines on a card ("Determination 7, towards / 10").
 - The strength column is a fixed size, so the detail column starts at a different place on different cards, and the layout has no width below about 306 points (the window cannot be that narrow).
 - The arrow title is written in the app as well as in the engine's text; one engine function from names would keep a single format.
-- The group editor's `open` closure defaults to doing nothing, so a caller that leaves it out gets a Save that leaves the sheet open. The picture run is the only such caller, and it is harmless there.
-- The reason for a harmful group in "no third player free" is loose when a third player is free but every group with him holds a harmful arrow; no test covers it.
 - The review of a recorded group counts five parameters in its evidence where the suggestions count seven; both come out as derived, so nothing differs yet.
-- Two untested corners from the first tasks: a Team Leader's arrow to an Influential young player, and a reading from another squad leaving a takes-nothing judgement alone. The fixture check pins totals only, not each cell of the guess.
+- One untested corner of the guess: a Team Leader's arrow to an Influential young player. The check against the owner's readings pins totals only, not each cell of the guess.
+- The tie-break that prefers more arrows read can choose a young player, read as None from a senior, as a group's third member where an older player would have done, so a second group can be missed.
+- A suggestion called read can still hold unread arrows that are expected to be None: only the arrows it rests on need to have been read.
+- Reading a pair again at the same strength keeps the first day, so "read again, unchanged" cannot be recorded.
+- A caution is given only for the source of each candidate's best arrow, not for every member who is on loan here or advised to leave.
+- "This group has stopped working: nobody it influences has changed" is said even when the influence is a guess; the card shows "expected, not read" beside that arrow.
+- A player whose key changes from his name to FMRTE's id loses his arrow readings, as he does his hierarchy entry and his groups.
+- `mentoringMenteeMaxAge` is labelled an FM27 observation, though the age line of 23 is the design's own.
 - Neither the hands-on check nor the install has been done. Both are left to the owner and the controller: installing with `tools/build_app.sh`, opening the app on the real mentoring file, and trying the arrows sheet.

@@ -83,7 +83,7 @@ public enum ScreenPictures {
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let file = "\(name)-\(suffix).png"
             let editor = BoardFrame {
-                MentoringEditorSheet(model: model, editing: editing) {}
+                MentoringEditorSheet(model: model, editing: editing, close: {}, open: { _ in })
                     .boardCard()
             }
             .boardAppearance()

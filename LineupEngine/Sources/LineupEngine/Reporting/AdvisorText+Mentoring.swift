@@ -90,7 +90,8 @@ extension AdvisorText {
         case .tooFewFree: "\(who): there are not three players free to make a group with him."
         case .wouldHarm: "\(who): every group that would help him would pull a player down."
         case .noThirdFree:
-            "\(who): no third player is left free to make a group with him and a player who could influence him."
+            "\(who): no third player is left free who could join him and a player who could influence him "
+                + "without pulling a player down."
         case .influencersTaken: "\(who): the players who could influence him are already in a group."
         }
     }
@@ -149,12 +150,14 @@ extension AdvisorText {
         return nil
     }
 
-    /// The prompt to read a recorded group's arrows in the game; nil when none of them is a guess.
+    /// The prompt to read a recorded group's arrows in the game; nil when none of them is a guess. The count is of
+    /// every pair still guessed, while the card lists only arrows above None, so the prompt says why the two differ.
     public static func arrowsToRead(_ review: GroupReview) -> String? {
         let count = review.unreadArrows
         guard count > 0 else { return nil }
         return "Record this group's arrows from the game: "
-            + (count == 1 ? "1 of them is still a guess." : "\(count) of them are still guesses.")
+            + (count == 1 ? "1 is still a guess." : "\(count) are still guesses.")
+            + " An arrow expected to be None is not listed."
     }
 
     /// Beside the social groups in the hierarchy.

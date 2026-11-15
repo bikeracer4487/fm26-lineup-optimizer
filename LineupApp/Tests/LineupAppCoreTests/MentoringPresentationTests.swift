@@ -367,7 +367,8 @@ import Testing
         #expect(card.arrows.map(\.titleText) == ["Okafor → Lane", "Okafor → Pike"])
         #expect(card.arrows.map(\.strengthText) == ["Significant · read Sat 14 Nov", "Light · expected, not read"])
         #expect(card.arrows.map(\.detailText) == ["Professionalism 10, towards 15", "nothing to gain"])
-        #expect(card.arrowsPromptText == "Record this group's arrows from the game: 5 of them are still guesses.")
+        #expect(card.arrowsPromptText == "Record this group's arrows from the game: 5 are still guesses. "
+                + "An arrow expected to be None is not listed.")
         #expect(card.members.map(\.nameText) == ["Okafor (30)", "Lane (20)", "Pike (17)"])
         #expect(card.members[0].detailText == "Professionalism 15, no change")
         #expect(card.members[1].detailText == "Professionalism 9 to 10 in 5 weeks · Pressure 5, no change")
@@ -406,8 +407,10 @@ import Testing
             try #require(try sheet([], advice: pinned(groups: [review(unread: unread)])).yours.first).arrowsPromptText
         }
         #expect(try prompt(6) == AdvisorText.arrowsToRead(review(unread: 6)))
-        #expect(try prompt(6) == "Record this group's arrows from the game: 6 of them are still guesses.")
-        #expect(try prompt(1) == "Record this group's arrows from the game: 1 of them is still a guess.")
+        #expect(try prompt(6) == "Record this group's arrows from the game: 6 are still guesses. "
+                + "An arrow expected to be None is not listed.")
+        #expect(try prompt(1) == "Record this group's arrows from the game: 1 is still a guess. "
+                + "An arrow expected to be None is not listed.")
         #expect(try prompt(0) == nil)
     }
 
@@ -416,7 +419,8 @@ import Testing
         #expect(card.spokenText == "Okafor, Lane, Pike, since Mon 12 Oct, "
                 + "Okafor to Lane, Significant · read Sat 14 Nov, Professionalism 10, towards 15, "
                 + "Okafor to Pike, Light · expected, not read, nothing to gain, "
-                + "Record this group's arrows from the game: 5 of them are still guesses., "
+                + "Record this group's arrows from the game: 5 are still guesses. "
+                + "An arrow expected to be None is not listed., "
                 + "Warning: Okafor's influence on Pike is expected to be Light, and Okafor's Ambition is 6 against "
                 + "Pike's 9., "
                 + "This group is doing harm: a member is worth less than when he joined. Consider regrouping., "
@@ -831,6 +835,33 @@ import Testing
         let unnamed = MentoringPresentation.arrowRows(three, names: [hart: "Hart"])
         #expect(unnamed.allSatisfy { !$0.titleText.contains(young.key) && !$0.titleText.contains(reid.key) })
         #expect(unnamed[1].titleText == "Hart → \(TrainingPresentation.unnamed)")
+    }
+
+    @Test func theRestCanBeSetToNoneOnceThreeAreChosen() {
+        let set: [ArrowsDraft.Pair: ArrowStrength] = [ArrowsDraft.Pair(from: hart, to: young): .significant,
+                                                      ArrowsDraft.Pair(from: reid, to: hart): .light]
+        let three = arrowsDraft([hart, young, reid], strengths: set)
+        #expect(MentoringPresentation.setTheRestToNoneTitle(three) == "Set the rest to None")
+        #expect(MentoringPresentation.setTheRestToNoneTitle(three)
+                == "Set the rest to \(AdvisorText.name(ArrowStrength.none))")
+
+        let filled = MentoringPresentation.settingTheRestToNone(three)
+        #expect(filled.id == three.id)
+        #expect(filled.squad == three.squad)
+        #expect(filled.members == three.members)
+        #expect(filled.strengths == [
+            ArrowsDraft.Pair(from: hart, to: young): .significant, ArrowsDraft.Pair(from: hart, to: reid): ArrowStrength.none,
+            ArrowsDraft.Pair(from: young, to: hart): ArrowStrength.none, ArrowsDraft.Pair(from: young, to: reid): ArrowStrength.none,
+            ArrowsDraft.Pair(from: reid, to: hart): .light, ArrowsDraft.Pair(from: reid, to: young): ArrowStrength.none])
+        // Every pair is set now: nothing is left to set, and setting it again changes nothing.
+        #expect(MentoringPresentation.setTheRestToNoneTitle(filled) == nil)
+        #expect(MentoringPresentation.settingTheRestToNone(filled) == filled)
+
+        // With fewer than three chosen there are no six rows to fill.
+        let two = arrowsDraft([hart, young], strengths: [ArrowsDraft.Pair(from: hart, to: young): .light])
+        #expect(MentoringPresentation.settingTheRestToNone(two) == two)
+        #expect(MentoringPresentation.setTheRestToNoneTitle(two) == nil)
+        #expect(MentoringPresentation.setTheRestToNoneTitle(arrowsDraft([])) == nil)
     }
 
     @Test func theStrengthChoicesAreNotReadThenTheGamesFour() {

@@ -4,12 +4,13 @@ import SwiftUI
 
 /// What the Mentoring tab has open, as a sheet over the Training screen: a squad's hierarchy, a group's members, or the
 /// arrows of three players. `close` closes it, after a save or on Cancel; `open` puts another in its place, as the
-/// arrows of a group just added.
+/// arrows of a group just added, or closes it when handed nil. The group editor's Save closes only through `open`, so
+/// every caller gives it.
 struct MentoringEditorSheet: View {
     let model: AppModel
     let editing: MentoringEditing
     let close: () -> Void
-    var open: (MentoringEditing?) -> Void = { _ in }
+    let open: (MentoringEditing?) -> Void
 
     var body: some View {
         switch editing {
@@ -162,9 +163,9 @@ struct GroupEditor: View {
 }
 
 /// The arrows of three players as the game's Mentoring screen shows them: once three are chosen, a row for each of
-/// their six arrows with a menu of its strength, above the heavy rule, and under it the squad's players to choose from,
-/// as the group editor offers them. How many are chosen and why the arrows cannot be saved yet sit by Save, which
-/// waits until they can.
+/// their six arrows with a menu of its strength, and under them, while any is not read, a button setting those to None,
+/// above the heavy rule; under it the squad's players to choose from, as the group editor offers them. How many are
+/// chosen and why the arrows cannot be saved yet sit by Save, which waits until they can.
 struct ArrowsEditor: View {
     let model: AppModel
     let done: () -> Void
@@ -184,6 +185,14 @@ struct ArrowsEditor: View {
                 ForEach(model.arrowRows(for: draft)) { row in
                     ArrowMenuRow(row: row, strength: Binding(get: { draft.strengths[row.id] },
                                                              set: { draft.strengths[row.id] = $0 }))
+                }
+                if let setTheRest = MentoringPresentation.setTheRestToNoneTitle(draft) {
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        Button(setTheRest) { draft = MentoringPresentation.settingTheRestToNone(draft) }
+                            .buttonStyle(.secondary)
+                    }
+                    .padding(.vertical, Theme.Spacing.xs)
                 }
             }
         } rows: {

@@ -824,6 +824,22 @@ import LineupEngine
         #expect(t.reopened().mentoring.arrows == t.model.mentoring.arrows)
     }
 
+    @Test func settingTheRestToNoneThenSavingKeepsSixReadings() throws {
+        let t = try both()
+        let trio = Array(ids(t.model, .firstTeam)[0..<3])
+        var draft = t.model.arrowsDraft(for: .firstTeam, members: trio)
+        let read = pairs(trio)[1]
+        draft.strengths[read] = .average
+        t.model.saveArrows(MentoringPresentation.settingTheRestToNone(draft))
+        #expect(t.model.mentoring.arrows.count == 6)
+        #expect(reading(t.model, read)?.strength == .average)
+        for pair in pairs(trio) where pair != read {
+            #expect(reading(t.model, pair) == ArrowReading(from: pair.from, to: pair.to, squad: .firstTeam,
+                                                           strength: ArrowStrength.none, readOn: today))
+        }
+        #expect(MentoringPresentation.setTheRestToNoneTitle(t.model.arrowsDraft(for: .firstTeam, members: trio)) == nil)
+    }
+
     @Test func savingItAgainUnchangedKeepsEveryDay() throws {
         let t = try both()
         let trio = Array(ids(t.model, .firstTeam)[0..<3])

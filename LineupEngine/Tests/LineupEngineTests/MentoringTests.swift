@@ -210,13 +210,40 @@ import Testing
         #expect(shape(sFree) == [["x", "y", "z"]])
         #expect(sFree.notPlaced == [NotPlaced(player: id("K"), name: "K", age: 18, reason: .noThirdFree)])
         #expect(sFree.notPlaced.map(AdvisorText.notPlaced)
-                == ["K (18): no third player is left free to make a group with him and a player who could influence him."])
+                == ["K (18): no third player is left free who could join him and a player who could influence him "
+                    + "without pulling a player down."])
 
         // Two more juniors who gain most give S a group too: then every player who could influence K is taken.
         let sTaken = try report(players + [player("W1", 18, [.professionalism: 1]), player("W2", 18, [.professionalism: 1])],
                                 dynamics: dynamics)
         #expect(shape(sTaken) == [["w1", "w2", "x"], ["s", "y", "z"]])
         #expect(notPlaced(sTaken) == ["k": .influencersTaken])
+    }
+
+    @Test func anUnusedPlayerWhoseOwnArrowIsHarmfulCannotHelp() throws {
+        // U is better than K in Professionalism and worse in Ambition by less: his Light arrow into K has a gain, but it
+        // is harmful, so he can never be grouped with K. Only X, who is in a suggested group, could help K.
+        let dynamics = levels(["X": .teamLeader, "U": .influential])
+        let players = [senior("X"), senior("U", 30, [.ambition: 8]), player("Y", 18, [.professionalism: 1]),
+                       player("Z", 18, [.professionalism: 1]), player("K", 18)]
+        let result = try report(players, dynamics: dynamics)
+        #expect(shape(result) == [["x", "y", "z"]])
+        #expect(notPlaced(result) == ["k": .influencersTaken, "u": .noInfluence])
+    }
+
+    @Test func aHelperLeftFreeWithOnlyAHarmfulThirdHasNoThirdFree() throws {
+        // X leads Y and Z; S could help K and T, but T's arrow into K is harmful, so the three left make no group.
+        let dynamics = levels(["X": .teamLeader, "S": .influential])
+        let players = [senior("X"), senior("S"), player("Y", 18, [.professionalism: 1]),
+                       player("Z", 18, [.professionalism: 1]), player("K", 18), player("T", 18, [.professionalism: 5])]
+        let result = try report(players, dynamics: dynamics, arrows: [reading("T", "K", .light)])
+        #expect(shape(result) == [["x", "y", "z"]])
+        #expect(notPlaced(result) == ["k": .noThirdFree, "t": .noThirdFree])
+        #expect(result.notPlaced.map(AdvisorText.notPlaced) == [
+            "K (18): no third player is left free who could join him and a player who could influence him "
+                + "without pulling a player down.",
+            "T (18): no third player is left free who could join him and a player who could influence him "
+                + "without pulling a player down."])
     }
 
     @Test func tiesGoToFewerSeniorsThenMoreArrowsReadThenTheLowestKeys() throws {
@@ -324,6 +351,18 @@ import Testing
         #expect(nothingToGain.suggestions.isEmpty)
         #expect(notPlaced(nothingToGain) == ["a": .nothingToGain, "b": .nothingToGain, "lead": .noInfluence])
 
+        // Lead is worse than both everywhere it counts: still nothing to gain, though his arrows would pull them down.
+        let worseEverywhere = try report([player("Lead", 30, [.professionalism: 5, .ambition: 5]), player("A", 18),
+                                          player("B", 18)], dynamics: leader)
+        #expect(notPlaced(worseEverywhere) == ["a": .nothingToGain, "b": .nothingToGain, "lead": .noInfluence])
+
+        // Lead is better in Ambition and worse in Professionalism by more: he gains them nothing and would pull them
+        // down.
+        let betterInOne = try report([player("Lead", 30, [.professionalism: 8, .ambition: 10]),
+                                      player("A", 18, [.ambition: 5]), player("B", 18, [.ambition: 5])], dynamics: leader)
+        #expect(betterInOne.suggestions.isEmpty)
+        #expect(notPlaced(betterInOne) == ["a": .wouldHarm, "b": .wouldHarm, "lead": .noInfluence])
+
         let wouldHarm = try report([senior("Lead", 30, [.ambition: 6]), player("A", 18, [.ambition: 9]),
                                     player("B", 18, [.ambition: 9])], dynamics: leader)
         #expect(notPlaced(wouldHarm)["a"] == .wouldHarm)
@@ -385,7 +424,8 @@ import Testing
                                player("Cal", 18)],
                               arrows: [reading("Ann", "Ben", .light), reading("Ben", "Ann", .light)])
         #expect(pair.suggestions.isEmpty)
-        #expect(notPlaced(pair) == ["ann": .nothingToGain, "ben": .wouldHarm, "cal": .noInfluence])
+        // Ben's arrow into Ann nets nothing, but would pull her down in Professionalism.
+        #expect(notPlaced(pair) == ["ann": .wouldHarm, "ben": .wouldHarm, "cal": .noInfluence])
 
         let ring = try report([player("A", 18), player("B", 18), player("C", 18)],
                               arrows: [reading("A", "B", .light), reading("B", "C", .light), reading("C", "A", .light)])
