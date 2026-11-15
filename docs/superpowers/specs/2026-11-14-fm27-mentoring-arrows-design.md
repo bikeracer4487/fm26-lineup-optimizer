@@ -113,7 +113,7 @@ A suggestion **rests on** the arrows that give its candidates their gain. It is 
 
 A member of a suggested group who is the source of an arrow with gain and is on loan at the club or advised to leave carries the first design's caution, since the group ends when he goes. Such a player is still never a candidate.
 
-Groups are found as now, most to gain first: the group of greatest value is taken, its three players are set aside, and so on until no group meets the two rules. Ties: more of the group's arrows read, then the players' keys.
+Groups are found as now, most to gain first: the group of greatest value is taken, its three players are set aside, and so on until no group meets the two rules. Ties: the group that uses fewer players with a level above Others, so that a senior is not spent in a group where he adds nothing and is free for a junior later; then more of the group's arrows read; then the players' keys.
 
 In a squad where nobody has a level above Others, every guess is None, so nothing is suggested by guessing; the tab says the hierarchy must be entered first. Arrows the owner has read in that squad are facts and still count: a group whose read arrows meet the two rules is suggested. The first design's "by age alone" is removed.
 
@@ -187,13 +187,12 @@ The pictures gain: the arrows sheet; a suggestion resting on readings; one resti
 
 ## 11. The owner's readings as a fixture
 
-The tests of sections 8.2 to 8.5 should run on what the owner actually read. That needs three things kept together under `LineupEngine/Tests/LineupEngineTests/Fixtures/`, and each needs the owner's agreement, because they name his real players in a public repository and the project's rule lets player data in only as a fixture:
+The tests of sections 8.2 to 8.5 run on what the owner actually read. Two files under `LineupEngine/Tests/LineupEngineTests/Fixtures/mentoring/` hold it, both saved with his agreement on 14 November 2026, because they name his real players in a public repository and the project's rule lets player data in only as a fixture:
 
-- **The readings**: the 24 groups he read on 14 November 2026, with every arrow that was not None and the pairs he re-read. They exist today only in this design's working notes.
-- **The squad on that day**: a new capture of the first team taken with `tools/capture_fmrte_paste.sh`, so that the players' identities and personality values are the ones the readings belong to. The existing captures are a day older.
-- **The hierarchy he entered**: each first-team player's level and social group, as they stand in the app. The project's rule is that nothing is copied from the app's saved state into the repository, so this is copied only if he says so; otherwise he reads the levels out again.
+- `arrow-readings-2026-11-14.json`: the 24 groups he read, with every arrow that was above None and the pairs he read a second time.
+- `first-team-2026-11-14.json`: each first-team player's age, the level and social group he entered, and the four personality values the advice counts. It was copied from the app's saved state on his instruction ("Yes, copy those from the app's saved state"), in place of a fresh capture; nothing else was taken from there.
 
-With the fixture a test can say how often the guess of section 8.2 agrees with what he read, so a later change to the guess can be seen to help or not. Without it, the same tests run on made-up players and that check is dropped.
+With them a test says how often the guess of section 8.2 agrees with what he read, so a later change to the guess can be seen to help or not.
 
 ## 12. Testing
 
