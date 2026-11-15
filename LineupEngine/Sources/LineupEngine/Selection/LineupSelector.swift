@@ -273,12 +273,20 @@ public struct LineupSelector: Sendable {
 
     /// A risk rule's exclusion, else `.rejected` if the manager rejected him, else nil.
     private func exclusion(for player: Player, _ request: SelectionRequest) -> Exclusion? {
-        let loan = LoanStatus.of(player, ownClub: request.ownClub)
-        if let ruled = RiskRules.exclusion(for: player, loan: loan, importance: request.importance,
-                                           isNextFixture: request.isNextFixture, parameters: parameters) {
+        Self.exclusion(for: player, ownClub: request.ownClub, importance: request.importance,
+                       isNextFixture: request.isNextFixture, rejected: request.rejected, parameters: parameters)
+    }
+
+    /// Why the selector keeps a player out of a fixture whatever his value: a risk rule's exclusion, else `.rejected` if
+    /// the manager rejected him, else nil. The planner asks the same before it chooses the successors to favour.
+    static func exclusion(for player: Player, ownClub: String?, importance: Importance, isNextFixture: Bool,
+                          rejected: Set<PlayerID>, parameters: EngineParameters) -> Exclusion? {
+        let loan = LoanStatus.of(player, ownClub: ownClub)
+        if let ruled = RiskRules.exclusion(for: player, loan: loan, importance: importance,
+                                           isNextFixture: isNextFixture, parameters: parameters) {
             return ruled
         }
-        return request.rejected.contains(player.id) ? .rejected : nil
+        return rejected.contains(player.id) ? .rejected : nil
     }
 
     private func pick(_ assignment: SlotAssignment, _ player: Player, rating: SlotRating, fitness: FitnessFactors,

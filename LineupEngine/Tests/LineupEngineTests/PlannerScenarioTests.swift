@@ -363,6 +363,108 @@ import Testing
         #expect(on.fixtures.contains { planned in planned.lineup.picks.contains { $0.adjustments.contains { $0.kind == .successor } } })
     }
 
+    @Test func theTwoAtMediumAreSuccessorsWhoCanBePicked() throws {
+        // Three 19-year-olds, each natural at one slot, each a little below its first choice and within what ×1.05 can
+        // overturn: at striker the closest, at left back the next, at central attacking midfield the furthest.
+        func young(_ name: String, at slot: SlotID, _ attributes: [Attribute: Int]) throws -> Player {
+            let assignment = try #require(assignments.first { $0.slot == slot })
+            return Player.fixture(name: name, age: 19, all: 14, attributes: attributes,
+                                  familiarity: Dictionary(uniqueKeysWithValues: Set([assignment.ipPosition,
+                                                                                     assignment.oopPosition]).map { ($0, 20) }),
+                                  currentAbility: 100, potentialAbility: 130)
+        }
+        let closest = try young("Young striker", at: .ST_C, [.anticipation: 11])
+        let next = try young("Young left back", at: .D_L, [.pace: 11])
+        let furthest = try young("Young playmaker", at: .AM_C, [.pace: 10])
+        let squad = try PlannerFixture.squad(first: 14, second: 12)
+        let players = squad + [closest, next, furthest]
+        let shares = try [(closest, SlotID.ST_C), (next, .D_L), (furthest, .AM_C)].map { player, slot in
+            try rating(player.id, at: slot, in: players) / rating(id(slot), at: slot, in: players)
+        }
+        try #require(shares[0] > shares[1] && shares[1] > shares[2] && shares[2] > 1 / 1.05 && shares[0] < 1)
+        let outlooks = try planner.developmentOutlooks(for: fixture("m", .medium, day: 0), players: players,
+                                                       ownClub: "Oxford City", retraining: [])
+        for (player, slot) in [(closest, SlotID.ST_C), (next, .D_L), (furthest, .AM_C)] {
+            let band = try #require(outlooks[player.id]?.slots.first { $0.slot == slot }?.band)
+            try #require(band == .close || band == .onCourse)
+        }
+
+        func favoured(_ planned: PlannedFixture) -> Set<PlayerID> {
+            Set(planned.lineup.picks.filter { $0.adjustments.contains { $0.kind == .successor } }.map(\.player))
+        }
+        // All three can be picked: the two closest are favoured and start, the furthest does not.
+        let all = try plan([fixture("m", .medium, day: 0)], players, settings: PlanSettings(savingPlayers: 0)).fixtures[0]
+        #expect(favoured(all) == [closest.id, next.id])
+        #expect(!starters(all).contains(furthest.id))
+        // The closest is injured: he takes no place, so the other two are favoured and start.
+        let injured = players.map { player in
+            var player = player
+            if player.id == closest.id { player.isInjured = true }
+            return player
+        }
+        let without = try plan([fixture("m", .medium, day: 0)], injured, settings: PlanSettings(savingPlayers: 0)).fixtures[0]
+        #expect(favoured(without) == [next.id, furthest.id])
+        #expect(starters(without).isSuperset(of: [next.id, furthest.id]))
+        // So does one the owner has turned down for the fixture.
+        var rejectedFixture = fixture("m", .medium, day: 0)
+        rejectedFixture.rejected = [closest.id]
+        let rejected = try plan([rejectedFixture], players, settings: PlanSettings(savingPlayers: 0)).fixtures[0]
+        #expect(favoured(rejected) == [next.id, furthest.id])
+    }
+
+    @Test func theOutlooksForATacticServeEveryFixtureOnItAndThePlanIsUnchanged() throws {
+        // A successor at striker and a prospect the floor favours, so the outlooks change picks. Renaming a fixture's
+        // tactic makes it a different tactic to the planner, so a plan whose every fixture has its own renamed copy
+        // works the outlooks out for each fixture; with one tactic they are worked out once. The plans must be the same.
+        var players = try PlannerFixture.squad(first: 14, second: 12)
+        players.append(successor([.finishing: 15, .composure: 15]))
+        players.append(Player.fixture(name: "D_L prospect", age: 20, all: 13, attributes: [.professionalism: 1],
+                                      familiarity: [.defenderLeft: 20], currentAbility: 100, potentialAbility: 130))
+        // The same shape with the striker on the left: the young striker's slot is ST_L there, not ST_C.
+        var target = tactic
+        target.name = "Sample 4-2-3-1, striker on the left"
+        target.inPossession[.ST_L] = target.inPossession.removeValue(forKey: .ST_C)
+        target.outOfPossession[.ST_L] = target.outOfPossession.removeValue(forKey: .ST_C)
+        target.mapping[.ST_C] = nil
+        target.mapping[.ST_L] = .ST_L
+        let importances: [Importance] = [.medium, .low, .sharpness, .medium, .low]
+        func fixtures(_ tactics: [Tactic]) -> [Fixture] {
+            importances.indices.map { i in
+                Fixture(id: FixtureID("f\(i)"), date: day0.adding(days: 4 * i), opponent: "Opponent \(i)",
+                        importance: importances[i], tactic: tactics[i])
+            }
+        }
+        func renamed(_ tactics: [Tactic]) -> [Tactic] {
+            tactics.enumerated().map { i, tactic in
+                var copy = tactic
+                copy.name += " (\(i))"
+                return copy
+            }
+        }
+        let settings = PlanSettings(savingPlayers: 0)
+        let same = Array(repeating: tactic, count: importances.count)
+        let once = try plan(fixtures(same), players, settings: settings)
+        #expect(once == (try plan(fixtures(renamed(same)), players, settings: settings)))
+        #expect(once.fixtures.contains { planned in planned.lineup.picks.contains { $0.adjustments.contains { $0.kind == .successor } } })
+        #expect(once.fixtures.contains { planned in planned.lineup.picks.contains { $0.adjustments.contains { $0.kind == .development } } })
+
+        // Two tactics in turn: each fixture gets its own tactic's outlooks, in which the young striker's slot differs.
+        let young = PlayerID(key: PlayerID.normalise("ST young"))
+        let slots = try [tactic, target].map { tactic in
+            try #require(try planner.developmentOutlooks(
+                for: Fixture(id: FixtureID("x"), date: day0, opponent: "X", importance: .low, tactic: tactic),
+                players: players, ownClub: "Oxford City", retraining: [])[young]).slots.map(\.slot)
+        }
+        #expect(slots == [[.ST_C], [.ST_L]])
+        let mixed = [tactic, target, tactic, target, tactic]
+        let alternating = try plan(fixtures(mixed), players, settings: settings)
+        #expect(alternating == (try plan(fixtures(renamed(mixed)), players, settings: settings)))
+        // On the left-striker tactic he is favoured at ST_L, which only that tactic's outlooks hold.
+        #expect(alternating.fixtures[1].lineup.picks.contains { pick in
+            pick.slot == .ST_L && pick.adjustments.contains { $0.kind == .successor }
+        })
+    }
+
     // MARK: - Marked to sell or loan out
 
     /// A striker of 28 with no room to grow, so no other rule favours him, a little below the first-choice striker.

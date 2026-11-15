@@ -47,6 +47,8 @@ public enum ImportanceRules {
         let recent = context.history.recentSlots(
             of: player.id, before: context.date, limit: parameters.stabilityAnchorRun.value)
         let floor = developmentFloor(player, context, parameters)
+        // The floor goes only to the slots he can play, as his outlook lists them.
+        let playable = Set(context.outlooks[player.id]?.slots.map(\.slot) ?? [])
 
         var bySlot: [SlotID: [Adjustment]] = [:]
         for assignment in context.assignments {
@@ -61,9 +63,9 @@ public enum ImportanceRules {
                     found.append(favour)
                 }
             } else {
-                // The floor is the same at every slot; it is kept in each slot's own list so the successor's favour
-                // can take its place at one. It and retraining multiply.
-                found += floor
+                // The floor is the same at every slot he can play; it is kept in each slot's own list so the
+                // successor's favour can take its place at one. It and retraining multiply.
+                if playable.contains(assignment.slot) { found += floor }
                 found += retrained
             }
             found += stability(recent, assignment, context, parameters)
@@ -72,11 +74,12 @@ public enum ImportanceRules {
         return (everySlot.sorted(by: inKindOrder), bySlot)
     }
 
-    /// The successors a medium fixture may favour: among `players` who are a successor at some slot of the fixture's
-    /// tactic and have not had their matches this month, the `successorsFavouredAtMedium` closest to their first choice.
-    /// Closest is the greatest of his rating ÷ the first choice's rating over his successor slots, where a first choice
-    /// rated 0 counts as already passed (infinitely close); ties go to the lower key. The planner puts the result in
-    /// `RuleContext.successorsFavoured` for a medium fixture; low and sharpness fixtures have no cap.
+    /// The successors a medium fixture may favour: among `players` (the planner hands only those it could pick for the
+    /// fixture) who are a successor at some slot of the fixture's tactic and have not had their matches this month, the
+    /// `successorsFavouredAtMedium` closest to their first choice. Closest is the greatest of his rating ÷ the first
+    /// choice's rating over his successor slots, where a first choice rated 0 counts as already passed (infinitely
+    /// close); ties go to the lower key. The planner puts the result in `RuleContext.successorsFavoured` for a medium
+    /// fixture; low and sharpness fixtures have no cap.
     public static func successors(players: [Player], context: RuleContext, parameters: EngineParameters) -> Set<PlayerID> {
         let ranked: [(id: PlayerID, closeness: Double)] = players.compactMap { player in
             let slots = successorSlots(player, context, parameters)
@@ -164,11 +167,11 @@ public enum ImportanceRules {
                            reason: "Needs minutes: sharpness \(Display.percent(player.sharpness)) (×\(Display.twoDecimals(factor)))")]
     }
 
-    /// The floor every developing prospect gets in a low or sharpness fixture: aged `developingUpToAge` or under, with
-    /// potential at least `prospectHeadroom` times his ability and an outlook that is not markedly lower. Its size is
-    /// what a match is worth to his growth at his age (`developmentFactors`, or `developmentFactorLowProfessionalism`
-    /// for a young teenager with low Professionalism), scaled by the Development setting. He has none once he has had
-    /// his matches for the month (`hasHadHisMatches`).
+    /// The floor every developing prospect gets in a low or sharpness fixture, at each slot his outlook says he can play:
+    /// aged `developingUpToAge` or under, with potential at least `prospectHeadroom` times his ability and an outlook
+    /// that is not markedly lower. Its size is what a match is worth to his growth at his age (`developmentFactors`, or
+    /// `developmentFactorLowProfessionalism` for a young teenager with low Professionalism), scaled by the Development
+    /// setting. He has none once he has had his matches for the month (`hasHadHisMatches`).
     private static func developmentFloor(_ player: Player, _ context: RuleContext,
                                          _ parameters: EngineParameters) -> [Adjustment] {
         switch context.importance {
@@ -224,17 +227,18 @@ public enum ImportanceRules {
 
     /// The slots of the fixture's tactic where he is a successor, in his outlook's order, each with the first choice he
     /// is expected to pass and whether he is close. He is aged `developingUpToAge` or under with an outlook that is not
-    /// markedly lower; he is not the first choice at the slot; and his band against its first choice is close, or on
-    /// course for a player older than `successorCloseOnlyUpToAge`. The band already compares a first choice who is
-    /// developing too at his own reach.
+    /// markedly lower; he is first choice at no slot of the tactic (he has his matches already, and a favour would only
+    /// move him between slots); and his band against the slot's first choice is close, or on course for a player older
+    /// than `successorCloseOnlyUpToAge`. The band already compares a first choice who is developing too at his own reach.
     private static func successorSlots(_ player: Player, _ context: RuleContext, _ parameters: EngineParameters)
         -> [(slot: SlotOutlook, rival: Rival, isClose: Bool)] {
         guard player.age <= parameters.developingUpToAge.value,
               let outlook = context.outlooks[player.id], !outlook.isMarkedlyLower else { return [] }
         let inTactic = Set(context.assignments.map(\.slot))
-        return outlook.slots.compactMap { slot in
-            guard inTactic.contains(slot.slot), !slot.isFirstChoice, let rival = slot.firstChoice,
-                  let band = slot.band else { return nil }
+        let slots = outlook.slots.filter { inTactic.contains($0.slot) }
+        guard !slots.contains(where: \.isFirstChoice) else { return [] }
+        return slots.compactMap { slot in
+            guard let rival = slot.firstChoice, let band = slot.band else { return nil }
             switch band {
             case .close:
                 return (slot, rival, true)

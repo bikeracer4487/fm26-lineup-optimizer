@@ -102,8 +102,14 @@ public struct Planner: Sendable {
         let retraining = Self.latestRetraining(request.retraining)
         // For the development favours, each fixture's outlooks come from a second set of tiers with injured players
         // kept in, so an injury neither hides a young player nor moves whom he is compared with.
-        let outlooksByFixture = try fixtures.map {
-            try developmentOutlooks(for: $0, players: players, ownClub: request.ownClub, retraining: retraining)
+        // They depend on the fixture only through its tactic, so they are worked out once for each distinct tactic.
+        var outlooksByTactic: [(tactic: Tactic, outlooks: [PlayerID: Outlook])] = []
+        let outlooksByFixture = try fixtures.map { fixture in
+            if let known = outlooksByTactic.first(where: { $0.tactic == fixture.tactic }) { return known.outlooks }
+            let outlooks = try developmentOutlooks(for: fixture, players: players, ownClub: request.ownClub,
+                                                   retraining: retraining)
+            outlooksByTactic.append((fixture.tactic, outlooks))
+            return outlooks
         }
         var history = StartHistory(request.confirmed)
         let known = Set(players.map(\.id))
@@ -142,10 +148,16 @@ public struct Planner: Sendable {
                                       ownClub: request.ownClub, history: history, tiers: tiersByFixture[index], retraining: retraining,
                                       marks: request.marks, stability: settings.stability,
                                       outlooks: outlooksByFixture[index], development: settings.development)
-            // In an ordinary match only the closest successors are favoured; in a lesser one any successor is.
+            // In an ordinary match only the closest successors are favoured; in a lesser one any successor is. Only
+            // players the selector could pick for this fixture take a place among them.
             switch fixture.importance {
             case .medium:
-                context.successorsFavoured = ImportanceRules.successors(players: onTheDay, context: context,
+                let pickable = onTheDay.filter { player in
+                    LineupSelector.exclusion(for: player, ownClub: request.ownClub, importance: fixture.importance,
+                                             isNextFixture: index == 0, rejected: fixture.rejected,
+                                             parameters: parameters) == nil
+                }
+                context.successorsFavoured = ImportanceRules.successors(players: pickable, context: context,
                                                                         parameters: parameters)
             case .high, .low, .sharpness:
                 break

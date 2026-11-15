@@ -199,28 +199,56 @@ import Testing
     }
 
     /// An outlook for `player` at `level`, as the planner hands the rules one: its estimate carries his age, abilities
-    /// and Professionalism.
-    func outlook(_ player: Player, _ level: ReachLevel? = .couldMakeSecond, slots: [SlotOutlook] = []) -> Outlook {
+    /// and Professionalism. With no slots given, the slots he can play are left back and striker, each with Smith as
+    /// first choice and a band that makes him nobody's successor; he cannot play any other slot.
+    func outlook(_ player: Player, _ level: ReachLevel? = .couldMakeSecond, slots: [SlotOutlook]? = nil) -> Outlook {
         let estimate = ReachEstimate(
             age: player.age, current: player.currentAbility, potential: player.potentialAbility,
             professionalism: player.attributes[.professionalism]!, ambition: 10, determination: 10, seasonGrowth: 10,
             bySeason: [Double(player.currentAbility), Double(player.potentialAbility)], reachesPotential: true,
             ambitionSlows: false, determinationSlows: false, professionalismHoldsBack: false)
-        return Outlook(player: player.id, estimate: estimate, slots: slots, best: nil, level: level, average: nil)
+        return Outlook(player: player.id, estimate: estimate, slots: slots ?? playable(.D_L, .ST_C), best: nil,
+                       level: level, average: nil)
     }
 
-    func outlooks(_ player: Player, _ level: ReachLevel? = .couldMakeSecond, slots: [SlotOutlook] = []) -> [PlayerID: Outlook] {
+    func outlooks(_ player: Player, _ level: ReachLevel? = .couldMakeSecond, slots: [SlotOutlook]? = nil) -> [PlayerID: Outlook] {
         [player.id: outlook(player, level, slots: slots)]
     }
 
-    /// The floor's factor: the same development adjustment at two different slots, and none in the every-slot list.
-    /// nil when he has none at either.
+    /// Slots he can play where he is neither first choice nor a successor: Smith is first choice and his band is possible.
+    func playable(_ slots: SlotID...) -> [SlotOutlook] {
+        slots.map { at($0, .possible) }
+    }
+
+    /// The floor's factor: the same development adjustment at the two slots he can play (left back and striker), none at
+    /// a slot he cannot play (goalkeeper, right back), and none in the every-slot list. nil when he has none.
     func floorFactor(_ r: (everySlot: [Adjustment], bySlot: [SlotID: [Adjustment]]),
                sourceLocation: SourceLocation = #_sourceLocation) -> Double? {
         #expect(every(r, .development) == nil, sourceLocation: sourceLocation)
+        #expect(slot(r, .GK, .development) == nil, sourceLocation: sourceLocation)
+        #expect(slot(r, .D_R, .development) == nil, sourceLocation: sourceLocation)
         let left = slot(r, .D_L, .development), striker = slot(r, .ST_C, .development)
         #expect(left == striker, sourceLocation: sourceLocation)
         return left?.factor
+    }
+
+    @Test func theFloorIsOnlyAtTheSlotsHeCanPlay() {
+        let p = young(19)
+        // At the slots his outlook lists, and nowhere else.
+        let r = run(p, .low, outlooks: outlooks(p, slots: playable(.D_L, .AM_C)))
+        #expect(slot(r, .D_L, .development)?.factor == 1.07)
+        #expect(slot(r, .AM_C, .development)?.factor == 1.07)
+        for other in [SlotID.GK, .ST_C, .D_R, .DM_L] {
+            #expect(slot(r, other, .development) == nil, "\(other)")
+        }
+        // An outlook with no slots gives no floor anywhere.
+        let none = run(p, .low, outlooks: outlooks(p, slots: []))
+        #expect(none.everySlot.isEmpty)
+        #expect(none.bySlot.values.allSatisfy { $0.isEmpty })
+        // A slot he is first choice at is one he can play.
+        let home = run(p, .low, outlooks: outlooks(p, nil, slots: [at(.D_L, nil, isFirstChoice: true)]))
+        #expect(slot(home, .D_L, .development)?.factor == 1.07)
+        #expect(slot(home, .ST_C, .development) == nil)
     }
 
     @Test func aProspectIsFavouredInALesserFixture() {
@@ -364,7 +392,7 @@ import Testing
 
     @Test func aSuccessorIsFavouredAtHisSlotInPlaceOfTheFloor() {
         let p = young(19)
-        let found = outlooks(p, .couldPassFirst, slots: [at(.D_L, .onCourse)])
+        let found = outlooks(p, .couldPassFirst, slots: [at(.D_L, .onCourse)] + playable(.ST_C, .D_R))
         for importance in [Importance.low, .sharpness] {
             let r = run(p, importance, outlooks: found)
             #expect(r.bySlot[.D_L] == [successor(1.15, "On course to pass Smith at left back: favoured for matches there (×1.15)")],
@@ -372,10 +400,12 @@ import Testing
             // The floor at his other slots, the same as before.
             #expect(r.bySlot[.ST_C] == [floor(1.07)], "\(importance)")
             #expect(r.bySlot[.D_R] == [floor(1.07)], "\(importance)")
+            // Nothing at a slot he cannot play.
+            #expect(r.bySlot[.GK] == [], "\(importance)")
             #expect(r.everySlot.isEmpty, "\(importance)")
             #expect(neverBoth(r), "\(importance)")
         }
-        // Without the slot he is no successor, and the floor is everywhere.
+        // Where he is only possible he is no successor, and the floor is at every slot he can play.
         let none = run(p, .low, outlooks: outlooks(p, .couldPassFirst))
         #expect(none.bySlot[.D_L] == [floor(1.07)])
     }
@@ -402,7 +432,8 @@ import Testing
         let seventeen = young(17)
         let onCourse = run(seventeen, .low, outlooks: outlooks(seventeen, .couldPassFirst, slots: [at(.D_L, .onCourse)]))
         #expect(onCourse.bySlot[.D_L] == [floor(1.02)])
-        let close = run(seventeen, .low, outlooks: outlooks(seventeen, .couldPassFirst, slots: [at(.D_L, .close)]))
+        let close = run(seventeen, .low, outlooks: outlooks(seventeen, .couldPassFirst,
+                                                            slots: [at(.D_L, .close)] + playable(.ST_C)))
         #expect(close.bySlot[.D_L] == [successor(1.15, "Close to passing Smith at left back: favoured for matches there (×1.15)")])
         #expect(close.bySlot[.ST_C] == [floor(1.02)])
         let eighteen = young(18)
@@ -411,12 +442,25 @@ import Testing
     }
 
     @Test func aFirstChoiceIsNotHisOwnSuccessor() {
-        // First choice at left back, an option at striker: the favour at striker only, the floor at left back.
+        // First choice at left back and close at striker: he has his matches, so nobody's successor: the floor at both.
         let p = young(20)
-        let r = run(p, .low, outlooks: outlooks(p, .couldPassFirst, slots: [at(.D_L, nil, isFirstChoice: true),
-                                                                            at(.ST_C, .onCourse)]))
+        let home = outlooks(p, .couldPassFirst, slots: [at(.D_L, nil, isFirstChoice: true), at(.ST_C, .close)])
+        for importance in [Importance.low, .sharpness] {
+            let r = run(p, importance, outlooks: home)
+            #expect(r.bySlot[.D_L] == [floor(1.07)], "\(importance)")
+            #expect(r.bySlot[.ST_C] == [floor(1.07)], "\(importance)")
+        }
+        #expect(run(p, .medium, outlooks: home).bySlot.values.allSatisfy { $0.isEmpty })
+        // He takes no place among the two at medium.
+        #expect(ImportanceRules.successors(players: [p], context: context(.medium, outlooks: home), parameters: parameters)
+            .isEmpty)
+        // The same player first choice nowhere gets the favour at the slot he is close at.
+        let away = outlooks(p, .couldPassFirst, slots: [at(.D_L, .possible), at(.ST_C, .close)])
+        let r = run(p, .low, outlooks: away)
         #expect(r.bySlot[.D_L] == [floor(1.07)])
-        #expect(r.bySlot[.ST_C] == [successor(1.15, "On course to pass Smith at striker: favoured for matches there (×1.15)")])
+        #expect(r.bySlot[.ST_C] == [successor(1.15, "Close to passing Smith at striker: favoured for matches there (×1.15)")])
+        #expect(ImportanceRules.successors(players: [p], context: context(.medium, outlooks: away), parameters: parameters)
+            == [p.id])
         // First choice at his only slot: nothing to pass, so the floor.
         let only = run(p, .low, outlooks: outlooks(p, nil, slots: [at(.D_L, nil, isFirstChoice: true)]))
         #expect(only.bySlot[.D_L] == [floor(1.07)])
@@ -550,7 +594,7 @@ import Testing
 
     @Test func theSettingAndTheMonthlyStopApplyToTheSuccessorToo() {
         let p = young(19)
-        let found = outlooks(p, .couldPassFirst, slots: [at(.D_L, .onCourse)])
+        let found = outlooks(p, .couldPassFirst, slots: [at(.D_L, .onCourse)] + playable(.ST_C))
         // The setting scales the favour as it scales the floor.
         let scaled = run(p, .low, outlooks: found, development: 0.4)
         #expect(abs((slot(scaled, .D_L, .successor)?.factor ?? 0) - 1.06) < 1e-9)
@@ -764,7 +808,7 @@ import Testing
                     outlooks: outlooks(p))
         #expect(r.everySlot.map(\.kind) == [.loanedIn, .consecutiveStarts, .needsSharpness])
         #expect(r.bySlot[.D_L]?.map(\.kind) == [.development, .retraining, .stability])
-        #expect(r.bySlot[.D_R]?.map(\.kind) == [.development])
+        #expect(r.bySlot[.ST_C]?.map(\.kind) == [.development])
     }
 
     @Test func aPlayerWithNothingSpecialHasNoAdjustments() {
