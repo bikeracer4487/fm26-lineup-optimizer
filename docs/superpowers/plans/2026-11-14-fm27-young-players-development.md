@@ -605,4 +605,6 @@ Found while building:
 - The standing line gives the season's growth rate even for a player already at his potential.
 - A markedly lower player who is in the second eleven of a thin squad is kept to play until someone better arrives.
 - Loan for matches can be advised on a contract type the tool does not read.
-- The install and the hands-on check of the real app are left to the owner: the build ends with the suites and the pictures, and the real app has not been opened on this change.
+- "Loan for matches" at the keep level is drawn in the muted tone in the Young players part, as "Keep and play" is, because the stamp takes the tone of the player's level; an advice to act on may be expected to stand out more.
+- A comment in Player Removal's code says a player not worth developing is "first choice nowhere", where the rule is first choice at no slot he can play, and the same comment has a stray short line.
+- The build was installed with `tools/build_app.sh` after both suites passed on a clean build with no warnings. The hands-on check of the real app is left to the owner; opening the real app on saved state from before this plan has been checked by tests only.
