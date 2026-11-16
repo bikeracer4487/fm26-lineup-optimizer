@@ -43,6 +43,12 @@
 //                                              matches on one day ("match-failed-…"); and its candidate picker on
 //                                              its own for the first fixture's goalkeeper ("match-picker-…") and
 //                                              for the remembered eleven's goalkeeper ("match-remembered-picker-…").
+//                                              It is drawn again later in a season, with twelve fixtures and
+//                                              the first six confirmed, so the notes do not fit and open at the
+//                                              next match to play ("match-midseason-…", and as starts
+//                                              "match-midseason-starts-…"), and on the fixture against a much
+//                                              stronger side with no pick selected, so the whole game plan
+//                                              part shows ("match-gameplan-…").
 //                                              The advisor screens ("elevens-…", "rest-…", "training-…",
 //                                              "removal-…") are drawn on the sample, empty ("<screen>-empty-…")
 //                                              and with a primary tactic that has a problem
@@ -175,7 +181,7 @@ func fail(_ message: String) -> Never {
 /// Which state of the sample data to start from.
 enum SampleState {
     case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange, pastFixtures
-    case afterConfirmingFirst, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
+    case afterConfirmingFirst, midSeason, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
     case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, nothingToRetrain, loanee
     case differingSuggestion
     case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
@@ -195,6 +201,7 @@ enum SampleState {
         case .pastFixtures: return try SampleData.modelWithPastFixtures(repositoryRoot: url)
         case .afterConfirmingFirst: return try SampleData.modelAfterConfirmingFirst(repositoryRoot: url)
         case .choices: return try SampleData.modelWithChoices(repositoryRoot: url)
+        case .midSeason: return try SampleData.modelMidSeason(repositoryRoot: url)
         case .missedFixture: return try SampleData.modelWithMissedFixture(repositoryRoot: url)
         case .missedEleven: return try SampleData.modelWithMissedEleven(repositoryRoot: url)
         case .missedElevenWhileStopped: return try SampleData.modelWithMissedElevenWhileThePlanIsStopped(repositoryRoot: url)
@@ -245,6 +252,18 @@ let narrowWindow = CGSize(width: 800, height: 700)
                              screens: [.matchSelection], matchStart: MatchStart(fixture: first.id))
     try ScreenPictures.write(model: confirmed, to: directory, size: size, variant: "after-confirm",
                              screens: [.matchSelection], matchStart: MatchStart(slot: .D_L))
+    // Twelve fixtures with the first six confirmed: the notes scroll, and open at the next match to play.
+    let midSeason = sampleModel(root, .midSeason)
+    try ScreenPictures.write(model: midSeason, to: directory, size: size, variant: "midseason", screens: [.matchSelection])
+    try ScreenPictures.write(model: midSeason, to: directory, size: size, variant: "midseason-starts",
+                             screens: [.matchSelection], matchStart: MatchStart(view: .starts))
+    // The third fixture, against a much stronger side, with no pick selected: the game plan part with all three sentences.
+    let sample = sampleModel(root)
+    guard let strong = sample.fixtures.first(where: { $0.opponentStrength == .muchStronger }) else {
+        fail("The sample model has no fixture against a much stronger side.")
+    }
+    try ScreenPictures.write(model: sample, to: directory, size: size, variant: "gameplan", screens: [.matchSelection],
+                             matchStart: MatchStart(fixture: strong.id))
     let missed = sampleModel(root, .missedFixture)
     guard let early = missed.fixtures.first else { fail("The sample model has no fixtures.") }
     try ScreenPictures.write(model: missed, to: directory, size: size, variant: "missed",

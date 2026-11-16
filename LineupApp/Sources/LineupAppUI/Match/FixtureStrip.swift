@@ -4,7 +4,9 @@ import SwiftUI
 
 /// The fixtures across the top as sticky notes, in date order: each one's date, opponent and importance, and whether
 /// it is confirmed or missed. The chosen one's magnet is blue and its note has a blue foot; clicking another chooses
-/// it. The notes share the width; when they do not fit, they keep their least width and scroll.
+/// it. The notes share the width; when they do not fit, they keep their least width and scroll. They open scrolled
+/// to the chosen note, so the matches already played are off to its left, and when another is chosen (by confirming,
+/// or from elsewhere on the screen) they scroll only as far as it takes to show it.
 struct FixtureStrip: View {
     let cells: [FixtureCell]
     let chosen: FixtureID?
@@ -13,10 +15,18 @@ struct FixtureStrip: View {
     var body: some View {
         ViewThatFits(in: .horizontal) {
             notes(fillsWidth: true)
-            ScrollView(.horizontal) {
-                notes(fillsWidth: false)
+            ScrollViewReader { scroller in
+                ScrollView(.horizontal) {
+                    notes(fillsWidth: false)
+                }
+                .scrollIndicators(.automatic)
+                .onAppear {
+                    if let chosen { scroller.scrollTo(chosen, anchor: .leading) }
+                }
+                .onChange(of: chosen) { _, now in
+                    if let now { withAnimation { scroller.scrollTo(now) } }
+                }
             }
-            .scrollIndicators(.automatic)
         }
     }
 

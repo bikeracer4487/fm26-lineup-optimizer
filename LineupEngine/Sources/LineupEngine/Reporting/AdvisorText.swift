@@ -90,6 +90,56 @@ public enum AdvisorText {
         }
     }
 
+    /// A game plan by the name the game gives it when a match is simulated.
+    public static func name(_ plan: GamePlan) -> String {
+        switch plan {
+        case .noGamePlan: "No game plan"
+        case .playForTheWin: "Play for the win"
+        case .playForTheDraw: "Play for the draw"
+        case .settleForADraw: "Settle for a draw"
+        case .goForABigWin: "Go for a big win"
+        case .smashAndGrab: "Smash and grab"
+        case .leaveItLate: "Leave it late"
+        case .pressureCooker: "Pressure cooker"
+        case .strangleTheGame: "Strangle the game"
+        }
+    }
+
+    /// "If you simulate this match: No game plan".
+    public static func gamePlanLine(_ advice: GamePlanAdvice) -> String {
+        "If you simulate this match: \(name(advice.recommended))"
+    }
+
+    /// Why that plan, which plans to avoid, and which came out best against a much stronger side: each only when the
+    /// advice has it. Every sentence says what test it rests on.
+    public static func gamePlanSentences(_ advice: GamePlanAdvice) -> [String] {
+        var sentences: [String] = []
+        switch advice.recommended {
+        case .noGamePlan:
+            sentences.append("No game plan plays your tactic as you set it. No test of FM27's game plans exists, so "
+                + "nothing shows that any of them does better.")
+        case .playForTheWin, .playForTheDraw, .settleForADraw, .goForABigWin, .smashAndGrab, .leaveItLate,
+             .pressureCooker, .strangleTheGame:
+            break
+        }
+        if !advice.avoid.isEmpty {
+            let they = advice.avoid.count == 1 ? "it sits" : "they sit"
+            sentences.append("Avoid \(planList(advice.avoid)): \(they) deep, which did worst in the one FM26 test of the "
+                + "plans and costs points in FM27 engine tests.")
+        }
+        if !advice.level.isEmpty {
+            let close = advice.level.count == 1 ? "" : ", too close to call between them"
+            sentences.append("Against a much stronger side like this one, \(planList(advice.level)) came out best of the "
+                + "plans in the one FM26 test\(close).")
+        }
+        return sentences
+    }
+
+    private static func planList(_ plans: [GamePlan]) -> String {
+        let names = plans.map(name)
+        return names.count <= 1 ? (names.first ?? "") : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
+    }
+
     /// A fixture's importance by name, as a menu or a badge shows it.
     public static func name(_ importance: Importance) -> String {
         switch importance {

@@ -401,6 +401,7 @@ public enum FitnessModel {
                              ("sharpnessMinDaysToNext", importance.sharpnessMinDaysToNext)] where days < 1 {
             found.append("importanceRules \(name) is \(days), not 1 or more")
         }
+        found += GamePlanAdvisor.problems(in: parameters.gamePlanRules.value)
         return found
     }
 }

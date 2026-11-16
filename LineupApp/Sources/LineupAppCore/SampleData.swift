@@ -193,6 +193,25 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model later in a season: seven more fixtures a week apart after the sample's five, and the first six
+    /// confirmed in turn, so Match Selection's notes do not fit the window and the next match to play is the seventh.
+    @MainActor public static func modelMidSeason(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        guard let last = model.fixtures.last else {
+            throw SampleDataError(description: "The sample model has no fixtures.")
+        }
+        for (week, letter) in ["F", "G", "H", "I", "J", "K", "L"].enumerated() {
+            model.addFixture(date: last.date.adding(days: 7 * (week + 1)), opponent: "Opponent \(letter)", importance: .medium)
+        }
+        for _ in 0..<6 {
+            guard let next = model.fixtures.first(where: { model.canConfirm($0.id) }) else {
+                throw SampleDataError(description: "The mid-season sample has no fixture that can be confirmed.")
+            }
+            model.confirm(next.id)
+        }
+        return model
+    }
+
     /// The sample model with the owner's choices in the first fixture: the best available U21 player fixed at AM C,
     /// the injured goalkeeper fixed in goal (an override the engine cannot use) and the striker left out.
     @MainActor public static func modelWithChoices(repositoryRoot: URL) throws -> AppModel {

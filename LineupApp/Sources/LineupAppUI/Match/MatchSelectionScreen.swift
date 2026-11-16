@@ -227,7 +227,14 @@ struct FixtureBody: View {
                     selection = MatchPresentation.selection(at: slot, in: plan)
                 }
             } detail: {
+                let gamePlan = model.gamePlanNote(for: plan)
                 VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                    // In this column, not under the heading, where another line would take height from the pitch.
+                    if let gamePlan {
+                        Text(gamePlan.line)
+                            .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     if let slot = selected, let detail = model.pickDetail(at: slot, in: plan) {
                         PickDetailView(model: model, fixture: plan.id, detail: detail) { selection = $0 }
                     } else {
@@ -237,6 +244,9 @@ struct FixtureBody: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     LeftOutList(model: model, plan: plan, omissions: LeftOutRow.rows(lineup.omissions))
+                    if let gamePlan {
+                        GamePlanPart(note: gamePlan)
+                    }
                     MarkKey()
                 }
             }

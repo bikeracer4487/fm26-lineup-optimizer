@@ -537,3 +537,68 @@ import LineupEngine
         #expect(model.fitnessNote != nil)
     }
 }
+
+@Suite @MainActor struct GamePlanNoteTests {
+    func plans(_ model: AppModel) throws -> [FixturePlan] {
+        guard case .ready(let plans) = model.planState else {
+            throw SampleDataError(description: "The sample plan is not ready: \(model.planState)")
+        }
+        return plans
+    }
+
+    @Test func aPlannedFixtureSaysWhichGamePlanToUseInTheEnginesWords() throws {
+        let model = try SampleData.model(repositoryRoot: Captures.repositoryRoot)
+        let similar = try #require(try plans(model).first { $0.fixture.opponentStrength == .similar })
+        let advice = try GamePlanAdvisor.advise(against: .similar, parameters: .fm27)
+        let note = try #require(model.gamePlanNote(for: similar))
+        #expect(note.line == "If you simulate this match: No game plan")
+        #expect(note.sentences == AdvisorText.gamePlanSentences(advice))
+        #expect(note.sentences.count == 2)
+        #expect(note.noteText == "(FM26-era numbers)")
+        #expect(GamePlanNote.heading == "Game plan")
+    }
+
+    @Test func aMuchStrongerOpponentAddsItsSentence() throws {
+        let model = try SampleData.model(repositoryRoot: Captures.repositoryRoot)
+        let strong = try #require(try plans(model).first { $0.fixture.opponentStrength == .muchStronger })
+        let note = try #require(model.gamePlanNote(for: strong))
+        #expect(note.sentences.count == 3)
+        #expect(note.sentences.last?.hasPrefix("Against a much stronger side like this one, Play for the draw") == true)
+    }
+
+    @Test func aConfirmedFixtureHasNoGamePlanNote() throws {
+        let model = try SampleData.modelAfterConfirmingFirst(repositoryRoot: Captures.repositoryRoot)
+        let all = try plans(model)
+        let confirmed = try #require(all.first)
+        guard case .confirmed = confirmed.body else {
+            Issue.record("The first sample fixture is not confirmed.")
+            return
+        }
+        #expect(model.gamePlanNote(for: confirmed) == nil)
+        #expect(model.gamePlanNote(for: try #require(all.dropFirst().first)) != nil)
+    }
+
+    @Test func aMissedFixtureHasNoGamePlanNote() throws {
+        let model = try SampleData.modelWithMissedFixture(repositoryRoot: Captures.repositoryRoot)
+        let missed = try #require(try plans(model).first)
+        guard case .missed = missed.body else {
+            Issue.record("The first fixture of the sample with a missed fixture is not missed.")
+            return
+        }
+        #expect(model.gamePlanNote(for: missed) == nil)
+    }
+}
+
+@Suite @MainActor struct MidSeasonSampleTests {
+    /// The sample the pictures use to show the notes opening at the next match to play.
+    @Test func theMidSeasonSampleHasSixConfirmedAndChoosesTheSeventh() throws {
+        let model = try SampleData.modelMidSeason(repositoryRoot: Captures.repositoryRoot)
+        guard case .ready(let plans) = model.planState else { Issue.record("not ready: \(model.planState)"); return }
+        #expect(model.fixtures.count == 12)
+        #expect(plans.prefix(6).allSatisfy { if case .confirmed = $0.body { true } else { false } })
+        #expect(plans.dropFirst(6).allSatisfy { if case .planned = $0.body { true } else { false } })
+        #expect(plans.count > 6)
+        #expect(MatchPresentation.initialFixture(in: plans) == plans[6].id)
+        #expect(plans[6].fixture.opponent == "Opponent G")
+    }
+}

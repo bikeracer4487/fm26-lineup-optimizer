@@ -718,6 +718,8 @@ public struct EngineParameters: Sendable {
     /// How much stronger or weaker than the owner's squad a pasted opponent squad must be, as whole percentages of the
     /// owner's best-eleven total, to read as stronger or weaker and as much stronger or much weaker.
     public var opponentStrengthLines: Parameter<OpponentStrengthLines>
+    /// Which game plan to use when a match is simulated, which never to use, and which came out best in the one test.
+    public var gamePlanRules: Parameter<GamePlanRules>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -1157,7 +1159,15 @@ public struct EngineParameters: Sendable {
             opponentStrengthLines: Parameter(
                 OpponentStrengthLines(strongerFromPercent: 5, muchStrongerFromPercent: 15), .derived,
                 source: "this design's choice (docs/superpowers/specs/2026-11-15-fm27-league-situation-and-opponent-squad-design.md): "
-                    + "no test relates a gap in ability to results; a ratio so the lines mean the same in every division"))
+                    + "no test relates a gap in ability to results; a ratio so the lines mean the same in every division"),
+            gamePlanRules: Parameter(
+                GamePlanRules(recommended: .noGamePlan, avoid: [.settleForADraw, .smashAndGrab, .strangleTheGame],
+                              levelAgainstMuchStronger: [.playForTheDraw, .playForTheWin]),
+                .carriedOverFM26,
+                source: "docs/Research/fm27-match-simulation-game-plans.md: no FM27 test of any game plan exists; the one FM26 "
+                    + "test (FRVR) was ten results a plan against one much stronger side, where Play for the draw and Play "
+                    + "for the win came out best and Settle for a draw, Smash and grab and Strangle the game worst; in "
+                    + "FM27 engine tests (Fm-Match-Lab) sitting deep cost points"))
     }()
 
     private static let removalSource = "ui/api/api_player_removal.py (branch customizable-tactics)"

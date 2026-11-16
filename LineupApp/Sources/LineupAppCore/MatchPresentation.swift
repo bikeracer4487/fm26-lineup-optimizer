@@ -319,6 +319,41 @@ public struct FixtureCell: Identifiable, Equatable, Sendable {
     }
 }
 
+// MARK: The game plan
+
+/// Which game plan to use if the match is simulated, as Match Selection shows it: the engine's line naming the plan,
+/// its sentences as written, and its evidence note.
+public struct GamePlanNote: Equatable, Sendable {
+    /// The heading over the sentences.
+    public static let heading = "Game plan"
+
+    /// "If you simulate this match: No game plan", in the engine's words.
+    public let line: String
+    /// Why, which plans to avoid, and which came out best against a much stronger side, in the engine's order.
+    public let sentences: [String]
+    /// The evidence note in brackets: "(FM26-era numbers)"; nil for FM27 evidence.
+    public let noteText: String?
+
+    public init(_ advice: GamePlanAdvice) {
+        line = AdvisorText.gamePlanLine(advice)
+        sentences = AdvisorText.gamePlanSentences(advice)
+        noteText = AdvisorText.note(for: advice.basis).map { "(\($0))" }
+    }
+}
+
+extension AppModel {
+    /// The game plan note for a fixture with a planned eleven, against the opponent's strength on the fixture; nil for
+    /// a confirmed or a missed fixture, which is not about to be played.
+    public func gamePlanNote(for plan: FixturePlan) -> GamePlanNote? {
+        guard case .planned = plan.body else { return nil }
+        // The planner made this plan with the same parameters, so it has already found them sound.
+        guard let advice = try? GamePlanAdvisor.advise(against: plan.fixture.opponentStrength, parameters: planParameters) else {
+            return nil
+        }
+        return GamePlanNote(advice)
+    }
+}
+
 // MARK: Starts
 
 /// The plan as a grid: a row for each player who starts at least once, a column for each fixture with a lineup.
