@@ -66,7 +66,7 @@ public struct GroupArrow: Equatable, Sendable {
     public let pulls: [Pull]
 }
 
-/// Why a suggested group may not last: a member whose arrow it rests on will go.
+/// Why a suggested group may not last: a member will go.
 public enum MemberCaution: Equatable, Sendable {
     case onLoanHere(PlayerID)
     case advisedToLeave(PlayerID)
@@ -164,7 +164,8 @@ extension Mentoring {
     ///
     /// The groups are found greedily: of every valid group among the free players not yet used, the one of greatest
     /// value is formed, then the same again among the players left, until none is valid. Ties go to the group with
-    /// fewer members above Others, then to the one with more of its six arrows read, then to the lowest keys. This does
+    /// fewer members who will go (on loan here or advised to leave), then to the one with fewer members above Others,
+    /// then to the one with more of its six arrows read, then to the lowest keys. This does
     /// not prove that no other set of groups has a greater total. Injury, bans and fitness are not looked at.
     ///
     /// A regrouping is looked for among the squad's live recorded groups, one at a time and then two at a time: the
@@ -302,6 +303,8 @@ extension Mentoring {
         let members: [Int]
         /// The sum over its candidates of the greatest gain of any one arrow into him.
         let value: Int
+        /// Members who will go: on loan here or advised to leave. The group ends when one does.
+        let going: Int
         /// Members with a level above Others.
         let seniors: Int
         /// Of its six arrows, those read.
@@ -309,9 +312,11 @@ extension Mentoring {
         /// For each candidate with a gain, the source and target of the arrow that gives it.
         let restsOn: [(from: Int, to: Int)]
 
-        /// Greater value first; then fewer seniors; then more arrows read; then the lowest keys.
+        /// Greater value first; then fewer members who will go; then fewer seniors; then more arrows read; then the
+        /// lowest keys.
         func isBetter(than other: Option) -> Bool {
             if value != other.value { return value > other.value }
+            if going != other.going { return going < other.going }
             if seniors != other.seniors { return seniors < other.seniors }
             if read != other.read { return read > other.read }
             return members.lexicographicallyPrecedes(other.members)
@@ -407,8 +412,9 @@ extension Mentoring {
             for from in members {
                 for to in members where to != from && arrows[from][to].isRead { read += 1 }
             }
+            let going = members.filter { !people[$0].isOwn || people[$0].isLeaving }.count
             let seniors = members.filter { people[$0].standing > .others }.count
-            return Option(members: members, value: value, seniors: seniors, read: read, restsOn: restsOn)
+            return Option(members: members, value: value, going: going, seniors: seniors, read: read, restsOn: restsOn)
         }
 
         /// Every group of three among `free`, ascending, in order.
@@ -495,9 +501,9 @@ extension Mentoring {
                 let x = a.arrow.arrow, y = b.arrow.arrow
                 return (x.from.key, x.to.key) < (y.from.key, y.to.key)
             }
-            let sources = Set(option.restsOn.map(\.from)).sorted()
-            let cautions = sources.filter { !people[$0].isOwn }.map { MemberCaution.onLoanHere(people[$0].player.id) }
-                + sources.filter { people[$0].isLeaving }.map { MemberCaution.advisedToLeave(people[$0].player.id) }
+            // Any member, whatever he gives: the group needs its three.
+            let cautions = members.filter { !people[$0].isOwn }.map { MemberCaution.onLoanHere(people[$0].player.id) }
+                + members.filter { people[$0].isLeaving }.map { MemberCaution.advisedToLeave(people[$0].player.id) }
             return SuggestedGroup(
                 members: members.map { SuggestedMember(player: people[$0].player.id, name: people[$0].player.name,
                                                         age: people[$0].player.age) },

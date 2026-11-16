@@ -280,7 +280,7 @@ import Testing
         #expect(oneAndNone.suggestions == one.suggestions)
     }
 
-    @Test func aSourceWhoWillGoCarriesTheCaution() throws {
+    @Test func aMemberWhoWillGoCarriesTheCaution() throws {
         let juniors = [player("A", 18), player("B", 18)]
         let onLoan = try report([senior("Lead", club: "Banbury United")] + juniors, dynamics: leader)
         #expect(shape(onLoan) == [["a", "b", "lead"]])
@@ -294,8 +294,61 @@ import Testing
 
         let thirdGoing = try report([senior("Lead"), player("Kid", 18), player("Going", 28, [.professionalism: 20])],
                                     dynamics: leader, leaving: [id("Going")])
+        // The third member gives and gains nothing, but the group still ends when he goes, as a recorded group's card
+        // says of him.
         #expect(shape(thirdGoing) == [["going", "kid", "lead"]])
-        #expect(thirdGoing.suggestions.first?.cautions == [])
+        #expect(thirdGoing.suggestions.first?.cautions == [.advisedToLeave(id("Going"))])
+
+        let thirdOnLoan = try report([senior("Lead"), player("Kid", 18),
+                                      player("Guest", 28, [.professionalism: 20], club: "Banbury United")], dynamics: leader)
+        #expect(shape(thirdOnLoan) == [["guest", "kid", "lead"]])
+        #expect(thirdOnLoan.suggestions.first?.cautions == [.onLoanHere(id("Guest"))])
+
+        let two = try report([senior("Lead", club: "Banbury United"), player("Kid", 18),
+                              player("Going", 28, [.professionalism: 20])], dynamics: leader, leaving: [id("Going")])
+        #expect(two.suggestions.first?.cautions == [.onLoanHere(id("Lead")), .advisedToLeave(id("Going"))])
+    }
+
+    @Test func aTieGoesToTheGroupWithFewerMembersWhoWillGo() throws {
+        // Ash and Bell are alike: at every ceiling, at Others and 28, they give and gain nothing. Ash has the lower key.
+        let thirds = [senior("Lead"), player("Kid", 18), player("Ash", 28, [.professionalism: 20]),
+                      player("Bell", 28, [.professionalism: 20])]
+        #expect(shape(try report(thirds, dynamics: leader)) == [["ash", "kid", "lead"]])
+        let ashGoing = try report(thirds, dynamics: leader, leaving: [id("Ash")])
+        #expect(shape(ashGoing) == [["bell", "kid", "lead"]])
+        #expect(ashGoing.suggestions.first?.cautions == [])
+
+        // Every arrow of Ash's group read, as after the owner recorded it and ended it: the one who is staying still
+        // comes first.
+        let allRead = [reading("Lead", "Kid", .average), reading("Kid", "Lead", .none), reading("Lead", "Ash", .none),
+                       reading("Ash", "Lead", .none), reading("Ash", "Kid", .none), reading("Kid", "Ash", .none)]
+        #expect(shape(try report(thirds, dynamics: leader, arrows: allRead, leaving: [id("Ash")])) == [["bell", "kid", "lead"]])
+        #expect(shape(try report(thirds, dynamics: leader, arrows: allRead)) == [["ash", "kid", "lead"]])
+
+        // A player on loan here goes too.
+        let guest = [senior("Lead"), player("Kid", 18), player("Ash", 28, [.professionalism: 20], club: "Banbury United"),
+                     player("Bell", 28, [.professionalism: 20])]
+        #expect(shape(try report(guest, dynamics: leader)) == [["bell", "kid", "lead"]])
+
+        // A senior who is staying is spent before a player who will go is used.
+        let spare = [senior("Lead"), senior("Vet", 31), player("Kid", 18), player("Ash", 28, [.professionalism: 20])]
+        let levelsOfTwo = levels(["Lead": .teamLeader, "Vet": .influential])
+        #expect(shape(try report(spare, dynamics: levelsOfTwo)) == [["ash", "kid", "lead"]])
+        #expect(shape(try report(spare, dynamics: levelsOfTwo, leaving: [id("Ash")])) == [["kid", "lead", "vet"]])
+    }
+
+    @Test func aMemberWhoWillGoIsStillUsedWhenNobodyElseCanMakeUpTheGroupOrWhenHisGroupGivesMore() throws {
+        // Nobody else is free: the group is still worth having until he goes.
+        let only = [senior("Lead"), player("Kid", 18), player("Ash", 28, [.professionalism: 20])]
+        let alone = try report(only, dynamics: leader, leaving: [id("Ash")])
+        #expect(shape(alone) == [["ash", "kid", "lead"]])
+        #expect(alone.suggestions.first?.cautions == [.advisedToLeave(id("Ash"))])
+
+        // A greater value comes before who will go: the leader who is leaving gives Kid more than Vet would.
+        let players = [senior("Lead"), player("Vet", 30, [.professionalism: 12]), player("Kid", 18),
+                       player("Ash", 28, [.professionalism: 20]), player("Bell", 28, [.professionalism: 20])]
+        let result = try report(players, dynamics: levels(["Lead": .teamLeader, "Vet": .teamLeader]), leaving: [id("Lead")])
+        #expect(result.suggestions.first?.members.map(\.player.key).contains("lead") == true)
     }
 
     @Test func aLoaneeOrALeaverIsNeverACandidateAndALoanedOutPlayerIsNowhere() throws {

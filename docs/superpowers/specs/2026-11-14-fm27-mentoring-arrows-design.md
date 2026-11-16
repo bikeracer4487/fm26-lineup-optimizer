@@ -222,6 +222,17 @@ The owner's request, after using the built tab: "the app doesn't tell me when an
 
 Limits. The suggested groups are left as they are, so a free player in a suggestion is never taken for a regrouping. Three or more groups are never broken up together. The groups are found greedily, as the suggestions are, so a better regrouping can exist and not be shown. The count behind it is the one that orders suggestions; it predicts nothing, and no number is shown. What a group has already changed in its members is not weighed against breaking it up.
 
+## 13b. Added on 15 November 2026: a member who will go
+
+The owner recorded a suggested group of Ellis Brown, Matty Taylor and Dejan Tetek. Its card said Brown was advised to leave; the suggestion had said nothing, because 8.4 gave the caution only to the source of an arrow with gain, and Brown only made up the three. When the owner ended the group, the same three were suggested again: with all six of their arrows now read, they won every tie on "more arrows read".
+
+Two changes to 8.4, built with no plan:
+
+- **The caution** is carried by any member of a suggested group who is on loan at the club or advised to leave, whatever he gives. A group needs its three, so it ends when he goes.
+- **Ties** go first to the group with fewer members who will go (on loan at the club or advised to leave), then as before: fewer players above Others, more arrows read, the keys. So a player who is staying makes up a group before one who is going, even when the other group's arrows have all been read and even when the one staying has a level above Others. A greater value still comes first, so a group is never worth less for it, and a player who will go is still used when nobody else free can make up the group.
+
+On the owner's saved state of 8 September 2026 (in the game), ending that group now suggests Matty Taylor, Dillon De Silva and Dejan Tetek, resting on the same read arrow. A recorded group is not looked at again for this: the card says a member is advised to leave, as before, and the owner ends the group to be offered another.
+
 ## 14. Left to the builder
 
 - The types' names, and how the readings are keyed and saved.
