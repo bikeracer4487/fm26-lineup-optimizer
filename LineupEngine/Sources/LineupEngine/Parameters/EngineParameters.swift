@@ -718,7 +718,8 @@ public struct EngineParameters: Sendable {
     /// How much stronger or weaker than the owner's squad a pasted opponent squad must be, as whole percentages of the
     /// owner's best-eleven total, to read as stronger or weaker and as much stronger or much weaker.
     public var opponentStrengthLines: Parameter<OpponentStrengthLines>
-    /// Which game plan to use when a match is simulated, which never to use, and which came out best in the one test.
+    /// Which game plans to use and to avoid when a match is simulated, by the opponent's strength, and the points of
+    /// the one test of the plans.
     public var gamePlanRules: Parameter<GamePlanRules>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
@@ -1161,13 +1162,23 @@ public struct EngineParameters: Sendable {
                 source: "this design's choice (docs/superpowers/specs/2026-11-15-fm27-league-situation-and-opponent-squad-design.md): "
                     + "no test relates a gap in ability to results; a ratio so the lines mean the same in every division"),
             gamePlanRules: Parameter(
-                GamePlanRules(recommended: .noGamePlan, avoid: [.settleForADraw, .smashAndGrab, .strangleTheGame],
-                              levelAgainstMuchStronger: [.playForTheDraw, .playForTheWin]),
+                GamePlanRules(
+                    muchStronger: GamePlanRule(use: [.playForTheDraw, .playForTheWin],
+                                               avoid: [.settleForADraw, .strangleTheGame, .smashAndGrab]),
+                    stronger: GamePlanRule(use: [.playForTheWin, .playForTheDraw], avoid: [.settleForADraw, .strangleTheGame]),
+                    similar: GamePlanRule(use: [.playForTheWin, .noGamePlan], avoid: [.settleForADraw]),
+                    weaker: GamePlanRule(use: [.playForTheWin, .noGamePlan], avoid: [.settleForADraw, .strangleTheGame]),
+                    muchWeaker: GamePlanRule(use: [.playForTheWin, .noGamePlan], avoid: [.settleForADraw, .strangleTheGame]),
+                    unset: GamePlanRule(use: [.playForTheWin], avoid: [.settleForADraw]),
+                    testPoints: [.playForTheDraw: 10, .playForTheWin: 9, .leaveItLate: 8, .goForABigWin: 7, .pressureCooker: 6,
+                                 .smashAndGrab: 2, .strangleTheGame: 2, .settleForADraw: 1]),
                 .carriedOverFM26,
-                source: "docs/Research/fm27-match-simulation-game-plans.md: no FM27 test of any game plan exists; the one FM26 "
-                    + "test (FRVR) was ten results a plan against one much stronger side, where Play for the draw and Play "
-                    + "for the win came out best and Settle for a draw, Smash and grab and Strangle the game worst; in "
-                    + "FM27 engine tests (Fm-Match-Lab) sitting deep cost points"))
+                source: "docs/Research/fm26-match-simulation-game-plans.md, its table \"Rule the tool can compute\", by the "
+                    + "opponent's strength only; with docs/Research/fm27-match-simulation-game-plans.md. The one test of "
+                    + "the plans (FRVR, FM26, 18 December 2025) was ten instant results a plan against one much stronger "
+                    + "side, and its points are kept here; No game plan was not in it. Every rule but the one against a "
+                    + "much stronger side is the research's reasoning from that test and from FM27 engine tests in which "
+                    + "sitting deep cost points. Neither search covered every community, so a test may exist that it missed"))
     }()
 
     private static let removalSource = "ui/api/api_player_removal.py (branch customizable-tactics)"

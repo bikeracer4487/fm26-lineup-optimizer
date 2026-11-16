@@ -127,38 +127,70 @@ public enum AdvisorText {
         }
     }
 
-    /// "If you simulate this match: No game plan".
+    /// "If you simulate this match: Play for the win or No game plan": the plans to use, which nothing separates.
     public static func gamePlanLine(_ advice: GamePlanAdvice) -> String {
-        "If you simulate this match: \(name(advice.recommended))"
+        let names = advice.use.map(name)
+        let list = names.count <= 1 ? (names.first ?? "") : names.dropLast().joined(separator: ", ") + " or " + names[names.count - 1]
+        return "If you simulate this match: \(list)"
     }
 
-    /// Why that plan, which plans to avoid, and which came out best against a much stronger side: each only when the
-    /// advice has it. Every sentence says what test it rests on.
+    /// What the advice rests on, which plans to avoid and why, and what is not known. Each sentence says whether it
+    /// is a measurement or reasoning, and names the one test of the plans.
     public static func gamePlanSentences(_ advice: GamePlanAdvice) -> [String] {
+        let test = "the one test of the game plans (FM26, ten matches a plan, against a much stronger side)"
+        let many = advice.use.count > 1
         var sentences: [String] = []
-        switch advice.recommended {
-        case .noGamePlan:
-            sentences.append("No game plan plays your tactic as you set it. No test of FM27's game plans exists, so "
-                + "nothing shows that any of them does better.")
-        case .playForTheWin, .playForTheDraw, .settleForADraw, .goForABigWin, .smashAndGrab, .leaveItLate,
-             .pressureCooker, .strangleTheGame:
-            break
+        // Whether the test has been described by the time the plans to avoid are named.
+        var testNamed = false
+        switch advice.strength {
+        case .muchStronger:
+            sentences.append("The one test of the game plans (FM26, ten matches a plan) was against a much stronger side "
+                + "like this one: \(planList(advice.use, points: advice.testPoints)) came out best"
+                + "\(many ? ", too close to tell apart" : "").")
+            testNamed = true
+        case .stronger:
+            sentences.append("No test covers a stronger side like this one. The one test of the game plans (FM26, ten "
+                + "matches a plan) was against a much stronger side, where "
+                + "\(planList(advice.use, points: advice.testPoints)) came out best; using \(many ? "them" : "it") here is "
+                + "reasoning from that, not a measurement.")
+            testNamed = true
+        case .similar, .weaker, .muchWeaker:
+            let kind = switch advice.strength {
+            case .weaker: "a weaker side"
+            case .muchWeaker: "a much weaker side"
+            case .similar, .muchStronger, .stronger, nil: "a side of similar strength"
+            }
+            let noPlan = advice.use.contains(.noGamePlan)
+                ? ", and none sets No game plan (your tactic as you set it) against a plan" : ""
+            sentences.append("No test covers \(kind) like this one\(noPlan). \(planList(advice.use, points: [:])) "
+                + "\(many ? "are reasoned choices, not measured ones, and nothing separates them" : "is a reasoned choice, not a measured one").")
+        case nil:
+            sentences.append("This fixture has no strength set for the opponent, so this is what is advised against every "
+                + "strength. Set their strength on the Fixtures screen, or paste their squad there, for advice that fits "
+                + "the match.")
         }
         if !advice.avoid.isEmpty {
-            let they = advice.avoid.count == 1 ? "it sits" : "they sit"
-            sentences.append("Avoid \(planList(advice.avoid)): \(they) deep, which did worst in the one FM26 test of the "
-                + "plans and costs points in FM27 engine tests.")
+            let they = advice.avoid.count == 1 ? "it" : "they"
+            let deep = advice.isMeasured ? "" : ", and sitting deep costs points in FM27 engine tests"
+            sentences.append("Avoid \(planList(advice.avoid, points: advice.testPoints)): \(they) came out worst in "
+                + "\(testNamed ? "that test" : test)\(deep).")
         }
-        if !advice.level.isEmpty {
-            let close = advice.level.count == 1 ? "" : ", too close to call between them"
-            sentences.append("Against a much stronger side like this one, \(planList(advice.level)) came out best of the "
-                + "plans in the one FM26 test\(close).")
+        switch advice.strength {
+        case .muchStronger, .stronger:
+            if !advice.use.contains(.noGamePlan) {
+                sentences.append("No game plan was not in the test, so how your own tactic compares is not known.")
+            }
+        case .similar, .weaker, .muchWeaker, nil:
+            break
         }
         return sentences
     }
 
-    private static func planList(_ plans: [GamePlan]) -> String {
-        let names = plans.map(name)
+    /// "A (10 points), B (9 points) and C"; a plan with no points in `points` is named alone.
+    private static func planList(_ plans: [GamePlan], points: [GamePlan: Int]) -> String {
+        let names = plans.map { plan in
+            points[plan].map { "\(name(plan)) (\($0) point\($0 == 1 ? "" : "s"))" } ?? name(plan)
+        }
         return names.count <= 1 ? (names.first ?? "") : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
     }
 

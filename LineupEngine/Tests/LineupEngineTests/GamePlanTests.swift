@@ -8,52 +8,66 @@ import Testing
         var changed = parameters
         var value = changed.gamePlanRules.value
         change(&value)
-        changed.gamePlanRules = Parameter(value, .derived, source: "test")
+        changed.gamePlanRules = Parameter(value, .fm27Measured, source: "test")
         return changed
     }
 
-    @Test func noGamePlanIsRecommendedWhateverTheOpponent() throws {
+    func advice(_ strength: OpponentStrength?) throws -> GamePlanAdvice {
+        try GamePlanAdvisor.advise(against: strength, parameters: parameters)
+    }
+
+    @Test func eachStrengthHasItsPlansToUseAndToAvoid() throws {
+        #expect(try advice(.muchStronger).use == [.playForTheDraw, .playForTheWin])
+        #expect(try advice(.muchStronger).avoid == [.settleForADraw, .strangleTheGame, .smashAndGrab])
+        #expect(try advice(.stronger).use == [.playForTheWin, .playForTheDraw])
+        #expect(try advice(.stronger).avoid == [.settleForADraw, .strangleTheGame])
+        #expect(try advice(.similar).use == [.playForTheWin, .noGamePlan])
+        #expect(try advice(.similar).avoid == [.settleForADraw])
+        for strength in [OpponentStrength.weaker, .muchWeaker] {
+            #expect(try advice(strength).use == [.playForTheWin, .noGamePlan])
+            #expect(try advice(strength).avoid == [.settleForADraw, .strangleTheGame])
+        }
+        #expect(try advice(nil).use == [.playForTheWin])
+        #expect(try advice(nil).avoid == [.settleForADraw])
         for strength in OpponentStrength.allCases.map(Optional.some) + [nil] {
-            let advice = try GamePlanAdvisor.advise(against: strength, parameters: parameters)
-            #expect(advice.recommended == .noGamePlan)
-            #expect(advice.avoid == [.settleForADraw, .smashAndGrab, .strangleTheGame])
-            #expect(advice.basis == .carriedOverFM26)
+            #expect(try advice(strength).strength == strength)
         }
     }
 
-    @Test func onlyAMuchStrongerOpponentAddsThePlansThatCameOutBest() throws {
-        #expect(try GamePlanAdvisor.advise(against: .muchStronger, parameters: parameters).level
-                == [.playForTheDraw, .playForTheWin])
+    @Test func onlyTheRuleAgainstAMuchStrongerSideIsAMeasurement() throws {
+        #expect(try advice(.muchStronger).isMeasured)
+        #expect(try advice(.muchStronger).basis == .carriedOverFM26)
         for strength in [OpponentStrength.stronger, .similar, .weaker, .muchWeaker].map(Optional.some) + [nil] {
-            #expect(try GamePlanAdvisor.advise(against: strength, parameters: parameters).level == [])
+            #expect(try advice(strength).isMeasured == false)
+            #expect(try advice(strength).basis == .derived)
         }
+        // Better evidence for the rule lifts the measured advice only.
+        let better = rules { _ in }
+        #expect(try GamePlanAdvisor.advise(against: .muchStronger, parameters: better).basis == .fm27Measured)
+        #expect(try GamePlanAdvisor.advise(against: .similar, parameters: better).basis == .derived)
     }
 
-    @Test func theAdviceFollowsTheRule() throws {
+    @Test func theAdviceFollowsTheRules() throws {
         let changed = rules {
-            $0.recommended = .playForTheWin
-            $0.avoid = [.settleForADraw]
-            $0.levelAgainstMuchStronger = [.leaveItLate]
+            $0.similar = GamePlanRule(use: [.leaveItLate], avoid: [.pressureCooker])
+            $0.testPoints = [.leaveItLate: 30]
         }
-        let advice = try GamePlanAdvisor.advise(against: .muchStronger, parameters: changed)
-        #expect(advice.recommended == .playForTheWin)
-        #expect(advice.avoid == [.settleForADraw])
-        #expect(advice.level == [.leaveItLate])
-        #expect(advice.basis == .derived)
+        let similar = try GamePlanAdvisor.advise(against: .similar, parameters: changed)
+        #expect(similar.use == [.leaveItLate])
+        #expect(similar.avoid == [.pressureCooker])
+        #expect(similar.testPoints == [.leaveItLate: 30])
+        // Another strength's rule is left as it was.
+        #expect(try GamePlanAdvisor.advise(against: .weaker, parameters: changed).use == [.playForTheWin, .noGamePlan])
     }
 
     @Test func aRuleThatContradictsItselfIsAParameterProblem() {
         let cases: [(EngineParameters, String)] = [
-            (rules { $0.avoid = [.noGamePlan] },
-             "gamePlanRules recommends No game plan and also says to avoid it"),
-            (rules { $0.levelAgainstMuchStronger = [.noGamePlan] },
-             "gamePlanRules lists No game plan as level with the recommended plan, which it is"),
-            (rules { $0.levelAgainstMuchStronger = [.smashAndGrab] },
-             "gamePlanRules lists Smash and grab as level with the recommended plan and also says to avoid it"),
-            (rules { $0.avoid = [.smashAndGrab, .smashAndGrab] },
-             "gamePlanRules lists Smash and grab twice among the plans to avoid"),
-            (rules { $0.levelAgainstMuchStronger = [.playForTheWin, .playForTheWin] },
-             "gamePlanRules lists Play for the win twice among the plans level with the recommended plan"),
+            (rules { $0.similar.use = [] }, "gamePlanRules similar names no plan to use"),
+            (rules { $0.weaker.avoid = [.playForTheWin] }, "gamePlanRules weaker lists Play for the win to use and to avoid"),
+            (rules { $0.unset.avoid = [.settleForADraw, .settleForADraw] },
+             "gamePlanRules unset lists Settle for a draw twice among the plans to avoid"),
+            (rules { $0.muchStronger.use = [.playForTheWin, .playForTheWin] },
+             "gamePlanRules muchStronger lists Play for the win twice among the plans to use"),
         ]
         for (bad, problem) in cases {
             #expect(FitnessModel.problems(in: bad) == [problem])
@@ -64,13 +78,14 @@ import Testing
         #expect(FitnessModel.problems(in: parameters) == [])
     }
 
-    @Test func theRuleIsListedWithItsEvidenceAndSource() {
+    @Test func theRulesAreListedWithTheirEvidenceSourceAndTheTestsPoints() {
         let listed = Dictionary(uniqueKeysWithValues: parameters.all.map { ($0.name, $0) })
         #expect(listed["gamePlanRules"]?.evidence == .carriedOverFM26)
+        #expect(listed["gamePlanRules"]?.source.contains("docs/Research/fm26-match-simulation-game-plans.md") == true)
         #expect(listed["gamePlanRules"]?.source.contains("docs/Research/fm27-match-simulation-game-plans.md") == true)
-        #expect(parameters.gamePlanRules.value == GamePlanRules(
-            recommended: .noGamePlan, avoid: [.settleForADraw, .smashAndGrab, .strangleTheGame],
-            levelAgainstMuchStronger: [.playForTheDraw, .playForTheWin]))
+        #expect(parameters.gamePlanRules.value.testPoints == [
+            .playForTheDraw: 10, .playForTheWin: 9, .leaveItLate: 8, .goForABigWin: 7, .pressureCooker: 6,
+            .smashAndGrab: 2, .strangleTheGame: 2, .settleForADraw: 1])
     }
 
     @Test func eachPlanHasItsName() {
@@ -79,47 +94,75 @@ import Testing
             "Smash and grab", "Leave it late", "Pressure cooker", "Strangle the game"])
     }
 
-    @Test func theLineNamesThePlan() throws {
-        let advice = try GamePlanAdvisor.advise(against: .similar, parameters: parameters)
-        #expect(AdvisorText.gamePlanLine(advice) == "If you simulate this match: No game plan")
+    @Test func theLineNamesThePlansToUse() throws {
+        #expect(AdvisorText.gamePlanLine(try advice(.muchStronger)) == "If you simulate this match: Play for the draw or Play for the win")
+        #expect(AdvisorText.gamePlanLine(try advice(.similar)) == "If you simulate this match: Play for the win or No game plan")
+        #expect(AdvisorText.gamePlanLine(try advice(nil)) == "If you simulate this match: Play for the win")
+        let three = try GamePlanAdvisor.advise(against: .similar, parameters: rules {
+            $0.similar.use = [.playForTheWin, .noGamePlan, .leaveItLate]
+        })
+        #expect(AdvisorText.gamePlanLine(three) == "If you simulate this match: Play for the win, No game plan or Leave it late")
     }
 
-    @Test func theSentencesSayWhyWhatToAvoidAndHowThinTheEvidenceIs() throws {
-        let advice = try GamePlanAdvisor.advise(against: .similar, parameters: parameters)
-        #expect(AdvisorText.gamePlanSentences(advice) == [
-            "No game plan plays your tactic as you set it. No test of FM27's game plans exists, so nothing shows that "
-                + "any of them does better.",
-            "Avoid Settle for a draw, Smash and grab and Strangle the game: they sit deep, which did worst in the one "
-                + "FM26 test of the plans and costs points in FM27 engine tests.",
+    @Test func againstAMuchStrongerSideTheSentencesGiveTheTestsPoints() throws {
+        #expect(AdvisorText.gamePlanSentences(try advice(.muchStronger)) == [
+            "The one test of the game plans (FM26, ten matches a plan) was against a much stronger side like this one: "
+                + "Play for the draw (10 points) and Play for the win (9 points) came out best, too close to tell apart.",
+            "Avoid Settle for a draw (1 point), Strangle the game (2 points) and Smash and grab (2 points): they came out "
+                + "worst in that test.",
+            "No game plan was not in the test, so how your own tactic compares is not known.",
         ])
     }
 
-    @Test func aMuchStrongerOpponentAddsItsSentence() throws {
-        let advice = try GamePlanAdvisor.advise(against: .muchStronger, parameters: parameters)
-        let sentences = AdvisorText.gamePlanSentences(advice)
-        #expect(sentences.count == 3)
-        #expect(sentences.last == "Against a much stronger side like this one, Play for the draw and Play for the win "
-                + "came out best of the plans in the one FM26 test, too close to call between them.")
+    @Test func againstAStrongerSideTheSentencesSayItIsReasoning() throws {
+        #expect(AdvisorText.gamePlanSentences(try advice(.stronger)) == [
+            "No test covers a stronger side like this one. The one test of the game plans (FM26, ten matches a plan) was "
+                + "against a much stronger side, where Play for the win (9 points) and Play for the draw (10 points) came "
+                + "out best; using them here is reasoning from that, not a measurement.",
+            "Avoid Settle for a draw (1 point) and Strangle the game (2 points): they came out worst in that test, and "
+                + "sitting deep costs points in FM27 engine tests.",
+            "No game plan was not in the test, so how your own tactic compares is not known.",
+        ])
     }
 
-    @Test func theSentencesFollowAChangedRule() throws {
-        let one = try GamePlanAdvisor.advise(against: .muchStronger, parameters: rules {
-            $0.recommended = .playForTheWin
-            $0.avoid = [.settleForADraw]
-            $0.levelAgainstMuchStronger = [.leaveItLate]
+    @Test func againstASimilarOrWeakerSideTheSentencesSayNothingIsMeasured() throws {
+        #expect(AdvisorText.gamePlanSentences(try advice(.similar)) == [
+            "No test covers a side of similar strength like this one, and none sets No game plan (your tactic as you set "
+                + "it) against a plan. Play for the win and No game plan are reasoned choices, not measured ones, and "
+                + "nothing separates them.",
+            "Avoid Settle for a draw (1 point): it came out worst in the one test of the game plans (FM26, ten matches a "
+                + "plan, against a much stronger side), and sitting deep costs points in FM27 engine tests.",
+        ])
+        let weaker = AdvisorText.gamePlanSentences(try advice(.weaker))
+        #expect(weaker.first?.hasPrefix("No test covers a weaker side like this one, and none sets No game plan") == true)
+        #expect(weaker.last == "Avoid Settle for a draw (1 point) and Strangle the game (2 points): they came out worst in "
+                + "the one test of the game plans (FM26, ten matches a plan, against a much stronger side), and sitting "
+                + "deep costs points in FM27 engine tests.")
+        #expect(AdvisorText.gamePlanSentences(try advice(.muchWeaker)).first?
+            .hasPrefix("No test covers a much weaker side like this one") == true)
+    }
+
+    @Test func withNoStrengthSetTheSentencesSayHowToGetAdviceThatFits() throws {
+        #expect(AdvisorText.gamePlanSentences(try advice(nil)) == [
+            "This fixture has no strength set for the opponent, so this is what is advised against every strength. Set "
+                + "their strength on the Fixtures screen, or paste their squad there, for advice that fits the match.",
+            "Avoid Settle for a draw (1 point): it came out worst in the one test of the game plans (FM26, ten matches a "
+                + "plan, against a much stronger side), and sitting deep costs points in FM27 engine tests.",
+        ])
+    }
+
+    @Test func theSentencesFollowChangedRules() throws {
+        let one = try GamePlanAdvisor.advise(against: .similar, parameters: rules {
+            $0.similar = GamePlanRule(use: [.leaveItLate], avoid: [])
         })
-        #expect(AdvisorText.gamePlanLine(one) == "If you simulate this match: Play for the win")
         #expect(AdvisorText.gamePlanSentences(one) == [
-            "Avoid Settle for a draw: it sits deep, which did worst in the one FM26 test of the plans and costs points "
-                + "in FM27 engine tests.",
-            "Against a much stronger side like this one, Leave it late came out best of the plans in the one FM26 test.",
-        ])
-        let none = try GamePlanAdvisor.advise(against: .similar, parameters: rules {
-            $0.avoid = []
-            $0.levelAgainstMuchStronger = []
+            "No test covers a side of similar strength like this one. Leave it late is a reasoned choice, not a measured one."])
+        let strong = try GamePlanAdvisor.advise(against: .muchStronger, parameters: rules {
+            $0.muchStronger = GamePlanRule(use: [.noGamePlan], avoid: [.pressureCooker])
         })
-        #expect(AdvisorText.gamePlanSentences(none) == [
-            "No game plan plays your tactic as you set it. No test of FM27's game plans exists, so nothing shows that "
-                + "any of them does better."])
+        #expect(AdvisorText.gamePlanSentences(strong) == [
+            "The one test of the game plans (FM26, ten matches a plan) was against a much stronger side like this one: "
+                + "No game plan came out best.",
+            "Avoid Pressure cooker (6 points): it came out worst in that test."])
     }
 }

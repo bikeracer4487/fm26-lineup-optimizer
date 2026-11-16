@@ -551,19 +551,32 @@ import LineupEngine
         let similar = try #require(try plans(model).first { $0.fixture.opponentStrength == .similar })
         let advice = try GamePlanAdvisor.advise(against: .similar, parameters: .fm27)
         let note = try #require(model.gamePlanNote(for: similar))
-        #expect(note.line == "If you simulate this match: No game plan")
+        #expect(note.line == "If you simulate this match: Play for the win or No game plan")
         #expect(note.sentences == AdvisorText.gamePlanSentences(advice))
         #expect(note.sentences.count == 2)
-        #expect(note.noteText == "(FM26-era numbers)")
+        // Reasoned from the one test, not measured.
+        #expect(note.noteText == "(this tool's estimate)")
         #expect(GamePlanNote.heading == "Game plan")
     }
 
-    @Test func aMuchStrongerOpponentAddsItsSentence() throws {
+    @Test func theAdviceFollowsTheOpponentsStrengthOnTheFixture() throws {
         let model = try SampleData.model(repositoryRoot: Captures.repositoryRoot)
         let strong = try #require(try plans(model).first { $0.fixture.opponentStrength == .muchStronger })
         let note = try #require(model.gamePlanNote(for: strong))
-        #expect(note.sentences.count == 3)
-        #expect(note.sentences.last?.hasPrefix("Against a much stronger side like this one, Play for the draw") == true)
+        #expect(note.line == "If you simulate this match: Play for the draw or Play for the win")
+        #expect(note.sentences == AdvisorText.gamePlanSentences(
+            try GamePlanAdvisor.advise(against: .muchStronger, parameters: .fm27)))
+        #expect(note.sentences.first?.contains("Play for the draw (10 points)") == true)
+        // The one row that rests on a test of the plans.
+        #expect(note.noteText == "(FM26-era numbers)")
+
+        // With no strength set, the one plan advised against every strength, and how to get advice that fits.
+        var unset = strong.fixture
+        unset.opponentStrength = nil
+        model.update(unset)
+        let plain = try #require(try plans(model).first { $0.id == strong.id })
+        #expect(model.gamePlanNote(for: plain)?.line == "If you simulate this match: Play for the win")
+        #expect(model.gamePlanNote(for: plain)?.sentences.first?.hasPrefix("This fixture has no strength set") == true)
     }
 
     @Test func aConfirmedFixtureHasNoGamePlanNote() throws {

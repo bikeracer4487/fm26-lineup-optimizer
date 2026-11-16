@@ -21,14 +21,28 @@ public enum Evidence: String, Sendable, CaseIterable, Codable {
 }
 
 /// A tunable value together with its evidence level and where it came from.
+///
+/// It is one pointer wide: the three are kept together off the stack and never change. `EngineParameters` holds about
+/// a hundred of these and is handed down every call of the rating and selection code by value; with the values kept
+/// inline it was 4.8 KB, and a planning test run on a test thread's small stack ran out of it.
 public struct Parameter<Value: Sendable>: Sendable {
-    public let value: Value
-    public let evidence: Evidence
-    public let source: String
+    private final class Storage: Sendable {
+        let value: Value
+        let evidence: Evidence
+        let source: String
+
+        init(value: Value, evidence: Evidence, source: String) {
+            self.value = value; self.evidence = evidence; self.source = source
+        }
+    }
+
+    private let storage: Storage
+
+    public var value: Value { storage.value }
+    public var evidence: Evidence { storage.evidence }
+    public var source: String { storage.source }
 
     public init(_ value: Value, _ evidence: Evidence, source: String) {
-        self.value = value
-        self.evidence = evidence
-        self.source = source
+        storage = Storage(value: value, evidence: evidence, source: source)
     }
 }
