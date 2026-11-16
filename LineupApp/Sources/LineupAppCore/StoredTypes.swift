@@ -40,21 +40,28 @@ public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
     public var opponentStrength: OpponentStrength?
     /// What the last pasted squad of the opponent's showed; nil until one was pasted. The opponent's players are not kept.
     public var opponentReading: OpponentReading?
+    /// Whether a ban counts in this match, as the owner said; nil until he says, when it counts in every match but a
+    /// friendly (`bansApplyHere`). FMRTE shows that a player is banned, not which matches the ban is for.
+    public var bansApply: Bool?
+
+    /// Whether a ban counts in this match: the owner's word, else every match but a friendly.
+    public var bansApplyHere: Bool { bansApply ?? (competition != .friendly) }
 
     public init(
         id: FixtureID, date: Day, opponent: String, importance: Importance, tacticID: UUID? = nil,
         overrides: [SlotID: PlayerID] = [:], rejected: Set<PlayerID> = [], lastPlanned: PlannedEleven? = nil,
         competition: Competition? = nil, opponentStrength: OpponentStrength? = nil,
-        opponentReading: OpponentReading? = nil
+        opponentReading: OpponentReading? = nil, bansApply: Bool? = nil
     ) {
         self.id = id; self.date = date; self.opponent = opponent; self.importance = importance
         self.tacticID = tacticID; self.overrides = overrides; self.rejected = rejected; self.lastPlanned = lastPlanned
         self.competition = competition; self.opponentStrength = opponentStrength
-        self.opponentReading = opponentReading
+        self.opponentReading = opponentReading; self.bansApply = bansApply
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, date, opponent, importance, tacticID, overrides, rejected, lastPlanned, competition, opponentStrength, opponentReading
+        case bansApply
     }
 
     public init(from decoder: any Decoder) throws {
@@ -73,6 +80,8 @@ public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
         opponentStrength = try c.decodeIfPresent(OpponentStrength.self, forKey: .opponentStrength)
         // A fixture saved before squads could be pasted has no reading.
         opponentReading = try c.decodeIfPresent(OpponentReading.self, forKey: .opponentReading)
+        // A fixture saved before the owner could say where bans count says nothing.
+        bansApply = try c.decodeIfPresent(Bool.self, forKey: .bansApply)
     }
 
     /// `rejected` is written as an array in key order, because a set has no fixed order of its own.
@@ -89,6 +98,7 @@ public struct StoredFixture: Identifiable, Equatable, Codable, Sendable {
         try c.encodeIfPresent(competition, forKey: .competition)
         try c.encodeIfPresent(opponentStrength, forKey: .opponentStrength)
         try c.encodeIfPresent(opponentReading, forKey: .opponentReading)
+        try c.encodeIfPresent(bansApply, forKey: .bansApply)
     }
 }
 

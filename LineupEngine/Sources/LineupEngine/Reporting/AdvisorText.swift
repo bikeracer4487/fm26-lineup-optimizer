@@ -90,6 +90,28 @@ public enum AdvisorText {
         }
     }
 
+    /// Under a fixture's left-out list while it is the match the bans are served in: who is banned, that FMRTE does
+    /// not say which matches a ban is for, and what saying so does. `names` are the banned players, in the order given.
+    public static func bansServedHere(_ names: [String]) -> String {
+        let one = names.count == 1
+        return "\(nameList(names)) \(one ? "is" : "are") banned and left out of this match. FMRTE shows a ban but not "
+            + "which matches it is for. If \(one ? "his ban is" : "their bans are") not for this match, say so: "
+            + "\(one ? "he is" : "they are") then picked as usual here and left out of the next match that takes bans."
+    }
+
+    /// Under a fixture's left-out list when bans do not count in it and somebody is banned. `isFriendly`: nobody said
+    /// so, it is a friendly.
+    public static func bansNotApplied(_ names: [String], isFriendly: Bool) -> String {
+        let one = names.count == 1
+        return "Bans are not applied to this match, \(isFriendly ? "a friendly" : "as you said"): \(nameList(names)) "
+            + "\(one ? "is" : "are") banned and can be picked here. \(one ? "He is" : "They are") left out of the next "
+            + "match that takes bans."
+    }
+
+    private static func nameList(_ names: [String]) -> String {
+        names.count <= 1 ? (names.first ?? "") : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
+    }
+
     /// A game plan by the name the game gives it when a match is simulated.
     public static func name(_ plan: GamePlan) -> String {
         switch plan {

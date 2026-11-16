@@ -28,6 +28,14 @@ struct LeftOutList: View {
                 }
             }
 
+            if let ban = model.banNote(for: plan) {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    CautionLine(ban.sentence)
+                    Button(ban.buttonTitle) { model.setBansApply(ban.applies, in: plan.id) }
+                        .buttonStyle(.secondary)
+                }
+            }
+
             if !rejected.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Spacing.s) {
                     BoardHeading("Left out by you")

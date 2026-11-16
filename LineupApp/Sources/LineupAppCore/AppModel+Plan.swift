@@ -32,6 +32,36 @@ extension AppModel {
         changeFixture(fixture) { $0.rejected.insert(player) }
     }
 
+    /// Says whether bans count in this fixture, and plans again: a banned player misses the earliest planned fixture
+    /// where they do.
+    public func setBansApply(_ applies: Bool, in fixture: FixtureID) {
+        changeFixture(fixture) { $0.bansApply = applies }
+    }
+
+    /// What Match Selection says about bans under a planned fixture's left-out list, and the button beside it; nil
+    /// when nobody who could play is banned, for a confirmed or missed fixture, and for a fixture that takes bans
+    /// after the one they are served in.
+    public func banNote(for plan: FixturePlan) -> BanNote? {
+        guard case .planned = plan.body else { return nil }
+        let club = ownClub
+        let banned = players.filter { player in
+            if case .loanedOut = LoanStatus.of(player, ownClub: club) { return false }
+            return player.isBanned && !player.isInjured
+        }.map(\.name)
+        guard !banned.isEmpty else { return nil }
+        if !plan.fixture.bansApplyHere {
+            return BanNote(sentence: AdvisorText.bansNotApplied(banned, isFriendly: plan.fixture.bansApply == nil),
+                           buttonTitle: BanNote.applyTitle, applies: true)
+        }
+        let serving = fixturePlans.first { other in
+            if case .planned = other.body { other.fixture.bansApplyHere } else { false }
+        }
+        guard serving?.id == plan.id else { return nil }
+        return BanNote(sentence: AdvisorText.bansServedHere(banned),
+                       buttonTitle: banned.count == 1 ? BanNote.notForThisMatchTitleForOne : BanNote.notForThisMatchTitle,
+                       applies: false)
+    }
+
     /// Undoes `reject`.
     public func allow(_ player: PlayerID, in fixture: FixtureID) {
         changeFixture(fixture) { $0.rejected.remove(player) }
@@ -195,6 +225,8 @@ extension AppModel {
         }
         guard let assignment = assignments.first(where: { $0.slot == slot }) else { return [] }
         let (plan, fitness) = planned[index]
+        // As the planner: a ban is served in the earliest planned fixture that takes bans.
+        let servingBans = planned.firstIndex { $0.0.fixture.bansApplyHere }
         let parameters = planParameters
         let projected = plan.fitnessIsProjected
         let club = ownClub
@@ -206,7 +238,7 @@ extension AppModel {
             let onTheDay = fitness[player.id].map { Planner.withFitness(player, $0) } ?? player
             let exclusion = RiskRules.exclusion(
                 for: onTheDay, loan: LoanStatus.of(player, ownClub: club), importance: plan.fixture.importance,
-                isNextFixture: index == 0, parameters: parameters)
+                isNextFixture: index == servingBans, parameters: parameters)
                 ?? (plan.fixture.rejected.contains(player.id) ? .rejected : nil)
             return exclusion.map { ErrorDescriptions.describe($0, parameters: parameters, projected: projected) }
         }
@@ -343,7 +375,8 @@ extension AppModel {
         tactic(for: fixture).map { stored in
             Fixture(id: fixture.id, date: fixture.date, opponent: fixture.opponent, importance: fixture.importance,
                     tactic: stored.tactic, overrides: fixture.overrides, rejected: fixture.rejected,
-                    competition: fixture.competition, opponentStrength: fixture.opponentStrength)
+                    competition: fixture.competition, opponentStrength: fixture.opponentStrength,
+                    bansApply: fixture.bansApplyHere)
         }
     }
 

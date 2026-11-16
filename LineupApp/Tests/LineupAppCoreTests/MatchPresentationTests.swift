@@ -602,3 +602,111 @@ import LineupEngine
         #expect(plans[6].fixture.opponent == "Opponent G")
     }
 }
+
+@Suite @MainActor struct BanNoteTests {
+    func plans(_ model: AppModel) throws -> [FixturePlan] {
+        guard case .ready(let plans) = model.planState else {
+            throw SampleDataError(description: "The sample plan is not ready: \(model.planState)")
+        }
+        return plans
+    }
+
+    func starters(_ plan: FixturePlan, in model: AppModel) -> Set<String> {
+        guard case .planned(let lineup, _) = plan.body else { return [] }
+        let names = Dictionary(model.players.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        return Set(lineup.picks.compactMap { names[$0.player] })
+    }
+
+    @Test func nobodyBannedMeansNoNote() throws {
+        let model = try SampleData.model(repositoryRoot: Captures.repositoryRoot)
+        #expect(try plans(model).allSatisfy { model.banNote(for: $0) == nil })
+    }
+
+    @Test func bannedPlayersMissTheFirstFixtureAndItSaysSoWithTheButton() throws {
+        let model = try SampleData.modelWithBans(repositoryRoot: Captures.repositoryRoot)
+        let all = try plans(model)
+        #expect(starters(all[0], in: model).isDisjoint(with: SampleData.bannedNames))
+        let note = try #require(model.banNote(for: all[0]))
+        #expect(note.sentence == AdvisorText.bansServedHere(SampleData.bannedNames))
+        #expect(note.buttonTitle == "Their bans are not for this match")
+        #expect(note.applies == false)
+        // A later fixture that takes bans says nothing: they are served in the first.
+        #expect(all.dropFirst().filter(\.fixture.bansApplyHere).allSatisfy { model.banNote(for: $0) == nil })
+        #expect(!starters(all[1], in: model).isDisjoint(with: SampleData.bannedNames))
+    }
+
+    @Test func sayingTheBansAreNotForAMatchPicksThePlayersThereAndLeavesThemOutOfTheNext() throws {
+        let model = try SampleData.modelWithBans(repositoryRoot: Captures.repositoryRoot)
+        let before = model.timesPlanned
+        let first = try #require(try plans(model).first)
+        model.setBansApply(false, in: first.id)
+        #expect(model.timesPlanned == before + 1)
+        let all = try plans(model)
+        #expect(all[0].fixture.bansApply == false)
+        // None of the three is left out of the first fixture as banned, and one who was is picked.
+        guard case .planned(let firstLineup, _) = all[0].body, case .planned(let secondLineup, _) = all[1].body else {
+            Issue.record("The first two sample fixtures are not planned.")
+            return
+        }
+        #expect(!firstLineup.omissions.contains { $0.cause == .excluded(.banned) })
+        #expect(secondLineup.omissions.contains { $0.cause == .excluded(.banned) })
+        #expect(!starters(all[0], in: model).isDisjoint(with: SampleData.bannedNames))
+        #expect(starters(all[1], in: model).isDisjoint(with: SampleData.bannedNames))
+        let off = try #require(model.banNote(for: all[0]))
+        #expect(off.sentence == AdvisorText.bansNotApplied(SampleData.bannedNames, isFriendly: false))
+        #expect(off.buttonTitle == "Apply bans to this match")
+        #expect(off.applies == true)
+        #expect(model.banNote(for: all[1])?.sentence == AdvisorText.bansServedHere(SampleData.bannedNames))
+        #expect(model.banNote(for: all[2]) == nil)
+
+        // The candidates for a slot say the same as the lineups: banned in the second fixture only.
+        let marsh = try #require(model.players.first { $0.name == "Tyrone Marsh" })
+        let inFirst = try #require(model.candidates(for: .ST_C, in: all[0].id).first { $0.player == marsh.id })
+        let inSecond = try #require(model.candidates(for: .ST_C, in: all[1].id).first { $0.player == marsh.id })
+        #expect(inFirst.unavailable == nil)
+        #expect(inSecond.unavailable?.contains("banned") == true)
+
+        // And back.
+        model.setBansApply(true, in: first.id)
+        #expect(starters(try plans(model)[0], in: model).isDisjoint(with: SampleData.bannedNames))
+    }
+
+    @Test func aFriendlyTakesNoBansUnlessTheOwnerSaysSo() throws {
+        let model = try SampleData.modelWithBans(repositoryRoot: Captures.repositoryRoot)
+        // The sample's fourth fixture is a friendly.
+        let friendly = try #require(model.fixtures.first { $0.competition == .friendly })
+        #expect(friendly.bansApply == nil)
+        #expect(friendly.bansApplyHere == false)
+        let plan = try #require(try plans(model).first { $0.id == friendly.id })
+        #expect(model.banNote(for: plan)?.sentence == AdvisorText.bansNotApplied(SampleData.bannedNames, isFriendly: true))
+        var league = friendly
+        league.competition = .league
+        #expect(league.bansApplyHere == true)
+        league.bansApply = false
+        #expect(league.bansApplyHere == false)
+        var said = friendly
+        said.bansApply = true
+        #expect(said.bansApplyHere == true)
+    }
+
+    @Test func whereBansCountIsSavedReadBackAndAbsentInOlderFiles() throws {
+        var fixture = StoredFixture(id: FixtureID("a"), date: Day(year: 2026, month: 11, day: 14)!, opponent: "A",
+                                    importance: .medium)
+        let old = try JSONEncoder().encode(fixture)
+        #expect(!String(decoding: old, as: UTF8.self).contains("bansApply"))
+        #expect(try JSONDecoder().decode(StoredFixture.self, from: old).bansApply == nil)
+        fixture.bansApply = false
+        let saved = try JSONDecoder().decode(StoredFixture.self, from: try JSONEncoder().encode(fixture))
+        #expect(saved.bansApply == false)
+        #expect(saved == fixture)
+    }
+
+    @Test func editingAFixtureKeepsWhatTheOwnerSaidAboutBans() throws {
+        let model = try SampleData.modelWithBans(repositoryRoot: Captures.repositoryRoot, notForTheFirstMatch: true)
+        let first = try #require(model.fixtures.first)
+        var draft = model.fixtureDraft(for: first)
+        draft.opponent = "Renamed"
+        model.save(draft)
+        #expect(model.fixtures.first { $0.id == first.id }?.bansApply == false)
+    }
+}

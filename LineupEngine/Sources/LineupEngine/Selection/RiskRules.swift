@@ -14,8 +14,9 @@ public enum Exclusion: Equatable, Sendable {
 }
 
 public enum RiskRules {
-    /// First match wins: injured; out on loan; banned for the next fixture; condition below the
-    /// floor; jaded above the threshold unless the match is high importance.
+    /// First match wins: injured; out on loan; banned, in the fixture his ban is served in (`isNextFixture`: the
+    /// planner's earliest fixture that takes bans); condition below the floor; jaded above the threshold unless the
+    /// match is high importance.
     public static func exclusion(
         for player: Player, loan: LoanStatus, importance: Importance,
         isNextFixture: Bool, parameters: EngineParameters

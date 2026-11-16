@@ -23,6 +23,19 @@ import Testing
                 + "sharpness fixtures. Whether playing a player brings offers has not been tested.")
     }
 
+    @Test func theBanSentencesNameThePlayersAndSayWhatFMRTEDoesNotShow() {
+        #expect(AdvisorText.bansServedHere(["Dejan Tetek"]) == "Dejan Tetek is banned and left out of this match. FMRTE "
+                + "shows a ban but not which matches it is for. If his ban is not for this match, say so: he is then "
+                + "picked as usual here and left out of the next match that takes bans.")
+        #expect(AdvisorText.bansServedHere(["A", "B", "C"]) == "A, B and C are banned and left out of this match. FMRTE "
+                + "shows a ban but not which matches it is for. If their bans are not for this match, say so: they are "
+                + "then picked as usual here and left out of the next match that takes bans.")
+        #expect(AdvisorText.bansNotApplied(["A", "B"], isFriendly: false) == "Bans are not applied to this match, as you "
+                + "said: A and B are banned and can be picked here. They are left out of the next match that takes bans.")
+        #expect(AdvisorText.bansNotApplied(["A"], isFriendly: true) == "Bans are not applied to this match, a friendly: "
+                + "A is banned and can be picked here. He is left out of the next match that takes bans.")
+    }
+
     @Test func eachImportanceHasItsName() {
         #expect(Importance.allCases.map { AdvisorText.name($0) } == ["High", "Medium", "Low", "Sharpness"])
     }

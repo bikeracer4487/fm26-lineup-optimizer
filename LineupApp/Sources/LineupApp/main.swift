@@ -48,7 +48,12 @@
 //                                              next match to play ("match-midseason-…", and as starts
 //                                              "match-midseason-starts-…"), and on the fixture against a much
 //                                              stronger side with no pick selected, so the whole game plan
-//                                              part shows ("match-gameplan-…").
+//                                              part shows ("match-gameplan-…"). With three of the first
+//                                              eleven banned it is drawn on the first fixture, which leaves
+//                                              them out ("match-bans-…"); and, once the owner has said their
+//                                              bans are not for that match, on it ("match-bans-off-…") and on
+//                                              the second fixture, which then leaves them out
+//                                              ("match-bans-next-…").
 //                                              The advisor screens ("elevens-…", "rest-…", "training-…",
 //                                              "removal-…") are drawn on the sample, empty ("<screen>-empty-…")
 //                                              and with a primary tactic that has a problem
@@ -181,7 +186,7 @@ func fail(_ message: String) -> Never {
 /// Which state of the sample data to start from.
 enum SampleState {
     case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange, pastFixtures
-    case afterConfirmingFirst, midSeason, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
+    case afterConfirmingFirst, midSeason, bans, bansNotForTheFirst, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
     case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, nothingToRetrain, loanee
     case differingSuggestion
     case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
@@ -202,6 +207,8 @@ enum SampleState {
         case .afterConfirmingFirst: return try SampleData.modelAfterConfirmingFirst(repositoryRoot: url)
         case .choices: return try SampleData.modelWithChoices(repositoryRoot: url)
         case .midSeason: return try SampleData.modelMidSeason(repositoryRoot: url)
+        case .bans: return try SampleData.modelWithBans(repositoryRoot: url)
+        case .bansNotForTheFirst: return try SampleData.modelWithBans(repositoryRoot: url, notForTheFirstMatch: true)
         case .missedFixture: return try SampleData.modelWithMissedFixture(repositoryRoot: url)
         case .missedEleven: return try SampleData.modelWithMissedEleven(repositoryRoot: url)
         case .missedElevenWhileStopped: return try SampleData.modelWithMissedElevenWhileThePlanIsStopped(repositoryRoot: url)
@@ -264,6 +271,17 @@ let narrowWindow = CGSize(width: 800, height: 700)
     }
     try ScreenPictures.write(model: sample, to: directory, size: size, variant: "gameplan", screens: [.matchSelection],
                              matchStart: MatchStart(fixture: strong.id))
+    // Three of the first eleven banned: left out of the first fixture, with the button that says their bans are not
+    // for it; then after pressing it, on the first fixture, where they are picked, and on the second, where they are
+    // left out.
+    try ScreenPictures.write(model: sampleModel(root, .bans), to: directory, size: size, variant: "bans",
+                             screens: [.matchSelection])
+    let bansOff = sampleModel(root, .bansNotForTheFirst)
+    try ScreenPictures.write(model: bansOff, to: directory, size: size, variant: "bans-off", screens: [.matchSelection])
+    if let second = bansOff.fixtures.dropFirst().first {
+        try ScreenPictures.write(model: bansOff, to: directory, size: size, variant: "bans-next", screens: [.matchSelection],
+                                 matchStart: MatchStart(fixture: second.id))
+    }
     let missed = sampleModel(root, .missedFixture)
     guard let early = missed.fixtures.first else { fail("The sample model has no fixtures.") }
     try ScreenPictures.write(model: missed, to: directory, size: size, variant: "missed",

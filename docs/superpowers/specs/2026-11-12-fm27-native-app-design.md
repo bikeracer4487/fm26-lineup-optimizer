@@ -135,7 +135,7 @@ Field meanings established from the test pastes:
 - `Contract.ContractType` is `FullTime` or a bare number. `4` corresponds to "Out of Contract" in the game. Such players stay selectable and are flagged.
 - `LoanContract.LoanedToTeam` is blank for players at the club. A club name there other than the owner's means the player is out on loan: he is excluded from selection and listed separately. The owner's own club name there is taken to mean a player loaned in.
 - `IsInjured` is authoritative for injury. Injured players can still show about 95% condition.
-- `IsBanned` players are excluded from the next fixture only and flagged; a manual override can still place them, since the ban's competition is unknown.
+- `IsBanned` players are excluded from the next fixture only and flagged; a manual override can still place them, since the ban's competition is unknown. Revised on 15 November 2026, after three of the owner's players were banned from league matches with an FA Cup tie next: the tool left them out of the cup tie and would have played them in the league match after it. FMRTE still shows only that a player is banned. So each fixture now says whether bans count in it: they do unless the owner says otherwise on Match Selection, and never in a friendly unless he says so. A banned player misses the earliest planned fixture where bans count, and no other. The switch is for the fixture, not the player: a player banned from every competition while others are banned from one is left out by hand ("Leave him out of this match"). Built with no plan.
 
 Calls made here:
 
@@ -196,7 +196,7 @@ Separate from performance, risk rules keep players out regardless of rating. The
 
 - **Condition floor.** A player whose condition on the day is below the floor does not start, at any importance. The default is 85% and it is adjustable. The FM27 injury threshold is unverified.
 - **Jaded.** Jadedness above 400 is "jaded" (confirmed for FM27). A jaded player does not start Medium, Low or Sharpness fixtures. For a High fixture he is available with his jadedness penalty. The branch's stepped penalties for lower levels are kept as provisional.
-- **Unavailable.** Injured players and players out on loan never start. A banned player misses the next fixture only.
+- **Unavailable.** Injured players and players out on loan never start. A banned player misses the next fixture where bans count only (revised 15 November 2026; see section 8's note on `IsBanned`).
 
 A manual override beats every rule except injury and being out on loan, and the pick is marked as overridden against the rule it broke.
 

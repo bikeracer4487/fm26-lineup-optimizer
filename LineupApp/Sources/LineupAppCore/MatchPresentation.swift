@@ -319,6 +319,21 @@ public struct FixtureCell: Identifiable, Equatable, Sendable {
     }
 }
 
+// MARK: Bans
+
+/// What Match Selection says about bans in a fixture, in the engine's sentence, and the button that changes whether
+/// they count in it.
+public struct BanNote: Equatable, Sendable {
+    public static let notForThisMatchTitle = "Their bans are not for this match"
+    public static let notForThisMatchTitleForOne = "His ban is not for this match"
+    public static let applyTitle = "Apply bans to this match"
+
+    public let sentence: String
+    public let buttonTitle: String
+    /// What the button sets: whether bans count in the fixture.
+    public let applies: Bool
+}
+
 // MARK: The game plan
 
 /// Which game plan to use if the match is simulated, as Match Selection shows it: the engine's line naming the plan,

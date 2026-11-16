@@ -97,6 +97,8 @@ public struct Planner: Sendable {
         try Self.checkDates(ordered, asOf: request.asOf)
 
         let fixtures = Array(ordered.prefix(request.settings.horizon))
+        // A ban is served in the earliest planned fixture that takes bans, and nowhere else.
+        let servingBans = fixtures.firstIndex(where: \.bansApply)
         guard !fixtures.isEmpty else { return Plan(fixtures: []) }
 
         let players = request.players.sorted { $0.id.key < $1.id.key }
@@ -163,7 +165,7 @@ public struct Planner: Sendable {
             case .medium:
                 let pickable = onTheDay.filter { player in
                     LineupSelector.exclusion(for: player, ownClub: request.ownClub, importance: fixture.importance,
-                                             isNextFixture: index == 0, rejected: fixture.rejected,
+                                             isNextFixture: index == servingBans, rejected: fixture.rejected,
                                              parameters: parameters) == nil
                 }
                 context.successorsFavoured = ImportanceRules.successors(players: pickable, context: context,
@@ -191,7 +193,7 @@ public struct Planner: Sendable {
             let projected = anyMatchSoFar || request.asOf < fixture.date
             let lineup = try selector.select(SelectionRequest(
                 tactic: fixture.tactic, players: onTheDay, ownClub: request.ownClub, importance: fixture.importance,
-                isNextFixture: index == 0, overrides: fixture.overrides, rejected: fixture.rejected,
+                isNextFixture: index == servingBans, overrides: fixture.overrides, rejected: fixture.rejected,
                 adjustments: everySlot, slotAdjustments: bySlot, fitnessIsProjected: projected))
             planned.append(PlannedFixture(fixture: fixture.id, lineup: lineup, fitness: fitness, fitnessIsProjected: projected))
 

@@ -38,13 +38,16 @@ public struct Fixture: Equatable, Sendable {
     /// Only read by the importance suggestion; the planner uses `importance`.
     public var competition: Competition?
     public var opponentStrength: OpponentStrength?
+    /// Whether a ban counts in this match. FMRTE says that a player is banned, not which matches the ban is for, so
+    /// the owner says where it does not count. A banned player misses the earliest planned fixture where it does.
+    public var bansApply: Bool
 
     public init(
         id: FixtureID, date: Day, opponent: String, importance: Importance, tactic: Tactic,
         overrides: [SlotID: PlayerID] = [:], rejected: Set<PlayerID> = [],
-        competition: Competition? = nil, opponentStrength: OpponentStrength? = nil
+        competition: Competition? = nil, opponentStrength: OpponentStrength? = nil, bansApply: Bool = true
     ) {
-        self.competition = competition; self.opponentStrength = opponentStrength
+        self.competition = competition; self.opponentStrength = opponentStrength; self.bansApply = bansApply
         self.id = id; self.date = date; self.opponent = opponent
         self.importance = importance; self.tactic = tactic
         self.overrides = overrides; self.rejected = rejected

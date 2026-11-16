@@ -321,6 +321,37 @@ import Testing
         #expect(starts(plan.fixtures[1], id(.ST_C)))
     }
 
+    @Test func aBanIsServedInTheFirstFixtureItAppliesTo() throws {
+        let players = changing(.ST_C) { $0.isBanned = true }
+        var cup = fixture("cup", day: 1)
+        cup.bansApply = false
+        let plan = try planner.plan(request([cup, fixture("league", day: 4), fixture("later", day: 8)], players: players))
+        // Not banned from the cup match: he starts it as he would with no ban.
+        #expect(starts(plan.fixtures[0], id(.ST_C)))
+        #expect(!plan.fixtures[0].lineup.omissions.contains { $0.cause == .excluded(.banned) })
+        // The ban is served in the next match it applies to, and only there.
+        #expect(!starts(plan.fixtures[1], id(.ST_C)))
+        #expect(plan.fixtures[1].lineup.omissions.first { $0.player == id(.ST_C) }?.cause == .excluded(.banned))
+        #expect(starts(plan.fixtures[2], id(.ST_C)))
+    }
+
+    @Test func aBanIsServedNowhereWhenNoPlannedFixtureTakesBans() throws {
+        let players = changing(.ST_C) { $0.isBanned = true }
+        var one = fixture("one", day: 1), two = fixture("two", day: 4)
+        one.bansApply = false
+        two.bansApply = false
+        let plan = try planner.plan(request([one, two], players: players))
+        #expect(plan.fixtures.allSatisfy { starts($0, id(.ST_C)) })
+    }
+
+    @Test func whereBansApplyChangesNothingWhenNobodyIsBanned() throws {
+        var cup = fixture("cup", day: 1)
+        let with = try planner.plan(request([cup, fixture("league", day: 4)]))
+        cup.bansApply = false
+        let without = try planner.plan(request([cup, fixture("league", day: 4)]))
+        #expect(with.fixtures.map(\.lineup) == without.fixtures.map(\.lineup))
+    }
+
     @Test func anInjuredPlayerMissesEveryFixture() throws {
         let players = changing(.ST_C) { $0.isInjured = true }
         let plan = try planner.plan(request([fixture("a", day: 1), fixture("b", day: 30)], players: players))

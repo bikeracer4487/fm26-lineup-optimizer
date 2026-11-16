@@ -212,6 +212,23 @@ public enum SampleData {
         return model
     }
 
+    /// The names of the three first-team players banned in `modelWithBans`.
+    public static let bannedNames = ["Darnell Johnson", "Dejan Tetek", "Tyrone Marsh"]
+
+    /// The sample model with three of its first eleven banned, as after a match in which each took the booking that
+    /// brings a ban. With `notForTheFirstMatch`, the owner has said the bans are not for the first fixture.
+    @MainActor public static func modelWithBans(repositoryRoot: URL, notForTheFirstMatch: Bool = false) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        edit(model) { player in
+            if bannedNames.contains(player.name) { player.isBanned = true }
+        }
+        guard model.players.filter(\.isBanned).count == bannedNames.count, let first = model.fixtures.first else {
+            throw SampleDataError(description: "The sample model lacks a fixture or one of the players to ban.")
+        }
+        if notForTheFirstMatch { model.setBansApply(false, in: first.id) }
+        return model
+    }
+
     /// The sample model with the owner's choices in the first fixture: the best available U21 player fixed at AM C,
     /// the injured goalkeeper fixed in goal (an override the engine cannot use) and the striker left out.
     @MainActor public static func modelWithChoices(repositoryRoot: URL) throws -> AppModel {
