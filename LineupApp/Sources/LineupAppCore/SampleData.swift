@@ -593,6 +593,35 @@ public enum SampleData {
         return model
     }
 
+    /// The hierarchy sample with the advice's first suggested first-team group recorded five weeks before the game's
+    /// current date, an import today in which the player its first arrow points to has fallen one in Professionalism,
+    /// and the group ended today, as End group does. It was doing harm when it ended, so the same three are not
+    /// suggested again, and the suggestion that puts him with another of them says what fell.
+    @MainActor public static func modelWithEndedGroup(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithHierarchy(repositoryRoot: repositoryRoot)
+        let group = try firstSuggestion(model)
+        let ceiling = model.planParameters.mentoringCeilings.value[.professionalism] ?? 20
+        guard let mentee = group.arrows.first?.arrow.to,
+              let value = (model.squad.book.current[.firstTeam] ?? []).first(where: { $0.id == mentee })?
+                .attributes[.professionalism], value > 1, value <= ceiling else {
+            throw SampleDataError(description: "The sample's first suggested group has no member who can fall in Professionalism.")
+        }
+        record(group, in: model, weeksAgo: 5)
+        edit(model) { if $0.id == mentee { $0.attributes[.professionalism] = value - 1 } }
+        model.recordPersonality(after: .firstTeam, on: model.settings.currentDate)
+        let today = model.settings.currentDate
+        model.changeMentoring { state in
+            for index in state.groups.indices where state.groups[index].isLive { state.groups[index].endedOn = today }
+        }
+        let fell = { (caution: MemberCaution) in if case .fell(mentee, _, _) = caution { true } else { false } }
+        guard case .ready(let report) = model.mentoringAdvice(for: .firstTeam),
+              !report.suggestions.contains(where: { $0.id == group.id }),
+              report.suggestions.contains(where: { $0.cautions.contains(where: fell) }) else {
+            throw SampleDataError(description: "The sample's ended group is suggested again, or no suggestion says who fell in it.")
+        }
+        return model
+    }
+
     /// The hierarchy sample with the six arrows of the advice's first suggested first-team group read today, each at
     /// the strength the tool guessed, as the owner records them in the arrows sheet, so that group rests on readings;
     /// the other suggestions still rest on guesses.

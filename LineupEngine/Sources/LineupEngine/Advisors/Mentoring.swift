@@ -66,10 +66,14 @@ public struct GroupArrow: Equatable, Sendable {
     public let pulls: [Pull]
 }
 
-/// Why a suggested group may not last: a member will go.
+/// What the owner should know before setting a suggested group up: a member will go, so it may not last, or a member
+/// came out of an earlier group with another of its members worth less.
 public enum MemberCaution: Equatable, Sendable {
     case onLoanHere(PlayerID)
     case advisedToLeave(PlayerID)
+    /// The first was worth less in these counted attributes, in `Mentoring.counted` order, when a group that held
+    /// the second ended than when he joined it. Which member caused it, if any did, is not known.
+    case fell(PlayerID, with: PlayerID, changes: [AttributeChange])
 }
 
 public struct SuggestedMember: Equatable, Sendable {
@@ -86,7 +90,8 @@ public struct SuggestedGroup: Identifiable, Equatable, Sendable {
     public let arrows: [GroupArrow]
     /// Every arrow the group rests on was read; false when any of them is a guess.
     public let isRead: Bool
-    /// On loan here first, then advised to leave; within each by key.
+    /// On loan here first, then advised to leave, then who fell in an earlier group with another member; within each
+    /// by key.
     public let cautions: [MemberCaution]
     public let basis: Evidence
 }
@@ -110,6 +115,9 @@ public enum NotPlacedReason: Equatable, Sendable {
     /// players, members of suggested groups included) is in no suggested group, but no third player is left unused
     /// with whom the two would harm nobody.
     case noThirdFree
+    /// Every group of three free players that would give him a gain and pull nobody down is one the owner ended while
+    /// it was doing harm or had stopped working.
+    case groupEnded
     /// Every helper is in a suggested group, or every player with something to give him is in a recorded group.
     case influencersTaken
 }
@@ -168,6 +176,10 @@ extension Mentoring {
     /// then to the one with more of its six arrows read, then to the lowest keys. This does
     /// not prove that no other set of groups has a greater total. Injury, bans and fitness are not looked at.
     ///
+    /// What was seen of a group the owner ended counts for more than its arrows: the three of a group that was doing
+    /// harm or had stopped working on the day it ended are never formed again, here or in a regrouping, and a
+    /// suggested group that holds a member who fell in an ended group and another member of it says so (`Seen`).
+    ///
     /// A regrouping is looked for among the squad's live recorded groups, one at a time and then two at a time: the
     /// present members of the groups, with the free players in no suggested group, are grouped as the suggestions
     /// are. It counts when the new groups' value is above the value of the groups broken up (a group with a harmful
@@ -209,6 +221,7 @@ extension Mentoring {
 
         let readings = readingsUsed(request.arrows, in: request.squad, among: Set(people.map(\.player.id)))
         let judge = Judge(people: people, squad: request.squad, readings: readings, counted: counted,
+                          seen: seen(request, people: people.map(\.player.id), parameters: parameters),
                           parameters: parameters)
 
         let pool = people.indices.filter { !people[$0].inRecordedGroup }
@@ -246,6 +259,40 @@ extension Mentoring {
             squad: request.squad, needsHierarchy: !people.contains { $0.standing > .others },
             isStale: isStale, suggestions: suggestions, notPlaced: notPlaced, groups: groups, regrouping: regrouping,
             basis: judge.basis)
+    }
+
+    /// What was seen of the groups the owner has ended, which counts for more than what their arrows promise.
+    private struct Seen {
+        /// The groups of three ended while they were doing harm or had stopped working, each as its members' places
+        /// in `people`, ascending. The same three are not suggested again; the owner can still record them by hand.
+        var spent: Set<[Int]> = []
+        /// `falls[member][other]`: the counted attributes in which `member` was worth less when a group holding
+        /// `other` ended than when he joined it. Of two such groups, the one that ended later.
+        var falls: [Int: [Int: [AttributeChange]]] = [:]
+    }
+
+    /// A group is judged as its card would have judged it on the day it ended: on its members then, and on their
+    /// readings up to that day, so a fall read after it ended is not held against it. The arrows and levels are
+    /// today's. Only a group of this squad whose three members are all still in it and not out on loan counts.
+    private static func seen(_ request: MentoringRequest, people: [PlayerID], parameters: EngineParameters) -> Seen {
+        var seen = Seen()
+        let ended = request.groups.filter { $0.squad == request.squad && $0.endedOn != nil }.sorted {
+            $0.endedOn! != $1.endedOn! ? $0.endedOn! < $1.endedOn! : $0.id.uuidString < $1.id.uuidString
+        }
+        for group in ended where group.current.count == groupSize {
+            let members = people.indices.filter { index in group.current.contains { $0.player == people[index] } }
+            guard members.count == groupSize else { continue }
+            var atItsEnd = request
+            atItsEnd.readings = request.readings.mapValues { $0.filter { $0.day <= group.endedOn! } }
+            let review = review(group, request: atItsEnd, parameters: parameters)
+            if review.isDoingHarm || review.hasStoppedWorking { seen.spent.insert(members) }
+            for member in members {
+                let fell = review.members.first { $0.player == people[member] }?.changes.filter { $0.change == .worse }
+                guard let fell, !fell.isEmpty else { continue }
+                for other in members where other != member { seen.falls[member, default: [:]][other] = fell }
+            }
+        }
+        return seen
     }
 
     // MARK: Rules shared with the review of a recorded group
@@ -338,13 +385,16 @@ extension Mentoring {
         /// Belongs to the club, not advised to leave, and below the ceiling in a counted attribute. Only players in no
         /// recorded group are ever asked about.
         let isCandidate: [Bool]
+        /// What was seen of the groups the owner has ended.
+        let seen: Seen
         /// The weakest evidence of every parameter a suggestion rests on.
         let basis: Evidence
 
-        init(people: [Person], squad: Squad, readings: [ArrowReading], counted: [Attribute],
+        init(people: [Person], squad: Squad, readings: [ArrowReading], counted: [Attribute], seen: Seen,
              parameters: EngineParameters) {
             self.people = people
             self.counted = counted
+            self.seen = seen
             self.parameters = parameters
             let standings = Dictionary(uniqueKeysWithValues: people.map { ($0.player.id, $0.standing) })
             let parties = people.map { Party(id: $0.player.id, standing: $0.standing, age: $0.player.age) }
@@ -387,9 +437,15 @@ extension Mentoring {
                                       parameters.mentoringTakesNothingAfter.evidence])!
         }
 
+        /// The group of three as one to form; nil when it is not valid, or is one the owner ended while it was doing
+        /// harm or had stopped working.
+        func option(_ members: [Int]) -> Option? {
+            seen.spent.contains(members) ? nil : valid(members)
+        }
+
         /// The group of three as an option; nil when it is not valid: an arrow among its six is harmful, or no
         /// candidate in it has an arrow into him with a gain above 0.
-        func option(_ members: [Int]) -> Option? {
+        func valid(_ members: [Int]) -> Option? {
             for from in members {
                 for to in members where to != from && harmful[from][to] { return nil }
             }
@@ -450,7 +506,8 @@ extension Mentoring {
             var best: (set: [Int], formed: [Option], difference: Int)?
             for set in ones + twos {
                 let members = set.flatMap { recorded[$0].members }
-                let old = set.reduce(0) { $0 + (option(recorded[$1].members)?.value ?? 0) }
+                // A recorded group counts for what its arrows give, whatever a group of the same three did before.
+                let old = set.reduce(0) { $0 + (valid(recorded[$1].members)?.value ?? 0) }
                 // No group is valid among the spare players alone, so every group formed holds a member.
                 var options: [Option] = []
                 for trio in trios((spare + members).sorted()) where trio.contains(where: members.contains) {
@@ -502,8 +559,14 @@ extension Mentoring {
                 return (x.from.key, x.to.key) < (y.from.key, y.to.key)
             }
             // Any member, whatever he gives: the group needs its three.
-            let cautions = members.filter { !people[$0].isOwn }.map { MemberCaution.onLoanHere(people[$0].player.id) }
+            var cautions = members.filter { !people[$0].isOwn }.map { MemberCaution.onLoanHere(people[$0].player.id) }
                 + members.filter { people[$0].isLeaving }.map { MemberCaution.advisedToLeave(people[$0].player.id) }
+            for member in members {
+                for other in members {
+                    guard let fell = seen.falls[member]?[other] else { continue }
+                    cautions.append(.fell(people[member].player.id, with: people[other].player.id, changes: fell))
+                }
+            }
             return SuggestedGroup(
                 members: members.map { SuggestedMember(player: people[$0].player.id, name: people[$0].player.name,
                                                         age: people[$0].player.age) },
@@ -534,12 +597,15 @@ extension Mentoring {
                 if pool.count < Mentoring.groupSize { return .tooFewFree }
                 // A helper gives him a gain and makes a valid group with him and some other free player; such a
                 // group then rests on an arrow into him, since he is a candidate.
-                let helpers = free.filter { helper in
-                    gains[helper][index] > 0 && free.contains { other in
-                        other != helper && option([index, helper, other].sorted()) != nil
+                func helping(_ group: ([Int]) -> Option?) -> [Int] {
+                    free.filter { helper in
+                        gains[helper][index] > 0 && free.contains { other in
+                            other != helper && group([index, helper, other].sorted()) != nil
+                        }
                     }
                 }
-                if helpers.isEmpty { return .wouldHarm }
+                let helpers = helping(option)
+                if helpers.isEmpty { return helping(valid).isEmpty ? .wouldHarm : .groupEnded }
                 if helpers.contains(where: { !used.contains($0) }) { return .noThirdFree }
             }
             return .influencersTaken

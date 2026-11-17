@@ -78,7 +78,16 @@ extension AdvisorText {
         switch caution {
         case .onLoanHere(let id): "\(names[id] ?? "A player") is on loan here: the group ends when he goes back."
         case .advisedToLeave(let id): "\(names[id] ?? "A player") is advised to leave: the group ends when he goes."
+        case .fell(let id, let other, let changes):
+            "\(names[id] ?? "A player")'s \(list(changes.map(fall))) in a group with \(names[other] ?? "another player") "
+                + "that you ended. What caused it is not known."
         }
+    }
+
+    /// "Professionalism fell from 13 to 12"; an attribute with a value missing is named alone.
+    private static func fall(_ change: AttributeChange) -> String {
+        guard let start = change.start, let latest = change.latest else { return "\(change.attribute.rawValue) fell" }
+        return "\(change.attribute.rawValue) fell from \(start) to \(latest)"
     }
 
     public static func notPlaced(_ player: NotPlaced) -> String {
@@ -92,6 +101,8 @@ extension AdvisorText {
         case .noThirdFree:
             "\(who): no third player is left free who could join him and a player who could influence him "
                 + "without pulling a player down."
+        case .groupEnded:
+            "\(who): every group that would help him is one you ended while it was doing harm or had stopped working."
         case .influencersTaken: "\(who): the players who could influence him are already in a group."
         }
     }

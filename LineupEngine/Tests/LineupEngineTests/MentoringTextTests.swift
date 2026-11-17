@@ -67,6 +67,17 @@ import Testing
                 == "A player is on loan here: the group ends when he goes back.")
         #expect(AdvisorText.caution(.advisedToLeave(PlayerID(key: "fmrte:123")), names: [:])
                 == "A player is advised to leave: the group ends when he goes.")
+        let fell = [AttributeChange(attribute: .professionalism, start: 13, latest: 12, weeks: 5, change: .worse),
+                    AttributeChange(attribute: .ambition, start: 10, latest: 8, weeks: 5, change: .worse)]
+        #expect(AdvisorText.caution(.fell(hart, with: reid, changes: [fell[0]]), names: names)
+                == "Hart's Professionalism fell from 13 to 12 in a group with Reid that you ended. What caused it is not known.")
+        #expect(AdvisorText.caution(.fell(hart, with: reid, changes: fell), names: names)
+                == "Hart's Professionalism fell from 13 to 12 and Ambition fell from 10 to 8 in a group with Reid that you "
+                + "ended. What caused it is not known.")
+        #expect(AdvisorText.caution(.fell(PlayerID(key: "fmrte:1"), with: PlayerID(key: "fmrte:2"), changes: [fell[0]]),
+                                    names: [:])
+                == "A player's Professionalism fell from 13 to 12 in a group with another player that you ended. What "
+                + "caused it is not known.")
     }
 
     @Test func eachNotPlacedReasonHasItsOwnSentence() {
@@ -80,6 +91,8 @@ import Testing
         #expect(sentence(.wouldHarm) == "Dunn (17): every group that would help him would pull a player down.")
         #expect(sentence(.noThirdFree) == "Dunn (17): no third player is left free who could join him and a player "
                 + "who could influence him without pulling a player down.")
+        #expect(sentence(.groupEnded) == "Dunn (17): every group that would help him is one you ended while it was "
+                + "doing harm or had stopped working.")
         #expect(sentence(.influencersTaken) == "Dunn (17): the players who could influence him are already in a group.")
     }
 

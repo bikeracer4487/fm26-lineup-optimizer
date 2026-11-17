@@ -37,17 +37,33 @@ import Testing
 
     func request(_ players: [Player], squad: Squad = .firstTeam, dynamics: [PlayerID: PlayerDynamics] = [:],
                  updatedOn: Day? = nil, groups: [MentoringGroup] = [], arrows: [ArrowReading] = [],
-                 leaving: Set<PlayerID> = []) -> MentoringRequest {
+                 leaving: Set<PlayerID> = [], readings: [String: [PersonalityReading]] = [:]) -> MentoringRequest {
         MentoringRequest(squad: squad, players: players, ownClub: "Oxford City", dynamics: dynamics,
-                         dynamicsUpdatedOn: updatedOn, groups: groups, readings: [:], arrows: arrows, names: [:],
-                         leaving: leaving, asOf: today)
+                         dynamicsUpdatedOn: updatedOn, groups: groups,
+                         readings: Dictionary(uniqueKeysWithValues: readings.map { (id($0.key), $0.value) }),
+                         arrows: arrows, names: [:], leaving: leaving, asOf: today)
     }
 
     func report(_ players: [Player], squad: Squad = .firstTeam, dynamics: [PlayerID: PlayerDynamics] = [:],
                 updatedOn: Day? = nil, groups: [MentoringGroup] = [], arrows: [ArrowReading] = [],
-                leaving: Set<PlayerID> = [], parameters: EngineParameters? = nil) throws -> MentoringReport {
+                leaving: Set<PlayerID> = [], readings: [String: [PersonalityReading]] = [:],
+                parameters: EngineParameters? = nil) throws -> MentoringReport {
         try Mentoring.report(request(players, squad: squad, dynamics: dynamics, updatedOn: updatedOn, groups: groups,
-                                     arrows: arrows, leaving: leaving), parameters: parameters ?? q)
+                                     arrows: arrows, leaving: leaving, readings: readings), parameters: parameters ?? q)
+    }
+
+    /// The counted attributes at 10 unless `values` says otherwise, read `daysAgo` days before today.
+    func values(_ daysAgo: Int, _ values: [Attribute: Int] = [:]) -> PersonalityReading {
+        PersonalityReading(day: today.adding(days: -daysAgo),
+                           values: [.professionalism: 10, .pressure: 10, .determination: 10, .ambition: 10]
+                               .merging(values) { _, new in new })
+    }
+
+    /// A group of the named players that ran from `from` days ago to `to` days ago.
+    func ended(_ names: [String], from: Int = 60, to: Int = 1, squad: Squad = .firstTeam) -> MentoringGroup {
+        let start = today.adding(days: -from)
+        return MentoringGroup(id: UUID(), squad: squad, startedOn: start, endedOn: today.adding(days: -to),
+                              members: names.map { MentoringMember(player: id($0), joinedOn: start) })
     }
 
     /// Each suggestion's three keys.
@@ -335,6 +351,120 @@ import Testing
         let levelsOfTwo = levels(["Lead": .teamLeader, "Vet": .influential])
         #expect(shape(try report(spare, dynamics: levelsOfTwo)) == [["ash", "kid", "lead"]])
         #expect(shape(try report(spare, dynamics: levelsOfTwo, leaving: [id("Ash")])) == [["kid", "lead", "vet"]])
+    }
+
+    // MARK: A group the owner ended
+
+    /// Lead gives Kid a gain; Ash and Bell are alike and make up the three, Ash first by his key.
+    var endedSquad: [Player] {
+        [senior("Lead"), player("Kid", 18), player("Ash", 28, [.professionalism: 20]),
+         player("Bell", 28, [.professionalism: 20])]
+    }
+
+    @Test func aGroupEndedWhileDoingHarmIsNotSuggestedAgain() throws {
+        let fell = ["Kid": [values(60), values(10, [.ambition: 9])]]
+        #expect(shape(try report(endedSquad, dynamics: leader, readings: fell)) == [["ash", "kid", "lead"]])
+        let again = try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Ash"])], readings: fell)
+        #expect(shape(again) == [["bell", "kid", "lead"]])
+        // The mentor's fall counts as any member's does.
+        let leadFell = ["Lead": [values(60), values(10, [.ambition: 9])]]
+        #expect(shape(try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Ash"])],
+                                 readings: leadFell)) == [["bell", "kid", "lead"]])
+    }
+
+    @Test func aGroupEndedAfterItStoppedWorkingIsNotSuggestedAgain() throws {
+        // Kid, the one member with an arrow into him, did not change in the 110 days read while it ran.
+        let still = ["Kid": [values(120), values(10)]]
+        let again = try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Ash"], from: 120)],
+                               readings: still)
+        #expect(shape(again) == [["bell", "kid", "lead"]])
+        // Under thirteen weeks it had not stopped.
+        let short = ["Kid": [values(80), values(10)]]
+        #expect(shape(try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Ash"], from: 80)],
+                                 readings: short)) == [["ash", "kid", "lead"]])
+    }
+
+    @Test func anEndedGroupThatDidNoHarmCanBeSuggestedAgain() throws {
+        let same = ["ash", "kid", "lead"]
+        // Nothing read, no change, and a gain.
+        #expect(shape(try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Ash"])])) == [same])
+        #expect(shape(try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Ash"])],
+                                 readings: ["Kid": [values(60), values(10)]])) == [same])
+        #expect(shape(try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Ash"])],
+                                 readings: ["Kid": [values(60), values(10, [.ambition: 11])]])) == [same])
+        // A fall read after the group ended is not the group's.
+        #expect(shape(try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Ash"], to: 20)],
+                                 readings: ["Kid": [values(60), values(30), values(10, [.ambition: 9])]])) == [same])
+        // A fall before he joined is not either.
+        #expect(shape(try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Ash"], from: 30)],
+                                 readings: ["Kid": [values(90, [.ambition: 11]), values(60), values(10)]])) == [same])
+    }
+
+    @Test func onlyTheSameThreeAreNotSuggestedAgain() throws {
+        let fell = ["Kid": [values(60), values(10, [.ambition: 9])]]
+        // Another three, two of them the same; another squad's group; and a member taken out before it ended.
+        #expect(shape(try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Bell"])], readings: fell))
+            == [["ash", "kid", "lead"]])
+        #expect(shape(try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Ash"], squad: .u21)],
+                                 readings: fell)) == [["ash", "kid", "lead"]])
+        var swapped = ended(["Lead", "Kid", "Ash"])
+        swapped.members[2].leftOn = today.adding(days: -30)
+        #expect(shape(try report(endedSquad, dynamics: leader, groups: [swapped], readings: fell)) == [["ash", "kid", "lead"]])
+    }
+
+    @Test func aPlayerWhoseOnlyGroupWasEndedIsNotPlacedAndSaysSo() throws {
+        let three = [senior("Lead"), player("Kid", 18), player("Ash", 28, [.professionalism: 20])]
+        let fell = ["Kid": [values(60), values(10, [.ambition: 9])]]
+        let result = try report(three, dynamics: leader, groups: [ended(["Lead", "Kid", "Ash"])], readings: fell)
+        #expect(shape(result) == [])
+        #expect(notPlaced(result) == ["kid": .groupEnded])
+        let line = try #require(result.notPlaced.first)
+        #expect(AdvisorText.notPlaced(line) == "Kid (18): every group that would help him is one you ended while it "
+            + "was doing harm or had stopped working.")
+        // With no such group the three are suggested, and nobody is left out.
+        #expect(notPlaced(try report(three, dynamics: leader, readings: fell)) == [:])
+    }
+
+    @Test func aMemberWhoFellIsCautionedWhenPutWithAnotherOfThatGroup() throws {
+        let fell = ["Kid": [values(60), values(10, [.ambition: 9, .professionalism: 9])]]
+        let again = try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Ash"])], readings: fell)
+        #expect(shape(again) == [["bell", "kid", "lead"]])
+        // The counted attributes that fell, in their order; Bell was not in that group.
+        let weeks = Double(50) / 7
+        #expect(again.suggestions.first?.cautions == [.fell(id("Kid"), with: id("Lead"), changes: [
+            AttributeChange(attribute: .professionalism, start: 10, latest: 9, weeks: weeks, change: .worse),
+            AttributeChange(attribute: .ambition, start: 10, latest: 9, weeks: weeks, change: .worse)])])
+        // It follows the other cautions.
+        let going = try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Ash"])], leaving: [id("Bell")],
+                               readings: fell)
+        #expect(going.suggestions.first?.cautions.first == .advisedToLeave(id("Bell")))
+        #expect(going.suggestions.first?.cautions.count == 2)
+    }
+
+    @Test func nobodyIsCautionedForAGroupInWhichNobodyFell() throws {
+        // He rose, or the fall came after it ended.
+        let rose = ["Kid": [values(60), values(10, [.ambition: 11])]]
+        let later = ["Kid": [values(60), values(30), values(10, [.ambition: 9])]]
+        let fell = ["Kid": [values(60), values(10, [.ambition: 9])]]
+        let other = ended(["Lead", "Kid", "Bell"])
+        #expect(try report(endedSquad, dynamics: leader, groups: [other], readings: rose).suggestions.first?.cautions == [])
+        #expect(try report(endedSquad, dynamics: leader, groups: [ended(["Lead", "Kid", "Bell"], to: 20)], readings: later)
+            .suggestions.first?.cautions == [])
+        // Without the fall's group the same suggestion carries nothing.
+        #expect(try report(endedSquad, dynamics: leader, readings: fell).suggestions.first?.cautions == [])
+    }
+
+    @Test func aRegroupingNeverFormsAGroupEndedWhileDoingHarm() throws {
+        // Kid is recorded with two who give him nothing; breaking that up would put him with Lead and Ash.
+        let players = [senior("Lead"), player("Kid", 18), player("Ash", 28, [.professionalism: 20]),
+                       player("Cole", 28, [.professionalism: 20]), player("Dunn", 28, [.professionalism: 20])]
+        let live = group(["cole", "dunn", "kid"])
+        let free = try report(players, dynamics: leader, groups: [live])
+        #expect(free.regrouping?.groups.map { $0.members.map(\.player.key) } == [["ash", "kid", "lead"]])
+        let fell = ["Kid": [values(200), values(150, [.ambition: 9]), values(100, [.ambition: 9])]]
+        let barred = try report(players, dynamics: leader,
+                                groups: [live, ended(["Lead", "Kid", "Ash"], from: 200, to: 100)], readings: fell)
+        #expect(barred.regrouping?.groups.map { $0.members.map(\.player.key) } == [["cole", "kid", "lead"]])
     }
 
     @Test func aMemberWhoWillGoIsStillUsedWhenNobodyElseCanMakeUpTheGroupOrWhenHisGroupGivesMore() throws {

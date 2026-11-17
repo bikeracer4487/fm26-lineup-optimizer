@@ -233,6 +233,25 @@ Two changes to 8.4, built with no plan:
 
 On the owner's saved state of 8 September 2026 (in the game), ending that group now suggests Matty Taylor, Dillon De Silva and Dejan Tetek, resting on the same read arrow. A recorded group is not looked at again for this: the card says a member is advised to leave, as before, and the owner ends the group to be offered another.
 
+## 13c. Added on 16 November 2026: a group the owner ended
+
+The owner's group of Fernando Forestieri, Keegan Bloom and Samuel Onyekachukwu was called "doing harm": Bloom's Professionalism had gone from 13 to 12 since he joined. The owner ended it, in the tool and in the game, and the same three were suggested again.
+
+The cause. "Doing harm" and "stopped working" (8.5) are what the tool saw of a group, from the readings taken at each import. The suggestions (8.4) are built from arrows and present values alone, and read nothing of how an ended group went. By its arrows this group was sound: Light from Forestieri into each of the other two, None for the rest, and Forestieri above Bloom in every counted attribute. So the card and the suggestions disagreed, and the suggestions won once the group was ended.
+
+Two changes to 8.4, built with no plan. What was seen of a group counts for more than what its arrows promise.
+
+- **The same three are not suggested again** when the group they made was doing harm or had stopped working on the day it ended. It is judged as its card would have judged it that day: on its members then, and on their readings up to that day, so a fall read after it ended is not held against it. The arrows and levels are today's. This holds for a regrouping's groups too. A candidate for whom every group that would help is such a group is listed as not placed, and the line says so. The owner can still record the three by hand; a group he records is read afresh from the day it starts, and counts in a regrouping for what its arrows give.
+- **A caution on a suggested group** that puts a member who fell together with another member of the group he fell in: "Keegan Bloom's Professionalism fell from 13 to 12 in a group with Fernando Forestieri that you ended. What caused it is not known." It is said whatever the arrows between the two are. Of two ended groups that held the pair, the later counts.
+
+An ended group that did no harm and had not stopped can be suggested again as before (13b covers the member who will go). Only a group of this squad whose three members at its end are all still in it and not out on loan is read.
+
+The alternative considered, and not built: never putting the member who fell with either of the other two again. It was dropped because the tool cannot say which member, if any, caused the fall. In this case the only arrow above None into Bloom came from Forestieri, who is above him in every counted attribute, so by the arrows Forestieri cannot have pulled him down, and Forestieri is also the one player who could lift Bloom's Determination of 4. Bloom's four changes that week (Professionalism 13 to 12, Adaptability 16 to 15, Temperament 12 to 13, Controversy 6 to 7) each moved towards one of the other two, three of them towards Onyekachukwu, whose arrow into him the game showed as None. That is one observation. It may mean an arrow of None is not nothing, or that the change came from outside the group (the research says players are influenced by the squad's personality and social groups without mentoring). The owner decides; the caution gives him what was seen.
+
+On the owner's saved state of 3 October 2026 (in the game), the three are no longer suggested. Forestieri, Bloom and Dillon De Silva are, resting on the read arrow from Forestieri into Bloom, with the caution above; Onyekachukwu is not placed, and the regrouping would put him with Alfie Potter and Fran Byram.
+
+Limits. The bar on the same three never lapses, whatever changes later in their values. A fall is held against the group whatever caused it. Where a member of the ended group has left the squad, nothing of it is read, so no caution is given for the two who remain. "Stopped working" at the end is judged with today's arrows, since the arrows of that day are not kept apart.
+
 ## 14. Left to the builder
 
 - The types' names, and how the readings are keyed and saved.

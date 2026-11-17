@@ -285,13 +285,14 @@ import Testing
     /// Every reason: a new case stops this from building until it is added below.
     private func listed(_ reason: NotPlacedReason) -> Bool {
         switch reason {
-        case .takesNothing, .noInfluence, .nothingToGain, .tooFewFree, .wouldHarm, .noThirdFree, .influencersTaken: true
+        case .takesNothing, .noInfluence, .nothingToGain, .tooFewFree, .wouldHarm, .noThirdFree, .groupEnded,
+             .influencersTaken: true
         }
     }
 
     @Test func notPlacedAreTheEnginesSentences() throws {
         let reasons: [NotPlacedReason] = [.takesNothing, .noInfluence, .nothingToGain, .tooFewFree, .wouldHarm,
-                                          .noThirdFree, .influencersTaken]
+                                          .noThirdFree, .groupEnded, .influencersTaken]
         #expect(reasons.allSatisfy(listed))
         let missing = reasons.map { NotPlaced(player: pike, name: "Pike", age: 17, reason: $0) }
         let shown = try sheet([], advice: pinned(notPlaced: missing))

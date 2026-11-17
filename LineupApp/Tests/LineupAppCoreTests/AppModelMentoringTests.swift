@@ -1293,6 +1293,40 @@ import LineupEngine
         #expect(after.suggested.allSatisfy { $0.recordTitle == "Record as set" })
     }
 
+    @Test func theEndedSampleDoesNotSuggestItsGroupAgainAndSaysWhoFell() throws {
+        let model = try SampleData.modelWithEndedGroup(repositoryRoot: Captures.repositoryRoot)
+        let ended = try #require(model.mentoring.groups.first)
+        #expect(model.mentoring.groups.count == 1 && !ended.isLive)
+        let members = Set(ended.members.map(\.player))
+        let advice = try report(model)
+        #expect(advice.groups.isEmpty)
+        #expect(!advice.suggestions.contains { Set($0.members.map(\.player)) == members })
+        // The suggestion that puts the member who fell with another of that group says so, in the engine's sentence.
+        let sheet = model.mentoringSheet(for: .firstTeam)
+        #expect(sheet.yours.isEmpty)
+        let card = try #require(sheet.suggested.first { !$0.cautions.isEmpty })
+        #expect(card.suggestion.members.filter { members.contains($0.player) }.count == 2)
+        let caution = try #require(card.cautions.first)
+        #expect(card.cautions.count == 1)
+        #expect(caution.contains("'s Professionalism fell from "))
+        #expect(caution.hasSuffix(" that you ended. What caused it is not known."))
+        #expect(sheet.suggested.filter { !$0.cautions.isEmpty }.count == 1)
+        #expect(model.notices.isEmpty)
+    }
+
+    @Test func aGroupEndedWithAMemberRisenIsSuggestedAgain() throws {
+        let model = try SampleData.modelWithMentoringGroup(repositoryRoot: Captures.repositoryRoot)
+        let group = try #require(model.mentoring.groups.first)
+        let members = Set(group.members.map(\.player))
+        let today = model.settings.currentDate
+        model.changeMentoring { $0.groups[0].endedOn = today }
+        let sheet = model.mentoringSheet(for: .firstTeam)
+        #expect(sheet.yours.isEmpty)
+        let card = try #require(sheet.suggested.first { Set($0.suggestion.members.map(\.player)) == members })
+        #expect(card.cautions.isEmpty)
+        #expect(sheet.suggested.allSatisfy { $0.cautions.isEmpty })
+    }
+
     @Test func theSpentSampleHasAGroupWhoseReadArrowsGiveNothing() throws {
         let model = try SampleData.modelWithSpentGroup(repositoryRoot: Captures.repositoryRoot)
         let advice = try report(model)

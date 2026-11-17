@@ -102,8 +102,10 @@
 //                                              seniors recorded as a group, which is expected to give nobody
 //                                              anything and which a regrouping would break up
 //                                              ("training-mentoring-regroup-…", and "…-regroup-small-…" in the
-//                                              smallest window's width), and the same with its arrows read
-//                                              ("training-mentoring-spent-…").
+//                                              smallest window's width), the same with its arrows read
+//                                              ("training-mentoring-spent-…"), and with a group ended while it
+//                                              was doing harm, whose three are not suggested again
+//                                              ("training-mentoring-ended-…").
 //                                              Its editors are drawn on their own: the first team's hierarchy
 //                                              as entered ("training-mentoring-hierarchy-editor-…"), the U21s'
 //                                              ("training-mentoring-hierarchy-editor-u21-…"), a new group
@@ -190,7 +192,7 @@ enum SampleState {
     case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, nothingToRetrain, loanee
     case differingSuggestion
     case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
-    case arrowsRead, harmfulArrow, noInfluence, regrouping, spentGroup, youngPlayers
+    case arrowsRead, harmfulArrow, noInfluence, regrouping, spentGroup, endedGroup, youngPlayers
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -230,6 +232,7 @@ enum SampleState {
         case .harmfulArrow: return try SampleData.modelWithHarmfulArrow(repositoryRoot: url)
         case .noInfluence: return try SampleData.modelWithNoInfluence(repositoryRoot: url)
         case .regrouping: return try SampleData.modelWithRegrouping(repositoryRoot: url)
+        case .endedGroup: return try SampleData.modelWithEndedGroup(repositoryRoot: url)
         case .spentGroup: return try SampleData.modelWithSpentGroup(repositoryRoot: url)
         case .youngPlayers: return try SampleData.modelWithYoungPlayers(repositoryRoot: url)
         }
@@ -424,6 +427,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
         ("mentoring-arrows-none", sampleModel(root, .noInfluence), tall, mentoring),
         ("mentoring-regroup", sampleModel(root, .regrouping), tall, mentoring),
         ("mentoring-spent", sampleModel(root, .spentGroup), tall, mentoring),
+        ("mentoring-ended", sampleModel(root, .endedGroup), tall, mentoring),
         ("mentoring-regroup-small", sampleModel(root, .regrouping),
          CGSize(width: Theme.Layout.minimumWindow.width, height: Theme.Layout.minimumWindow.height * 4), mentoring),
     ]
