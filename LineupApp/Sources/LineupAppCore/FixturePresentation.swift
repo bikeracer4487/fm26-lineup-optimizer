@@ -279,4 +279,35 @@ extension AppModel {
         changed.currentDate = settings.currentDate.adding(days: days)
         update(changed)
     }
+
+    /// The earliest fixture from today on with no lineup confirmed; nil when there is none. The Fixtures screen opens
+    /// scrolled to it, and "Next match" moves today to its day.
+    public var nextMatch: StoredFixture? {
+        fixtures.first { state(of: $0) == .toPlay }
+    }
+
+    public static let nextMatchTitle = "Next match"
+
+    /// Whether "Next match" has a day to move today to: there is a next match, and it is after today.
+    public var canMoveTodayToNextMatch: Bool {
+        nextMatch.map { $0.date > settings.currentDate } ?? false
+    }
+
+    /// What "Next match" would do, or why it can do nothing.
+    public var nextMatchHelp: String {
+        guard let next = nextMatch else { return "No match from today on is without a confirmed lineup." }
+        guard next.date > settings.currentDate else {
+            return "The next match with no lineup confirmed is today, against \(next.opponent)."
+        }
+        return "Sets today in the game to \(DayText.short(next.date)), the day of the next match with no lineup "
+            + "confirmed, against \(next.opponent)."
+    }
+
+    /// Moves the game's current date on to the day of the next match; nothing happens when there is none after today.
+    public func moveTodayToNextMatch() {
+        guard canMoveTodayToNextMatch, let next = nextMatch else { return }
+        var changed = settings
+        changed.currentDate = next.date
+        update(changed)
+    }
 }

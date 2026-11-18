@@ -115,7 +115,8 @@ struct ScreenPill: View {
     }
 }
 
-/// The date in the game on a yellow note, with the day before, the day after and a calendar to choose another.
+/// The date in the game on a yellow note, with the day before, the day after, the day of the next match with no lineup
+/// confirmed and a calendar to choose another.
 struct TodayNote: View {
     let model: AppModel
     @State private var choosing = false
@@ -132,6 +133,9 @@ struct TodayNote: View {
             HStack(spacing: Theme.Spacing.m) {
                 Button("Day before") { model.moveToday(by: -1) }
                 Button("Day after") { model.moveToday(by: 1) }
+                Button(AppModel.nextMatchTitle) { model.moveTodayToNextMatch() }
+                    .disabled(!model.canMoveTodayToNextMatch)
+                    .help(model.nextMatchHelp)
                 Button("Choose a day") { choosing = true }
                     .popover(isPresented: $choosing, arrowEdge: .bottom) {
                         DayPicker("Today in the game", day: today, graphical: true)

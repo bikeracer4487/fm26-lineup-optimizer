@@ -26,7 +26,10 @@
 //                                              the editor on its own for that fixture
 //                                              ("fixture-editor-suggestion-…"). The Fixtures screen is drawn
 //                                              again with the league situation "Nothing to play for", so its
-//                                              league fixtures' suggestions differ ("fixtures-situation-…"),
+//                                              league fixtures' suggestions differ ("fixtures-situation-…");
+//                                              later in a season in the smallest window, with twelve fixtures
+//                                              and the first six confirmed, so the table scrolls and opens
+//                                              with the next match in the middle ("fixtures-midseason-…");
 //                                              and the editor on its own for the second fixture after its
 //                                              opponent's squad was pasted ("fixtures-editor-reading-…") and
 //                                              after the sample's own first team was pasted and refused
@@ -342,6 +345,11 @@ let narrowWindow = CGSize(width: 800, height: 700)
     let situation = sampleModel(root)
     situation.setLeagueSituation(.nothingToPlayFor)
     try ScreenPictures.write(model: situation, to: directory, size: size, variant: "situation", screens: [.fixtures])
+
+    // Twelve fixtures with the first six confirmed, in the smallest window: the table scrolls, and opens with the next
+    // match in the middle.
+    try ScreenPictures.write(model: sampleModel(root, .midSeason), to: directory, size: Theme.Layout.minimumWindow,
+                             variant: "midseason", screens: [.fixtures])
 
     // The editor after the opponent's squad was pasted, and after the owner's own squad was pasted and refused.
     let url = URL(fileURLWithPath: root, isDirectory: true)

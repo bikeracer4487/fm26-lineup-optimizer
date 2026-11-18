@@ -15,7 +15,8 @@ public struct FixturesStart: Sendable {
 /// the editor for adding or changing one is a card on the board above them, its draft kept in the window's navigation
 /// so it survives a change of screen. Under a fixture's note, the importance the advice suggests when it differs from
 /// the owner's; a click on it shows its reasons under the row, one fixture's at a time, and "Use it" under it takes it.
-/// While there are fixtures, the league situation's menu sits at the heading's trailing edge. The rows always fit the board:
+/// While there are fixtures, the league situation's menu sits at the heading's trailing edge. The table opens scrolled
+/// so the next match with no lineup confirmed is in the middle. The rows always fit the board:
 /// the opponent, tactic, state and suggestion wrap, and when there is still no room, Edit and Delete go on a line of
 /// their own under each fixture.
 public struct FixturesScreen: View {
@@ -112,12 +113,25 @@ public struct FixturesScreen: View {
             }
             .frame(height: Theme.Table.headingHeight)
             HeavyRule()
-            ScrollView(.vertical) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(model.fixtures.enumerated()), id: \.element.id) { index, fixture in
-                        row(fixture, index: index, actionsBeside: actionsBeside)
-                        FaintRule()
+            // The rows open with the next match in the middle, so the matches already played are above it; when
+            // another becomes the next match they scroll only as far as it takes to show it.
+            ScrollViewReader { scroller in
+                ScrollView(.vertical) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(model.fixtures.enumerated()), id: \.element.id) { index, fixture in
+                            VStack(alignment: .leading, spacing: 0) {
+                                row(fixture, index: index, actionsBeside: actionsBeside)
+                                FaintRule()
+                            }
+                            .id(fixture.id)
+                        }
                     }
+                }
+                .onAppear {
+                    if let next = model.nextMatch?.id { scroller.scrollTo(next, anchor: .center) }
+                }
+                .onChange(of: model.nextMatch?.id) { _, next in
+                    if let next { withAnimation { scroller.scrollTo(next) } }
                 }
             }
         }

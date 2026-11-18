@@ -882,6 +882,79 @@ import Testing
         #expect(t.reopened().settings.currentDate == day("2026-11-12"))
         #expect(t.model.todayInTheGameText == "Today in the game: Thursday 12 November 2026")
     }
+
+    // MARK: The next match
+
+    @Test func theNextMatchIsTheEarliestFromTodayOnWithNoLineupConfirmed() throws {
+        let t = try TestModel()
+        // Added out of date order: a missed match, today's match already confirmed, and two still to play.
+        t.model.addFixture(date: day("2026-11-18"), opponent: "Later", importance: .low)
+        t.model.addFixture(date: day("2026-11-10"), opponent: "Missed", importance: .low)
+        let next = t.model.addFixture(date: day("2026-11-15"), opponent: "Next", importance: .low)
+        let played = t.model.addFixture(date: day("2026-11-13"), opponent: "Played", importance: .low)
+        t.model.history = [record(for: played, on: day("2026-11-13"))]
+        #expect(t.model.nextMatch?.id == next)
+    }
+
+    @Test func aMatchTodayWithNoLineupConfirmedIsTheNextMatch() throws {
+        let t = try TestModel()
+        t.model.addFixture(date: day("2026-11-15"), opponent: "Later", importance: .low)
+        let today = t.model.addFixture(date: day("2026-11-13"), opponent: "Today", importance: .low)
+        #expect(t.model.nextMatch?.id == today)
+    }
+
+    @Test func thereIsNoNextMatchWhenEveryFixtureIsPastOrConfirmed() throws {
+        let t = try TestModel()
+        #expect(t.model.nextMatch == nil)
+        t.model.addFixture(date: day("2026-11-10"), opponent: "Missed", importance: .low)
+        let played = t.model.addFixture(date: day("2026-11-20"), opponent: "Played", importance: .low)
+        t.model.history = [record(for: played, on: day("2026-11-20"))]
+        #expect(t.model.nextMatch == nil)
+    }
+
+    @Test func nextMatchMovesTodayToItsDayAndIsSaved() throws {
+        let t = try TestModel()
+        t.model.addFixture(date: day("2026-11-10"), opponent: "Missed", importance: .low)
+        t.model.addFixture(date: day("2026-11-15"), opponent: "Banbury United", importance: .low)
+        t.model.addFixture(date: day("2026-11-18"), opponent: "Later", importance: .low)
+        #expect(t.model.canMoveTodayToNextMatch)
+        #expect(t.model.nextMatchHelp
+                == "Sets today in the game to Sun 15 Nov, the day of the next match with no lineup confirmed, "
+                + "against Banbury United.")
+        t.model.moveTodayToNextMatch()
+        #expect(t.model.settings.currentDate == day("2026-11-15"))
+        #expect(t.reopened().settings.currentDate == day("2026-11-15"))
+    }
+
+    @Test func nextMatchDoesNothingWhenTheNextMatchIsToday() throws {
+        let t = try TestModel()
+        t.model.addFixture(date: day("2026-11-13"), opponent: "Banbury United", importance: .low)
+        t.model.addFixture(date: day("2026-11-18"), opponent: "Later", importance: .low)
+        #expect(!t.model.canMoveTodayToNextMatch)
+        #expect(t.model.nextMatchHelp == "The next match with no lineup confirmed is today, against Banbury United.")
+        t.model.moveTodayToNextMatch()
+        #expect(t.model.settings.currentDate == day("2026-11-13"))
+    }
+
+    @Test func nextMatchDoesNothingWhenNoMatchIsStillToPlay() throws {
+        let t = try TestModel()
+        t.model.addFixture(date: day("2026-11-10"), opponent: "Missed", importance: .low)
+        #expect(!t.model.canMoveTodayToNextMatch)
+        #expect(t.model.nextMatchHelp == "No match from today on is without a confirmed lineup.")
+        t.model.moveTodayToNextMatch()
+        #expect(t.model.settings.currentDate == day("2026-11-13"))
+    }
+
+    @Test func confirmingTodaysMatchMakesTheOneAfterItTheNextMatch() throws {
+        let t = try TestModel()
+        let today = t.model.addFixture(date: day("2026-11-13"), opponent: "Today", importance: .low)
+        t.model.addFixture(date: day("2026-11-17"), opponent: "After", importance: .low)
+        t.model.history = [record(for: today, on: day("2026-11-13"))]
+        #expect(t.model.canMoveTodayToNextMatch)
+        t.model.moveTodayToNextMatch()
+        #expect(t.model.settings.currentDate == day("2026-11-17"))
+        #expect(AppModel.nextMatchTitle == "Next match")
+    }
 }
 
 // MARK: Pasting the opponent's squad
