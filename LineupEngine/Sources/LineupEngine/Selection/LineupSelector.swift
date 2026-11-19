@@ -520,6 +520,9 @@ public enum Display {
     public static func percent(_ fraction: Double) -> String { "\(Int((fraction * 100 + displayNoise).rounded(.down)))%" }
     static func twoDecimals(_ x: Double) -> String { String(format: "%.2f", x) }
 
+    /// A share as a percentage to one decimal, without a sign: 0.057 is "5.7%".
+    public static func onePercentDecimal(_ share: Double) -> String { String(format: "%.1f%%", abs(share) * 100) }
+
     /// Whole units of the currency with a comma between each group of three digits, whatever the locale: "$1,250".
     public static func money(_ amount: Int, symbol: String) -> String {
         var digits = String(amount.magnitude)

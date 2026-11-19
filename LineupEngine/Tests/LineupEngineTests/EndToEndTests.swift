@@ -384,6 +384,40 @@ import Testing
         #expect(fixtures.contains { $0.date == Day(iso: "2026-11-21") })
     }
 
+    @Test func theCapturedSquadsHaveScoutingNeeds() throws {
+        let book = try realBook()
+        let players = book.allPlayers
+        let ownClub = book.ownClub(override: ownClubName)
+        let tactic = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
+        let catalog = try RoleCatalog.fm27()
+        let profile = try RatingProfile.standard()
+        let parameters = EngineParameters.fm27
+        let asOf = try #require(Day(iso: "2026-11-13"))
+        let history = try JSONDecoder().decode([ConfirmedLineup].self, from: Fixtures.data("plans/sample-history.json"))
+        let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, money: .weeklyPounds,
+                                         history: StartHistory(history), asOf: asOf, retraining: [],
+                                         catalog: catalog, profile: profile, parameters: parameters)
+        let going = Scouting.going(players: players, ownClub: ownClub, marks: [:], advisedToLeave: removal.advisedToLeave)
+        let needs = try Scouting.needs(tactic: tactic, players: players, ownClub: ownClub, going: going, retraining: [],
+                                       catalog: catalog, profile: profile, parameters: parameters)
+
+        let slots = try tactic.assignments(catalog: catalog).map(\.slot)
+        let better = Set(needs.betterPlayers.map(\.slot))
+        let depth = Set(needs.moreDepth.map(\.depth.slot))
+        #expect(better.count == needs.betterPlayers.count && depth.count == needs.moreDepth.count)
+        for slot in slots {
+            let places = (better.contains(slot) ? 1 : 0) + (depth.contains(slot) ? 1 : 0) + (needs.fine.contains(slot) ? 1 : 0)
+            if needs.fine.contains(slot) {
+                #expect(places == 1, "\(slot.rawValue)")
+            } else {
+                #expect(places >= 1, "\(slot.rawValue)")
+            }
+        }
+        if let keeper = needs.betterPlayers.first(where: { $0.slot == .GK }), let measure = keeper.measure {
+            if case .ability = measure {} else { Issue.record("the goalkeeper is measured by ability") }
+        }
+    }
+
     @Test func theYoungPlayersOfTheCapturedSquadsEachHaveAnOutlookAndAnAdvice() throws {
         let book = try realBook()
         let players = book.allPlayers

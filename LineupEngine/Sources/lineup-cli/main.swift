@@ -31,6 +31,8 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        at each slot, who needs rest, who could retrain to cover thin slots, who to sell, loan out or release, and the
        loan review; with --fixtures, a suggested importance beside each fixture's own; then, for each squad given,
        the mentoring groups suggested and the players left without one.
+       advise also prints a Scouting part after Depth: the needs of the squad that stays, with players on loan to the club
+       and those Player Removal advises to move on counted as gone. The command line takes no marks to sell or loan out.
        --standings is a JSON object from a player's key to {"standing": "teamLeader|highlyInfluential|influential|others",
        "socialGroup"?: "core|others|secondary:<name>"}: the hierarchy as the game's Dynamics screen shows it. Without it
        nobody stands above Others and no group is suggested. The command line takes no arrow readings: every arrow it
@@ -297,6 +299,11 @@ do {
             asOf: options.asOf!, intensity: options.settings.trainingIntensity, accepted: [], rejected: []),
             // Money is shown as the squads given wrote it; of several, the last one given decides the period.
             money: book.moneyStyle, catalog: catalog, profile: profile, parameters: parameters)
+        // The squad that stays: the command line takes no marks, so only loans in and Player Removal's advice count.
+        let going = Scouting.going(players: players, ownClub: ownClub, marks: [:],
+                                   advisedToLeave: advisors.removal.advisedToLeave)
+        let scouting = try Scouting.needs(tactic: tactic, players: players, ownClub: ownClub, going: going, retraining: [],
+                                          catalog: catalog, profile: profile, parameters: parameters)
         var suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]?
         if let fixtures {
             // The planner's tiers: injured players left out, as they cannot play.
@@ -321,7 +328,7 @@ do {
         output = Report.render(header, advice: Report.Advice(
             asOf: options.asOf!, profile: profile, intensity: options.settings.trainingIntensity, history: history,
             elevens: advisors.elevens, depth: advisors.depth, rest: advisors.rest, training: advisors.training,
-            removal: advisors.removal, suggestions: suggestions, mentoring: mentoring),
+            removal: advisors.removal, scouting: scouting, suggestions: suggestions, mentoring: mentoring),
             parameters: parameters)
     }
 } catch {

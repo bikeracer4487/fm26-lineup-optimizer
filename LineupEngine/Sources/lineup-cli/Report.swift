@@ -88,6 +88,7 @@ enum Report {
         let rest: [RestAdvice]
         let training: TrainingReport
         let removal: RemovalReport
+        let scouting: ScoutingNeeds
         /// In date order; nil when no fixtures were given.
         let suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]?
         /// One entry for each squad given, in the order given.
@@ -108,6 +109,7 @@ enum Report {
         out += eleven("Second XI", advice.elevens.second, average: advice.elevens.secondAverage,
                       unfilled: advice.elevens.unfilledSecond, squadOf: squadOf)
         out += depth(advice.depth, parameters: parameters)
+        out += scouting(advice.scouting, parameters: parameters)
         out += rest(advice.rest)
         out += training(advice.training)
         out += removal(advice.removal)
@@ -143,6 +145,26 @@ enum Report {
             out.append("  \(pad(slot.slot.rawValue, 6)) cover \(slot.cover), \(drop)\(slot.isThin ? ", THIN" : ""): \(options)\(loans)")
         }
         out.append(AdvisorText.thinCover(report) ?? "Thin cover: none")
+        return out
+    }
+
+    /// The squad that stays measured for what it lacks: who is counted as going, then each need with its slot in words.
+    private static func scouting(_ needs: ScoutingNeeds, parameters: EngineParameters) -> [String] {
+        var out = ["", "=== Scouting ===\(mark(needs.basis))"]
+        if let going = AdvisorText.countedAsGoing(needs.going) { out.append(going) }
+        func part(_ heading: String, _ items: [(slot: SlotID, kind: String?, lines: [String])]) {
+            out.append(heading)
+            if items.isEmpty { out.append("  none") }
+            for item in items {
+                out.append("  \(PositionText.plain(item.slot))" + (item.kind.map { " (\($0))" } ?? ""))
+                for line in item.lines { out.append("    \(line)") }
+            }
+        }
+        part(AdvisorText.betterPlayersHeading, needs.betterPlayers.map {
+            ($0.slot, AdvisorText.name($0.kind), AdvisorText.betterPlayerLines($0)) })
+        part(AdvisorText.moreDepthHeading, needs.moreDepth.map {
+            ($0.depth.slot, nil, AdvisorText.depthNeedLines($0, parameters: parameters)) })
+        out.append("Fine: " + (needs.fine.isEmpty ? "none" : needs.fine.map { PositionText.plain($0) }.joined(separator: ", ")))
         return out
     }
 
