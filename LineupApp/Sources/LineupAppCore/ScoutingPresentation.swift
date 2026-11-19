@@ -149,6 +149,9 @@ public enum ScoutingPresentation {
     public static let todayLabel = AdvisorText.name(CandidateOrder.today)
     public static let laterLabel = AdvisorText.name(CandidateOrder.later)
     public static let otherSlotsLabel = "Other slots"
+    public static let cautionsLabel = "Cautions"
+    /// Before the Today and Later control, whose words are also the row labels.
+    public static let orderLabel = "Order by"
     /// Above the engine's sentences when the needs or the candidates for the tactic shown cannot be worked out.
     public static let failedLead = "Scouting cannot be worked out for this tactic."
 

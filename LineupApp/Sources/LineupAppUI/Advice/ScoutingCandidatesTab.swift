@@ -55,8 +55,15 @@ struct ScoutingCandidatesTab: View {
             }
         } trailing: {
             if ordered {
-                BoardTabs(choices: ScoutingPresentation.orderChoices.map { ($0.order, $0.title) },
-                          selection: $navigation.scoutingOrder)
+                // Labelled as the tactic menu is, so it does not read as a second pair of tabs.
+                HStack(alignment: .center, spacing: Theme.Spacing.m) {
+                    Text(ScoutingPresentation.orderLabel)
+                        .font(Theme.Typeface.text())
+                        .foregroundStyle(Theme.Colour.ink)
+                        .fixedSize()
+                    BoardTabs(choices: ScoutingPresentation.orderChoices.map { ($0.order, $0.title) },
+                              selection: $navigation.scoutingOrder)
+                }
             }
         }
     }
@@ -143,7 +150,7 @@ private struct Disclosure: View {
     }
 }
 
-/// One candidate: his name with any stamp, what the paste says of him, then his lines by label and his cautions. A click
+/// One candidate: his name with any stamp, what the paste says of him, then his lines and his cautions by label. A click
 /// on his name opens the row to show his other slots, when he has more to show.
 private struct ScoutingCandidateRowView: View {
     let row: ScoutingCandidateRow
@@ -171,12 +178,13 @@ private struct ScoutingCandidateRowView: View {
                 LabelledLines(label: ScoutingPresentation.todayLabel, lines: lines.today)
                 LabelledLines(label: ScoutingPresentation.laterLabel, lines: lines.later)
                 if !row.cautions.isEmpty {
-                    FlowLayout(spacing: Theme.Scouting.cautionGap, lineSpacing: Theme.Spacing.xs) {
-                        ForEach(Array(row.cautions.enumerated()), id: \.offset) { _, caution in
-                            CautionLine(caution)
+                    Labelled(label: ScoutingPresentation.cautionsLabel) {
+                        FlowLayout(spacing: Theme.Scouting.cautionGap, lineSpacing: Theme.Spacing.xs) {
+                            ForEach(Array(row.cautions.enumerated()), id: \.offset) { _, caution in
+                                CautionLine(caution)
+                            }
                         }
                     }
-                    .padding(.leading, Theme.Scouting.labelColumn)
                 }
                 LabelledLines(label: ScoutingPresentation.otherSlotsLabel, lines: lines.otherSlots)
             }
@@ -190,8 +198,13 @@ private struct ScoutingCandidateRowView: View {
     /// The disclosure mark, or its room, then his name and stamps over what the paste says of him.
     private func identity(opens: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Disclosure(isOpen: isOpen)
-                .opacity(opens ? 1 : 0)
+            if opens {
+                Disclosure(isOpen: isOpen)
+            } else {
+                // Its room kept, so every name lines up.
+                Disclosure(isOpen: isOpen)
+                    .hidden()
+            }
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
                     Text(row.name)
@@ -219,11 +232,7 @@ private struct LabelledLines: View {
 
     var body: some View {
         if !lines.isEmpty {
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text(label)
-                    .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .bold))
-                    .foregroundStyle(Theme.Colour.mutedInk)
-                    .frame(width: Theme.Scouting.labelColumn, alignment: .leading)
+            Labelled(label: label) {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                     // Keyed by place, so two identical lines are both shown.
                     ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
@@ -233,8 +242,24 @@ private struct LabelledLines: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
+        }
+    }
+}
+
+/// A label in the column the row's labels share, then what it labels beside it.
+private struct Labelled<Content: View>: View {
+    let label: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text(label)
+                .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .bold))
+                .foregroundStyle(Theme.Colour.mutedInk)
+                .frame(width: Theme.Scouting.labelColumn, alignment: .leading)
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
