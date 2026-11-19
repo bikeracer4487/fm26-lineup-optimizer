@@ -10,9 +10,14 @@ import Testing
     func going(_ name: String, _ reason: GoingReason) -> Going { Going(player: id(name.lowercased()), name: name, reason: reason) }
 
     func need(_ kind: BetterPlayerKind, slot: SlotID = .D_L, first: NamedPlayer? = nil, measure: NeedMeasure? = nil,
-              gap: Double? = nil, leaving: Going? = nil, eased: NamedPlayer? = nil) -> BetterPlayerNeed {
-        BetterPlayerNeed(slot: slot, kind: kind, firstChoice: first, measure: measure, gap: gap, goingFirstChoice: leaving,
-                         easedBy: eased, basis: .derived)
+              gap: Double? = nil, leaving: Going? = nil, eased: NamedPlayer? = nil, namesAge: Bool = false) -> BetterPlayerNeed {
+        BetterPlayerNeed(slot: slot, kind: kind, firstChoice: first, namesFirstChoiceAge: namesAge, measure: measure, gap: gap,
+                         goingFirstChoice: leaving, easedBy: eased, basis: .derived)
+    }
+    func depthNeed(_ depth: SlotDepth, going: [Going] = [], returning: [Returning] = [], injured: [NamedPlayer] = [],
+                   lasts: Bool = false, first: NamedPlayer? = nil, shareUnder: Double? = nil) -> DepthNeed {
+        DepthNeed(depth: depth, going: going, returning: returning, injured: injured, lastsOnlyWhileInjured: lasts,
+                  firstChoice: first, nextBestShareUnder: shareUnder)
     }
 
     let sam = NamedPlayer(player: PlayerID(key: "sam reed"), name: "Sam Reed", age: 27)
@@ -95,13 +100,12 @@ import Testing
 
     @Test func depthLines() {
         let one = slotDepth(options: [option("Jonny Maxted"), option("Josh Ashby", cover: false)], cover: 1, drop: 6.66, next: "Josh Ashby")
-        #expect(AdvisorText.depthNeedLines(DepthNeed(depth: one, going: [], returning: []), parameters: parameters)
+        #expect(AdvisorText.depthNeedLines(depthNeed(one, going: [], returning: []), parameters: parameters)
                 == ["1 player counts as cover; 2 needed: Jonny Maxted.", "Next best: Josh Ashby, 6.7 lower."])
         let none = slotDepth(options: [], cover: 0, drop: nil, next: nil)
-        #expect(AdvisorText.depthNeedLines(DepthNeed(depth: none, going: [], returning: []), parameters: parameters)
+        #expect(AdvisorText.depthNeedLines(depthNeed(none, going: [], returning: []), parameters: parameters)
                 == ["Nobody counts as cover; 2 needed.", "Nobody else can step in."])
-        let lines = AdvisorText.depthNeedLines(DepthNeed(
-            depth: none, going: [going("Lee Hart", .onLoanHere), going("Sam Reed", .advisedToLeave)],
+        let lines = AdvisorText.depthNeedLines(depthNeed(none, going: [going("Lee Hart", .onLoanHere), going("Sam Reed", .advisedToLeave)],
             returning: [Returning(player: id("max treml"), name: "Max Treml", club: "Wallingford")]), parameters: parameters)
         #expect(lines == ["Nobody counts as cover; 2 needed.", "Nobody else can step in.",
                           "Not counting Lee Hart and Sam Reed, who are going.",
@@ -110,7 +114,7 @@ import Testing
 
     @Test func twoWhoCountAreJoinedWithAnd() {
         let two = slotDepth(options: [option("A One"), option("B Two")], cover: 2, drop: 1, next: "B Two")
-        #expect(AdvisorText.depthNeedLines(DepthNeed(depth: two, going: [], returning: []), parameters: parameters).first
+        #expect(AdvisorText.depthNeedLines(depthNeed(two, going: [], returning: []), parameters: parameters).first
                 == "2 players count as cover: A One and B Two.")
     }
 
@@ -127,7 +131,7 @@ import Testing
         let none = slotDepth(options: [], cover: 0, drop: nil, next: nil)
         let base = ["Nobody counts as cover; 2 needed.", "Nobody else can step in."]
         func lines(going: [Going] = [], returning: [Returning] = []) -> [String] {
-            AdvisorText.depthNeedLines(DepthNeed(depth: none, going: going, returning: returning), parameters: parameters)
+            AdvisorText.depthNeedLines(depthNeed(none, going: going, returning: returning), parameters: parameters)
         }
         #expect(lines(going: [going("Lee Hart", .onLoanHere)]) == base + ["Not counting Lee Hart, who is going."])
         #expect(lines(going: [going("Lee Hart", .onLoanHere), going("Sam Reed", .markedToSell), going("Tom Vale", .advisedToLeave)])
@@ -145,7 +149,7 @@ import Testing
     }
 
     func candidateSlot(_ slot: SlotID = .D_L, level: CandidateLevel = .wouldStart, margin: Double? = 0.06,
-                       first: Rival? = nil, solid: Bool = true, ip: Int = 15, oop: Int = 15, stillWeakBy: Double? = nil,
+                       first: Rival? = nil, solid: Bool = true, ip: Int = 15, oop: Int = 15, stillWeakBy: WeakGap? = nil,
                        later: SlotOutlook? = nil) -> CandidateSlot {
         CandidateSlot(slot: slot, rating: 70, ipFamiliarity: ip, oopFamiliarity: oop, isSolid: solid, level: level,
                       firstChoice: margin == nil ? nil : (first ?? rival()), secondChoice: nil, marginOverFirst: margin,
@@ -206,12 +210,13 @@ import Testing
         #expect(AdvisorText.todayLines(candidateSlot(solid: false, ip: 12, oop: 14)) == [
             "Would start: rates 6.0% above Evan Humphries, your first choice at left back.",
             "Not yet solid there: familiarity 12 in possession, 14 out."])
-        #expect(AdvisorText.todayLines(candidateSlot(stillWeakBy: 0.031)) == [
+        #expect(AdvisorText.todayLines(candidateSlot(stillWeakBy: WeakGap(gap: 0.031, measure: .rating(his: 90, average: 92.9)))) == [
             "Would start: rates 6.0% above Evan Humphries, your first choice at left back.",
             "The slot would still be weak with him: 3.1% under the average of your outfield first choices."])
-        #expect(AdvisorText.todayLines(candidateSlot(.GK, stillWeakBy: 0.4)) == [
+        // The goalkeeper's slot is measured by ability, as the value carries it; the text asks nothing about the slot.
+        #expect(AdvisorText.todayLines(candidateSlot(.GK, stillWeakBy: WeakGap(gap: 0.4, measure: .ability(his: 60, average: 104.6)))) == [
             "Would start: rates 6.0% above Evan Humphries, your first choice at goalkeeper.",
-            "The slot would still be weak with him, by ability."])
+            "The slot would still be weak with him: ability 60 against an average of 105 for your outfield first choices."])
     }
 
     @Test func laterLinesWithAnOutlookAndALevel() {

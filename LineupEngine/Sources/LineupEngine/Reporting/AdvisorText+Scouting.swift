@@ -142,10 +142,15 @@ extension AdvisorText {
         if !slot.isSolid {
             lines.append("Not yet solid there: familiarity \(slot.ipFamiliarity) in possession, \(slot.oopFamiliarity) out.")
         }
-        if let gap = slot.stillWeakBy {
-            lines.append(slot.slot == .GK
-                ? "The slot would still be weak with him, by ability."
-                : "The slot would still be weak with him: \(Display.onePercentDecimal(gap)) under the average of your outfield first choices.")
+        if let weak = slot.stillWeakBy {
+            let lead = "The slot would still be weak with him: "
+            switch weak.measure {
+            case .rating:
+                lines.append(lead + "\(Display.onePercentDecimal(weak.gap)) under the average of your outfield first choices.")
+            case .ability(let his, let average):
+                lines.append(lead + "ability \(his) against an average of \(String(format: "%.0f", average)) "
+                             + "for your outfield first choices.")
+            }
         }
         return lines
     }

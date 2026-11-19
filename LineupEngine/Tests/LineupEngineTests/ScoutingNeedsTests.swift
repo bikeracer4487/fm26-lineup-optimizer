@@ -268,4 +268,111 @@ import Testing
         let players = try squad(levels: [named(.D_L, "first"): 12, named(.D_L, "second"): 10])
         #expect(try needs(players) == (try needs(players.reversed())))
     }
+
+    // One place for each rule.
+    @Test func theWeakLineIsOneRuleForAGapAndForAValue() {
+        let p = EngineParameters.fm27
+        #expect(Scouting.isWeak(gap: 0.05, parameters: p) && !Scouting.isWeak(gap: 0.0499, parameters: p))
+        // A value at 95% of the average is on the line: weak, so it does not clear it; just over clears it.
+        #expect(Scouting.gap(of: 95, under: 100) == 1 - 95.0 / 100)
+        #expect(!Scouting.clearsWeakLine(95, average: 100, parameters: p))
+        #expect(Scouting.clearsWeakLine(95.01, average: 100, parameters: p))
+    }
+    @Test func depthsCoverTestIsOneRule() {
+        let p = EngineParameters.fm27
+        #expect(Depth.isCover(isSolid: true, rating: 80, firstChoiceRating: 100, parameters: p))
+        #expect(!Depth.isCover(isSolid: true, rating: 79.9, firstChoiceRating: 100, parameters: p))
+        #expect(!Depth.isCover(isSolid: false, rating: 100, firstChoiceRating: 100, parameters: p))
+        #expect(Depth.isCover(isSolid: true, rating: 1, firstChoiceRating: nil, parameters: p))
+    }
+
+    // A young player of the club's own out on loan.
+    /// A player out on loan at Wallingford, familiarity 20 at the slot's positions, every attribute at `level`.
+    func loanee(_ slot: SlotID, level: Int, age: Int, potential: Int) throws -> Player {
+        var p = Player.fixture(name: "Max Treml", age: age, all: level, potentialAbility: potential, loanedTo: "Wallingford")
+        try playsAt(slot, &p)
+        return p
+    }
+    @Test func aYoungPlayerOutOnLoanEasesAWeakNeed() throws {
+        let weakLeftBack = try squad(levels: [named(.D_L, "first"): 12, named(.D_L, "second"): 10])
+        let eased = try #require(try needs(weakLeftBack + [loanee(.D_L, level: 12, age: 19, potential: 190)])
+            .betterPlayers.first { $0.slot == .D_L })
+        #expect(eased.kind == .weak && eased.easedBy?.name == "Max Treml" && eased.easedBy?.age == 19)
+        #expect(eased.easedBy?.onLoanAt == "Wallingford")
+        // His potential caps him under the line.
+        let capped = try #require(try needs(weakLeftBack + [loanee(.D_L, level: 12, age: 19, potential: 101)])
+            .betterPlayers.first { $0.slot == .D_L })
+        #expect(capped.kind == .weak && capped.easedBy == nil)
+    }
+    @Test func aYoungPlayerOutOnLoanIsASuccessor() throws {
+        let old = named(.AM_C, "first")
+        let players = try squad { if $0.name == old { $0.age = 32 } }
+        #expect(try needs(players).betterPlayers.map(\.kind) == [.ageing])
+        #expect(try needs(players + [loanee(.AM_C, level: 13, age: 19, potential: 190)]).betterPlayers.isEmpty)
+    }
+    @Test func aPlayerOfTwentyFourOutOnLoanNeitherEasesNorSucceeds() throws {
+        let weakLeftBack = try squad(levels: [named(.D_L, "first"): 12, named(.D_L, "second"): 10]) {
+            if $0.name == named(.AM_C, "first") { $0.age = 32 }
+        }
+        let r = try needs(weakLeftBack + [loanee(.D_L, level: 12, age: 24, potential: 190),
+                                          loanee(.AM_C, level: 13, age: 24, potential: 190).renamed("Ben Cole")])
+        #expect(try #require(r.betterPlayers.first { $0.slot == .D_L }).easedBy == nil)
+        #expect(r.betterPlayers.contains { $0.slot == .AM_C && $0.kind == .ageing })
+    }
+
+    // A depth need and injuries.
+    @Test func anInjuredFirstChoiceIsNamedAndTheNeedLastsOnlyWhileHeIsOut() throws {
+        let first = named(.D_L, "first")
+        let r = try needs(squad { if $0.name == first { $0.isInjured = true } })
+        let need = try #require(r.moreDepth.first { $0.depth.slot == .D_L })
+        #expect(need.depth.cover == 1 && need.injured.map(\.name) == [first] && need.lastsOnlyWhileInjured)
+        #expect(need.firstChoice?.name == first)
+        // With his second choice also gone, the need would stay when he is back.
+        let alone = try needs(squad { if $0.name == first { $0.isInjured = true } }.filter { $0.name != named(.D_L, "second") })
+        let lasting = try #require(alone.moreDepth.first { $0.depth.slot == .D_L })
+        #expect(lasting.injured.map(\.name) == [first] && !lasting.lastsOnlyWhileInjured)
+    }
+    @Test func anInjuredPlayerBelowTheCoverShareIsNotNamed() throws {
+        let second = named(.D_L, "second")
+        let r = try needs(squad(levels: [second: 4]) { if $0.name == second { $0.isInjured = true } })
+        let need = try #require(r.moreDepth.first { $0.depth.slot == .D_L })
+        #expect(need.injured.isEmpty && !need.lastsOnlyWhileInjured)
+        // A healthy second choice who counts leaves no need.
+        #expect(try needs(squad()).moreDepth.isEmpty)
+    }
+    /// Left back: both players injured, so nobody counts (Depth puts it first), but both would. Right back: its second
+    /// choice gone, so one counts. The need that rests on injuries comes after the other.
+    @Test func aNeedThatRestsOnAnInjuryComesLast() throws {
+        let players = try squad { if $0.name.hasPrefix(SlotID.D_L.rawValue + " ") { $0.isInjured = true } }
+            .filter { $0.name != named(.D_R, "second") }
+        let r = try needs(players)
+        #expect(r.depth.thin == [.D_L, .D_R])
+        #expect(r.moreDepth.map(\.depth.slot) == [.D_R, .D_L])
+        #expect(r.moreDepth.map(\.lastsOnlyWhileInjured) == [false, true])
+        #expect(r.moreDepth[1].injured.count == 2)
+        // Without the injuries Depth's order stands: left back has no need, right back has.
+        #expect(try needs(squad().filter { $0.name != named(.D_R, "second") }).moreDepth.map(\.depth.slot) == [.D_R])
+    }
+    @Test func theNextBestIsGivenAsAShareUnderTheFirstChoice() throws {
+        let first = named(.D_L, "first")
+        let r = try needs(squad { if $0.name == first { $0.isInjured = true } })
+        let need = try #require(r.moreDepth.first { $0.depth.slot == .D_L })
+        let firstRating = try #require(need.depth.options.first { $0.name == first }).rating
+        let next = try #require(need.depth.options.first { $0.player == need.depth.nextBest })
+        let share = try #require(need.nextBestShareUnder)
+        #expect(abs(share - (1 - next.rating / firstRating)) < 1e-12 && share > 0)
+        // With nobody else who can step in there is no next best.
+        let alone = try needs(squad { if $0.name == first { $0.isInjured = true } }.filter { $0.name != named(.D_L, "second") })
+        #expect(try #require(alone.moreDepth.first { $0.depth.slot == .D_L }).nextBestShareUnder == nil)
+    }
+}
+
+private extension Player {
+    /// The same player under another name and key.
+    func renamed(_ name: String) -> Player {
+        var p = self
+        p.name = name
+        p.id = PlayerID(key: PlayerID.normalise(name))
+        return p
+    }
 }

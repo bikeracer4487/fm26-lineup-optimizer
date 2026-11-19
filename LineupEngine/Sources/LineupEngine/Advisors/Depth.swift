@@ -80,6 +80,18 @@ public enum Depth {
         return true
     }
 
+    /// Depth's cover test: solid at the slot (`depthSolidFamiliarity` in both phases), and rated at least
+    /// `depthCoverShare` of the first choice's rating there; with no first choice there is no such line. Whether he is
+    /// injured or first choice at another slot is asked apart (`canStepIn`).
+    static func isCover(isSolid: Bool, rating: Double, firstChoiceRating: Double?, parameters: EngineParameters) -> Bool {
+        isSolid && isWithinCoverShare(rating: rating, firstChoiceRating: firstChoiceRating, parameters: parameters)
+    }
+
+    /// The cover share alone: at or over `depthCoverShare` of the first choice's rating, or no first choice.
+    static func isWithinCoverShare(rating: Double, firstChoiceRating: Double?, parameters: EngineParameters) -> Bool {
+        firstChoiceRating.map { rating >= $0 * parameters.depthCoverShare.value } ?? true
+    }
+
     /// Throws what `Elevens.report` throws, and `RatingError` for a player with missing data.
     public static func report(tactic: Tactic, players: [Player], ownClub: String?, catalog: RoleCatalog,
                               profile: RatingProfile, parameters: EngineParameters) throws -> DepthReport {
@@ -110,9 +122,8 @@ public enum Depth {
 
         var slots: [SlotDepth] = []
         for assignment in assignments {
-            // The least an option must rate here to count as cover; nil with no first choice to measure against.
-            let shareLine: Double? = tiers.first[assignment.slot].flatMap { tiers.ratings[$0]?[assignment.slot] }
-                .map { $0 * parameters.depthCoverShare.value }
+            // The first choice's rating here, which cover is measured against; nil with none.
+            let firstRating: Double? = tiers.first[assignment.slot].flatMap { tiers.ratings[$0]?[assignment.slot] }
             var options: [DepthOption] = []
             var onLoan: [DepthOption] = []
             for player in sorted {
@@ -130,13 +141,19 @@ public enum Depth {
                 let unavailable = RiskRules.exclusion(for: player, loan: loan, importance: .medium,
                                                       isNextFixture: true, parameters: parameters)
                 let rating = try engine.rating(for: player, in: assignment).value
-                let isStandIn = isSolid && canStepIn(unavailable: unavailable, tier: tier, at: assignment.slot)
-                let isBelowShare = tier != .first(assignment.slot) && (shareLine.map { rating < $0 } ?? false)
+                let canStep = canStepIn(unavailable: unavailable, tier: tier, at: assignment.slot)
+                // The first choice himself is never below his own share.
+                let isFirst = tier == .first(assignment.slot)
+                let isBelowShare = !isFirst
+                    && !isWithinCoverShare(rating: rating, firstChoiceRating: firstRating, parameters: parameters)
                 let option = DepthOption(
                     player: player.id, name: player.name, squad: player.squad, rating: rating,
                     ipFamiliarity: ip, oopFamiliarity: oop, isSolid: isSolid, unavailable: unavailable,
                     tier: tier, alsoNeededAt: also, isBelowCoverShare: isBelowShare,
-                    isStandIn: isStandIn, countsAsCover: isStandIn && !isBelowShare)
+                    isStandIn: isSolid && canStep,
+                    countsAsCover: canStep && isCover(isSolid: isSolid, rating: rating,
+                                                      firstChoiceRating: isFirst ? nil : firstRating,
+                                                      parameters: parameters))
                 if case .loanedOut = loan { onLoan.append(option) } else { options.append(option) }
             }
             func ranked(_ list: [DepthOption]) -> [DepthOption] {

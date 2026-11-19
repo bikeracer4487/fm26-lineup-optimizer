@@ -20,9 +20,9 @@ public struct CandidateSlot: Equatable, Sendable {
     public let secondChoice: Rival?
     /// His rating over the first choice's, minus 1; nil with no first choice.
     public let marginOverFirst: Double?
-    /// He would start at a slot with a nobody or weak need and is himself under the weak line: his own gap, worked
-    /// out as the need's is (by ability at the goalkeeper's slot).
-    public let stillWeakBy: Double?
+    /// He would start at a slot with a nobody or weak need and is himself on the weak line: his own gap, measured as
+    /// the need's is (by ability at the goalkeeper's slot).
+    public let stillWeakBy: WeakGap?
     /// His reach at the slot, when he is `developingUpToAge` or under; nil otherwise.
     public let later: SlotOutlook?
     /// `betterPlayerToday`: a better-player need at the slot where he would start. `moreDepth`: a depth need at the
@@ -38,7 +38,6 @@ public struct CandidateCaution: Equatable, Sendable {
 }
 
 extension Scouting {
-    private static let candidateNoise = 1e-9
     private static let levelOrder = CandidateLevel.allCases
 
     /// Whether a pasted player is one the owner holds: both keys are FMRTE ids and equal; or his club or the club he
@@ -61,34 +60,26 @@ extension Scouting {
     static func slotsToday(for candidate: Player, tactic: Tactic, needs: ScoutingNeeds, squad: [Player],
                            ownClub: String?, catalog: RoleCatalog, profile: RatingProfile,
                            parameters: EngineParameters) throws -> [CandidateSlot] {
-        func familiarity(_ position: Position) throws -> Int {
-            guard let value = candidate.familiarity[position] else {
-                throw RatingError.missingFamiliarity(player: candidate.name, position: position)
-            }
-            return value
-        }
         let engine = RatingEngine(profile: profile, parameters: parameters, configuration: .fm27)
-        let coverFrom = parameters.depthCoverFamiliarity.value
         let solidFrom = parameters.depthSolidFamiliarity.value
-        let offset = parameters.ratingAbilityOffset.value
+        let averages = WeakLineAverages(needs)
         var slots: [CandidateSlot] = []
-        for assignment in try tactic.assignments(catalog: catalog) {
-            let ip = try familiarity(assignment.ipPosition), oop = try familiarity(assignment.oopPosition)
-            guard ip >= coverFrom, oop >= coverFrom else { continue }
+        for playable in try playableSlots(for: candidate, assignments: try tactic.assignments(catalog: catalog),
+                                          engine: engine, parameters: parameters) {
+            let (assignment, ip, oop, rating) = playable
             let slot = assignment.slot
-            let rating = try engine.rating(for: candidate, in: assignment).value
             let rivals = try Development.rivals(at: slot, tiers: needs.elevens.tiers, squad: squad, ownClub: ownClub,
                                                 parameters: parameters)
             let secondPlace = needs.elevens.second.first { $0.slot == slot }
 
             let level: CandidateLevel
             if let first = rivals.first {
-                if rating + candidateNoise >= first.rating {
+                if rating + roundingNoise >= first.rating {
                     level = .wouldStart
                 } else if secondPlace == nil || secondPlace?.isOutOfPosition == true
-                            || rivals.second.map({ rating + candidateNoise >= $0.rating }) == true {
+                            || rivals.second.map({ rating + roundingNoise >= $0.rating }) == true {
                     level = .wouldMakeSecond
-                } else if rating + candidateNoise >= parameters.depthCoverShare.value * first.rating {
+                } else if Depth.isWithinCoverShare(rating: rating, firstChoiceRating: first.rating, parameters: parameters) {
                     level = .wouldCountAsCover
                 } else {
                     level = .belowCover
@@ -98,27 +89,23 @@ extension Scouting {
             }
 
             var answers: Set<NeedAnswer> = []
-            var stillWeakBy: Double?
+            var stillWeakBy: WeakGap?
             if let need = needs.betterPlayers.first(where: { $0.slot == slot }), level == .wouldStart {
                 answers.insert(.betterPlayerToday)
-                if need.kind != .ageing {
-                    let isKeeper = assignment.ipPosition == .goalkeeper
-                    let gap: Double?
-                    if isKeeper {
-                        gap = needs.outfieldAverageAbility.map {
-                            abilityGap(ability: candidate.currentAbility, averageAbility: $0, offset: offset)
-                        }
-                    } else {
-                        gap = needs.outfieldAverageRating.map { ratingGap(rating: rating, average: $0) }
+                switch need.kind {
+                case .nobody, .weak:
+                    if let weak = averages.weakGap(isGoalkeeper: isGoalkeeperSlot(assignment), rating: rating,
+                                                   ability: candidate.currentAbility, parameters: parameters),
+                       isWeak(gap: weak.gap, parameters: parameters) {
+                        stillWeakBy = weak
                     }
-                    if let gap, gap + candidateNoise >= 1 - parameters.scoutingWeakShare.value { stillWeakBy = gap }
+                case .ageing: break
                 }
             }
             let isSolid = ip >= solidFrom && oop >= solidFrom
-            // Depth would count him as cover: solid, and within the cover share of the first choice (no line without one).
-            let countsAsCover = isSolid && (rivals.first.map {
-                rating + candidateNoise >= parameters.depthCoverShare.value * $0.rating } ?? true)
-            if needs.moreDepth.contains(where: { $0.depth.slot == slot }), countsAsCover {
+            if needs.moreDepth.contains(where: { $0.depth.slot == slot }),
+               Depth.isCover(isSolid: isSolid, rating: rating, firstChoiceRating: rivals.first?.rating,
+                             parameters: parameters) {
                 answers.insert(.moreDepth)
             }
             slots.append(CandidateSlot(
@@ -228,8 +215,6 @@ public struct CandidatesReport: Equatable, Sendable {
         return found
     }
 
-    private static let noise = 1e-9
-
     /// `value` greatest first, a nil value counting as the greatest; the key breaks every tie.
     private static func sorted(_ list: [Candidate], part: CandidatePart, order: CandidateOrder) -> [Candidate] {
         func value(_ c: Candidate) -> Double? {
@@ -251,7 +236,7 @@ public struct CandidatesReport: Equatable, Sendable {
             case (nil, _?): return true
             case (_?, nil): return false
             case (let x?, let y?):
-                if abs(x - y) > noise { return x > y }
+                if abs(x - y) > Scouting.roundingNoise { return x > y }
             }
             return a.player.id.key < b.player.id.key
         }
@@ -266,8 +251,7 @@ extension Scouting {
         let goingIDs = Set(needs.going.map(\.player))
         let staying = held.filter { !goingIDs.contains($0.id) }
         let assignments = try tactic.assignments(catalog: catalog)
-        let offset = parameters.ratingAbilityOffset.value
-        let weakShare = parameters.scoutingWeakShare.value
+        let averages = WeakLineAverages(needs)
         let betterSlots = needs.betterPlayers.map(\.slot)
         let depthSlots = needs.moreDepth.map(\.depth.slot)
 
@@ -320,7 +304,7 @@ extension Scouting {
                     case (nil, nil): break
                     case (nil, _?): headline = s
                     case (_?, nil): break
-                    case (let x?, let y?): if x > y + candidateNoise { headline = s }
+                    case (let x?, let y?): if x > y + roundingNoise { headline = s }
                     }
                 }
             }
@@ -339,13 +323,11 @@ extension Scouting {
             }
 
             var clearsWeakLine: Bool?
-            if let estimate, let headline, headline.firstChoice == nil, let later = headline.later {
-                let isKeeper = assignments.first { $0.slot == headline.slot }?.ipPosition == .goalkeeper
-                let line = (isKeeper ? needs.outfieldAverageAbility : needs.outfieldAverageRating).map { $0 * weakShare }
-                if let line {
-                    let reach = isKeeper ? offset + estimate.reach : later.reachRating
-                    clearsWeakLine = reach + candidateNoise >= line
-                }
+            if let estimate, let headline, headline.firstChoice == nil, let later = headline.later,
+               let assignment = assignments.first(where: { $0.slot == headline.slot }),
+               let measured = averages.measure(isGoalkeeper: isGoalkeeperSlot(assignment), rating: later.reachRating,
+                                               ability: estimate.reach, parameters: parameters) {
+                clearsWeakLine = Scouting.clearsWeakLine(measured.value, average: measured.average, parameters: parameters)
             }
 
             var evidence = [needs.basis, parameters.depthCoverShare.evidence, parameters.depthCoverFamiliarity.evidence,

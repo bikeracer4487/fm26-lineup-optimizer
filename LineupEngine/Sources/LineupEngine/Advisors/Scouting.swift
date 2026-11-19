@@ -20,6 +20,19 @@ public struct NamedPlayer: Equatable, Sendable {
     public let player: PlayerID
     public let name: String
     public let age: Int
+    /// The club he is out on loan at; nil for a player at the club.
+    public let onLoanAt: String?
+
+    init(player: PlayerID, name: String, age: Int, onLoanAt: String? = nil) {
+        self.player = player
+        self.name = name
+        self.age = age
+        self.onLoanAt = onLoanAt
+    }
+
+    init(_ player: Player, onLoanAt: String? = nil) {
+        self.init(player: player.id, name: player.name, age: player.age, onLoanAt: onLoanAt)
+    }
 }
 
 public enum BetterPlayerKind: String, CaseIterable, Sendable { case nobody, weak, ageing }
@@ -32,11 +45,22 @@ public enum NeedMeasure: Equatable, Sendable {
     case ability(his: Int, average: Double)
 }
 
+/// How far under the weak line a player falls, and what he was measured by: by rating at an outfield slot, by ability
+/// at the goalkeeper's.
+public struct WeakGap: Equatable, Sendable {
+    /// As a share: 0.057 for 5.7%.
+    public let gap: Double
+    public let measure: NeedMeasure
+}
+
 public struct BetterPlayerNeed: Equatable, Sendable {
     public let slot: SlotID
     public let kind: BetterPlayerKind
     /// The first choice among those staying; nil when the slot has none.
     public let firstChoice: NamedPlayer?
+    /// He is at or over `firstChoiceAgeNamedFrom`, so the weak line names his age: the weak rule comes before the
+    /// ageing one and would otherwise hide it.
+    public let namesFirstChoiceAge: Bool
     /// nil when the slot has no first choice, he is out of position, or there is no average.
     public let measure: NeedMeasure?
     /// How far under the average he is, as a share: 0.057 for 5.7%. For the goalkeeper both sides go through
@@ -44,7 +68,8 @@ public struct BetterPlayerNeed: Equatable, Sendable {
     public let gap: Double?
     /// Today's first choice at the slot, when he is going.
     public let goingFirstChoice: Going?
-    /// `nobody` and `weak` only: the young player staying whose reach clears the weak line, the highest reach first.
+    /// `nobody` and `weak` only: the young player of the club's own whose reach clears the weak line, the highest reach
+    /// first; one out on loan says where.
     public let easedBy: NamedPlayer?
     public let basis: Evidence
 }
@@ -62,6 +87,16 @@ public struct DepthNeed: Equatable, Sendable {
     public let going: [Going]
     /// Players out on loan who are solid there and within the cover share, in Depth's order.
     public let returning: [Returning]
+    /// Those staying who would count as cover but for an injury (solid, within the cover share, not first choice at
+    /// another slot), in Depth's order.
+    public let injured: [NamedPlayer]
+    /// `depth.cover` and `injured` together reach `depthThinBelow`: the need lasts only while they are out.
+    public let lastsOnlyWhileInjured: Bool
+    /// The slot's first choice among those staying; nil when it has none.
+    public let firstChoice: NamedPlayer?
+    /// How far the next best's rating is under the first choice's, as a share: 0.064 for 6.4%, negative when he rates
+    /// above him. nil with no next best or no first choice.
+    public let nextBestShareUnder: Double?
 }
 
 public struct ScoutingNeeds: Equatable, Sendable {
@@ -70,7 +105,7 @@ public struct ScoutingNeeds: Equatable, Sendable {
     /// Nobody, then weak by gap (largest first), then ageing (oldest first); within nobody and within weak, eased
     /// needs after the others; then the tactic's slot order.
     public let betterPlayers: [BetterPlayerNeed]
-    /// Depth's order among those staying.
+    /// Depth's order among those staying, the needs that last only while players are injured after the others.
     public let moreDepth: [DepthNeed]
     /// The slots with neither, in the tactic's order.
     public let fine: [SlotID]
@@ -84,9 +119,34 @@ public struct ScoutingNeeds: Equatable, Sendable {
     public let basis: Evidence
 }
 
+/// What a better-player rule found, with the figure it is ordered by.
+enum BetterPlayerFinding: Equatable {
+    case nobody
+    case weak(gap: Double)
+    case ageing(age: Int)
+
+    var kind: BetterPlayerKind {
+        switch self {
+        case .nobody: .nobody
+        case .weak: .weak
+        case .ageing: .ageing
+        }
+    }
+}
+
+/// A young player of the club's own and his outlook at each slot he can play: one staying at the club, from
+/// `Development.outlooks`, or one out on loan, rated at each slot directly as a pasted player is.
+struct Prospect {
+    let player: Player
+    let estimate: ReachEstimate
+    let slots: [SlotOutlook]
+    /// The club he is out on loan at; nil for a player at the club.
+    let onLoanAt: String?
+}
+
 public enum Scouting {
-    /// Comparisons allow for binary floating-point error, as `Development` does.
-    private static let roundingNoise = 1e-9
+    /// Every comparison scouting makes allows for binary floating-point error, as `Development` does.
+    static let roundingNoise = 1e-9
 
     /// Players of `players` who are on loan at the club, marked, or in `advisedToLeave`, each once, by key, with the
     /// first reason in `GoingReason`'s order. Ids that no player has are ignored.
@@ -112,15 +172,34 @@ public enum Scouting {
         return found
     }
 
+    /// Where a reason stands in `GoingReason`'s order.
+    private static func rank(_ reason: GoingReason) -> Int {
+        switch reason {
+        case .onLoanHere: 0
+        case .markedToSell: 1
+        case .markedToLoanOut: 2
+        case .advisedToLeave: 3
+        }
+    }
+
+    /// Where a kind of need stands in the list: nobody, weak, ageing.
+    private static func rank(_ kind: BetterPlayerKind) -> Int {
+        switch kind {
+        case .nobody: 0
+        case .weak: 1
+        case .ageing: 2
+        }
+    }
+
     /// Solves the elevens and depth for `players` (today) and for `players` without `going` (staying), and reads
-    /// the needs off the second. Throws what `Elevens.report`, `Depth.report` and `Development.outlooks` throw.
+    /// the needs off the second. Throws what `Elevens.report`, `Depth.report`, `Development.outlooks` and
+    /// `Reach.estimate` throw, and `RatingError` for a young player out on loan with missing data.
     public static func needs(tactic: Tactic, players: [Player], ownClub: String?, going: [Going],
                              retraining: [Retraining], catalog: RoleCatalog, profile: RatingProfile,
                              parameters: EngineParameters) throws -> ScoutingNeeds {
         // Each player once, with the reason that comes first in `GoingReason`'s order.
-        let reasonOrder = GoingReason.allCases
         let goingByID = Dictionary(going.map { ($0.player, $0) }, uniquingKeysWith: { a, b in
-            (reasonOrder.firstIndex(of: b.reason) ?? 0) < (reasonOrder.firstIndex(of: a.reason) ?? 0) ? b : a
+            rank(b.reason) < rank(a.reason) ? b : a
         })
         let staying = players.filter { goingByID[$0.id] == nil }
         let byID = Dictionary(players.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -136,15 +215,15 @@ public enum Scouting {
         let depth = going.isEmpty ? todayDepth : try Depth.report(
             tactic: tactic, players: staying, ownClub: ownClub, elevens: elevens, catalog: catalog, profile: profile,
             parameters: parameters)
-        let outlooks = try Development.outlooks(players: staying, ownClub: ownClub, assignments: assignments,
-                                                tiers: elevens.tiers, retraining: retraining, parameters: parameters)
+        let prospects = try prospects(staying: staying, ownClub: ownClub, assignments: assignments, tiers: elevens.tiers,
+                                      retraining: retraining, profile: profile, parameters: parameters)
 
         // The averages the first choices are measured by: outfield slots whose first choice is in position, summed in
         // the tactic's slot order.
         let offset = parameters.ratingAbilityOffset.value
         var ratings: [Double] = []
         var abilities: [Double] = []
-        for assignment in assignments where assignment.ipPosition != .goalkeeper {
+        for assignment in assignments where !isGoalkeeperSlot(assignment) {
             guard let place = elevens.first.first(where: { $0.slot == assignment.slot }), !place.isOutOfPosition,
                   let player = byID[place.player] else { continue }
             ratings.append(place.rating.value)
@@ -152,9 +231,9 @@ public enum Scouting {
         }
         let averageRating: Double? = ratings.isEmpty ? nil : ratings.reduce(0, +) / Double(ratings.count)
         let averageAbility: Double? = abilities.isEmpty ? nil : abilities.reduce(0, +) / Double(abilities.count)
+        let averages = WeakLineAverages(rating: averageRating, ability: averageAbility)
 
-        let weakShare = parameters.scoutingWeakShare.value
-        let outlookEvidence: [Evidence] = outlooks.isEmpty ? [] : [
+        let outlookEvidence: [Evidence] = prospects.isEmpty ? [] : [
             parameters.growthPerSeason.evidence, parameters.growthProfessionalismRates.evidence,
             parameters.markedlyLowerShare.evidence, parameters.markedlyLowerShareYoungest.evidence]
 
@@ -164,85 +243,66 @@ public enum Scouting {
             return false
         }
 
-        // A young player staying whose reach clears the weak line at the slot, the highest reach first.
+        // A young player whose reach clears the weak line at the slot, the highest reach first.
         func easedBy(_ assignment: SlotAssignment) -> NamedPlayer? {
-            let isKeeper = assignment.ipPosition == .goalkeeper
-            guard let line = (isKeeper ? averageAbility : averageRating).map({ $0 * weakShare }) else { return nil }
-            var best: (reach: Double, player: Player)?
-            for (id, outlook) in outlooks.sorted(by: { $0.key.key < $1.key.key }) {
-                guard !isFirstChoiceElsewhere(id, not: assignment.slot),
-                      let player = byID[id], let slot = outlook.slots.first(where: { $0.slot == assignment.slot }) else { continue }
-                let reach = isKeeper ? offset + outlook.estimate.reach : slot.reachRating
-                guard reach + roundingNoise >= line else { continue }
-                if let current = best, reach <= current.reach { continue }
-                best = (reach, player)
+            var best: (reach: Double, prospect: Prospect)?
+            for prospect in prospects where !isFirstChoiceElsewhere(prospect.player.id, not: assignment.slot) {
+                guard let slot = prospect.slots.first(where: { $0.slot == assignment.slot }),
+                      let measured = averages.measure(isGoalkeeper: isGoalkeeperSlot(assignment), rating: slot.reachRating,
+                                                      ability: prospect.estimate.reach, parameters: parameters),
+                      clearsWeakLine(measured.value, average: measured.average, parameters: parameters) else { continue }
+                if let current = best, measured.value <= current.reach { continue }
+                best = (measured.value, prospect)
             }
-            return best.map { NamedPlayer(player: $0.player.id, name: $0.player.name, age: $0.player.age) }
+            return best.map { NamedPlayer($0.prospect.player, onLoanAt: $0.prospect.onLoanAt) }
         }
 
         func hasSuccessor(at slot: SlotID) -> Bool {
-            outlooks.contains { id, outlook in
-                !isFirstChoiceElsewhere(id, not: slot)
-                    && outlook.slots.contains { $0.slot == slot && ($0.band == .close || $0.band == .onCourse) }
+            prospects.contains { prospect in
+                !isFirstChoiceElsewhere(prospect.player.id, not: slot)
+                    && prospect.slots.contains { $0.slot == slot && ($0.band == .close || $0.band == .onCourse) }
             }
         }
 
-        var needs: [(need: BetterPlayerNeed, order: Int)] = []
+        var needs: [(need: BetterPlayerNeed, finding: BetterPlayerFinding, order: Int)] = []
         for (index, assignment) in assignments.enumerated() {
             let slot = assignment.slot
-            let isKeeper = assignment.ipPosition == .goalkeeper
             let place = elevens.first.first { $0.slot == slot }
             let first = place.flatMap { byID[$0.player] }
-            var measure: NeedMeasure?
-            var gap: Double?
+            var weak: WeakGap?
             if let place, let first, !place.isOutOfPosition {
-                if isKeeper {
-                    if let averageAbility {
-                        measure = .ability(his: first.currentAbility, average: averageAbility - offset)
-                        gap = abilityGap(ability: first.currentAbility, averageAbility: averageAbility, offset: offset)
-                    }
-                } else if let averageRating {
-                    measure = .rating(his: place.rating.value, average: averageRating)
-                    gap = ratingGap(rating: place.rating.value, average: averageRating)
-                }
+                weak = averages.weakGap(isGoalkeeper: isGoalkeeperSlot(assignment), rating: place.rating.value,
+                                        ability: first.currentAbility, parameters: parameters)
             }
-            guard let kind = betterPlayerKind(hasFirstChoice: place != nil, isOutOfPosition: place?.isOutOfPosition ?? false,
-                                              gap: gap, age: first?.age, hasSuccessor: hasSuccessor(at: slot),
-                                              parameters: parameters) else { continue }
-            let eased: NamedPlayer? = kind == .ageing ? nil : easedBy(assignment)
+            guard let finding = betterPlayerFinding(
+                hasFirstChoice: place != nil, isOutOfPosition: place?.isOutOfPosition == true, gap: weak?.gap,
+                age: first?.age, hasSuccessor: hasSuccessor(at: slot), parameters: parameters) else { continue }
+            let eased: NamedPlayer?
             let basis: Evidence
-            switch kind {
+            switch finding {
             case .nobody, .weak:
+                eased = easedBy(assignment)
                 basis = Evidence.weakest([parameters.scoutingWeakShare.evidence, parameters.ratingAbilityOffset.evidence]
                                          + outlookEvidence)!
             case .ageing:
+                eased = nil
                 basis = Evidence.weakest([parameters.firstChoiceAgeNamedFrom.evidence] + outlookEvidence)!
             }
             let leaving = today.tiers.first[slot].flatMap { goingByID[$0] }
             needs.append((BetterPlayerNeed(
-                slot: slot, kind: kind,
-                firstChoice: first.map { NamedPlayer(player: $0.id, name: $0.name, age: $0.age) },
-                measure: measure, gap: gap, goingFirstChoice: leaving, easedBy: eased, basis: basis), index))
-        }
-        func rank(_ kind: BetterPlayerKind) -> Int {
-            switch kind {
-            case .nobody: 0
-            case .weak: 1
-            case .ageing: 2
-            }
+                slot: slot, kind: finding.kind, firstChoice: first.map { NamedPlayer($0) },
+                namesFirstChoiceAge: first.map { $0.age >= parameters.firstChoiceAgeNamedFrom.value } == true,
+                measure: weak?.measure, gap: weak?.gap, goingFirstChoice: leaving, easedBy: eased, basis: basis),
+                finding, index))
         }
         needs.sort { a, b in
-            if a.need.kind != b.need.kind { return rank(a.need.kind) < rank(b.need.kind) }
+            if rank(a.need.kind) != rank(b.need.kind) { return rank(a.need.kind) < rank(b.need.kind) }
             let ae = a.need.easedBy != nil, be = b.need.easedBy != nil
             if ae != be { return !ae }
-            switch a.need.kind {
-            case .nobody: break
-            case .weak:
-                let ga = a.need.gap ?? 0, gb = b.need.gap ?? 0
-                if ga != gb { return ga > gb }
-            case .ageing:
-                let aa = a.need.firstChoice?.age ?? 0, ab = b.need.firstChoice?.age ?? 0
-                if aa != ab { return aa > ab }
+            switch (a.finding, b.finding) {
+            case (.weak(let x), .weak(let y)): if x != y { return x > y }
+            case (.ageing(let x), .ageing(let y)): if x != y { return x > y }
+            case (.nobody, _), (.weak, _), (.ageing, _): break
             }
             return a.order < b.order
         }
@@ -257,8 +317,24 @@ public enum Scouting {
                 else { return nil }
                 return Returning(player: option.player, name: option.name, club: club)
             }
-            moreDepth.append(DepthNeed(depth: slotDepth, going: leaving, returning: returning))
+            // Would count but for an injury: solid, within the cover share, and not first choice at another slot.
+            let injured: [NamedPlayer] = slotDepth.options.filter { option in
+                option.unavailable == .injured && option.isSolid && !option.isBelowCoverShare
+                    && Depth.canStepIn(unavailable: nil, tier: option.tier, at: slot)
+            }.compactMap { byID[$0.player].map { NamedPlayer($0) } }
+            let firstID = elevens.tiers.first[slot]
+            var shareUnder: Double?
+            if let firstID, let firstRating = elevens.tiers.ratings[firstID]?[slot], firstRating > 0,
+               let next = slotDepth.options.first(where: { $0.player == slotDepth.nextBest }) {
+                shareUnder = 1 - next.rating / firstRating
+            }
+            moreDepth.append(DepthNeed(
+                depth: slotDepth, going: leaving, returning: returning, injured: injured,
+                lastsOnlyWhileInjured: slotDepth.cover + injured.count >= parameters.depthThinBelow.value,
+                firstChoice: firstID.flatMap { byID[$0] }.map { NamedPlayer($0) }, nextBestShareUnder: shareUnder))
         }
+        // The needs that rest on an injury after the others, each in Depth's order.
+        moreDepth = moreDepth.filter { !$0.lastsOnlyWhileInjured } + moreDepth.filter(\.lastsOnlyWhileInjured)
 
         let needed = Set(needs.map(\.need.slot)).union(moreDepth.map(\.depth.slot))
         let fine = assignments.map(\.slot).filter { !needed.contains($0) }
@@ -271,23 +347,128 @@ public enum Scouting {
                              basis: Evidence.weakest(evidence)!)
     }
 
-    /// How far under the outfield average a rating is, as a share: 0.057 for 5.7%.
-    static func ratingGap(rating: Double, average: Double) -> Double { 1 - rating / average }
+    /// The young players of the club's own who could ease a need or succeed a first choice, by key: those staying at
+    /// the club, from `Development.outlooks`, and those of `developingUpToAge` or under out on loan, rated directly at
+    /// each slot they can play (as a pasted player is) against the staying rivals.
+    private static func prospects(staying: [Player], ownClub: String?, assignments: [SlotAssignment], tiers: SquadTiers,
+                                  retraining: [Retraining], profile: RatingProfile,
+                                  parameters: EngineParameters) throws -> [Prospect] {
+        let outlooks = try Development.outlooks(players: staying, ownClub: ownClub, assignments: assignments, tiers: tiers,
+                                                retraining: retraining, parameters: parameters)
+        let engine = RatingEngine(profile: profile, parameters: parameters, configuration: .fm27)
+        var found: [Prospect] = []
+        for player in staying.sorted(by: { $0.id.key < $1.id.key }) {
+            if let outlook = outlooks[player.id] {
+                found.append(Prospect(player: player, estimate: outlook.estimate, slots: outlook.slots, onLoanAt: nil))
+                continue
+            }
+            guard case .loanedOut(let club) = LoanStatus.of(player, ownClub: ownClub),
+                  player.age <= parameters.developingUpToAge.value, player.currentAbility > 0 else { continue }
+            let estimate = try Reach.estimate(for: player, parameters: parameters)
+            var slots: [SlotOutlook] = []
+            for playable in try playableSlots(for: player, assignments: assignments, engine: engine, parameters: parameters) {
+                let slot = playable.assignment.slot
+                let rivals = try Development.rivals(at: slot, tiers: tiers, squad: staying, ownClub: ownClub,
+                                                    parameters: parameters)
+                slots.append(Development.slotOutlook(for: player, estimate: estimate, rating: playable.rating, at: slot,
+                                                     rivals: rivals, parameters: parameters))
+            }
+            found.append(Prospect(player: player, estimate: estimate, slots: slots, onLoanAt: club))
+        }
+        return found
+    }
 
-    /// The same for the goalkeeper's slot, by current ability: both sides go through `ratingAbilityOffset`.
-    /// `averageAbility` is the average of (offset + ability).
-    static func abilityGap(ability: Int, averageAbility: Double, offset: Double) -> Double {
-        1 - (offset + Double(ability)) / averageAbility
+    /// The slots of `assignments` a player can play (familiarity at or over `depthCoverFamiliarity` in both phases,
+    /// Depth's line for an option), in their order, with his familiarities and his full-fitness rating there.
+    /// Throws `RatingError` for a missing familiarity or attribute.
+    static func playableSlots(for player: Player, assignments: [SlotAssignment], engine: RatingEngine,
+                              parameters: EngineParameters) throws
+        -> [(assignment: SlotAssignment, ip: Int, oop: Int, rating: Double)] {
+        func familiarity(_ position: Position) throws -> Int {
+            guard let value = player.familiarity[position] else {
+                throw RatingError.missingFamiliarity(player: player.name, position: position)
+            }
+            return value
+        }
+        let coverFrom = parameters.depthCoverFamiliarity.value
+        var found: [(assignment: SlotAssignment, ip: Int, oop: Int, rating: Double)] = []
+        for assignment in assignments {
+            let ip = try familiarity(assignment.ipPosition), oop = try familiarity(assignment.oopPosition)
+            guard ip >= coverFrom, oop >= coverFrom else { continue }
+            found.append((assignment, ip, oop, try engine.rating(for: player, in: assignment).value))
+        }
+        return found
+    }
+
+    // MARK: One place for each rule
+
+    /// The goalkeeper's slot, whose ratings are on their own scale, so it is measured by ability: its in-possession
+    /// position is the goalkeeper's.
+    static func isGoalkeeperSlot(_ assignment: SlotAssignment) -> Bool { assignment.ipPosition == .goalkeeper }
+
+    /// How far under `average` a value is, as a share: 0.057 for 5.7%.
+    static func gap(of value: Double, under average: Double) -> Double { 1 - value / average }
+
+    /// The weak line: a gap at or over 1 − `scoutingWeakShare`.
+    static func isWeak(gap: Double, parameters: EngineParameters) -> Bool {
+        gap + roundingNoise >= 1 - parameters.scoutingWeakShare.value
+    }
+
+    /// A value clears the weak line against `average` when its gap under it is not weak.
+    static func clearsWeakLine(_ value: Double, average: Double, parameters: EngineParameters) -> Bool {
+        !isWeak(gap: gap(of: value, under: average), parameters: parameters)
     }
 
     /// The better-player rule from numbers alone, the first that holds: nobody (no first choice, or out of
-    /// position), weak (`gap` at or over 1 − `scoutingWeakShare`), ageing (`age` at or over
-    /// `firstChoiceAgeNamedFrom` with no successor); nil for none.
+    /// position), weak (`gap` on the weak line), ageing (`age` at or over `firstChoiceAgeNamedFrom` with no
+    /// successor); nil for none.
+    static func betterPlayerFinding(hasFirstChoice: Bool, isOutOfPosition: Bool, gap: Double?, age: Int?,
+                                    hasSuccessor: Bool, parameters: EngineParameters) -> BetterPlayerFinding? {
+        if !hasFirstChoice || isOutOfPosition { return .nobody }
+        if let gap, isWeak(gap: gap, parameters: parameters) { return .weak(gap: gap) }
+        if let age, age >= parameters.firstChoiceAgeNamedFrom.value, !hasSuccessor { return .ageing(age: age) }
+        return nil
+    }
+
     static func betterPlayerKind(hasFirstChoice: Bool, isOutOfPosition: Bool, gap: Double?, age: Int?,
                                  hasSuccessor: Bool, parameters: EngineParameters) -> BetterPlayerKind? {
-        if !hasFirstChoice || isOutOfPosition { return .nobody }
-        if let gap, gap + roundingNoise >= 1 - parameters.scoutingWeakShare.value { return .weak }
-        if let age, age >= parameters.firstChoiceAgeNamedFrom.value, !hasSuccessor { return .ageing }
-        return nil
+        betterPlayerFinding(hasFirstChoice: hasFirstChoice, isOutOfPosition: isOutOfPosition, gap: gap, age: age,
+                            hasSuccessor: hasSuccessor, parameters: parameters)?.kind
+    }
+}
+
+/// The two averages of the outfield first choices that a slot is measured against: their rating, and, for the
+/// goalkeeper's slot, their (offset + current ability).
+struct WeakLineAverages {
+    let rating: Double?
+    let ability: Double?
+
+    init(rating: Double?, ability: Double?) {
+        self.rating = rating
+        self.ability = ability
+    }
+
+    init(_ needs: ScoutingNeeds) {
+        self.init(rating: needs.outfieldAverageRating, ability: needs.outfieldAverageAbility)
+    }
+
+    /// What a player at a slot is measured by and the average it is set against: his rating at an outfield slot, and
+    /// at the goalkeeper's (offset + `ability`), `ability` being his current ability or a reach. nil with no average.
+    func measure(isGoalkeeper: Bool, rating: Double, ability: Double,
+                 parameters: EngineParameters) -> (value: Double, average: Double)? {
+        if isGoalkeeper {
+            return self.ability.map { (parameters.ratingAbilityOffset.value + ability, $0) }
+        }
+        return self.rating.map { (rating, $0) }
+    }
+
+    /// His gap under the average and what it was measured by; nil with no average.
+    func weakGap(isGoalkeeper: Bool, rating: Double, ability: Int, parameters: EngineParameters) -> WeakGap? {
+        guard let measured = measure(isGoalkeeper: isGoalkeeper, rating: rating, ability: Double(ability),
+                                     parameters: parameters) else { return nil }
+        let measure: NeedMeasure = isGoalkeeper
+            ? .ability(his: ability, average: measured.average - parameters.ratingAbilityOffset.value)
+            : .rating(his: rating, average: measured.average)
+        return WeakGap(gap: Scouting.gap(of: measured.value, under: measured.average), measure: measure)
     }
 }

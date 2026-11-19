@@ -102,7 +102,7 @@ import Testing
         // Better than a weak first choice at 10 and still far under the others at 14: he answers it, and the slot stays weak.
         let weaker = try squadWithAWeakLeftBack(first: 10, second: 9)
         let slot = try #require(today(candidate(.D_L, level: 11), players: weaker).first)
-        #expect(slot.answers == [.betterPlayerToday] && (slot.stillWeakBy ?? 0) > 0.05)
+        #expect(slot.answers == [.betterPlayerToday] && (slot.stillWeakBy?.gap ?? 0) > 0.05)
     }
     @Test func heAnswersADepthNeedOnlyWhenHeCountsAndIsSolid() throws {
         let players = try PlannerFixture.squad().filter { $0.name != PlannerFixture.name(.D_L, "second") }
