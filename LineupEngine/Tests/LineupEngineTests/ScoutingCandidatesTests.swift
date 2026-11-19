@@ -279,4 +279,16 @@ import Testing
             #expect(groups[1].candidates.map(\.player.name) == ["a", "b", "low", "Nowhere"])
         }
     }
+    /// The goalkeeper's reach is taken as ability through the offset (70) against the weak share (0.95) of the outfield
+    /// first choices' average of offset + ability (the fixture squad's abilities are 100: 0.95 x 170 = 161.5): a reach
+    /// of 92 or more clears it, 91 or less does not. The first goalkeeper reaches exactly 100, which clears it only with
+    /// the offset (100 alone is under 161.5); the second is capped at 80, which falls short.
+    @Test func atTheGoalkeepersSlotTheReachIsSetAgainstTheWeakLineByAbility() throws {
+        let players = try firstElevenWithout(.GK)
+        let reaches = candidate(.GK, level: 12) { $0.age = 19; $0.currentAbility = 95; $0.potentialAbility = 100 }
+        let r = try #require(report([reaches], players: players).candidates.first)
+        #expect(r.headline == .GK && r.slots[0].firstChoice == nil && r.reachClearsWeakLine == true)
+        let capped = candidate(.GK, level: 12) { $0.age = 19; $0.currentAbility = 80; $0.potentialAbility = 80 }
+        #expect(try #require(report([capped], players: players).candidates.first).reachClearsWeakLine == false)
+    }
 }
