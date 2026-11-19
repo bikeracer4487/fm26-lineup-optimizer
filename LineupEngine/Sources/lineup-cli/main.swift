@@ -37,8 +37,9 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        and those Player Removal advises to move on counted as gone. The command line takes no marks to sell or loan out.
        scout prints only the heading advise prints (tactic, day, squads read and their warnings) and advise's Scouting
        part, then the players read from --candidates (those the owner already holds are left out) in groups: those
-       who answer a need today, those who could answer one later, those who would start where there is no need, and
-       the rest, each with how he would stand today, his reach, cautions and other slots. With every pasted player
+       who answer a need today, those who could answer one later, those who would start where there is no need, those
+       who could pass a first choice where there is no need, and the rest, each with how he would stand today, his
+       reach, cautions and other slots. With every pasted player
        already held it says so and exits with a failure. Wages and asking prices are in the candidates' paste's own currency and period.
        --standings is a JSON object from a player's key to {"standing": "teamLeader|highlyInfluential|influential|others",
        "socialGroup"?: "core|others|secondary:<name>"}: the hierarchy as the game's Dynamics screen shows it. Without it

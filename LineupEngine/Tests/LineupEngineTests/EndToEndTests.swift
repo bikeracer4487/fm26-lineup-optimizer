@@ -385,7 +385,27 @@ import Testing
     }
 
     @Test func theCapturedSquadsHaveScoutingNeeds() throws {
-        try checkScoutingNeeds(keeperAbility: nil)
+        let needs = try checkScoutingNeeds(keeperAbility: nil)
+        // Max Treml, a goalkeeper of 18 out on loan, is on course to pass Jonny Maxted (32): no ageing need.
+        #expect(!needs.betterPlayers.contains { $0.slot == .GK })
+        // Jonny Maxted is injured and the goalkeeper's slot has nobody else: the need would stay when he is back.
+        let keeper = try #require(needs.moreDepth.first { $0.depth.slot == .GK })
+        #expect(keeper.injured.map(\.name) == ["Jonny Maxted"] && !keeper.lastsOnlyWhileInjured)
+        #expect(keeper.firstChoice?.name == "Jonny Maxted" && keeper.nextBestShareUnder == nil)
+        // Fernando Forestieri is injured at central attacking midfield; with him the slot would have its two.
+        let playmaker = try #require(needs.moreDepth.last)
+        #expect(playmaker.depth.slot == .AM_C && playmaker.lastsOnlyWhileInjured)
+        #expect(playmaker.injured.map(\.name) == ["Fernando Forestieri"] && playmaker.firstChoice?.name == "Fernando Forestieri")
+        #expect(playmaker.going.map(\.name) == ["Scott Pollock"])
+        #expect(needs.moreDepth.dropLast().allSatisfy { !$0.lastsOnlyWhileInjured })
+        for need in needs.moreDepth {
+            guard let share = need.nextBestShareUnder else { continue }
+            let first = try #require(need.depth.options.first { $0.name == need.firstChoice?.name })
+            let next = try #require(need.depth.options.first { $0.player == need.depth.nextBest })
+            #expect(abs(share - (1 - next.rating / first.rating)) < 1e-9, "\(need.depth.slot.rawValue)")
+        }
+        let shares = needs.moreDepth.compactMap(\.nextBestShareUnder).map { Display.onePercentDecimal($0) }
+        #expect(shares == ["37.9%", "36.5%", "6.4%"])
     }
 
     /// The captured goalkeeper is ageing, so his need has no measure; at a current ability of 30 he is weak, measured
@@ -476,16 +496,29 @@ import Testing
         }
         let strangers = try report(elsewhere)
         #expect(!paste.players.isEmpty && strangers.leftOut.isEmpty && strangers.candidates.count == paste.players.count)
+        // As the run gives them after the whole-branch review's round of fixes.
+        let expectedParts: [String: (part: CandidatePart, headline: SlotID, answer: NeedAnswer?)] = [
+            "Max Treml": (.answersToday, .GK, .moreDepth),
+            "Kauan Bitencourt de Oliveira": (.answersToday, .AM_L, .moreDepth),
+            "Brayden Daniel": (.answersLater, .AM_R, .betterPlayerLater),
+            "Tyrae Njogu": (.rest, .DM_L, nil),
+            "Caleb Moir": (.rest, .D_CR, nil),
+            "Aydin Ulas": (.rest, .D_CR, nil),
+        ]
+        #expect(Set(strangers.candidates.map(\.player.name)) == Set(expectedParts.keys))
+        #expect(strangers.groups(orderedBy: .today).map(\.part) == [.answersToday, .answersToday, .answersLater, .rest])
         let words = SlotID.allCases.map(\.rawValue).filter { $0.contains("_") }
         for candidate in strangers.candidates {
             let name = candidate.player.name
-            #expect(CandidatePart.allCases.contains(candidate.part), "\(name)")
+            let expected = try #require(expectedParts[name], "\(name)")
+            #expect(candidate.part == expected.part && candidate.headline == expected.headline
+                        && candidate.headlineAnswer == expected.answer, "\(name)")
             if candidate.player.age <= parameters.developingUpToAge.value {
                 #expect(candidate.outlook != nil, "\(name)")
             } else {
                 #expect(candidate.outlook == nil, "\(name)")
             }
-            let lines = candidate.slots.flatMap { AdvisorText.todayLines($0) } + AdvisorText.laterLines(candidate)
+            let lines = candidate.slots.flatMap { AdvisorText.otherSlotLines($0) } + AdvisorText.laterLines(candidate)
             for line in lines {
                 #expect(line.hasSuffix("."), "\(name): \(line)")
                 #expect(!words.contains { line.contains($0) }, "\(name): \(line)")
