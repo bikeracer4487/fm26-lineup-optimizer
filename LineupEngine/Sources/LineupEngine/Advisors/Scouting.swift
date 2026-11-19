@@ -198,13 +198,12 @@ public enum Scouting {
             if let place, let first, !place.isOutOfPosition {
                 if isKeeper {
                     if let averageAbility {
-                        let his = offset + Double(first.currentAbility)
                         measure = .ability(his: first.currentAbility, average: averageAbility - offset)
-                        gap = 1 - his / averageAbility
+                        gap = abilityGap(ability: first.currentAbility, averageAbility: averageAbility, offset: offset)
                     }
                 } else if let averageRating {
                     measure = .rating(his: place.rating.value, average: averageRating)
-                    gap = 1 - place.rating.value / averageRating
+                    gap = ratingGap(rating: place.rating.value, average: averageRating)
                 }
             }
             guard let kind = betterPlayerKind(hasFirstChoice: place != nil, isOutOfPosition: place?.isOutOfPosition ?? false,
@@ -270,6 +269,15 @@ public enum Scouting {
                              moreDepth: moreDepth, fine: fine, elevens: elevens, depth: depth,
                              outfieldAverageRating: averageRating, outfieldAverageAbility: averageAbility,
                              basis: Evidence.weakest(evidence)!)
+    }
+
+    /// How far under the outfield average a rating is, as a share: 0.057 for 5.7%.
+    static func ratingGap(rating: Double, average: Double) -> Double { 1 - rating / average }
+
+    /// The same for the goalkeeper's slot, by current ability: both sides go through `ratingAbilityOffset`.
+    /// `averageAbility` is the average of (offset + ability).
+    static func abilityGap(ability: Int, averageAbility: Double, offset: Double) -> Double {
+        1 - (offset + Double(ability)) / averageAbility
     }
 
     /// The better-player rule from numbers alone, the first that holds: nobody (no first choice, or out of

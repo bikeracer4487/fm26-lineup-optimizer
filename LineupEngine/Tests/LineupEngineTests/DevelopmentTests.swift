@@ -244,6 +244,30 @@ import Testing
         #expect(row.level != .couldPassFirst)
     }
 
+    // MARK: The rivals at a slot
+
+    /// The first and second choice as a young player's outlook names them, and the first choice's estimate only when he
+    /// is developing.
+    @Test func rivalsAreTheOnesTheOutlookNames() throws {
+        let rising = player("Rising", age: 20, current: 100, potential: 140)
+        let old = player("Old", age: 28, current: 100, potential: 100)
+        let young = player("Young", age: 18, potential: 140, slots: [.D_L])
+        let t = tiers(first: [.D_L: rising], second: [.D_L: old],
+                      ratings: [(rising, .D_L, 85), (old, .D_L, 70), (young, .D_L, 60)])
+        let row = try #require(slot(try outlooks([rising, old, young], t)[young.id], .D_L))
+        let found = try Development.rivals(at: .D_L, tiers: t, squad: [rising, old, young], ownClub: "Oxford City",
+                                           parameters: parameters)
+        #expect(found.first == row.firstChoice && found.second == row.secondChoice)
+        #expect(found.first != nil && found.second != nil)
+        #expect(found.firstEstimate?.reach == 140)
+
+        let steady = try Development.rivals(at: .D_L, tiers: tiers(first: [.D_L: old], ratings: [(old, .D_L, 70)]),
+                                            squad: [old], ownClub: "Oxford City", parameters: parameters)
+        #expect(steady.first?.compared == 70 && steady.second == nil && steady.firstEstimate == nil)
+        let none = try Development.rivals(at: .D_L, tiers: tiers(), squad: [old], ownClub: "Oxford City", parameters: parameters)
+        #expect(none.first == nil && none.second == nil && none.firstEstimate == nil)
+    }
+
     // MARK: Bands
 
     @Test func eachBand() throws {

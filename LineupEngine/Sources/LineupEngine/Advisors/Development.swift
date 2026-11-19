@@ -153,13 +153,6 @@ public enum Development {
         }
         let average = averageAbility(of: players, ownClub: ownClub)
 
-        func rival(_ id: PlayerID?, at slot: SlotID) -> Rival? {
-            guard let id, let player = byID[id], let rating = tiers.ratings[id]?[slot] else { return nil }
-            let compared = estimates[id].map { scaled(rating, from: Double($0.current), to: $0.reach, parameters) } ?? rating
-            return Rival(player: id, name: player.name, age: player.age, rating: rating, compared: compared,
-                         isAgeNamed: player.age >= parameters.firstChoiceAgeNamedFrom.value)
-        }
-
         var found: [PlayerID: Outlook] = [:]
         for player in sorted {
             guard let estimate = estimates[player.id] else { continue }
@@ -169,15 +162,46 @@ public enum Development {
                       let rating = tiers.ratings[player.id]?[assignment.slot] else { continue }
                 let first = tiers.first[assignment.slot]
                 let second = tiers.second[assignment.slot]
+                let pair = rivals(at: assignment.slot, tiers: tiers, byID: byID, estimates: estimates, parameters: parameters)
                 slots.append(slotOutlook(
                     player, estimate, assignment.slot, rating: rating, isFirstChoice: first == player.id,
-                    firstChoice: first == player.id ? nil : rival(first, at: assignment.slot),
-                    secondChoice: second == player.id ? nil : rival(second, at: assignment.slot),
-                    firstChoiceEstimate: first.flatMap { estimates[$0] }, parameters: parameters))
+                    firstChoice: first == player.id ? nil : pair.first,
+                    secondChoice: second == player.id ? nil : pair.second,
+                    firstChoiceEstimate: pair.firstEstimate, parameters: parameters))
             }
             found[player.id] = outlook(player, estimate, slots, average: average, parameters: parameters)
         }
         return found
+    }
+
+    /// The first and second choice at `slot` by `tiers`, as the outlooks name them (a rival who is developing is
+    /// compared at his own reach), and the first choice's estimate when he is developing. `squad` are the players
+    /// the tiers were worked out from; a choice who is not among them, or not rated there, is nil.
+    /// Throws `RatingError.missingAttribute` for a developing choice without Professionalism, Ambition or Determination.
+    static func rivals(at slot: SlotID, tiers: SquadTiers, squad: [Player], ownClub: String?,
+                       parameters: EngineParameters) throws -> (first: Rival?, second: Rival?, firstEstimate: ReachEstimate?) {
+        let byID = Dictionary(squad.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var estimates: [PlayerID: ReachEstimate] = [:]
+        for id in [tiers.first[slot], tiers.second[slot]].compactMap({ $0 }) {
+            if let player = byID[id], isDeveloping(player, ownClub: ownClub, parameters: parameters) {
+                estimates[id] = try Reach.estimate(for: player, parameters: parameters)
+            }
+        }
+        return rivals(at: slot, tiers: tiers, byID: byID, estimates: estimates, parameters: parameters)
+    }
+
+    /// What `outlooks` and the public `rivals` share, with the estimates already worked out.
+    private static func rivals(at slot: SlotID, tiers: SquadTiers, byID: [PlayerID: Player],
+                               estimates: [PlayerID: ReachEstimate],
+                               parameters: EngineParameters) -> (first: Rival?, second: Rival?, firstEstimate: ReachEstimate?) {
+        func rival(_ id: PlayerID?) -> Rival? {
+            guard let id, let player = byID[id], let rating = tiers.ratings[id]?[slot] else { return nil }
+            let compared = estimates[id].map { scaled(rating, from: Double($0.current), to: $0.reach, parameters) } ?? rating
+            return Rival(player: id, name: player.name, age: player.age, rating: rating, compared: compared,
+                         isAgeNamed: player.age >= parameters.firstChoiceAgeNamedFrom.value)
+        }
+        let first = tiers.first[slot]
+        return (rival(first), rival(tiers.second[slot]), first.flatMap { estimates[$0] })
     }
 
     /// A first choice at any slot has enough, whatever he has started. Otherwise, with at least
