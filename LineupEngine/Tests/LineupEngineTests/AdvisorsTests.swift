@@ -154,7 +154,12 @@ import Testing
         let r = try report(request(players))
         #expect(r.removal.advisedToLeave.contains(back.id))
         #expect(r.training.recommendations.isEmpty)
-        #expect(r.training.needsWithoutCandidates == [RetrainingNeed(tactic: tactic.name, slot: .D_L)])
+        // Left back, thin whoever goes, comes first; every other need is thin only because its cover is advised to
+        // leave, and names him.
+        let needs = r.training.needsWithoutCandidates
+        #expect(needs.first == RetrainingNeed(tactic: tactic.name, slot: .D_L))
+        #expect(needs.dropFirst().allSatisfy { !$0.going.isEmpty })
+        #expect(needs.contains { $0.slot == .D_R && $0.going.contains(back.name) })
     }
 
     @Test func twoSavedTacticsGiveNeedsFromBoth() throws {
@@ -170,12 +175,16 @@ import Testing
         let primaryNeed = RetrainingNeed(tactic: tactic.name, slot: .D_L)
         let otherNeeds = otherDepth.thin.map { RetrainingNeed(tactic: other.name, slot: $0) }
 
+        // Training also lists the slots thin once the players Removal advises moving on have gone; those name who.
+        func thinToday(_ r: AdvisorsReport) -> [RetrainingNeed] { r.training.needsWithoutCandidates.filter { $0.going.isEmpty } }
         let both = try report(request(players, tactics: [tactic, other]))
-        #expect(both.training.needsWithoutCandidates == [primaryNeed] + otherNeeds)
+        #expect(thinToday(both) == [primaryNeed] + otherNeeds)
+        let tactics = both.training.needsWithoutCandidates.map(\.tactic)
+        #expect(tactics == tactics.filter { $0 == tactic.name } + tactics.filter { $0 == other.name })
         // The primary comes first and is not judged twice, even when the saved tactics list it again or leave it out.
         #expect(try report(request(players, tactics: [other, tactic, tactic])).training == both.training)
         #expect(try report(request(players, tactics: [other])).training == both.training)
-        #expect(try report(request(players, tactics: [])).training.needsWithoutCandidates == [primaryNeed])
+        #expect(thinToday(try report(request(players, tactics: []))) == [primaryNeed])
         // Elevens, depth and removal judge against the primary alone.
         let alone = try report(request(players))
         #expect(both.elevens == alone.elevens && both.depth == alone.depth && both.removal == alone.removal)
@@ -187,7 +196,7 @@ import Testing
             money: .weeklyPounds, catalog: catalog, profile: profile, parameters: .fm27)
         #expect(swapped.depth == otherDepth)
         #expect(swapped.elevens.first.map(\.slot).contains(.ST_L))
-        #expect(swapped.training.needsWithoutCandidates == otherNeeds + [primaryNeed])
+        #expect(thinToday(swapped) == otherNeeds + [primaryNeed])
     }
 
     @Test func inputOrderDoesNotMatter() throws {

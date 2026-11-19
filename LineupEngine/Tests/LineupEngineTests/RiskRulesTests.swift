@@ -8,11 +8,12 @@ import Testing
         RiskRules.exclusion(for: player, loan: loan, importance: importance, isNextFixture: isNextFixture, parameters: .fm27)
     }
 
-    @Test func injuryComesFirstAndCannotBeOverridden() {
+    @Test func injuryComesFirstAndTheOwnerCanOverruleIt() {
         let player = Player.fixture(condition: 0.50, jadedness: 600, isInjured: true, isBanned: true)
         let result = exclusion(player, loan: .loanedOut(to: "Wallingford"))
         #expect(result == .injured)
-        #expect(!RiskRules.canBeOverridden(.injured))
+        // FMRTE says that he is injured, not whether he can play through it: the owner knows.
+        #expect(RiskRules.canBeOverridden(.injured))
     }
 
     @Test func loanedOutPlayerIsExcluded() {

@@ -84,6 +84,23 @@ private func isNameWarning(_ warning: ImportWarning) -> Bool {
         #expect(daniel.attributes.count == 62 && daniel.familiarity.count == 14)
     }
 
+    /// FMRTE 27.1.0 build 14 stopped writing Balance as money (the owner's report, 18 November 2026). The capture has
+    /// the team and search grids at the same column count, so this also shows the grid is still told apart without it.
+    @Test func balanceWithoutACurrencySymbolImportsTheSamePlayers() throws {
+        let balance = try column("PhysicalAttributes.Balance")
+        let plain = try importU21 { rows in
+            rows.map { row in
+                var row = row
+                row[balance] = row[balance].replacingOccurrences(of: "£", with: "")
+                return row
+            }
+        }
+        let captured = try importU21()
+        #expect(try Fixtures.text("captures/u21.tsv").contains("\"£6\""))   // the capture does carry the symbol
+        #expect(plain.grid == captured.grid && plain.players == captured.players)
+        #expect(plain.warnings == captured.warnings && plain.money == captured.money)
+    }
+
     @Test func importsTheSamePlayersFromTheTeamGrid() throws {
         let r = try Importer.importPlayers(clipboard: Fixtures.text("captures/u21-team-grid.tsv"),
                                            fmrteConfig: Fixtures.data("captures/u21-team-grid.grids.json"), squad: .u21)

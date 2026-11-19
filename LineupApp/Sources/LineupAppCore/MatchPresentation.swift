@@ -235,25 +235,28 @@ public struct CandidateRow: Identifiable, Equatable, Sendable {
     /// His full-fitness rating to one decimal place, or a dash when it cannot be worked out; nil when the picker shows
     /// no ratings, as for a missed fixture's remembered eleven.
     public let ratingText: String?
-    /// Why he cannot play, in the engine's words.
+    /// Why a rule leaves him out, or why he cannot be rated, in the engine's words.
     public let unavailable: String?
     /// He is the pick in the slot now.
     public let isCurrent: Bool
     /// Where he is in the eleven now, when that is another slot.
     public let note: String?
-    public var canChoose: Bool { unavailable == nil }
+    /// Whether the row is a button: he can play, or the owner's choice of him would overrule the reason shown.
+    public let canChoose: Bool
 
     public init(player: PlayerID, name: String, squadText: String, ratingText: String?, unavailable: String?,
-                isCurrent: Bool, note: String? = nil) {
+                isCurrent: Bool, note: String? = nil, canChoose: Bool? = nil) {
         self.player = player; self.name = name; self.squadText = squadText; self.ratingText = ratingText
         self.unavailable = unavailable; self.isCurrent = isCurrent; self.note = note
+        self.canChoose = canChoose ?? (unavailable == nil)
     }
 
     public static func rows(_ candidates: [Candidate], current: PlayerID?) -> [CandidateRow] {
         candidates.map { candidate in
             CandidateRow(player: candidate.player, name: candidate.name, squadText: candidate.squad.displayName,
                          ratingText: candidate.rating.map(MatchText.oneDecimal) ?? "—",
-                         unavailable: candidate.unavailable, isCurrent: candidate.player == current)
+                         unavailable: candidate.unavailable, isCurrent: candidate.player == current,
+                         canChoose: candidate.canBeChosen)
         }
     }
 
@@ -276,11 +279,12 @@ public struct PickerText: Equatable, Sendable {
     /// The heading over the ratings; nil when the picker shows none.
     public let ratingHeading: String?
 
-    /// For a planned lineup: who can play, best first at full fitness.
+    /// For a planned lineup: who can play, best first at full fitness, then those a rule leaves out, whom the owner
+    /// can still choose.
     public static func planned(_ slot: SlotID) -> PickerText {
         PickerText(title: MatchPresentation.pickerTitle(slot),
-                   explanation: "Those who can play, best first at full fitness; then those who cannot, with the reason. "
-                       + "Choosing a player fixes him here for this match.",
+                   explanation: "Those who can play, best first at full fitness; then those a rule leaves out, with the "
+                       + "reason. Choosing a player fixes him here for this match, over the rule.",
                    ratingHeading: "Rating at full fitness")
     }
 

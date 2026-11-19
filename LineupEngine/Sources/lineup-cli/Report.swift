@@ -150,6 +150,7 @@ enum Report {
     private static func option(_ slot: SlotID, _ option: DepthOption, parameters: EngineParameters) -> String {
         var marks: [String] = []
         if option.countsAsCover { marks.append("cover") }
+        if option.isBelowCoverShare { marks.append(AdvisorText.belowCoverShare(parameters).lowercased()) }
         if option.squad != .firstTeam { marks.append(squadName(option.squad)) }
         if let unavailable = option.unavailable { marks.append(ErrorDescriptions.describe(unavailable, parameters: parameters)) }
         if !option.isSolid { marks.append("familiarity \(option.ipFamiliarity)/\(option.oopFamiliarity)") }
@@ -186,10 +187,17 @@ enum Report {
             for caution in one.cautions { out.append("        ! \(caution)") }
         }
         func needs(_ list: [RetrainingNeed]) -> String {
-            list.isEmpty ? "none" : list.map { "\($0.slot.rawValue) in \($0.tactic)" }.joined(separator: ", ")
+            list.isEmpty ? "none" : list.map { need in
+                "\(need.slot.rawValue) in \(need.tactic)"
+                    + (need.going.isEmpty ? "" : " (not counting \(need.going.joined(separator: ", ")), advised to leave)")
+            }.joined(separator: ", ")
         }
         out.append("Already being retrained for: \(needs(report.needsBeingRetrained))")
         out.append("Needs nobody suits (recruit): \(needs(report.needsWithoutCandidates))")
+        if !report.retrainingsNotNeeded.isEmpty {
+            out.append("Retrainings no thin slot needs: "
+                       + report.retrainingsNotNeeded.map { "\($0.player.key) at \($0.position.rawValue)" }.joined(separator: ", "))
+        }
         return out
     }
 

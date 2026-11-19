@@ -298,9 +298,14 @@ import Testing
         #expect(depth.thin.contains(.GK))
         #expect(keeper.onLoan.map(\.name).contains("Max Treml"))
         #expect(keeper.options.contains { $0.name == "Jonny Maxted" && $0.unavailable == .injured })
-        // The two U21 centre-backs a day short of the condition floor still count as cover.
+        // The two U21 centre-backs a day short of the condition floor could still step in, but they rate under 80% of
+        // either first choice, so they do not count as cover and both centre-back slots are thin.
         for slot in [SlotID.D_CL, .D_CR] {
-            #expect(depth.slots.first { $0.slot == slot }?.isThin == false, "\(slot.rawValue)")
+            let centre = try #require(depth.slots.first { $0.slot == slot })
+            let youths = centre.options.filter { ["Caleb Moir", "Aydin Ulas"].contains($0.name) }
+            #expect(youths.count == 2 && youths.allSatisfy { $0.isStandIn && $0.isBelowCoverShare && !$0.countsAsCover },
+                    "\(slot.rawValue)")
+            #expect(centre.standIns == 3 && centre.cover == 1 && centre.isThin, "\(slot.rawValue)")
         }
 
         // Rest: nobody out on loan.

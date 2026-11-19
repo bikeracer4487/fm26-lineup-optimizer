@@ -249,15 +249,26 @@ import LineupEngine
     @Test func aCandidateRowShowsHisRatingOrADashAndWhetherHeCanBeChosen() {
         let rows = CandidateRow.rows([
             Candidate(player: PlayerID(key: "a"), name: "Able", squad: .firstTeam, rating: 106.94, unavailable: nil),
-            Candidate(player: PlayerID(key: "b"), name: "Baker", squad: .u21, rating: 99.0, unavailable: "injured"),
+            Candidate(player: PlayerID(key: "b"), name: "Baker", squad: .u21, rating: 99.0, unavailable: "injured",
+                      canBeChosen: true),
             Candidate(player: PlayerID(key: "c"), name: "Cole", squad: .u18, rating: nil,
                       unavailable: "Cole has no value for the attribute Pace"),
+            Candidate(player: PlayerID(key: "d"), name: "Dale", squad: .u18, rating: 80, unavailable: "on loan at Banbury United",
+                      canBeChosen: false),
         ], current: PlayerID(key: "b"))
-        #expect(rows.map(\.ratingText) == ["106.9", "99.0", "—"])
-        #expect(rows.map(\.squadText) == ["First team", "U21s", "U18s"])
-        #expect(rows.map(\.canChoose) == [true, false, false])
-        #expect(rows.map(\.isCurrent) == [false, true, false])
-        #expect(rows.map(\.unavailable) == [nil, "injured", "Cole has no value for the attribute Pace"])
+        #expect(rows.map(\.ratingText) == ["106.9", "99.0", "—", "80.0"])
+        #expect(rows.map(\.squadText) == ["First team", "U21s", "U18s", "U18s"])
+        // A rule's reason against him is shown, and he can still be chosen where the engine would use the choice.
+        #expect(rows.map(\.canChoose) == [true, true, false, false])
+        #expect(rows.map(\.isCurrent) == [false, true, false, false])
+        #expect(rows.map(\.unavailable)
+                == [nil, "injured", "Cole has no value for the attribute Pace", "on loan at Banbury United"])
+    }
+
+    @Test func aCandidateWithAReasonAgainstHimCannotBeChosenUnlessSaid() {
+        let candidate = Candidate(player: PlayerID(key: "a"), name: "Able", squad: .firstTeam, rating: nil, unavailable: "no rating")
+        #expect(!candidate.canBeChosen)
+        #expect(Candidate(player: PlayerID(key: "b"), name: "Baker", squad: .u21, rating: 9, unavailable: nil).canBeChosen)
     }
 
     // MARK: Not ready
@@ -310,6 +321,9 @@ import LineupEngine
         #expect(MatchPresentation.pickerTitle(.ST_C) == "Choose who plays at striker")
         #expect(PickerText.planned(.ST_C).title == "Choose who plays at striker")
         #expect(PickerText.planned(.ST_C).ratingHeading == "Rating at full fitness")
+        #expect(PickerText.planned(.ST_C).explanation
+                == "Those who can play, best first at full fitness; then those a rule leaves out, with the reason. "
+                + "Choosing a player fixes him here for this match, over the rule.")
         #expect(PickerText.remembered(.D_L).title == "Who started at left back?")
         #expect(PickerText.remembered(.D_L).ratingHeading == nil)
         #expect(MatchPresentation.confirmButton(for: missed(fixture("m", "2026-11-10", "M"))).title
@@ -518,14 +532,21 @@ import LineupEngine
         #expect(shown.problems.count == 1)
     }
 
-    @Test func theSampleWithChoicesHasAPinnedYouthAnIgnoredOverrideAndARejection() throws {
+    @Test func theSampleWithChoicesHasAPinnedYouthAnInjuredKeeperChosenAnIgnoredOverrideAndARejection() throws {
         let model = try SampleData.modelWithChoices(repositoryRoot: Captures.repositoryRoot)
         let plan = try firstPlan(model)
         let midfielder = try #require(model.tokens(for: plan).first { $0.slot == .AM_C })
         #expect(midfielder.marks.contains(.override))
         #expect(midfielder.marks.contains(.youth(.u21)))
-        #expect(plan.ignoredOverrides.map(\.slot) == [.GK])
-        #expect(plan.ignoredOverrides.first?.sentence.hasPrefix("Jonny Maxted at goalkeeper: injured") == true)
+        // The injured goalkeeper the owner chose plays, marked as his choice over the rule.
+        let keeper = try #require(model.tokens(for: plan).first { $0.slot == .GK })
+        #expect(keeper.marks.contains(.override))
+        guard case .planned(let lineup, _) = plan.body else { Issue.record("not planned"); return }
+        #expect(lineup.picks.first { $0.slot == .GK }?.reasons.last == "Chosen by you, overriding: injured")
+        // The player out on loan the owner chose at left back does not: that cannot be overruled.
+        #expect(plan.ignoredOverrides.map(\.slot) == [.D_L])
+        #expect(plan.ignoredOverrides.first?.sentence.contains(" at left back: on loan at ") == true)
+        #expect(plan.ignoredOverrides.first?.sentence.hasSuffix(", which cannot be overruled.") == true)
         #expect(model.rejectedRows(in: plan).map(\.name) == ["Tyrone Marsh"])
     }
 

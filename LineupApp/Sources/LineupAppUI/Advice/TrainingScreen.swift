@@ -227,10 +227,21 @@ private struct UnderWayRow: View {
                 RetrainingTrackView(track: track)
             }
             if let progress = row.progressText {
-                Text(progress)
-                    .font(Theme.Typeface.text(Theme.TypeSize.body))
-                    .foregroundStyle(Theme.Colour.ink)
-                    .fixedSize(horizontal: false, vertical: true)
+                // The row's spoken text already says it.
+                if row.progressIsCaution {
+                    CautionLine(progress)
+                        .accessibilityHidden(true)
+                } else {
+                    Text(progress)
+                        .font(Theme.Typeface.text(Theme.TypeSize.body))
+                        .foregroundStyle(Theme.Colour.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityHidden(true)
+                }
+            }
+            if let notNeeded = row.notNeededText {
+                // The row's spoken text already says it.
+                CautionLine(notNeeded)
                     .accessibilityHidden(true)
             }
             if let leaving = row.leavingText {

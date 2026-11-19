@@ -609,13 +609,27 @@ import Testing
         #expect(pick(banned, .ST_C)?.reasons.last == "Chosen by you, overriding: banned")
     }
 
-    @Test func anOverrideOfAnInjuredPlayerIsIgnoredAndReported() throws {
+    @Test func anOverrideBeatsAnInjuryAndIsMarked() throws {
+        // The game can pass an injured player fit to play; FMRTE only says that he is injured.
         let cover = Player.fixture(name: "Cover Striker", familiarity: [.striker: 17])
-        let lineup = try selector.select(request(changing("Striker", in: squad(cover)) { $0.isInjured = true }, overrides: [.ST_C: id("Striker")]))
-        #expect(lineup.ignoredOverrides[.ST_C] == .notAllowed(.injured))
+        let players = changing("Striker", in: squad(cover)) { $0.isInjured = true }
+        let lineup = try selector.select(request(players, overrides: [.ST_C: id("Striker")]))
+        #expect(lineup.ignoredOverrides.isEmpty)
+        let st = try #require(pick(lineup, .ST_C))
+        #expect(st.player == id("Striker"))
+        #expect(st.isOverride)
+        #expect(st.warnings == [.overridesRule(.injured)])
+        #expect(st.reasons.last == "Chosen by you, overriding: injured")
+    }
+
+    @Test func anInjuredPlayerNobodyChoseDoesNotStart() throws {
+        let cover = Player.fixture(name: "Cover Striker", familiarity: [.striker: 17])
+        let players = changing("Striker", in: squad(cover)) { $0.isInjured = true }
+        let lineup = try selector.select(request(players))
         let st = try #require(pick(lineup, .ST_C))
         #expect(st.player == id("Cover Striker"))
         #expect(!st.isOverride)
+        #expect(lineup.omissions.first { $0.player == id("Striker") }?.cause == .excluded(.injured))
     }
 
     @Test func anOverrideOfAPlayerOutOnLoanIsIgnoredAndReported() throws {
@@ -661,8 +675,8 @@ import Testing
         #expect(unused.ignoredOverrides == [.M_C: .slotNotInTactic])
 
         // A player used twice is reported as used twice even when his exclusion cannot be overridden.
-        let injured = changing("Striker", in: squad()) { $0.isInjured = true }
-        let twice = try selector.select(request(injured, overrides: [.ST_C: id("Striker"), .AM_C: id("Striker")]))
+        let away = Player.fixture(name: "Away Striker", familiarity: [.striker: 20], loanedTo: "Wallingford")
+        let twice = try selector.select(request(squad(away), overrides: [.ST_C: id("Away Striker"), .AM_C: id("Away Striker")]))
         #expect(twice.ignoredOverrides == [.ST_C: .usedTwice, .AM_C: .usedTwice])
     }
 

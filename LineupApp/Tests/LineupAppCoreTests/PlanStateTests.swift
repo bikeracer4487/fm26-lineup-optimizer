@@ -274,16 +274,24 @@ import Testing
         let t = try TestModel()
         let model = try squad(fixtures: 1, t)
         let id = model.fixtures[0].id
-        guard let keeper = model.players.first(where: { $0.name == "Jonny Maxted" }), keeper.isInjured,
-              let striker = model.players.first(where: { $0.name == "Tyrone Marsh" }) else {
-            Issue.record("the capture's injured keeper or its striker is missing"); return
+        // A player out on loan is the one choice the engine never uses: he is at another club.
+        let away = model.players.compactMap { player -> (Player, String)? in
+            if case .loanedOut(let club) = model.squad.book.loanStatus(of: player, override: model.settings.clubOverride) {
+                (player, club)
+            } else {
+                nil
+            }
+        }.first
+        guard let (loaned, club) = away, let striker = model.players.first(where: { $0.name == "Tyrone Marsh" }) else {
+            Issue.record("the capture's player out on loan or its striker is missing"); return
         }
-        model.setOverride(keeper.id, at: .GK, in: id)
+        model.setOverride(loaned.id, at: .GK, in: id)
         model.setOverride(striker.id, at: .AM_C, in: id)
         model.setOverride(striker.id, at: .ST_C, in: id)
         model.setOverride(PlayerID(key: "nobody of that name"), at: .D_L, in: id)
         #expect(plan(model, id)?.ignoredOverrides == [
-            IgnoredOverride(slot: .GK, sentence: "Jonny Maxted at goalkeeper: injured, which cannot be overruled."),
+            IgnoredOverride(slot: .GK,
+                            sentence: "\(loaned.name) at goalkeeper: on loan at \(club), which cannot be overruled."),
             IgnoredOverride(slot: .D_L, sentence: "The player chosen for left back is no longer in the squads."),
             IgnoredOverride(slot: .AM_C,
                             sentence: "Tyrone Marsh at central attacking midfield: because he is fixed in another slot too."),
@@ -597,13 +605,46 @@ import Testing
         guard let injured = model.players.first(where: \.isInjured) else { Issue.record("no injured player"); return }
         let his = candidates.first { $0.player == injured.id }
         #expect(his?.unavailable == "injured")
+        #expect(his?.canBeChosen == true)
         #expect(his?.name == injured.name && his?.squad == injured.squad)
         #expect((his?.rating ?? 0) > 0)
 
         let picked = pick(at: .GK, plan(model, id))
         let pickedCandidate = candidates.first { $0.player == picked?.player }
         #expect(pickedCandidate?.unavailable == nil)
+        #expect(pickedCandidate?.canBeChosen == true)
         #expect(pickedCandidate?.rating == picked?.rating.value)
+    }
+
+    @Test func anInjuredPlayerTheOwnerChoosesStartsInThatMatchOnly() throws {
+        // The game can pass an injured player fit to play, and FMRTE only says that he is injured.
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        let ids = model.fixtures.map(\.id)
+        guard let injured = model.players.first(where: \.isInjured) else { Issue.record("no injured player"); return }
+        #expect(pick(at: .GK, plan(model, ids[0]))?.player != injured.id)
+
+        let selection = model.choose(injured.id, at: .GK, in: ids[0])
+        #expect(selection != nil)
+        let chosen = try #require(pick(at: .GK, plan(model, ids[0])))
+        #expect(chosen.player == injured.id)
+        #expect(chosen.isOverride)
+        #expect(chosen.reasons.last == "Chosen by you, overriding: injured")
+        #expect(plan(model, ids[0])?.ignoredOverrides.isEmpty == true)
+        // He is still shown as injured in the picker, and is not picked where the owner has not chosen him.
+        #expect(model.candidates(for: .GK, in: ids[0]).first { $0.player == injured.id }?.unavailable == "injured")
+        #expect(pick(at: .GK, plan(model, ids[1]))?.player != injured.id)
+    }
+
+    @Test func aCandidateARuleLeavesOutCanBeChosen() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        let ids = model.fixtures.map(\.id)
+        guard let keeper = pick(at: .GK, plan(model, ids[0]))?.player else { return }
+        model.reject(keeper, in: ids[0])
+        let rejected = model.candidates(for: .GK, in: ids[0]).first { $0.player == keeper }
+        #expect(rejected?.unavailable == "rejected for this fixture")
+        #expect(rejected?.canBeChosen == true)
     }
 
     @Test func aCandidateWhoCannotPlaySaysSoAsHisLeftOutLineWould() throws {
@@ -636,10 +677,11 @@ import Testing
         let candidates = AppModel.ranked(players, rating: { player in
             if player.name == unrated { throw RatingError.missingAttribute(player: player.name, attribute: .pace) }
             return Double(player.name.count)
-        }, unavailable: { _ in nil })
+        }, ruledOut: { _ in nil })
         #expect(candidates.count == 4)
         #expect(candidates.last?.name == unrated)
         #expect(candidates.last?.rating == nil)
+        #expect(candidates.last?.canBeChosen == false)
         #expect(candidates.last?.unavailable
             == ErrorDescriptions.describe(RatingError.missingAttribute(player: unrated, attribute: .pace)))
         #expect(candidates.dropLast().allSatisfy { $0.rating != nil && $0.unavailable == nil })
@@ -652,8 +694,9 @@ import Testing
         let candidates = AppModel.ranked(players, rating: { player in
             if player.id == players[3].id { throw RatingError.missingAttribute(player: player.name, attribute: .pace) }
             return [players[0].id: 50.0, players[1].id: 90, players[2].id: 70][player.id]!
-        }, unavailable: { $0.id == players[1].id ? "injured" : nil })
+        }, ruledOut: { $0.id == players[1].id ? (reason: "injured", canBeOverruled: true) : nil })
         #expect(candidates.map(\.player) == [players[2].id, players[0].id, players[1].id, players[3].id])
+        #expect(candidates.map(\.canBeChosen) == [true, true, true, false])
     }
 
     @Test func aFixtureWithNoPlannedLineupHasNoCandidates() throws {

@@ -39,7 +39,8 @@ public struct CandidatePicker: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(rows) { row in
-                        // A player who cannot play is not a button, so his reason is not dimmed as a disabled control's.
+                        // A player who cannot be chosen is not a button, so his reason is not dimmed as a disabled
+                        // control's. One a rule leaves out can be chosen: his row is a button, with the reason in red.
                         if row.canChoose {
                             Button { choose(row.player) } label: {
                                 CandidateRowView(row: row)

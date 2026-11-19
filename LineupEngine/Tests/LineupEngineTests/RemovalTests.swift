@@ -299,7 +299,7 @@ import Testing
 
     /// His reasons from the thin-cover rule.
     func thinReasons(_ a: RemovalAdvice) -> [RemovalReason] {
-        a.reasons.filter { $0.text.hasSuffix("where cover is thin") || $0.text.hasSuffix("would be thin without him") }
+        a.reasons.filter { $0.text.hasSuffix("where cover is thin") || $0.text.hasSuffix("without him") }
     }
 
     func depth(_ players: [Player], _ slot: SlotID) throws -> SlotDepth {
@@ -363,6 +363,23 @@ import Testing
             #expect(thinReasons(a).isEmpty, "\(id.key)")
             #expect(a.basis == .carriedOverFM26, "\(id.key)")
         }
+    }
+
+    @Test func realCoverIsProtectedWhenTheOnlyOthersAreTooWeakToCount() throws {
+        // Three can step in at left back: the first choice, the second and a third far below them. Only two count as
+        // cover, the line, so each of the two is protected and the third is not.
+        let weak = Player.fixture(name: "Weak left back", all: 5,
+                                  familiarity: Dictionary([assignment(.D_L).ipPosition, assignment(.D_L).oopPosition]
+                                      .map { ($0, 20) }, uniquingKeysWith: { a, _ in a }))
+        let players = try squad() + [weak]
+        let left = try depth(players, .D_L)
+        try #require(left.standIns == 3 && left.cover == parameters.depthThinBelow.value)
+        try #require(left.options.first { $0.player == weak.id }?.isBelowCoverShare == true)
+        for id in [PlannerFixture.id(.D_L, "first"), PlannerFixture.id(.D_L, "second")] {
+            #expect(thinReasons(try advice(id, in: players)) == [reason("Cover at left back would be thin without him", -30)],
+                    "\(id.key)")
+        }
+        #expect(thinReasons(try advice(weak.id, in: players)).isEmpty)
     }
 
     @Test func theRuleAppliesOnceAtTheFirstSlotInOrder() throws {
@@ -822,12 +839,15 @@ import Testing
 
     @Test func aMarkedlyLowerPlayerNeededForDepthIsWatched() throws {
         let (players, young) = try needed(14)
-        try #require(try depth(players, .D_L).cover == parameters.depthThinBelow.value)
+        // He is too far below the first choice to count as cover, but only he and the first choice can step in there.
+        let left = try depth(players, .D_L)
+        try #require(left.standIns == parameters.depthThinBelow.value && left.cover == 1)
+        try #require(left.options.first { $0.player == young.id }?.isBelowCoverShare == true)
         let a = try advice(young.id, in: players)
         try #require(a.tier == .backup)
         #expect(a.outlook?.level == .markedlyLower)
         #expect(a.reasons == [reason("Not expected to reach the level of the squad at any position", 70),
-                              reason("Cover at left back would be thin without him", -30)])
+                              reason("Too few players can step in at left back without him", -30)])
         #expect(a.score == 40 && a.level == .medium && a.action == .monitor)
         // Not worth developing, and needed for cover: watched for that, with no word of a loan.
         #expect(a.watchReason == .neededForCover)
@@ -837,7 +857,7 @@ import Testing
 
     @Test func oneNotNeededScoresSeventy() throws {
         let (players, young) = try needed(20)
-        try #require(try depth(players, .D_L).cover == parameters.depthThinBelow.value + 1)
+        try #require(try depth(players, .D_L).standIns == parameters.depthThinBelow.value + 1)
         let r = try report(players)
         let a = try #require(r.advice.first { $0.player == young.id })
         try #require(a.tier == .backup)
@@ -948,7 +968,7 @@ import Testing
         let (players, young) = try needed(14, age: 19, all: 9, potentialAbility: reaching, months: 24)
         let a = try advice(young.id, in: players)
         try #require(a.tier == .backup && a.outlook?.level.map(worthDeveloping.contains) == true)
-        #expect(a.reasons.contains(reason("Cover at left back would be thin without him", -30)))
+        #expect(a.reasons.contains(reason("Too few players can step in at left back without him", -30)))
         #expect(a.action == .monitor && a.keepReason == nil)
         #expect(a.watchReason == .neededForCover)
         #expect(AdvisorText.why(a.action, for: a) == "He is needed as cover here, so a loan would leave the squad short.")
@@ -1187,7 +1207,7 @@ import Testing
                 .first { $0.player == id })
             try #require(a.outlook?.level == .markedlyLower && a.tier == .second(.D_L))
             try #require(a.matchesHere?.isEnough == false)
-            #expect(thinReasons(a) == [reason("Cover at left back would be thin without him", -30)], "\(age)")
+            #expect(thinReasons(a) == [reason("Too few players can step in at left back without him", -30)], "\(age)")
             #expect(a.action == .monitor && a.watchReason == .neededForCover, "\(age)")
             #expect(AdvisorText.why(a.action, for: a)
                     == "He is needed as cover here: he stays until the squad has someone better there.")

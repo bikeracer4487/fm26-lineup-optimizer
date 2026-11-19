@@ -248,6 +248,9 @@ import Testing
         #expect(EngineParameters.fm27.depthCoverFamiliarity.value == 10)
         #expect(EngineParameters.fm27.depthSolidFamiliarity.value == 15)
         #expect(EngineParameters.fm27.depthThinBelow.value == 2)
+        #expect(listed["depthCoverShare"]?.evidence == .carriedOverFM26)
+        #expect(listed["depthCoverShare"]?.source.contains("lineup-depth-strategy") == true)
+        #expect(EngineParameters.fm27.depthCoverShare.value == 0.80)
     }
 
     @Test func theRestParametersAreListedWithEvidenceAndSource() {
@@ -318,6 +321,7 @@ import Testing
             ("retrainingWeeks", .carriedOverFM26, "RETRAINING_DIFFICULTY"),
             ("retrainingPace", .carriedOverFM26, "ui/api/api_training_advisor.py"),
             ("retrainingStalledAfterWeeks", .derived, "this design's choice"),
+            ("retrainingBehindShare", .derived, "this design's choice"),
         ]
         for (name, evidence, cited) in expected {
             #expect(listed[name]?.evidence == evidence, "\(name)")
@@ -353,6 +357,7 @@ import Testing
         #expect(pace.headStartSteps == [FamiliarityStep(minimum: 13, factor: 0.5), FamiliarityStep(minimum: 10, factor: 0.7)])
         #expect(pace.minimumWeeks == 4)
         #expect(p.retrainingStalledAfterWeeks.value == 6)
+        #expect(p.retrainingBehindShare.value == 0.5)
     }
 
     @Test func anEmptyWeekRangeIsReported() {
@@ -440,6 +445,15 @@ import Testing
         q.retrainingPerPosition = Parameter(0, .derived, source: "test")
         #expect(FitnessModel.problems(in: q) == ["retrainingPerPosition is 0, not 1 or more"])
         q.retrainingPerPosition = Parameter(1, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q).isEmpty)
+    }
+
+    @Test func aCoverShareThatIsNotANumberIsReported() {
+        var q = EngineParameters.fm27
+        q.depthCoverShare = Parameter(.nan, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["depthCoverShare is nan, not a finite number"])
+        // Nothing or everything as the line is the owner's to choose.
+        q.depthCoverShare = Parameter(0, .derived, source: "test")
         #expect(FitnessModel.problems(in: q).isEmpty)
     }
 

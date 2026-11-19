@@ -355,10 +355,61 @@ import Testing
         // A ban does not stop him counting.
         let banned = try depth(report(squad { if $0.name == named(.AM_C, "second") { $0.isBanned = true } }), .AM_C)
         #expect(try counts(banned, PlannerFixture.id(.AM_C, "second")))
-        // Cover is the number of options that count, at every slot.
+        // Cover is the number of options that count, at every slot, and the stand-ins those who could step in.
         for slot in r.slots + [injured, unsolid, banned] {
             #expect(slot.cover == slot.options.filter(\.countsAsCover).count, "\(slot.slot.rawValue)")
+            #expect(slot.standIns == slot.options.filter(\.isStandIn).count, "\(slot.slot.rawValue)")
         }
+        // Nobody here is far below his first choice, so the two counts agree; an injured or unsolid option is neither.
+        #expect(r.slots.allSatisfy { $0.standIns == $0.cover })
+        #expect(injured.standIns == 1 && unsolid.standIns == 1 && banned.standIns == 2)
+    }
+
+    /// The full squad with the AM_C second choice at `level` in every attribute, still natural there.
+    func squadWithAttackingMidSecond(at level: Int) throws -> [Player] {
+        let name = named(.AM_C, "second")
+        return try squad { if $0.name == name { $0.attributes = $0.attributes.mapValues { _ in level } } }
+    }
+
+    @Test func aSolidPlayerFarBelowTheFirstChoiceDoesNotCountAsCover() throws {
+        let am = try depth(report(squadWithAttackingMidSecond(at: 5)), .AM_C)
+        let first = try #require(am.options.first { $0.player == PlannerFixture.id(.AM_C, "first") })
+        let weak = try #require(am.options.first { $0.player == PlannerFixture.id(.AM_C, "second") })
+        #expect(weak.rating < 0.8 * first.rating)
+        #expect(weak.isSolid && weak.unavailable == nil && weak.tier == .second(.AM_C))
+        #expect(weak.isBelowCoverShare && !weak.countsAsCover)
+        #expect(!first.isBelowCoverShare && first.countsAsCover)
+        #expect(am.cover == 1 && am.isThin)
+        // He could still step in, which is what Player Removal protects: both are counted as stand-ins.
+        #expect(weak.isStandIn && first.isStandIn && am.standIns == 2)
+        // He is still the next best: the drop says how far below he is.
+        #expect(am.nextBest == weak.player)
+    }
+
+    @Test func aSolidPlayerWithinTheShareOfTheFirstChoiceCounts() throws {
+        let am = try depth(report(PlannerFixture.squad()), .AM_C)
+        let first = try #require(am.options.first { $0.player == PlannerFixture.id(.AM_C, "first") })
+        let second = try #require(am.options.first { $0.player == PlannerFixture.id(.AM_C, "second") })
+        #expect(second.rating >= 0.8 * first.rating && second.rating < first.rating)
+        #expect(!second.isBelowCoverShare && second.countsAsCover)
+        #expect(am.cover == 2 && !am.isThin)
+    }
+
+    @Test func theShareCoverMustReachIsAParameter() throws {
+        let players = try squadWithAttackingMidSecond(at: 5)
+        let am = try depth(report(players), .AM_C)
+        let first = try #require(am.options.first { $0.player == PlannerFixture.id(.AM_C, "first") })
+        let weak = try #require(am.options.first { $0.player == PlannerFixture.id(.AM_C, "second") })
+        let share = weak.rating / first.rating
+        func counts(atShare line: Double) throws -> Bool {
+            var parameters = EngineParameters.fm27
+            parameters.depthCoverShare = Parameter(line, .derived, source: "test")
+            let r = try Depth.report(tactic: tactic, players: players, ownClub: "Oxford City", catalog: catalog,
+                                     profile: profile, parameters: parameters)
+            return try #require(try depth(r, .AM_C).options.first { $0.player == weak.player }).countsAsCover
+        }
+        #expect(try counts(atShare: share - 0.001))
+        #expect(try !counts(atShare: share + 0.001))
     }
 
     @Test func theNextBestIsWhomTheDropIsMeasuredTo() throws {
@@ -383,11 +434,12 @@ import Testing
         var parameters = EngineParameters.fm27
         parameters.depthCoverFamiliarity = Parameter(10, .fm27Measured, source: "test")
         parameters.depthSolidFamiliarity = Parameter(15, .fm27Official, source: "test")
-        parameters.depthThinBelow = Parameter(2, .carriedOverFM26, source: "test")
+        parameters.depthThinBelow = Parameter(2, .fm27Measured, source: "test")
+        // The cover share is carried over from FM26, and counts.
         let r = try Depth.report(tactic: tactic, players: PlannerFixture.squad(), ownClub: "Oxford City",
                                  catalog: catalog, profile: profile, parameters: parameters)
         #expect(r.basis == .carriedOverFM26)
-        parameters.depthThinBelow = Parameter(2, .fm27Measured, source: "test")
+        parameters.depthCoverShare = Parameter(0.80, .fm27Measured, source: "test")
         #expect(try Depth.report(tactic: tactic, players: PlannerFixture.squad(), ownClub: "Oxford City",
                                  catalog: catalog, profile: profile, parameters: parameters).basis == .fm27Official)
     }

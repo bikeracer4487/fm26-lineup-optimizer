@@ -178,6 +178,65 @@ import Testing
         #expect(empty.solidText == "Solid at 15")
     }
 
+    /// A right back of 23 with Versatility 13: left back is a structural change for him, about 21 weeks from 1.
+    private func rightBack(_ id: PlayerID) -> Player {
+        Player(id: id, name: "Alice Archer", squad: .firstTeam, age: 23, positionsText: "D R", currentAbility: 100,
+               potentialAbility: 120, attributes: Dictionary(uniqueKeysWithValues: Attribute.allCases.map { ($0, 13) }),
+               familiarity: Dictionary(uniqueKeysWithValues: Position.allCases.map { ($0, $0 == .defenderRight ? 20 : 1) }),
+               condition: 1, sharpness: 1, jadedness: 0, isInjured: false, isBanned: false, club: "Oxford City",
+               loanedTo: nil, contractType: .fullTime, monthsLeft: 24, wagePerWeek: 100, askingPrice: nil,
+               nationalities: [], extras: [:])
+    }
+
+    @Test func aRetrainingFarBehindItsEstimateIsACautionInTheEnginesWords() throws {
+        let choice = RetrainingChoice(player: alice, position: .defenderLeft)
+        let retraining = Retraining(player: alice, position: .defenderLeft, acceptedOn: today.adding(days: -148))
+        let state = TrainingState(accepted: [retraining], observations: [choice: [observation(-148, 1), observation(0, 4)]])
+        let back = rightBack(alice)
+        let row = try #require(TrainingPresentation.underWay(state, inSquads: [alice: back.name], players: [alice: back],
+                                                             parameters: parameters).first)
+        let progress = RetrainingTracker.progress(of: retraining, observations: state.observations[choice] ?? [],
+                                                  player: back, parameters: parameters)
+        #expect(progress.state == .behind)
+        #expect(row.progressText == AdvisorText.progress(progress, toward: .defenderLeft, parameters: parameters))
+        #expect(row.progressText == "Familiarity at left back 1 to 4 in 21 weeks: about 0.1 a week, 78 weeks to solid. That is "
+                + "well behind the estimate of about 21 weeks in all: check in the game that he is training there")
+        #expect(row.progressIsCaution)
+        // Without the player there is no estimate: the same figures are shown as plain progress.
+        let plain = try #require(TrainingPresentation.underWay(state, inSquads: [alice: back.name], parameters: parameters).first)
+        #expect(plain.progressText == "Familiarity at left back 1 to 4 in 21 weeks: about 0.1 a week, 78 weeks to solid")
+        #expect(!plain.progressIsCaution)
+    }
+
+    @Test func aStalledRetrainingIsACautionAndOneOnCourseIsNot() throws {
+        let choice = RetrainingChoice(player: alice, position: .defenderLeft)
+        func row(_ observations: [FamiliarityObservation]) throws -> RetrainingRow {
+            let state = TrainingState(accepted: [Retraining(player: alice, position: .defenderLeft, acceptedOn: today.adding(days: -42))],
+                                      observations: [choice: observations])
+            return try #require(TrainingPresentation.underWay(state, inSquads: [alice: "A"], players: [alice: rightBack(alice)],
+                                                              parameters: parameters).first)
+        }
+        #expect(try row([observation(-42, 5), observation(0, 5)]).progressIsCaution)
+        #expect(try !row([observation(-42, 1), observation(0, 6)]).progressIsCaution)
+        #expect(try !row([]).progressIsCaution)
+    }
+
+    @Test func aRetrainingNoThinSlotNeedsSaysSoInTheEnginesWords() {
+        let state = TrainingState(accepted: [Retraining(player: alice, position: .defenderLeft, acceptedOn: today),
+                                             Retraining(player: bob, position: .striker, acceptedOn: today)])
+        let names = [alice: "Alice Archer", bob: "Bob Baker"]
+        let rows = TrainingPresentation.underWay(state, inSquads: names, parameters: parameters,
+                                                 notNeeded: [RetrainingChoice(player: alice, position: .defenderLeft)])
+        #expect(rows.map(\.notNeededText) == [AdvisorText.notNeededForCover(.defenderLeft), nil])
+        #expect(rows.first?.notNeededText == "No saved tactic is thin at left back now: this retraining is not needed for cover")
+        #expect(rows.first?.spokenText.contains("this retraining is not needed for cover") == true)
+        #expect(TrainingPresentation.underWay(state, inSquads: names, parameters: parameters).map(\.notNeededText) == [nil, nil])
+        // A player no longer in any squad is not told so.
+        #expect(TrainingPresentation.underWay(state, inSquads: [bob: "Bob Baker"], parameters: parameters,
+                                              notNeeded: [RetrainingChoice(player: alice, position: .defenderLeft)])
+            .map(\.notNeededText) == [nil, nil])
+    }
+
     @Test func aRetraineePlayerRemovalAdvisesMovingOnIsMarkedSo() {
         let state = TrainingState(accepted: [Retraining(player: alice, position: .defenderLeft, acceptedOn: today),
                                              Retraining(player: bob, position: .striker, acceptedOn: today)])
@@ -380,6 +439,27 @@ import Testing
         let rows = underWay(model)
         #expect(rows.first { $0.choice.player == leaving }?.leavingText == AdvisorText.advisedToLeave(player.name))
         #expect(rows.first { $0.choice.player == staying.id }?.leavingText == nil)
+    }
+
+    @Test func theModelSaysWhichRetrainingsNoThinSlotNeeds() throws {
+        let t = try TestModel()
+        let model = try squad(t)
+        // A recommendation covers a thin slot: accepted, it is needed.
+        let card = try #require(cards(model).first)
+        model.accept(card.choice)
+        // Right back is not thin in the sample squad: someone learning it covers no need.
+        let report = try readyReport(model)
+        #expect(report.depth.slots.first { $0.slot == .D_R }?.isThin == false)
+        let learner = try #require(model.players.first {
+            $0.squad == .firstTeam && $0.id != card.choice.player && ($0.familiarity[.defenderRight] ?? 20) < 10
+                && LoanStatus.of($0, ownClub: model.ownClub) == .own
+        })
+        let spare = RetrainingChoice(player: learner.id, position: .defenderRight)
+        model.accept(spare)
+        #expect(try readyReport(model).training.retrainingsNotNeeded == [spare])
+        let rows = underWay(model)
+        #expect(rows.first { $0.choice == spare }?.notNeededText == AdvisorText.notNeededForCover(.defenderRight))
+        #expect(rows.first { $0.choice == card.choice }?.notNeededText == nil)
     }
 
     @Test func theRecruitPartIsTheAdvicesNeeds() throws {

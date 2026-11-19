@@ -230,17 +230,24 @@ public enum SampleData {
     }
 
     /// The sample model with the owner's choices in the first fixture: the best available U21 player fixed at AM C,
-    /// the injured goalkeeper fixed in goal (an override the engine cannot use) and the striker left out.
+    /// the injured goalkeeper fixed in goal (the owner's choice over the injury), a player out on loan fixed at left
+    /// back (an override the engine cannot use) and the striker left out.
     @MainActor public static func modelWithChoices(repositoryRoot: URL) throws -> AppModel {
         let model = try build(repositoryRoot: repositoryRoot).model
+        let away = model.players.first { player in
+            if case .loanedOut = model.squad.book.loanStatus(of: player, override: model.settings.clubOverride) { true } else { false }
+        }
         guard let first = model.fixtures.first,
               let youth = model.candidates(for: .AM_C, in: first.id).first(where: { $0.squad == .u21 && $0.unavailable == nil }),
               let injured = model.players.first(where: { $0.name == "Jonny Maxted" && $0.isInjured }),
+              let away,
               let striker = model.players.first(where: { $0.name == "Tyrone Marsh" }) else {
-            throw SampleDataError(description: "The sample model lacks a fixture, a U21 player, its injured goalkeeper or its striker.")
+            throw SampleDataError(description: "The sample model lacks a fixture, a U21 player, its injured goalkeeper, "
+                                  + "a player out on loan or its striker.")
         }
         model.setOverride(youth.player, at: .AM_C, in: first.id)
         model.setOverride(injured.id, at: .GK, in: first.id)
+        model.setOverride(away.id, at: .D_L, in: first.id)
         model.reject(striker.id, in: first.id)
         return model
     }
@@ -419,6 +426,47 @@ public enum SampleData {
         for squad in Squad.allCases {
             guard var players = model.squad.book.current[squad] else { continue }
             players.removeAll { $0.id == leaver.id }
+            for index in players.indices where players[index].id == accepted.player {
+                players[index].familiarity[accepted.position] = readings.last?.familiarity
+            }
+            _ = model.squad.book.apply(ImportResult(grid: "sample", players: players, warnings: [],
+                                                    money: model.squad.book.moneyStyle), to: squad)
+        }
+        model.save(.squad)
+        model.replan()
+        return model
+    }
+
+    /// The sample model with its accepted retraining twenty-one weeks under way and two points gained, well behind its
+    /// estimate, with the squad's copy showing the latest; and a second player learning right back, where cover is
+    /// not thin, so no slot needs him to.
+    @MainActor public static func modelWithRetrainingBehind(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        guard let accepted = model.training.accepted.first,
+              let start = model.training.observations[TrainingState.choice(accepted)]?.first?.familiarity else {
+            throw SampleDataError(description: "The sample model has no accepted retraining with a first observation.")
+        }
+        guard let spare = model.players.first(where: {
+            $0.squad == .firstTeam && $0.id != accepted.player && ($0.familiarity[.defenderRight] ?? 20) < 10
+                && LoanStatus.of($0, ownClub: model.ownClub) == .own
+        }) else {
+            throw SampleDataError(description: "The sample model has no second player to learn right back.")
+        }
+        model.accept(RetrainingChoice(player: spare.id, position: .defenderRight))
+
+        let readings = [(-147, 0), (-98, 1), (-49, 1), (0, 2)].map { days, gained in
+            FamiliarityObservation(day: date.adding(days: days), familiarity: start + gained)
+        }
+        model.changeTraining(replanning: false) { state in
+            state.accepted = state.accepted.map { retraining in
+                retraining.player == accepted.player
+                    ? Retraining(player: retraining.player, position: retraining.position, acceptedOn: date.adding(days: -147))
+                    : retraining
+            }
+            state.observations[TrainingState.choice(accepted)] = readings
+        }
+        for squad in Squad.allCases {
+            guard var players = model.squad.book.current[squad] else { continue }
             for index in players.indices where players[index].id == accepted.player {
                 players[index].familiarity[accepted.position] = readings.last?.familiarity
             }

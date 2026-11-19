@@ -580,8 +580,10 @@ public enum Removal {
         mutating func add(_ points: Int, _ text: String) { list.append(RemovalReason(text: text, points: points)) }
 
         /// Adds the points for protecting real cover, once, at the first slot in slot order where he is first choice
-        /// and cover is thin (injured or not), or where he counts as cover by Depth's rule and the slot's cover is at
-        /// most the line; the first of the two is checked first at each slot. Says whether it added them.
+        /// and cover is thin (injured or not), where he counts as cover by Depth's rule and the slot's cover is at
+        /// most the line, or where he is a stand-in too far below the first choice to count as cover and the slot's
+        /// stand-ins are at most the line: he stays until the squad has someone better there. They are checked in that
+        /// order at each slot. Says whether it added them.
         mutating func addThinCover(_ player: PlayerID, tier: SquadTier?, squad: SquadFacts, points: Int) -> Bool {
             for slot in squad.depth {
                 let position = PositionText.plain(slot.slot.position)
@@ -589,12 +591,16 @@ public enum Removal {
                     add(points, "First choice at \(position), where cover is thin")
                     return true
                 }
-                guard slot.cover <= squad.thinBelow,
-                      let option = slot.options.first(where: { $0.player == player }),
-                      option.countsAsCover else { continue }
-                add(points, slot.isThin ? "Counts as cover at \(position), where cover is thin"
-                                        : "Cover at \(position) would be thin without him")
-                return true
+                guard let option = slot.options.first(where: { $0.player == player }) else { continue }
+                if option.countsAsCover, slot.cover <= squad.thinBelow {
+                    add(points, slot.isThin ? "Counts as cover at \(position), where cover is thin"
+                                            : "Cover at \(position) would be thin without him")
+                    return true
+                }
+                if option.isStandIn, !option.countsAsCover, slot.standIns <= squad.thinBelow {
+                    add(points, "Too few players can step in at \(position) without him")
+                    return true
+                }
             }
             return false
         }

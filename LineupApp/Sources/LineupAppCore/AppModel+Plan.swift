@@ -208,9 +208,11 @@ extension AppModel {
     }
 
     /// Every player not out on loan, with his full-fitness rating in the slot for the fixture's tactic, those who can
-    /// play first, best first (see `ranked`), and why he cannot play in that fixture if he cannot: the engine's rule,
-    /// judged on the fitness the plan projects for that day, worded as the selector words it. A player who cannot be
-    /// rated comes last, with the engine's sentence for why. Empty when the fixture has no planned lineup or its tactic has no such slot.
+    /// play first, best first (see `ranked`), and why a rule leaves him out of that fixture if one does: the engine's
+    /// rule, judged on the fitness the plan projects for that day, worded as the selector words it. He can still be
+    /// chosen where the engine lets the owner's choice overrule that rule: an injury among them, since FMRTE says that
+    /// he is injured and not whether he can play through it. A player who cannot be rated comes last, with the engine's
+    /// sentence for why. Empty when the fixture has no planned lineup or its tactic has no such slot.
     public func candidates(for slot: SlotID, in fixture: FixtureID) -> [Candidate] {
         let planned = fixturePlans.compactMap { plan -> (FixturePlan, [PlayerID: ProjectedFitness])? in
             if case .planned(_, let fitness) = plan.body { (plan, fitness) } else { nil }
@@ -240,21 +242,27 @@ extension AppModel {
                 for: onTheDay, loan: LoanStatus.of(player, ownClub: club), importance: plan.fixture.importance,
                 isNextFixture: index == servingBans, parameters: parameters)
                 ?? (plan.fixture.rejected.contains(player.id) ? .rejected : nil)
-            return exclusion.map { ErrorDescriptions.describe($0, parameters: parameters, projected: projected) }
+            return exclusion.map {
+                (reason: ErrorDescriptions.describe($0, parameters: parameters, projected: projected),
+                 canBeOverruled: RiskRules.canBeOverridden($0))
+            }
         }
     }
 
-    /// The players as candidates: those who can play, best first; then those who cannot, best first; each group then by
-    /// name and key. Last, those who cannot be rated, by name and key, with the engine's sentence for the failure in
-    /// place of any other reason.
+    /// The players as candidates: those who can play, best first; then those a rule leaves out (`ruledOut`: the reason,
+    /// and whether the owner's choice can overrule it), best first; each group then by name and key. Last, those who
+    /// cannot be rated, by name and key, with the engine's sentence for the failure in place of any other reason; they
+    /// cannot be chosen.
     static func ranked(_ players: [Player], rating: (Player) throws -> Double,
-                       unavailable: (Player) -> String?) -> [Candidate] {
+                       ruledOut: (Player) -> (reason: String, canBeOverruled: Bool)?) -> [Candidate] {
         var rated: [Candidate] = []
         var unrated: [Candidate] = []
         for player in players {
             do {
-                rated.append(Candidate(player: player.id, name: player.name, squad: player.squad,
-                                       rating: try rating(player), unavailable: unavailable(player)))
+                let value = try rating(player)
+                let rule = ruledOut(player)
+                rated.append(Candidate(player: player.id, name: player.name, squad: player.squad, rating: value,
+                                       unavailable: rule?.reason, canBeChosen: rule?.canBeOverruled ?? true))
             } catch {
                 unrated.append(Candidate(player: player.id, name: player.name, squad: player.squad,
                                          rating: nil, unavailable: ErrorDescriptions.describe(error)))

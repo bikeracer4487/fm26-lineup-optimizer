@@ -67,7 +67,7 @@ public struct DepthToken: Identifiable, Equatable, Sendable {
     public var line: PitchLine { PitchLine(slot) }
     public let coverText: String
     public let isThin: Bool
-    /// "left back: 1 solid player; 2 needed".
+    /// "left back: 1 player counts as cover; 2 needed".
     public let spokenText: String
 }
 
@@ -81,6 +81,8 @@ public struct DepthOptionRow: Identifiable, Equatable, Sendable {
     /// "20 / 14": in possession, then out of possession.
     public let familiarityText: String
     public let countsAsCover: Bool
+    /// The engine's words for an option too far below the first choice to count as cover; nil for any other.
+    public let belowShare: String?
     /// Why he cannot play today, in the engine's words; nil when he can.
     public let unavailable: String?
     /// "Also needed at left back"; nil when he is not first or second choice elsewhere.
@@ -89,7 +91,7 @@ public struct DepthOptionRow: Identifiable, Equatable, Sendable {
     /// The row as said to assistive technology.
     public var spokenText: String {
         ([name, squadText, ratingText, "familiarity \(familiarityText)", countsAsCover ? "counts as cover" : nil,
-          unavailable, alsoNeeded].compactMap { $0 }).joined(separator: ", ")
+          belowShare, unavailable, alsoNeeded].compactMap { $0 }).joined(separator: ", ")
     }
 }
 
@@ -98,7 +100,7 @@ public struct DepthDetail: Equatable, Sendable {
     public let slot: SlotID
     /// The slot in words, as a heading: "Left back".
     public let title: String
-    /// The engine's words for its cover: "1 solid player; 2 needed".
+    /// The engine's words for its cover: "1 player counts as cover; 2 needed".
     public let cover: String
     /// The engine's words for who would step in.
     public let nextBest: String
@@ -213,6 +215,7 @@ public enum ElevensPresentation {
                                ratingText: MatchText.oneDecimal(option.rating),
                                familiarityText: familiarityText(ip: option.ipFamiliarity, oop: option.oopFamiliarity),
                                countsAsCover: option.countsAsCover,
+                               belowShare: option.isBelowCoverShare ? AdvisorText.belowCoverShare(parameters) : nil,
                                unavailable: option.unavailable.map { sentenceCase(ErrorDescriptions.describe($0, parameters: parameters)) },
                                alsoNeeded: AdvisorText.alsoNeeded(at: option.alsoNeededAt))
             }

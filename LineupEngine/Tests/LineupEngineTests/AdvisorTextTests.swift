@@ -634,16 +634,16 @@ import Testing
     }
 
     func depth(cover: Int) -> SlotDepth {
-        SlotDepth(slot: .D_L, ipPosition: .defenderLeft, oopPosition: .defenderLeft, options: [], onLoan: [], cover: cover,
+        SlotDepth(slot: .D_L, ipPosition: .defenderLeft, oopPosition: .defenderLeft, options: [], onLoan: [], cover: cover, standIns: cover,
                   isThin: cover < 2, dropToNextBest: nil, nextBest: nil)
     }
 
     @Test func coverWords() {
         #expect(parameters.depthThinBelow.value == 2)
-        #expect(AdvisorText.cover(depth(cover: 0), parameters: parameters) == "No solid player; 2 needed")
-        #expect(AdvisorText.cover(depth(cover: 1), parameters: parameters) == "1 solid player; 2 needed")
-        #expect(AdvisorText.cover(depth(cover: 2), parameters: parameters) == "2 solid players")
-        #expect(AdvisorText.cover(depth(cover: 4), parameters: parameters) == "4 solid players")
+        #expect(AdvisorText.cover(depth(cover: 0), parameters: parameters) == "Nobody counts as cover; 2 needed")
+        #expect(AdvisorText.cover(depth(cover: 1), parameters: parameters) == "1 player counts as cover; 2 needed")
+        #expect(AdvisorText.cover(depth(cover: 2), parameters: parameters) == "2 players count as cover")
+        #expect(AdvisorText.cover(depth(cover: 4), parameters: parameters) == "4 players count as cover")
     }
 
     @Test func thinCoverNamesTheThinSlotsInTheirOrderWithoutSayingToRecruit() {
@@ -655,7 +655,7 @@ import Testing
     }
 
     func stepIn(drop: Double?) -> SlotDepth {
-        SlotDepth(slot: .D_L, ipPosition: .defenderLeft, oopPosition: .defenderLeft, options: [], onLoan: [], cover: 1,
+        SlotDepth(slot: .D_L, ipPosition: .defenderLeft, oopPosition: .defenderLeft, options: [], onLoan: [], cover: 1, standIns: 1,
                   isThin: true, dropToNextBest: drop, nextBest: drop.map { _ in PlayerID(key: "josh ashby") })
     }
 
@@ -682,10 +682,10 @@ import Testing
     @Test func nobodyCanPlayOnlyWhereTheSlotHasNoOptions() {
         let option = DepthOption(player: PlayerID(key: "p"), name: "P", squad: .firstTeam, rating: 100, ipFamiliarity: 20,
                                  oopFamiliarity: 20, isSolid: true, unavailable: nil, tier: nil, alsoNeededAt: [],
-                                 countsAsCover: true)
+                                 isBelowCoverShare: false, isStandIn: true, countsAsCover: true)
         func slot(_ options: [DepthOption]) -> SlotDepth {
             SlotDepth(slot: .GK, ipPosition: .goalkeeper, oopPosition: .goalkeeper, options: options, onLoan: [],
-                      cover: options.count, isThin: options.count < 2, dropToNextBest: nil, nextBest: nil)
+                      cover: options.count, standIns: options.count, isThin: options.count < 2, dropToNextBest: nil, nextBest: nil)
         }
         #expect(AdvisorText.nobodyCanPlay(slot([])) == "Nobody can play here")
         #expect(AdvisorText.nobodyCanPlay(slot([option])) == nil)
@@ -693,20 +693,45 @@ import Testing
 
     @Test func whatCoverCountsWithItsEvidenceNoteInsideTheSentence() {
         #expect(AdvisorText.whatCoverCounts(parameters, basis: .derived)
-                == "Cover counts players solid in the slot (familiarity 15 or over in both phases), not injured and not first choice elsewhere; fewer than 2 is thin (this tool's estimate).")
+                == "Cover counts players solid in the slot (familiarity 15 or over in both phases) who rate at least 80% of the first choice there, not injured and not first choice elsewhere; fewer than 2 is thin (this tool's estimate).")
         #expect(AdvisorText.whatCoverCounts(parameters, basis: .carriedOverFM26)
-                == "Cover counts players solid in the slot (familiarity 15 or over in both phases), not injured and not first choice elsewhere; fewer than 2 is thin (FM26-era numbers).")
+                == "Cover counts players solid in the slot (familiarity 15 or over in both phases) who rate at least 80% of the first choice there, not injured and not first choice elsewhere; fewer than 2 is thin (FM26-era numbers).")
         #expect(AdvisorText.whatCoverCounts(parameters, basis: .fm27Measured) == AdvisorText.whatCoverCounts(parameters))
+    }
+
+    @Test func anOptionTooFarBelowTheFirstChoiceIsToldSo() {
+        #expect(AdvisorText.belowCoverShare(parameters) == "Under 80% of the first choice: not counted as cover")
+        var q = parameters
+        q.depthCoverShare = Parameter(0.75, .derived, source: "test")
+        #expect(AdvisorText.belowCoverShare(q) == "Under 75% of the first choice: not counted as cover")
+        #expect(AdvisorText.whatCoverCounts(q).contains("who rate at least 75% of the first choice there"))
     }
 
     @Test func whatCoverCounts() {
         #expect(AdvisorText.whatCoverCounts(parameters)
-                == "Cover counts players solid in the slot (familiarity 15 or over in both phases), not injured and not first choice elsewhere; fewer than 2 is thin.")
+                == "Cover counts players solid in the slot (familiarity 15 or over in both phases) who rate at least 80% of the first choice there, not injured and not first choice elsewhere; fewer than 2 is thin.")
     }
 
     func progress(_ state: RetrainingProgress.State, start: Int?, latest: Int?, weeks: Double,
-                  rate: Double? = nil, toSolid: Int? = nil) -> RetrainingProgress {
-        RetrainingProgress(state: state, start: start, latest: latest, weeks: weeks, gainedPerWeek: rate, weeksToSolid: toSolid)
+                  rate: Double? = nil, toSolid: Int? = nil, expected: Int? = nil) -> RetrainingProgress {
+        RetrainingProgress(state: state, start: start, latest: latest, weeks: weeks, gainedPerWeek: rate, weeksToSolid: toSolid,
+                           expectedWeeks: expected)
+    }
+
+    @Test func aRetrainingBehindItsEstimateSaysSoAndWhatToCheck() {
+        #expect(AdvisorText.progress(progress(.behind, start: 1, latest: 4, weeks: 21.1, rate: 0.142, toSolid: 78, expected: 21),
+                                     toward: .defenderLeft, parameters: parameters)
+                == "Familiarity at left back 1 to 4 in 21 weeks: about 0.1 a week, 78 weeks to solid. That is well behind "
+                + "the estimate of about 21 weeks in all: check in the game that he is training there")
+        // An estimate does not change what an improving retraining says.
+        #expect(AdvisorText.progress(progress(.improving, start: 8, latest: 11, weeks: 3, rate: 1.0, toSolid: 4, expected: 9),
+                                     toward: .defenderLeft, parameters: parameters)
+                == "Familiarity at left back 8 to 11 in 3 weeks: about 1.0 a week, 4 weeks to solid")
+    }
+
+    @Test func aRetrainingNoSlotNeedsSaysSo() {
+        #expect(AdvisorText.notNeededForCover(.defenderLeft)
+                == "No saved tactic is thin at left back now: this retraining is not needed for cover")
     }
 
     @Test func progressWords() {
@@ -750,6 +775,11 @@ import Testing
         #expect(AdvisorText.need(RetrainingNeed(tactic: "Sample 4-2-3-1", slot: .D_L)) == "Left back in Sample 4-2-3-1")
         #expect(AdvisorText.need(RetrainingNeed(tactic: "Another", slot: .D_CL)) == "Left centre-back in Another")
         #expect(AdvisorText.need(RetrainingNeed(tactic: "Sample 4-2-3-1", slot: .GK)) == "Goalkeeper in Sample 4-2-3-1")
+        // Cover that is advised to leave is named, since Depth still counts it.
+        #expect(AdvisorText.need(RetrainingNeed(tactic: "Sample 4-2-3-1", slot: .GK, going: ["Jonny Maxted"]))
+                == "Goalkeeper in Sample 4-2-3-1 (not counting Jonny Maxted, whom Player Removal advises moving on)")
+        #expect(AdvisorText.need(RetrainingNeed(tactic: "Another", slot: .AM_R, going: ["A", "B", "C"]))
+                == "Right attacking midfield in Another (not counting A, B and C, whom Player Removal advises moving on)")
     }
 
     @Test func coversNamesEachNeedInItsOrder() {

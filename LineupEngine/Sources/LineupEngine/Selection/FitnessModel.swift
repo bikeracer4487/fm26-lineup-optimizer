@@ -324,7 +324,8 @@ public enum FitnessModel {
         if perPosition < 1 {
             found.append("retrainingPerPosition is \(perPosition), not 1 or more")
         }
-        for (name, line) in [("retrainingMinimumShare", parameters.retrainingMinimumShare.value),
+        for (name, line) in [("depthCoverShare", parameters.depthCoverShare.value),
+                             ("retrainingMinimumShare", parameters.retrainingMinimumShare.value),
                              ("retrainingMinimumLearnability", parameters.retrainingMinimumLearnability.value)]
             where !line.isFinite {
             found.append("\(name) is \(line), not a finite number")

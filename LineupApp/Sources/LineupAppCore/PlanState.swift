@@ -79,10 +79,16 @@ public struct Candidate: Identifiable, Equatable, Sendable {
     public let squad: Squad
     /// His full-fitness rating in the slot; nil when it cannot be worked out, and `unavailable` then says why.
     public let rating: Double?
-    /// Why he cannot play in the fixture, in the engine's words; nil when he can.
+    /// Why a rule leaves him out of the fixture, or why he cannot be rated, in the engine's words; nil when he can play.
     public let unavailable: String?
+    /// Whether choosing him would stand: he can play, or the engine lets the owner's choice overrule the reason against
+    /// him (`RiskRules.canBeOverridden`: every rule but being out on loan). Never for a player who cannot be rated.
+    public let canBeChosen: Bool
 
-    public init(player: PlayerID, name: String, squad: Squad, rating: Double?, unavailable: String?) {
+    /// With no word on `canBeChosen`, he can be chosen only when nothing stands against him.
+    public init(player: PlayerID, name: String, squad: Squad, rating: Double?, unavailable: String?,
+                canBeChosen: Bool? = nil) {
         self.player = player; self.name = name; self.squad = squad; self.rating = rating; self.unavailable = unavailable
+        self.canBeChosen = canBeChosen ?? (unavailable == nil)
     }
 }

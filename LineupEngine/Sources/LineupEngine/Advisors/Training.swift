@@ -11,15 +11,19 @@ public struct RetrainingChoice: Hashable, Codable, Sendable {
     }
 }
 
-/// A thin slot in one saved tactic.
+/// A slot of one saved tactic that is thin, counting only the cover that is staying.
 public struct RetrainingNeed: Equatable, Sendable {
     /// The tactic's name.
     public let tactic: String
     public let slot: SlotID
+    /// The names of the players who count as cover there today but whom the owner is advised to move on, best first.
+    /// Depth still counts them, so the slot may not be thin on its screen.
+    public let going: [String]
 
-    public init(tactic: String, slot: SlotID) {
+    public init(tactic: String, slot: SlotID, going: [String] = []) {
         self.tactic = tactic
         self.slot = slot
+        self.going = going
     }
 }
 
@@ -63,6 +67,18 @@ public struct TrainingReport: Equatable, Sendable {
     /// and retrainings toward it together reach `depthThinBelow` gets no recommendation and is always here. Most in need
     /// first.
     public let needsBeingRetrained: [RetrainingNeed]
+    /// The accepted retrainings, in the order handed in, that no thin slot needs: of a player of the club's own who is
+    /// not yet solid at the position, where no slot of any tactic at that position (in either phase) is thin, counting
+    /// only the cover that is staying. A position no tactic uses is one of them.
+    public let retrainingsNotNeeded: [RetrainingChoice]
+
+    init(recommendations: [RetrainingRecommendation], needsWithoutCandidates: [RetrainingNeed],
+         needsBeingRetrained: [RetrainingNeed], retrainingsNotNeeded: [RetrainingChoice] = []) {
+        self.recommendations = recommendations
+        self.needsWithoutCandidates = needsWithoutCandidates
+        self.needsBeingRetrained = needsBeingRetrained
+        self.retrainingsNotNeeded = retrainingsNotNeeded
+    }
 }
 
 public enum Training {
@@ -73,7 +89,10 @@ public enum Training {
 
     /// Who should learn a position to cover the thin slots of `tactics`. A player in `leaving`, whom the owner is advised
     /// to move on, is never a candidate; the caller passes `RemovalReport.advisedToLeave` there, since Training does not
-    /// run Player Removal itself. A player with an accepted retraining, at any position, is not a candidate for another:
+    /// run Player Removal itself. He does not count as cover either: a slot is thin here when fewer than
+    /// `depthThinBelow` of the players Depth counts as cover are staying, so it can be thin here and not in Depth, and
+    /// the need then names who is going (`RetrainingNeed.going`). Needs come least cover staying first, then as Depth
+    /// orders its thin slots. A player with an accepted retraining, at any position, is not a candidate for another:
     /// one retraining at a time. A thin slot gets no recommendation once its cover plus the accepted retrainings toward
     /// it (as `TrainingReport.needsBeingRetrained` counts them) reaches `depthThinBelow`: those under way will fill it.
     /// A retrainee in `leaving` does not count toward a slot, since he is advised to go before he could fill it.
@@ -109,6 +128,8 @@ public enum Training {
         // One retraining at a time: a player with an accepted retraining is not offered another.
         let retraining = Set(accepted.map(\.player))
         var needs: [NeedFacts] = []
+        // The positions, in either phase, of every thin slot.
+        var thinPositions: Set<Position> = []
         var pairs: [RetrainingChoice: Pair] = [:]
         var learnabilities: [PlayerID: Double] = [:]
         let byID = Dictionary(sorted.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -133,16 +154,18 @@ public enum Training {
             let firstChoice = Dictionary(uniqueKeysWithValues: firstEleven.map { ($0.slot, $0) })
             let firstAt = Dictionary(uniqueKeysWithValues: firstEleven.map { ($0.player, $0.slot) })
             let assignments = Dictionary(uniqueKeysWithValues: try tactic.assignments(catalog: catalog).map { ($0.slot, $0) })
-            let slots = Dictionary(uniqueKeysWithValues: depth.slots.map { ($0.slot, $0) })
 
-            for slot in depth.thin {
-                guard let assignment = assignments[slot], let slotDepth = slots[slot] else { continue }
+            for (slotDepth, going) in thinWithoutThoseLeaving(depth, leaving: leaving, parameters: parameters) {
+                let slot = slotDepth.slot
+                guard let assignment = assignments[slot] else { continue }
                 let index = needs.count
+                thinPositions.formUnion([assignment.ipPosition, assignment.oopPosition])
                 let toward = try retrainingsToward(assignment)
-                needs.append(NeedFacts(need: RetrainingNeed(tactic: tactic.name, slot: slot), ipPosition: assignment.ipPosition,
-                                       cover: slotDepth.cover, isBeingRetrained: toward > 0))
+                let staying = slotDepth.cover - going.count
+                needs.append(NeedFacts(need: RetrainingNeed(tactic: tactic.name, slot: slot, going: going),
+                                       ipPosition: assignment.ipPosition, cover: staying, isBeingRetrained: toward > 0))
                 // The cover and the retrainings under way together reach the line: nobody else need learn it.
-                guard slotDepth.cover + toward < parameters.depthThinBelow.value else { continue }
+                guard staying + toward < parameters.depthThinBelow.value else { continue }
                 // Without a first choice there is nothing to measure a candidate against.
                 guard let first = firstChoice[slot], first.rating.value > 0 else { continue }
                 for player in sorted where !leaving.contains(player.id) && !retraining.contains(player.id) {
@@ -164,7 +187,7 @@ public enum Training {
         let chosen = choose(Array(pairs.values), perPosition: parameters.retrainingPerPosition.value)
         let basis = Evidence.weakest([
             parameters.depthCoverFamiliarity.evidence, parameters.depthSolidFamiliarity.evidence,
-            parameters.depthThinBelow.evidence, parameters.learnabilityRules.evidence,
+            parameters.depthThinBelow.evidence, parameters.depthCoverShare.evidence, parameters.learnabilityRules.evidence,
             parameters.retrainingMinimumLearnability.evidence, parameters.retrainingMinimumShare.evidence,
             parameters.retrainingPerPosition.evidence, parameters.retrainingTransitions.evidence,
             parameters.retrainingWeeks.evidence, parameters.retrainingPace.evidence,
@@ -172,9 +195,28 @@ public enum Training {
         let recommendations = chosen.map { recommendation($0, needs: needs, basis: basis, parameters: parameters) }
         let covered = Set(chosen.flatMap(\.needs))
         let uncovered = needs.indices.filter { !covered.contains($0) }.map { needs[$0] }
+        var notNeeded: [RetrainingChoice] = []
+        for retraining in accepted where !thinPositions.contains(retraining.position) {
+            guard let player = byID[retraining.player], case .own = LoanStatus.of(player, ownClub: ownClub),
+                  try familiarity(player, retraining.position) < solidFrom else { continue }
+            let choice = RetrainingChoice(player: retraining.player, position: retraining.position)
+            if !notNeeded.contains(choice) { notNeeded.append(choice) }
+        }
         return TrainingReport(recommendations: recommendations,
                               needsWithoutCandidates: uncovered.filter { !$0.isBeingRetrained }.map(\.need),
-                              needsBeingRetrained: uncovered.filter(\.isBeingRetrained).map(\.need))
+                              needsBeingRetrained: uncovered.filter(\.isBeingRetrained).map(\.need),
+                              retrainingsNotNeeded: notNeeded)
+    }
+
+    /// The weeks a retraining of `player` at `position` is estimated to take in all, from `familiarity` there when he
+    /// started: what a recommendation gives as `weeks`, for a retraining already under way. At his age and Versatility
+    /// now. Nil for an inversion, which has no estimate. Throws `RatingError.missingAttribute` without Versatility and
+    /// `RatingError.missingFamiliarity` for a missing position.
+    public static func estimatedWeeks(for player: Player, learning position: Position, from familiarity: Int,
+                                      parameters: EngineParameters) throws -> Int? {
+        let (_, difficulty) = try origin(of: player, learning: position, parameters: parameters)
+        return try weeks(difficulty, age: player.age, versatility: try attribute(player, .versatility),
+                         familiarity: familiarity, parameters: parameters)
     }
 
     /// From 0 to 1: how quickly he is likely to learn a new position. Throws `RatingError.missingAttribute` without
@@ -190,6 +232,26 @@ public enum Training {
         let room = min(max(Double(player.potentialAbility - player.currentAbility) / rules.roomToGrowSpan, 0), 1)
         return rules.versatilityWeight * versatilityShare + rules.ageWeight * ageFactor
             + rules.professionalismWeight * professionalismShare + rules.roomToGrowWeight * room
+    }
+
+    /// The slots with fewer than `depthThinBelow` of their cover staying, each with the names of its cover in `leaving`
+    /// (best first): least cover staying first, then the larger drop to the next best (nobody who could step in counts
+    /// as the largest), then slot order. With nobody leaving these are Depth's thin slots in its order.
+    private static func thinWithoutThoseLeaving(_ depth: DepthReport, leaving: Set<PlayerID>,
+                                                parameters: EngineParameters) -> [(slot: SlotDepth, going: [String])] {
+        let line = parameters.depthThinBelow.value
+        var found: [(offset: Int, slot: SlotDepth, going: [String])] = []
+        for (offset, slot) in depth.slots.enumerated() {
+            let going = slot.options.filter { $0.countsAsCover && leaving.contains($0.player) }.map(\.name)
+            if slot.cover - going.count < line { found.append((offset, slot, going)) }
+        }
+        return found.sorted { a, b in
+            let ca = a.slot.cover - a.going.count, cb = b.slot.cover - b.going.count
+            if ca != cb { return ca < cb }
+            let da = a.slot.dropToNextBest ?? .infinity, db = b.slot.dropToNextBest ?? .infinity
+            if da != db { return da > db }
+            return a.offset < b.offset
+        }.map { ($0.slot, $0.going) }
     }
 
     // MARK: Candidates
@@ -350,12 +412,13 @@ public enum Training {
         var reasons: [String] = []
         for index in pair.needs {
             let facts = needs[index]
-            let available = switch facts.cover {
-            case 0: "no solid player available"
-            case 1: "1 solid player available"
-            default: "\(facts.cover) solid players available"
+            let counted = switch facts.cover {
+            case 0: "nobody counts as cover"
+            case 1: "1 player counts as cover"
+            default: "\(facts.cover) players count as cover"
             }
-            let sentence = "Cover at \(PositionText.plain(facts.ipPosition)) is thin in \(facts.need.tactic) (\(available))"
+            let going = AdvisorText.notCounting(facts.need.going).map { ", \($0)" } ?? ""
+            let sentence = "Cover at \(PositionText.plain(facts.ipPosition)) is thin in \(facts.need.tactic) (\(counted)\(going))"
             if !reasons.contains(sentence) { reasons.append(sentence) }
         }
         reasons.append("He would rate \(String(format: "%.1f", c.rating)) there once learnt, \(Display.percent(c.share)) of the first choice")

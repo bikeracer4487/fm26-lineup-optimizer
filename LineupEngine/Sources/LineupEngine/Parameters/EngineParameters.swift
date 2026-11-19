@@ -606,6 +606,8 @@ public struct EngineParameters: Sendable {
     public var depthSolidFamiliarity: Parameter<Int>
     /// A slot with fewer solid options who are not injured (and not first choice elsewhere) than this is thin.
     public var depthThinBelow: Parameter<Int>
+    /// An option counts as cover only if he rates at least this share of the slot's first choice's rating there.
+    public var depthCoverShare: Parameter<Double>
     /// How a player's own jadedness limit, for rest advice, differs from the standard `jadedThreshold`.
     public var restLimitRules: Parameter<RestLimitRules>
     /// A player above this share of his jadedness limit is worth watching.
@@ -632,6 +634,9 @@ public struct EngineParameters: Sendable {
     public var retrainingPace: Parameter<RetrainingPace>
     /// A retraining that has gained nothing over at least this many weeks has stalled.
     public var retrainingStalledAfterWeeks: Parameter<Int>
+    /// A retraining gaining less than this share of the pace its estimate needs, over at least
+    /// `retrainingStalledAfterWeeks` weeks, is behind.
+    public var retrainingBehindShare: Parameter<Double>
     /// The points Player Removal and the loan review give for each rule, apart from the wage rules.
     public var removalRules: Parameter<RemovalRules>
     /// The points Player Removal gives for a high wage outside both elevens.
@@ -912,6 +917,11 @@ public struct EngineParameters: Sendable {
                 15, .derived,
                 source: "design spec 8.7's starting rule; FM27 Match Lab Study 5 puts a cap of 15 at 0.26 points a game and a cap of 10 at 0.85 (docs/Research/fm27-tactical-effectiveness-and-roles.md)"),
             depthThinBelow: Parameter(2, .derived, source: "design spec 8.7's starting rule: fewer than two is thin"),
+            depthCoverShare: Parameter(
+                0.80, .carriedOverFM26,
+                source: "docs/Research/lineup-depth-strategy.md and docs/Research/player-rotation-guide.md: cover can be about 20% "
+                    + "worse than the first choice, as retrainingMinimumShare; the owner asked for it on 18 November 2026, when a "
+                    + "player at 74% of the first choice was keeping a slot from being thin"),
             restLimitRules: Parameter(
                 RestLimitRules(
                     oldestFromAge: 32, oldestBase: 300, olderFromAge: 30, olderBase: 350, youngUnderAge: 19, youngBase: 350,
@@ -1000,6 +1010,11 @@ public struct EngineParameters: Sendable {
                     + "taken as 2 − plasticity, and the head start; docs/Research/position-retraining-strategy.md: three to six "
                     + "months with high Versatility, 18 months or never with low. The floor of 4 weeks is the fluid class's shortest"),
             retrainingStalledAfterWeeks: Parameter(6, .derived, source: "this design's choice"),
+            retrainingBehindShare: Parameter(
+                0.5, .derived,
+                source: "this design's choice: under half the pace the estimate needs. The owner's two retrainings had gained 3 "
+                    + "and 2 points in 21 and 20 weeks by 2 January 2027 in the save, against estimates of 21 and 39 weeks, and were shown "
+                    + "as improving"),
             removalRules: Parameter(
                 RemovalRules(
                     notFullTimePoints: 50, firstElevenPoints: -40, secondElevenPoints: -20, neitherElevenPoints: 15,

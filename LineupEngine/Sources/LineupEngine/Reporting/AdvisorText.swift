@@ -291,10 +291,11 @@ public enum AdvisorText {
         }
     }
 
-    /// "No solid player; 2 needed", "1 solid player; 2 needed", "2 solid players".
+    /// "Nobody counts as cover; 2 needed", "1 player counts as cover; 2 needed", "2 players count as cover".
     public static func cover(_ slot: SlotDepth, parameters: EngineParameters) -> String {
         let line = parameters.depthThinBelow.value
-        let count = slot.cover == 0 ? "No solid player" : slot.cover == 1 ? "1 solid player" : "\(slot.cover) solid players"
+        let count = slot.cover == 0 ? "Nobody counts as cover" : slot.cover == 1 ? "1 player counts as cover"
+            : "\(slot.cover) players count as cover"
         return slot.cover < line ? "\(count); \(line) needed" : count
     }
 
@@ -325,8 +326,14 @@ public enum AdvisorText {
     }
 
     private static func coverRule(_ parameters: EngineParameters) -> String {
-        "Cover counts players solid in the slot (familiarity \(parameters.depthSolidFamiliarity.value) or over in both phases), "
+        "Cover counts players solid in the slot (familiarity \(parameters.depthSolidFamiliarity.value) or over in both phases) "
+            + "who rate at least \(Display.percent(parameters.depthCoverShare.value)) of the first choice there, "
             + "not injured and not first choice elsewhere; fewer than \(parameters.depthThinBelow.value) is thin"
+    }
+
+    /// "Under 80% of the first choice: not counted as cover", for an option Depth marks `isBelowCoverShare`.
+    public static func belowCoverShare(_ parameters: EngineParameters) -> String {
+        "Under \(Display.percent(parameters.depthCoverShare.value)) of the first choice: not counted as cover"
     }
 
     /// "Also needed at left back, centre-back and striker": the other slots where an option is first or second
@@ -353,10 +360,19 @@ public enum AdvisorText {
         "Learning \(PositionText.plain(position))"
     }
 
-    /// "Left back in Sample 4-2-3-1": a thin slot in words, then its tactic.
+    /// "Left back in Sample 4-2-3-1": a thin slot in words, then its tactic; and, where cover there is advised to
+    /// leave, "(not counting Jonny Maxted, whom Player Removal advises moving on)", since Depth still counts him.
     public static func need(_ need: RetrainingNeed) -> String {
         let slot = PositionText.plain(need.slot)
         return slot.prefix(1).uppercased() + slot.dropFirst() + " in \(need.tactic)"
+            + (notCounting(need.going).map { " (\($0))" } ?? "")
+    }
+
+    /// "not counting A, B and C, whom Player Removal advises moving on"; nil for nobody.
+    static func notCounting(_ names: [String]) -> String? {
+        guard let last = names.last else { return nil }
+        let list = names.count == 1 ? last : names.dropLast().joined(separator: ", ") + " and " + last
+        return "not counting \(list), whom Player Removal advises moving on"
     }
 
     /// "Covers left back in Sample 4-2-3-1 and left centre-back in Another": the thin slots a retraining would cover,
@@ -384,6 +400,12 @@ public enum AdvisorText {
         guard report.needsWithoutCandidates.isEmpty else { return nil }
         if report.recommendations.isEmpty && report.needsBeingRetrained.isEmpty { return "No slot is thin." }
         return "Every thin slot has someone learning it or recommended for it."
+    }
+
+    /// "No saved tactic is thin at left back now: this retraining is not needed for cover", for a retraining in
+    /// `TrainingReport.retrainingsNotNeeded`.
+    public static func notNeededForCover(_ position: Position) -> String {
+        "No saved tactic is thin at \(PositionText.plain(position)) now: this retraining is not needed for cover"
     }
 
     /// "Player Removal advises moving him on.", for a player being retrained whom Player Removal advises moving on;
@@ -429,6 +451,15 @@ public enum AdvisorText {
             }
             return "Familiarity at \(place) \(start) to \(latest) in \(weeks) \(weeks == 1 ? "week" : "weeks"): "
                 + "about \(String(format: "%.1f", rate)) a week, \(toSolid) \(toSolid == 1 ? "week" : "weeks") to solid"
+        case .behind:
+            guard let rate = progress.gainedPerWeek, let toSolid = progress.weeksToSolid,
+                  let expected = progress.expectedWeeks else {
+                return "Familiarity at \(place) \(start) to \(latest) in \(weeks) \(weeks == 1 ? "week" : "weeks"): well behind its estimate"
+            }
+            return "Familiarity at \(place) \(start) to \(latest) in \(weeks) \(weeks == 1 ? "week" : "weeks"): "
+                + "about \(String(format: "%.1f", rate)) a week, \(toSolid) \(toSolid == 1 ? "week" : "weeks") to solid. "
+                + "That is well behind the estimate of about \(expected) \(expected == 1 ? "week" : "weeks") in all: "
+                + "check in the game that he is training there"
         case .stalled:
             return "Familiarity at \(place) has not moved from \(start) in \(weeks) \(weeks == 1 ? "week" : "weeks")"
         case .reached:

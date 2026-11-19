@@ -196,6 +196,12 @@ private struct OptionRow: View {
                         .foregroundStyle(Theme.Colour.redText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                if let below = row.belowShare {
+                    Text(below)
+                        .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
+                        .foregroundStyle(Theme.Colour.amberText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let also = row.alsoNeeded {
                     Text(also)
                         .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))

@@ -105,6 +105,10 @@ public struct RetrainingRow: Identifiable, Equatable, Sendable {
     public let track: RetrainingTrack?
     /// The engine's sentence on how it is going; nil when he is in no squad.
     public let progressText: String?
+    /// Whether that sentence is shown as a caution: the retraining has stalled or is well behind its estimate.
+    public let progressIsCaution: Bool
+    /// The engine's sentence when no thin slot needs this retraining, shown as a caution; nil otherwise.
+    public let notNeededText: String?
     /// "No longer in the squad" when he is in no squad; nil otherwise.
     public let departedStamp: StatusStamp?
     /// The engine's sentence when Player Removal advises moving him on, shown as a caution; nil otherwise.
@@ -113,7 +117,7 @@ public struct RetrainingRow: Identifiable, Equatable, Sendable {
     /// The row as said to assistive technology.
     public var spokenText: String {
         let parts: [String?] = [name, positionText, acceptedText, departedStamp?.text, track?.startText,
-                                track?.latestText, track?.solidText, progressText, leavingText]
+                                track?.latestText, track?.solidText, progressText, notNeededText, leavingText]
         return parts.compactMap { $0 }.joined(separator: ", ")
     }
 }
@@ -186,13 +190,19 @@ public enum TrainingPresentation {
     /// A row for each accepted retraining, in the saved order, with each player's name from `inSquads` (the players in
     /// any squad), else as saved. The track runs from the first counted observation to the latest, with the solid line
     /// at `depthSolidFamiliarity`. A player in `advisedToLeave`, Player Removal's list, has the engine's sentence saying so.
-    public static func underWay(_ state: TrainingState, inSquads names: [PlayerID: String], parameters: EngineParameters,
-                                advisedToLeave: Set<PlayerID> = []) -> [RetrainingRow] {
+    /// For a player in `players` the engine works out what the retraining was estimated to take, so it can say when he
+    /// is well behind it; for anyone else it has no estimate. A retraining in `notNeeded`, the advice's list of those no
+    /// thin slot needs, has the engine's sentence saying so while he is in a squad.
+    public static func underWay(_ state: TrainingState, inSquads names: [PlayerID: String], players: [PlayerID: Player] = [:],
+                                parameters: EngineParameters, advisedToLeave: Set<PlayerID> = [],
+                                notNeeded: Set<RetrainingChoice> = []) -> [RetrainingRow] {
         state.accepted.map { retraining in
             let choice = TrainingState.choice(retraining)
             let inSquad = names[retraining.player] != nil
-            let progress = RetrainingTracker.progress(of: retraining, observations: state.observations[choice] ?? [],
-                                                      parameters: parameters)
+            let observations = state.observations[choice] ?? []
+            let progress = players[retraining.player].map {
+                RetrainingTracker.progress(of: retraining, observations: observations, player: $0, parameters: parameters)
+            } ?? RetrainingTracker.progress(of: retraining, observations: observations, parameters: parameters)
             let shownName = name(of: retraining.player, inSquads: names, saved: state.names)
             return RetrainingRow(
                 choice: choice, name: shownName,
@@ -201,8 +211,18 @@ public enum TrainingPresentation {
                 track: inSquad ? RetrainingTrack(start: progress.start, latest: progress.latest,
                                                  solid: parameters.depthSolidFamiliarity.value) : nil,
                 progressText: inSquad ? AdvisorText.progress(progress, toward: retraining.position, parameters: parameters) : nil,
+                progressIsCaution: inSquad && isOffCourse(progress.state),
+                notNeededText: inSquad && notNeeded.contains(choice) ? AdvisorText.notNeededForCover(retraining.position) : nil,
                 departedStamp: inSquad ? nil : departed,
                 leavingText: advisedToLeave.contains(retraining.player) ? AdvisorText.advisedToLeave(shownName) : nil)
+        }
+    }
+
+    /// Whether a retraining in this state has its progress shown as a caution.
+    static func isOffCourse(_ state: RetrainingProgress.State) -> Bool {
+        switch state {
+        case .behind, .stalled: true
+        case .noData, .improving, .reached: false
         }
     }
 
@@ -241,12 +261,14 @@ extension AppModel {
     /// The Training screen's parts for the advice and the saved retraining choices; a retraining of a player Player
     /// Removal advises moving on says so while the advice is ready.
     public var trainingParts: [TrainingPart] {
-        let names = Dictionary(squad.book.allPlayers.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let players = Dictionary(squad.book.allPlayers.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let names = players.mapValues(\.name)
         let report = AdvicePresentation.report(adviceState)
         return TrainingPresentation.parts(
             report: report?.training,
-            underWay: TrainingPresentation.underWay(training, inSquads: names, parameters: planParameters,
-                                                    advisedToLeave: report?.removal.advisedToLeave ?? []),
+            underWay: TrainingPresentation.underWay(training, inSquads: names, players: players, parameters: planParameters,
+                                                    advisedToLeave: report?.removal.advisedToLeave ?? [],
+                                                    notNeeded: Set(report?.training.retrainingsNotNeeded ?? [])),
             turnedDown: TrainingPresentation.turnedDown(training, inSquads: names))
     }
 }

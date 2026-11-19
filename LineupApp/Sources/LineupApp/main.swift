@@ -44,7 +44,9 @@
 //                                              ("match-missed-eleven-…"), and so while two matches on one day
 //                                              stop the plan ("match-missed-stopped-…"); empty ("match-empty-…"); with two
 //                                              matches on one day ("match-failed-…"); and its candidate picker on
-//                                              its own for the first fixture's goalkeeper ("match-picker-…") and
+//                                              its own for the first fixture's goalkeeper ("match-picker-…"),
+//                                              for the end of that list, where those a rule leaves out can
+//                                              still be chosen ("match-picker-ruled-out-…"), and
 //                                              for the remembered eleven's goalkeeper ("match-remembered-picker-…").
 //                                              It is drawn again later in a season, with twelve fixtures and
 //                                              the first six confirmed, so the notes do not fit and open at the
@@ -63,7 +65,9 @@
 //                                              ("<screen>-problem-…"). The Elevens screen is drawn
 //                                              on each of its views ("elevens-first-…",
 //                                              "elevens-second-…", "elevens-depth-…"), Depth with the left
-//                                              centre-back chosen ("elevens-depth-slot-…"), and Depth in the
+//                                              centre-back chosen ("elevens-depth-slot-…", and taller so its
+//                                              players too far below the first choice to count as cover show,
+//                                              "elevens-depth-below-…"), and Depth in the
 //                                              smallest window ("elevens-depth-small-…") and, to see
 //                                              the lists under the pitch, in a window as narrow and
 //                                              taller ("elevens-first-tall-…", and "elevens-depth-tall-…"
@@ -81,8 +85,10 @@
 //                                              ("training-tall-…", and "training-small-tall-…" in the
 //                                              smallest window's width); with its retraining six weeks
 //                                              under way, a second whose player has left and a pair turned
-//                                              down, taller ("training-accepted-…"), and with nothing to list
-//                                              ("training-none-…"). Its Mentoring tab is drawn, taller, with the
+//                                              down, taller ("training-accepted-…"); with its retraining
+//                                              twenty-one weeks under way and well behind its estimate, and a
+//                                              second that no thin slot needs ("training-behind-…"); and with
+//                                              nothing to list ("training-none-…"). Its Mentoring tab is drawn, taller, with the
 //                                              first team's hierarchy entered so its groups are suggested
 //                                              ("training-mentoring-…"), on the sample with no hierarchy
 //                                              ("training-mentoring-no-hierarchy-…"), with the hierarchy entered
@@ -192,7 +198,7 @@ func fail(_ message: String) -> Never {
 enum SampleState {
     case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange, pastFixtures
     case afterConfirmingFirst, midSeason, bans, bansNotForTheFirst, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
-    case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, nothingToRetrain, loanee
+    case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, retrainingBehind, nothingToRetrain, loanee
     case differingSuggestion
     case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
     case arrowsRead, harmfulArrow, noInfluence, regrouping, spentGroup, endedGroup, youngPlayers
@@ -222,6 +228,7 @@ enum SampleState {
         case .nobodyNeedingRest: return try SampleData.modelWithNobodyNeedingRest(repositoryRoot: url)
         case .beforeRetraining: return try SampleData.modelBeforeRetraining(repositoryRoot: url)
         case .retrainingUnderWay: return try SampleData.modelWithRetrainingUnderWay(repositoryRoot: url)
+        case .retrainingBehind: return try SampleData.modelWithRetrainingBehind(repositoryRoot: url)
         case .nothingToRetrain: return try SampleData.modelWithNothingToRetrain(repositoryRoot: url)
         case .loanee: return try SampleData.modelWithLoanee(repositoryRoot: url)
         case .differingSuggestion: return try SampleData.modelWithDifferingSuggestion(repositoryRoot: url)
@@ -256,7 +263,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
                              screens: [.matchSelection], matchStart: MatchStart(view: .starts))
     // The youth player fixed at AM C selected, so the pin, the youth mark and "Clear override" show; in a taller
     // window, so the left-out list, "Left out by you" and the override not used show below the detail.
-    let tall = CGSize(width: size.width, height: size.height * 1.75)
+    let tall = CGSize(width: size.width, height: size.height * 2)
     try ScreenPictures.write(model: sampleModel(root, .choices), to: directory, size: tall, variant: "choices",
                              screens: [.matchSelection], matchStart: MatchStart(slot: .AM_C))
     let confirmed = sampleModel(root, .afterConfirmingFirst)
@@ -309,6 +316,12 @@ let narrowWindow = CGSize(width: 800, height: 700)
     try ScreenPictures.writeCandidatePicker(
         name: "match-picker", text: PickerText.planned(.GK), rows: plain.candidateRows(for: .GK, in: next.id),
         to: directory)
+    // The end of the same list: the last two who can play, then those a rule leaves out, who can still be chosen.
+    let keepers = plain.candidateRows(for: .GK, in: next.id)
+    let canPlay = keepers.prefix { $0.unavailable == nil }
+    try ScreenPictures.writeCandidatePicker(
+        name: "match-picker-ruled-out", text: PickerText.planned(.GK),
+        rows: Array(canPlay.suffix(2) + keepers.dropFirst(canPlay.count)), to: directory)
 
     // The narrow and the smallest windows: the detail under the pitch, the pitches stacked, and scrolling; the other
     // screens narrow, so the pills wrap.
@@ -372,6 +385,9 @@ let narrowWindow = CGSize(width: 800, height: 700)
     // The left centre-back chosen: options who count as cover and one needed at another slot.
     try ScreenPictures.write(model: plain, to: directory, size: size, variant: "depth-slot", screens: [.elevens],
                              elevensStart: ElevensStart(view: .depth, slot: .D_CL))
+    // The same slot in a taller window, so the two solid players too far below the first choice to count show.
+    try ScreenPictures.write(model: plain, to: directory, size: CGSize(width: size.width, height: size.height * 1.5),
+                             variant: "depth-below", screens: [.elevens], elevensStart: ElevensStart(view: .depth, slot: .D_CL))
     try ScreenPictures.write(model: plain, to: directory, size: Theme.Layout.minimumWindow, variant: "depth-small",
                              screens: [.elevens], elevensStart: ElevensStart(view: .depth))
     // The primary with an unsaved change, so the line saying the saved version is shown appears.
@@ -408,6 +424,10 @@ let narrowWindow = CGSize(width: 800, height: 700)
     try ScreenPictures.write(model: open, to: directory, size: smallTall, variant: "small-tall", screens: [.training])
     try ScreenPictures.write(model: sampleModel(root, .retrainingUnderWay), to: directory,
                              size: CGSize(width: size.width, height: size.height * 3.5), variant: "accepted",
+                             screens: [.training])
+    // A retraining well behind its estimate, and one no thin slot needs.
+    try ScreenPictures.write(model: sampleModel(root, .retrainingBehind), to: directory,
+                             size: CGSize(width: size.width, height: size.height * 3), variant: "behind",
                              screens: [.training])
     try ScreenPictures.write(model: sampleModel(root, .nothingToRetrain), to: directory, size: size, variant: "none",
                              screens: [.training])

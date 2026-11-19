@@ -361,6 +361,19 @@ import Testing
         }
     }
 
+    @Test func anInjuredPlayerTheOwnerChoseStartsInThatFixtureOnly() throws {
+        let players = changing(.ST_C) { $0.isInjured = true }
+        let fixtures = [fixture("a", day: 1, overrides: [.ST_C: id(.ST_C)]), fixture("b", day: 8)]
+        let plan = try planner.plan(request(fixtures, players: players))
+        let st = try #require(pick(plan.fixtures[0], .ST_C))
+        #expect(st.player == id(.ST_C) && st.isOverride)
+        #expect(st.warnings.contains(.overridesRule(.injured)))
+        #expect(plan.fixtures[0].lineup.ignoredOverrides.isEmpty)
+        // The injury is not projected away: where the owner has not chosen him, he is still left out.
+        #expect(!starts(plan.fixtures[1], id(.ST_C)))
+        #expect(plan.fixtures[1].lineup.omissions.first { $0.player == id(.ST_C) }?.cause == .excluded(.injured))
+    }
+
     @Test func anOverrideAndARejectionApplyToTheirOwnFixtureOnly() throws {
         let players = try PlannerFixture.squad(first: 14, second: 6)
         let fixtures = [fixture("a", day: 1, overrides: [.ST_C: id(.ST_C, "second")], rejected: [id(.AM_C)]),

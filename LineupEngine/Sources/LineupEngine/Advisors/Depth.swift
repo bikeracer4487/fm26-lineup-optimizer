@@ -17,8 +17,14 @@ public struct DepthOption: Equatable, Sendable {
     public let tier: SquadTier?
     /// The other slots where he is first or second choice.
     public let alsoNeededAt: [SlotID]
-    /// He counts towards the slot's `cover`: solid, not injured and not first choice at another slot. Player Removal
-    /// protects real cover by the same rule.
+    /// He rates under `depthCoverShare` of the slot's first choice's rating there: too far below him to count as cover,
+    /// however familiar he is. Never the first choice himself, and never at a slot with no first choice.
+    public let isBelowCoverShare: Bool
+    /// He could step in at the slot, whatever his rating: solid, not injured and not first choice at another slot.
+    /// Player Removal keeps a stand-in the slot would be short without, even one too weak to count as cover.
+    public let isStandIn: Bool
+    /// He counts towards the slot's `cover`: a stand-in who is not below the cover share. Player Removal protects real
+    /// cover by the same rule.
     public let countsAsCover: Bool
 }
 
@@ -31,9 +37,11 @@ public struct SlotDepth: Equatable, Sendable {
     public let options: [DepthOption]
     /// Players out on loan who would qualify, ranked the same way.
     public let onLoan: [DepthOption]
-    /// Options that are solid, not injured and not first choice at another slot: how many real options there are if
-    /// someone is injured, not who can play today.
+    /// Options that are solid, not injured, not first choice at another slot and within `depthCoverShare` of the first
+    /// choice's rating: how many real options there are if someone is injured, not who can play today.
     public let cover: Int
+    /// Options who could step in whatever their rating (`DepthOption.isStandIn`): never fewer than `cover`.
+    public let standIns: Int
     public let isThin: Bool
     /// The first choice's rating in this slot minus the highest rating among the slot's other options who could step
     /// in (not injured and not first choice at another slot); nil when the slot has no first choice or no such option.
@@ -102,6 +110,9 @@ public enum Depth {
 
         var slots: [SlotDepth] = []
         for assignment in assignments {
+            // The least an option must rate here to count as cover; nil with no first choice to measure against.
+            let shareLine: Double? = tiers.first[assignment.slot].flatMap { tiers.ratings[$0]?[assignment.slot] }
+                .map { $0 * parameters.depthCoverShare.value }
             var options: [DepthOption] = []
             var onLoan: [DepthOption] = []
             for player in sorted {
@@ -118,12 +129,14 @@ public enum Depth {
                 let isSolid = ip >= solidFrom && oop >= solidFrom
                 let unavailable = RiskRules.exclusion(for: player, loan: loan, importance: .medium,
                                                       isNextFixture: true, parameters: parameters)
+                let rating = try engine.rating(for: player, in: assignment).value
+                let isStandIn = isSolid && canStepIn(unavailable: unavailable, tier: tier, at: assignment.slot)
+                let isBelowShare = tier != .first(assignment.slot) && (shareLine.map { rating < $0 } ?? false)
                 let option = DepthOption(
-                    player: player.id, name: player.name, squad: player.squad,
-                    rating: try engine.rating(for: player, in: assignment).value,
+                    player: player.id, name: player.name, squad: player.squad, rating: rating,
                     ipFamiliarity: ip, oopFamiliarity: oop, isSolid: isSolid, unavailable: unavailable,
-                    tier: tier, alsoNeededAt: also,
-                    countsAsCover: isSolid && canStepIn(unavailable: unavailable, tier: tier, at: assignment.slot))
+                    tier: tier, alsoNeededAt: also, isBelowCoverShare: isBelowShare,
+                    isStandIn: isStandIn, countsAsCover: isStandIn && !isBelowShare)
                 if case .loanedOut = loan { onLoan.append(option) } else { options.append(option) }
             }
             func ranked(_ list: [DepthOption]) -> [DepthOption] {
@@ -145,7 +158,8 @@ public enum Depth {
             }
             slots.append(SlotDepth(slot: assignment.slot, ipPosition: assignment.ipPosition,
                                    oopPosition: assignment.oopPosition, options: options, onLoan: onLoan,
-                                   cover: cover, isThin: cover < parameters.depthThinBelow.value, dropToNextBest: drop,
+                                   cover: cover, standIns: options.filter(\.isStandIn).count,
+                                   isThin: cover < parameters.depthThinBelow.value, dropToNextBest: drop,
                                    nextBest: nextBest))
         }
 
@@ -157,7 +171,7 @@ public enum Depth {
             return a.offset < b.offset
         }.map(\.element.slot)
         let basis = Evidence.weakest([parameters.depthCoverFamiliarity.evidence, parameters.depthSolidFamiliarity.evidence,
-                                      parameters.depthThinBelow.evidence])!
+                                      parameters.depthThinBelow.evidence, parameters.depthCoverShare.evidence])!
         return DepthReport(slots: slots, thin: thin, basis: basis)
     }
 }

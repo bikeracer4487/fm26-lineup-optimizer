@@ -29,11 +29,13 @@ public enum RiskRules {
         return nil
     }
 
-    /// An injury or a loan is a fact the user cannot overrule; the other exclusions are advice.
+    /// A loan is a fact the user cannot overrule: the player is at another club. The other exclusions are advice.
+    /// An injury is among them (revised 18 November 2026): FMRTE says that a player is injured, not whether he can
+    /// play through it, and the game passes some injured players fit to play. Nothing but the owner's choice picks him.
     public static func canBeOverridden(_ exclusion: Exclusion) -> Bool {
         switch exclusion {
-        case .injured, .outOnLoan: false
-        case .banned, .belowConditionFloor, .jaded, .rejected: true
+        case .outOnLoan: false
+        case .injured, .banned, .belowConditionFloor, .jaded, .rejected: true
         }
     }
 }
