@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The Candidates tab: "Paste players" and "Clear", the Today and Later control, what the paste read and left out, and
 /// why a paste was refused; then the candidates part by part, each group under its heading, the rest closed behind a
-/// line saying how many are in it. With nothing pasted, the sentence saying how to paste.
+/// line saying how many are in it, and how far to trust it all. With nothing pasted, the sentence saying how to paste.
 struct ScoutingCandidatesTab: View {
     let model: AppModel
     @Bindable var navigation: Navigation
@@ -36,6 +36,9 @@ struct ScoutingCandidatesTab: View {
                         }
                     }
                     CandidateGroups(sheet: sheet, navigation: navigation)
+                    if let note = sheet.evidenceNote {
+                        ScoutingMutedLine(text: note, size: Theme.TypeSize.small)
+                    }
                 }
             }
         }
@@ -99,7 +102,8 @@ private struct CandidateGroups: View {
                         }
                     }
                     if group.showsRows(restOpen: navigation.scoutingRestOpen) {
-                        VStack(alignment: .leading, spacing: 0) {
+                        // Lazy, so a paste of several hundred rows lays out only those on screen.
+                        LazyVStack(alignment: .leading, spacing: 0) {
                             ForEach(group.rows) { row in
                                 FaintRule()
                                 ScoutingCandidateRowView(row: row, inRest: group.isRest,
@@ -150,8 +154,8 @@ private struct Disclosure: View {
     }
 }
 
-/// One candidate: his name with any stamp, what the paste says of him, then his lines and his cautions by label. A click
-/// on his name opens the row to show his other slots, when he has more to show.
+/// One candidate: his name with any stamp, what the paste says of him, then his lines and his cautions by label, and,
+/// while open, each other slot's lines together. A click on his name opens the row, when he has more to show.
 private struct ScoutingCandidateRowView: View {
     let row: ScoutingCandidateRow
     let inRest: Bool

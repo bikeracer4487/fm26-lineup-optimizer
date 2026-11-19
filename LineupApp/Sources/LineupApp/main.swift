@@ -140,8 +140,10 @@
 //                                              ("scouting-needs-going-…"), and with no squad
 //                                              ("scouting-notready-…"); its Candidates tab with nothing pasted
 //                                              ("scouting-candidates-empty-…"), holding the sample candidates,
-//                                              tall enough for every part ("scouting-candidates-…"), in the
-//                                              Later order ("scouting-candidates-later-…"), with every row and
+//                                              one of them the sample's own U21 and left out, tall enough for
+//                                              every part ("scouting-candidates-…"), in the Later order, which
+//                                              turns the two starters at right attacking midfield round
+//                                              ("scouting-candidates-later-…"), with every row and
 //                                              the rest open ("scouting-candidates-open-…"), in the smallest
 //                                              window ("scouting-candidates-small-…"), and after the sample's own
 //                                              U21s were pasted over them and refused
@@ -553,7 +555,9 @@ let narrowWindow = CGSize(width: 800, height: 700)
         fail("The sample's advice has no outfield first choice.")
     }
     going.setMark(.toSell, for: first.player)
-    try ScreenPictures.write(model: going, to: directory, size: needsTall, variant: "needs-going", screens: [.scouting])
+    // Taller again: four going, so more depth needs, each naming who is going or injured.
+    try ScreenPictures.write(model: going, to: directory, size: CGSize(width: size.width, height: size.height * 2),
+                             variant: "needs-going", screens: [.scouting])
 
     let candidates = ScoutingStart(view: .candidates)
     try ScreenPictures.write(model: sampleModel(root), to: directory, size: size, variant: "candidates-empty",
