@@ -291,4 +291,177 @@ import Testing
         let capped = candidate(.GK, level: 12) { $0.age = 19; $0.currentAbility = 80; $0.potentialAbility = 80 }
         #expect(try #require(report([capped], players: players).candidates.first).reachClearsWeakLine == false)
     }
+    // MARK: The headline slot, the five parts and their orders
+
+    /// The fixture squad with the named players' every attribute set to the level given, and those in `without` gone.
+    func squad(levels: [String: Int] = [:], without: Set<String> = []) throws -> [Player] {
+        try PlannerFixture.squad().filter { !without.contains($0.name) }.map { p in
+            var p = p
+            if let level = levels[p.name] { p.attributes = p.attributes.mapValues { _ in level } }
+            return p
+        }
+    }
+    func named(_ slot: SlotID, _ tier: String) -> String { PlannerFixture.name(slot, tier) }
+    func pasted(_ name: String, _ slot: SlotID, _ level: Int, also: [SlotID: Int] = [:], age: Int = 25,
+                potential: Int = 120) -> Player {
+        candidate(slot, level: level, also: also) {
+            $0.name = name; $0.id = PlayerID(key: name); $0.age = age; $0.potentialAbility = potential
+        }
+    }
+    func judged(_ c: Player, players: [Player]) throws -> Candidate {
+        try #require(report([c], players: players).candidates.first)
+    }
+
+    /// Left back at 13 is weak (the others at 14), and right back has no second choice (a depth need). At 12 he is
+    /// under the left back today and could pass him later, and counts as cover at right back: depth comes first.
+    @Test func aDepthNeedTodayBeatsABetterPlayerNeedLater() throws {
+        let players = try squad(levels: [named(.D_L, "first"): 13], without: [named(.D_R, "second")])
+        let needs = try needs(players)
+        #expect(needs.betterPlayers.map(\.slot) == [.D_L] && needs.moreDepth.map(\.depth.slot) == [.D_R])
+        let c = try judged(pasted("both", .D_L, 12, also: [.D_R: 20], age: 18, potential: 190), players: players)
+        #expect(try #require(c.slots.first { $0.slot == .D_L }).answers == [.betterPlayerLater])
+        #expect(c.headline == .D_R && c.headlineAnswer == .moreDepth && c.part == .answersToday)
+    }
+    /// Right back at 11 is the larger gap, so it comes before left back at 12 in the needs, while left back comes first
+    /// in the tactic: a candidate who would start at both is headed by right back.
+    @Test func theFirstBetterPlayerSlotIsTakenInNeedOrder() throws {
+        let players = try squad(levels: [named(.D_L, "first"): 12, named(.D_L, "second"): 10,
+                                         named(.D_R, "first"): 11, named(.D_R, "second"): 10])
+        #expect(try needs(players).betterPlayers.map(\.slot) == [.D_R, .D_L])
+        let c = try judged(pasted("both", .D_L, 14, also: [.D_R: 20]), players: players)
+        #expect(c.slots.map(\.slot) == [.D_L, .D_R] && c.headline == .D_R && c.headlineAnswer == .betterPlayerToday)
+    }
+    /// No needs. At 15 he would start at attacking midfield (first at 14) and could pass the left back (raised to 16)
+    /// later: would start comes first.
+    @Test func wouldStartBeatsCouldPassElsewhere() throws {
+        let players = try squad(levels: [named(.D_L, "first"): 16])
+        #expect(try needs(players).betterPlayers.isEmpty)
+        let c = try judged(pasted("young", .D_L, 15, also: [.AM_C: 20], age: 19, potential: 190), players: players)
+        #expect(try #require(c.slots.first { $0.slot == .D_L }).later?.level == .couldPassFirst)
+        #expect(c.headline == .AM_C && c.part == .wouldStartElsewhere)
+    }
+    /// A young player under the first choice at a slot with no need: could pass him later, or not.
+    @Test func aCouldPassLaterWhereThereIsNoNeedIsItsOwnPart() throws {
+        let players = try PlannerFixture.squad()
+        let grower = try judged(pasted("grower", .AM_C, 13, age: 19, potential: 190), players: players)
+        let slot = try #require(grower.slots.first)
+        #expect(slot.later?.level == .couldPassFirst && !slot.answers.contains(.betterPlayerLater))
+        #expect(grower.headline == .AM_C && grower.headlineAnswer == nil && grower.part == .couldPassElsewhere)
+        let capped = try judged(pasted("capped", .AM_C, 13, age: 19, potential: 101), players: players)
+        #expect(capped.slots.first?.later?.level != .couldPassFirst && capped.part == .rest)
+    }
+    /// The fallback: the better level wins over the tactic's order, then the greater margin, then the earlier slot.
+    @Test func theFallbackTakesTheBestLevelThenTheMarginThenTheTacticsOrder() throws {
+        // At 11 he is under the left back's second (12); the attacking midfielder's second is lowered to 11, still
+        // cover there, so the slot needs nothing.
+        let players = try squad(levels: [named(.AM_C, "second"): 11])
+        #expect(try needs(players).moreDepth.isEmpty && (try needs(players)).betterPlayers.isEmpty)
+        let level = try judged(pasted("p", .D_L, 11, also: [.AM_C: 20]), players: players)
+        #expect(level.slots.map(\.level) == [.wouldCountAsCover, .wouldMakeSecond])
+        #expect(level.headline == .AM_C && level.part == .rest)
+        // Level with the second choice at both; the attacking midfielder's first is lowered to 13: the smaller gap.
+        let margin = try judged(pasted("p", .D_L, 12, also: [.AM_C: 20]),
+                                players: squad(levels: [named(.AM_C, "first"): 13]))
+        #expect(margin.slots.map(\.level) == [.wouldMakeSecond, .wouldMakeSecond] && margin.headline == .AM_C)
+        // The same at both backs: the earlier slot.
+        let tie = try judged(pasted("p", .D_L, 12, also: [.D_R: 20]), players: PlannerFixture.squad())
+        #expect(tie.slots.map(\.level) == [.wouldMakeSecond, .wouldMakeSecond] && tie.headline == .D_L)
+    }
+    /// Left back: first choice raised to 20 and no second choice, so at 12 he makes the second eleven only because
+    /// nobody in position is there, rating under the cover share. Right back: second raised to 13, so at 12 he is real
+    /// cover. The place he holds only by default ranks below cover.
+    @Test func aSecondElevenPlaceUnderTheCoverShareRanksBelowCover() throws {
+        let players = try squad(levels: [named(.D_L, "first"): 20, named(.D_R, "second"): 13],
+                                without: [named(.D_L, "second")])
+        let c = try judged(pasted("p", .D_L, 12, also: [.D_R: 20]), players: players)
+        #expect(c.slots.map(\.level) == [.wouldMakeSecond, .wouldCountAsCover])
+        #expect(c.headline == .D_R && c.part == .rest)
+        // At 17 he is within the share at left back, and its second-eleven place ranks above cover again.
+        let near = try judged(pasted("p", .D_L, 17, also: [.D_R: 20]), players: players)
+        #expect(near.slots.first?.level == .wouldMakeSecond && near.headline == .D_L)
+    }
+
+    func order(_ list: [Player], players: [Player], _ order: CandidateOrder) throws -> [[String]] {
+        try report(list, players: players).groups(orderedBy: order).map { $0.candidates.map(\.player.name) }
+    }
+    /// Part 1: today by rating, later by reach rating.
+    @Test func answersTodayIsOrderedByRatingThenByReach() throws {
+        let players = try squadWithAWeakLeftBack()
+        let list = [pasted("now", .D_L, 15, age: 28), pasted("grower", .D_L, 14, age: 19, potential: 190)]
+        #expect(try report(list, players: players).candidates.allSatisfy { $0.part == .answersToday })
+        #expect(try order(list, players: players, .today) == [["now", "grower"]])
+        #expect(try order(list, players: players, .later) == [["grower", "now"]])
+    }
+    /// Part 2: by reach rating in both orders, though "b" rates higher today.
+    @Test func answersLaterIsOrderedByReachInBothOrders() throws {
+        let players = try squadWithAWeakLeftBack()
+        let list = [pasted("b", .D_L, 11, age: 18, potential: 130), pasted("a", .D_L, 10, age: 18, potential: 190)]
+        let r = try report(list, players: players)
+        #expect(r.candidates.allSatisfy { $0.part == .answersLater })
+        #expect(r.candidates[0].slots[0].rating > r.candidates[1].slots[0].rating)
+        #expect(try order(list, players: players, .today) == [["a", "b"]])
+        #expect(try order(list, players: players, .later) == [["a", "b"]])
+    }
+    /// Part 3: today by margin, later by reach margin.
+    @Test func wouldStartElsewhereIsOrderedByMarginThenByReachMargin() throws {
+        let players = try PlannerFixture.squad()
+        let list = [pasted("now", .AM_C, 16, age: 28), pasted("grower", .AM_C, 15, age: 19, potential: 190)]
+        #expect(try report(list, players: players).candidates.allSatisfy { $0.part == .wouldStartElsewhere })
+        #expect(try order(list, players: players, .today) == [["now", "grower"]])
+        #expect(try order(list, players: players, .later) == [["grower", "now"]])
+    }
+    /// Part 4: by reach margin in both orders, though "b" rates higher today.
+    @Test func couldPassElsewhereIsOrderedByReachMarginInBothOrders() throws {
+        let players = try PlannerFixture.squad()
+        let list = [pasted("b", .AM_C, 13, age: 19, potential: 130), pasted("a", .AM_C, 12, age: 19, potential: 190)]
+        let r = try report(list, players: players)
+        #expect(r.candidates.allSatisfy { $0.part == .couldPassElsewhere })
+        #expect((r.candidates[0].slots[0].marginOverFirst ?? 0) > (r.candidates[1].slots[0].marginOverFirst ?? 0))
+        #expect(try order(list, players: players, .today) == [["a", "b"]])
+        #expect(try order(list, players: players, .later) == [["a", "b"]])
+    }
+    /// Part 5: today by margin, later by reach margin; a young player whose reach stays under the first choice can still
+    /// come first by it. Those who play no slot come last in both.
+    @Test func theRestIsOrderedByMarginThenByReachMargin() throws {
+        let players = try PlannerFixture.squad()
+        let list = [Player.fixture(name: "Nowhere", club: "Wrexham"), pasted("steady", .AM_C, 13, age: 28),
+                    pasted("grower", .AM_C, 12, age: 19, potential: 114)]
+        let r = try report(list, players: players)
+        #expect(r.candidates.allSatisfy { $0.part == .rest })
+        #expect(try order(list, players: players, .today) == [["steady", "grower", "Nowhere"]])
+        #expect(try order(list, players: players, .later) == [["grower", "steady", "Nowhere"]])
+    }
+
+    // The one-sided tests.
+    @Test func cautionsOnTheirLineAreNotGiven() throws {
+        func cautions(_ attributes: [Attribute: Int]) throws -> [CandidateCaution] {
+            try Scouting.cautions(for: Player.fixture(all: 10, attributes: attributes), parameters: .fm27)
+        }
+        #expect(try cautions([.importantMatches: 8]).isEmpty)
+        #expect(try cautions([.controversy: 16]).isEmpty)
+        #expect(try cautions([.temperament: 8]).isEmpty)
+        #expect(try cautions([.professionalism: 8]).isEmpty)
+    }
+    /// The goalkeeper's slot has nobody; at ability 60 against the outfield's 100 he leaves it weak, by ability.
+    @Test func atTheGoalkeepersSlotStillWeakIsByAbility() throws {
+        let players = try firstElevenWithout(.GK)
+        let weak = try #require(today(candidate(.GK, level: 12) { $0.currentAbility = 60 }, players: players).first)
+        #expect(weak.answers.contains(.betterPlayerToday))
+        #expect(weak.stillWeakBy == WeakGap(gap: 1 - 130.0 / 170.0, measure: .ability(his: 60, average: 100)))
+        #expect(try #require(today(candidate(.GK, level: 12), players: players).first).stillWeakBy == nil)
+    }
+    @Test func aPastedPlayerOnLoanAtAThirdClubIsNotHeld() throws {
+        let c = candidate(.D_L, level: 14) { $0.loanedTo = "Barnet" }
+        #expect(!Scouting.isHeld(c, among: try PlannerFixture.squad(), ownClub: "Oxford City"))
+        #expect(try report([c], players: PlannerFixture.squad()).candidates.count == 1)
+    }
+    @Test func atASlotWithNoFirstChoiceOnlyASolidCandidateAnswersTheDepthNeed() throws {
+        let players = try firstElevenWithout(.D_L)
+        #expect(try needs(players).moreDepth.contains { $0.depth.slot == .D_L })
+        #expect(try #require(today(candidate(.D_L, level: 12), players: players).first).answers.contains(.moreDepth))
+        let notSolid = candidate(.D_L, level: 12, also: [.D_L: 14])
+        let slot = try #require(today(notSolid, players: players).first)
+        #expect(!slot.answers.contains(.moreDepth) && slot.answers.contains(.betterPlayerToday))
+    }
 }
+

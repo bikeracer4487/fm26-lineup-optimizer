@@ -106,6 +106,7 @@ extension AdvisorText {
         case .answersToday: "Answers a need today"
         case .answersLater: "Could answer a need later"
         case .wouldStartElsewhere: "Would start where you have no need"
+        case .couldPassElsewhere: "Could pass a first choice where you have no need"
         case .rest: "The rest"
         }
     }

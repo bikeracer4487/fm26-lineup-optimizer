@@ -150,10 +150,12 @@ import Testing
 
     func candidateSlot(_ slot: SlotID = .D_L, level: CandidateLevel = .wouldStart, margin: Double? = 0.06,
                        first: Rival? = nil, solid: Bool = true, ip: Int = 15, oop: Int = 15, stillWeakBy: WeakGap? = nil,
-                       later: SlotOutlook? = nil) -> CandidateSlot {
+                       later: SlotOutlook? = nil, outOfPosition: Bool = false,
+                       weakLine: WeakLineReach? = nil) -> CandidateSlot {
         CandidateSlot(slot: slot, rating: 70, ipFamiliarity: ip, oopFamiliarity: oop, isSolid: solid, level: level,
-                      firstChoice: margin == nil ? nil : (first ?? rival()), secondChoice: nil, marginOverFirst: margin,
-                      stillWeakBy: stillWeakBy, later: later, answers: [])
+                      firstChoice: margin == nil ? nil : (first ?? rival()), secondChoice: nil,
+                      firstChoiceIsOutOfPosition: outOfPosition, marginOverFirst: margin, stillWeakBy: stillWeakBy,
+                      later: later, laterAgainstWeakLine: weakLine, answers: [])
     }
 
     func estimate() -> ReachEstimate {
@@ -170,6 +172,10 @@ import Testing
     /// A candidate whose headline slot is `slot` (left back by default).
     func candidate(_ slot: CandidateSlot, young: Bool = false, level: ReachLevel? = .couldPassFirst, age: Int = 27,
                    clearsWeakLine: Bool? = nil, headline: Bool = true) -> Candidate {
+        var slot = slot
+        if let clearsWeakLine, let later = slot.later {
+            slot = slot.with(later: later, against: WeakLineReach(reach: .rating(112), clears: clearsWeakLine), answers: [])
+        }
         var outlook: Outlook?
         if young {
             let best = slot.later.flatMap { $0.level == nil ? nil : $0 }
@@ -177,15 +183,15 @@ import Testing
                               level: best?.level, average: nil)
         }
         return Candidate(player: .fixture(name: "Young", age: age), slots: [slot], headline: headline ? slot.slot : nil,
-                         headlineAnswer: nil, part: .rest, outlook: outlook, reachClearsWeakLine: clearsWeakLine,
-                         isAgeNamed: age >= 30, cautions: [], basis: .derived)
+                         headlineAnswer: nil, part: .rest, outlook: outlook, isAgeNamed: age >= 30, cautions: [], basis: .derived)
     }
 
     @Test func candidateNames() {
         #expect(CandidateLevel.allCases.map { AdvisorText.name($0) } == [
             "Would start", "Would make the second eleven", "Would count as cover", "Below cover"])
         #expect(CandidatePart.allCases.map { AdvisorText.name($0) } == [
-            "Answers a need today", "Could answer a need later", "Would start where you have no need", "The rest"])
+            "Answers a need today", "Could answer a need later", "Would start where you have no need",
+            "Could pass a first choice where you have no need", "The rest"])
         #expect(CandidateOrder.allCases.map { AdvisorText.name($0) } == ["Today", "Later"])
     }
 
