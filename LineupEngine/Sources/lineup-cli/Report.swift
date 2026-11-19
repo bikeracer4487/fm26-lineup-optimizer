@@ -168,6 +168,41 @@ enum Report {
         return out
     }
 
+    /// The pasted candidates: how many were read, who was left out as already the owner's, then each group under its
+    /// part's name and heading with each candidate's details, his lines for today and for later, his cautions and his
+    /// other slots. Wages and asking prices are written in the candidates' own paste's style.
+    static func candidates(_ report: CandidatesReport, read count: Int, money: MoneyStyle) -> [String] {
+        var out = ["", "=== Candidates ===", AdvisorText.playersRead(count)]
+        if let left = AdvisorText.leftOutAlreadyYours(report.leftOut) { out.append(left) }
+        for group in report.groups(orderedBy: .today) {
+            var heading = AdvisorText.name(group.part)
+            if let slot = group.slot, let answer = group.answer {
+                heading += " - " + AdvisorText.groupHeading(slot: slot, answer: answer)
+            }
+            out += ["", heading]
+            for candidate in group.candidates {
+                let player = candidate.player
+                var details = ["\(player.name), \(player.age)"]
+                if !player.positionsText.isEmpty { details.append(player.positionsText) }
+                if let club = AdvisorText.club(of: player) { details.append(club) }
+                if let loanedTo = player.loanedTo { details.append(AdvisorText.onLoan(at: loanedTo)) }
+                if let price = player.askingPrice { details.append(AdvisorText.askingPrice(price, money)) }
+                details.append(Display.wage(perWeek: player.wagePerWeek, money))
+                out.append("  " + details.joined(separator: ", ") + mark(candidate.basis))
+                if let headline = candidate.slots.first(where: { $0.slot == candidate.headline }) {
+                    for line in AdvisorText.todayLines(headline) + AdvisorText.laterLines(candidate) { out.append("    \(line)") }
+                } else {
+                    out.append("    \(AdvisorText.playsNoSlot)")
+                }
+                for caution in candidate.cautions { out.append("    \(AdvisorText.caution(caution))") }
+                for slot in candidate.slots where slot.slot != candidate.headline {
+                    out.append("    \(AdvisorText.otherSlotLine(slot))")
+                }
+            }
+        }
+        return out
+    }
+
     /// One option with his rating and, in brackets, whether he counts as cover, what stops him or what else he is.
     private static func option(_ slot: SlotID, _ option: DepthOption, parameters: EngineParameters) -> String {
         var marks: [String] = []

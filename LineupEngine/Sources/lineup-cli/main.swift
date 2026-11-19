@@ -19,6 +19,8 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
                          [--history <confirmed.json>] [--fixtures <fixtures.json>] [--intensity low|medium|high]
                          [--profile fm27|carried-over] [--standings <standings.json>]
                          [--league-situation title-race|in-contention|mid-table|nothing-to-play-for]
+       lineup-cli scout  everything advise takes, and --candidates <paste.tsv>, which is required: a paste of players
+                         from FMRTE's search grid, read with --grids as a first-team paste
        At least one of --first-team, --u21, --u18 is required.
        --profile picks the rating profile: fm27 (FM27 engine tests, the default), carried-over (carried over from FM26),
        or, for select only, both, which prints the FM27 lineup, then the carried-over one, and compares them.
@@ -33,6 +35,10 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        the mentoring groups suggested and the players left without one.
        advise also prints a Scouting part after Depth: the needs of the squad that stays, with players on loan to the club
        and those Player Removal advises to move on counted as gone. The command line takes no marks to sell or loan out.
+       scout prints advise's Scouting part, then the players read from --candidates (those the owner already holds are
+       left out) in groups: those who answer a need today, those who could answer one later, those who would start
+       where there is no need, and the rest, each with how he would stand today, his reach, cautions and other slots.
+       Wages and asking prices are in the candidates' paste's own currency and period.
        --standings is a JSON object from a player's key to {"standing": "teamLeader|highlyInfluential|influential|others",
        "socialGroup"?: "core|others|secondary:<name>"}: the hierarchy as the game's Dynamics screen shows it. Without it
        nobody stands above Others and no group is suggested. The command line takes no arrow readings: every arrow it
@@ -50,7 +56,7 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        development 1 (how much of the favour to young players in lesser fixtures applies; 0 turns it off).
 """
 
-enum Command: String { case select, plan, advise }
+enum Command: String { case select, plan, advise, scout }
 
 /// The rating profiles `--profile` can name, by the ids `RatingProfile` gives them, in the order they print.
 let profileChoices: [String: [String]] = [
@@ -70,6 +76,7 @@ struct Options {
     var fixtures: String?
     var history: String?
     var standings: String?
+    var candidates: String?
     var leagueSituation: LeagueSituation = .inContention
     var asOf: Day?
     var settings = PlanSettings.standard
@@ -84,7 +91,8 @@ func parse(_ arguments: [String]) throws -> Options {
     case "select": command = .select
     case "plan": command = .plan
     case "advise": command = .advise
-    default: throw UsageError(reason: "the commands are 'select', 'plan' and 'advise'")
+    case "scout": command = .scout
+    default: throw UsageError(reason: "the commands are 'select', 'plan', 'advise' and 'scout'")
     }
     var options = Options(command: command)
     let squads: [String: Squad] = ["--first-team": .firstTeam, "--u21": .u21, "--u18": .u18]
@@ -93,6 +101,7 @@ func parse(_ arguments: [String]) throws -> Options {
     case .select: shared + ["--importance"]
     case .plan: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--stability", "--saving", "--horizon", "--development"]
     case .advise: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--standings", "--league-situation"]
+    case .scout: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--standings", "--league-situation", "--candidates"]
     }
     let name = command.rawValue
     while let flag = args.popFirst() {
@@ -119,6 +128,7 @@ func parse(_ arguments: [String]) throws -> Options {
         case "--fixtures": options.fixtures = value
         case "--history": options.history = value
         case "--standings": options.standings = value
+        case "--candidates": options.candidates = value
         case "--league-situation":
             switch value {
             case "title-race": options.leagueSituation = .titleRaceOrRelegationFight
@@ -154,6 +164,9 @@ func parse(_ arguments: [String]) throws -> Options {
         guard options.asOf != nil else { throw UsageError(reason: "--as-of is required") }
     case .advise:
         guard options.asOf != nil else { throw UsageError(reason: "--as-of is required") }
+    case .scout:
+        guard options.asOf != nil else { throw UsageError(reason: "--as-of is required") }
+        guard options.candidates != nil else { throw UsageError(reason: "--candidates is required") }
     }
     return options
 }
@@ -289,7 +302,7 @@ do {
         output = Report.render(header, plan: plan, fixtures: fixtures, history: history, asOf: options.asOf!,
                                profile: profile, parameters: parameters, settings: options.settings)
 
-    case .advise:
+    case .advise, .scout:
         let fixtures = fixtureEntries.map { resolveFixtures($0, file: options.fixtures!, tactic: tactic, book: book) }
         let profile = profiles[0]
         let parameters = EngineParameters.fm27
@@ -330,6 +343,18 @@ do {
             elevens: advisors.elevens, depth: advisors.depth, rest: advisors.rest, training: advisors.training,
             removal: advisors.removal, scouting: scouting, suggestions: suggestions, mentoring: mentoring),
             parameters: parameters)
+        if options.command == .scout {
+            // The paste is read as a first-team paste with the same grids; its players are judged, not added to the book.
+            let paste = try Importer.importPlayers(clipboard: readText(options.candidates!), fmrteConfig: grids, squad: .firstTeam)
+            let report = try Scouting.candidates(pasted: paste.players, held: players, ownClub: ownClub, tactic: tactic,
+                                                 needs: scouting, catalog: catalog, profile: profile, parameters: parameters)
+            if report.candidates.isEmpty && !report.leftOut.isEmpty {
+                print(output + AdvisorText.playersRead(paste.players.count) + "\n"
+                      + AdvisorText.everyPastedPlayerIsYours, terminator: "\n")
+                exit(1)
+            }
+            output += Report.candidates(report, read: paste.players.count, money: paste.money).joined(separator: "\n") + "\n"
+        }
     }
 } catch {
     // The library describes FMRTE's configuration without knowing where it was read from.

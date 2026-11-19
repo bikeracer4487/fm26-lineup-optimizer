@@ -440,6 +440,64 @@ import Testing
         return needs
     }
 
+    /// The captured first team (with FMRTE's Id) is the squad and the captured U21 search grid is the paste, once with
+    /// every player's club set to another club and once as captured, when they are the owner's own.
+    @Test func capturedRowsReadAsCandidates() throws {
+        var book = SquadBook()
+        let firstTeam = try Importer.importPlayers(clipboard: Fixtures.text("captures/first-team-with-id.tsv"),
+                                                   fmrteConfig: Fixtures.data("captures/first-team-with-id.grids.json"),
+                                                   squad: .firstTeam)
+        book.apply(firstTeam, to: .firstTeam)
+        let paste = try Importer.importPlayers(clipboard: Fixtures.text("captures/u21.tsv"),
+                                               fmrteConfig: Fixtures.data("captures/u21.grids.json"), squad: .firstTeam)
+        let players = book.allPlayers
+        let ownClub = book.ownClub(override: ownClubName)
+        let tactic = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
+        let catalog = try RoleCatalog.fm27()
+        let profile = try RatingProfile.standard()
+        let parameters = EngineParameters.fm27
+        let asOf = try #require(Day(iso: "2026-11-13"))
+        let history = try JSONDecoder().decode([ConfirmedLineup].self, from: Fixtures.data("plans/sample-history.json"))
+        let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, money: book.moneyStyle,
+                                         history: StartHistory(history), asOf: asOf, retraining: [],
+                                         catalog: catalog, profile: profile, parameters: parameters)
+        let going = Scouting.going(players: players, ownClub: ownClub, marks: [:], advisedToLeave: removal.advisedToLeave)
+        let needs = try Scouting.needs(tactic: tactic, players: players, ownClub: ownClub, going: going, retraining: [],
+                                       catalog: catalog, profile: profile, parameters: parameters)
+
+        func report(_ pasted: [Player]) throws -> CandidatesReport {
+            try Scouting.candidates(pasted: pasted, held: players, ownClub: ownClub, tactic: tactic, needs: needs,
+                                    catalog: catalog, profile: profile, parameters: parameters)
+        }
+        let elsewhere = paste.players.map { player -> Player in
+            var other = player
+            other.club = "Banbury United"
+            return other
+        }
+        let strangers = try report(elsewhere)
+        #expect(!paste.players.isEmpty && strangers.leftOut.isEmpty && strangers.candidates.count == paste.players.count)
+        let words = SlotID.allCases.map(\.rawValue).filter { $0.contains("_") }
+        for candidate in strangers.candidates {
+            let name = candidate.player.name
+            #expect(CandidatePart.allCases.contains(candidate.part), "\(name)")
+            if candidate.player.age <= parameters.developingUpToAge.value {
+                #expect(candidate.outlook != nil, "\(name)")
+            } else {
+                #expect(candidate.outlook == nil, "\(name)")
+            }
+            let lines = candidate.slots.flatMap { AdvisorText.todayLines($0) } + AdvisorText.laterLines(candidate)
+            for line in lines {
+                #expect(line.hasSuffix("."), "\(name): \(line)")
+                #expect(!words.contains { line.contains($0) }, "\(name): \(line)")
+                #expect(line.range(of: #"\bGK\b"#, options: .regularExpression) == nil, "\(name): \(line)")
+            }
+        }
+
+        // As captured their club is the owner's own, so every player is left out.
+        let own = try report(paste.players)
+        #expect(own.candidates.isEmpty && own.leftOut == paste.players.map(\.name))
+    }
+
     @Test func theYoungPlayersOfTheCapturedSquadsEachHaveAnOutlookAndAnAdvice() throws {
         let book = try realBook()
         let players = book.allPlayers

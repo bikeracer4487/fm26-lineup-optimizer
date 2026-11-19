@@ -89,4 +89,128 @@ extension AdvisorText {
     private static func andList(_ names: [String]) -> String {
         names.count <= 1 ? (names.first ?? "") : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
     }
+
+    // MARK: The candidates
+
+    public static func name(_ level: CandidateLevel) -> String {
+        switch level {
+        case .wouldStart: "Would start"
+        case .wouldMakeSecond: "Would make the second eleven"
+        case .wouldCountAsCover: "Would count as cover"
+        case .belowCover: "Below cover"
+        }
+    }
+
+    public static func name(_ part: CandidatePart) -> String {
+        switch part {
+        case .answersToday: "Answers a need today"
+        case .answersLater: "Could answer a need later"
+        case .wouldStartElsewhere: "Would start where you have no need"
+        case .rest: "The rest"
+        }
+    }
+
+    public static func name(_ order: CandidateOrder) -> String {
+        switch order {
+        case .today: "Today"
+        case .later: "Later"
+        }
+    }
+
+    /// "Left back · needs a better player", "Goalkeeper · needs more depth".
+    public static func groupHeading(slot: SlotID, answer: NeedAnswer) -> String {
+        let need: String
+        switch answer {
+        case .betterPlayerToday, .betterPlayerLater: need = "needs a better player"
+        case .moreDepth: need = "needs more depth"
+        }
+        return "\(capitalised(PositionText.plain(slot))) · \(need)"
+    }
+
+    /// How he would stand at the slot today, then whether he is solid there and whether the slot would stay weak.
+    public static func todayLines(_ slot: CandidateSlot) -> [String] {
+        let position = PositionText.plain(slot.slot)
+        var lines: [String] = []
+        switch (slot.firstChoice, slot.marginOverFirst) {
+        case (let first?, let margin?):
+            let size = Display.onePercentDecimal(margin)
+            let how = size == Display.onePercentDecimal(0) ? "level with" : margin > 0 ? "\(size) above" : "\(size) under"
+            lines.append("\(name(slot.level)): rates \(how) \(first.name), your first choice at \(position).")
+        case (nil, _), (_, nil):
+            lines.append("\(name(slot.level)): nobody who stays can play at \(position).")
+        }
+        if !slot.isSolid {
+            lines.append("Not yet solid there: familiarity \(slot.ipFamiliarity) in possession, \(slot.oopFamiliarity) out.")
+        }
+        if let gap = slot.stillWeakBy {
+            lines.append(slot.slot == .GK
+                ? "The slot would still be weak with him, by ability."
+                : "The slot would still be weak with him: \(Display.onePercentDecimal(gap)) under the average of your outfield first choices.")
+        }
+        return lines
+    }
+
+    /// For his headline slot: his reach and where it leaves him, or that he is judged as he is. Empty when he can play
+    /// no slot.
+    public static func laterLines(_ candidate: Candidate) -> [String] {
+        guard let slot = candidate.headlineSlot else { return [] }
+        guard let outlook = candidate.outlook else {
+            return ["Judged as he is today." + (candidate.isAgeNamed ? " He is \(candidate.player.age): decline is not measured." : "")]
+        }
+        let names: (SlotID) -> String = { PositionText.plain($0) }
+        if slot.later?.level != nil, let reach = reachLine(outlook, names: names) {
+            var lines = [reach + ".", reachWorking(outlook.estimate)]
+            if let standing = standing(outlook, names: names) { lines.append(standing) }
+            switch slot.level {
+            case .wouldCountAsCover, .belowCover:
+                lines.append("The estimate assumes regular matches, which he may not get here.")
+            case .wouldStart, .wouldMakeSecond: break
+            }
+            return lines
+        }
+        var lines = [reachWorking(outlook.estimate)]
+        if let clears = candidate.reachClearsWeakLine {
+            let position = PositionText.plain(slot.slot)
+            lines.append(clears
+                ? "His reach would clear the line for a weak slot at \(position)."
+                : "His reach would still be under the line for a weak slot at \(position).")
+        }
+        return lines
+    }
+
+    /// "Right back: would make the second eleven." for a slot that is not his headline.
+    public static func otherSlotLine(_ slot: CandidateSlot) -> String {
+        "\(capitalised(PositionText.plain(slot.slot))): \(name(slot.level).lowercased())."
+    }
+
+    /// "Injury Proneness 16".
+    public static func caution(_ caution: CandidateCaution) -> String { "\(caution.attribute.rawValue) \(caution.value)" }
+
+    /// "Free agent" for a player out of contract, else his club; nil when the paste carried none.
+    public static func club(of player: Player) -> String? {
+        switch player.contractType {
+        case .outOfContract: "Free agent"
+        case .fullTime, .youth, .other: player.club
+        }
+    }
+
+    public static func onLoan(at club: String) -> String { "On loan at \(club)" }
+
+    public static func askingPrice(_ amount: Int, _ style: MoneyStyle) -> String {
+        "Asking " + Display.money(amount, symbol: style.symbol)
+    }
+
+    public static func playersRead(_ count: Int) -> String { "\(count) \(count == 1 ? "player" : "players") read." }
+
+    /// "Left out, already yours: A and B."; nil for none.
+    public static func leftOutAlreadyYours(_ names: [String]) -> String? {
+        guard !names.isEmpty else { return nil }
+        let list = names.count == 1 ? names[0] : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
+        return "Left out, already yours: \(list)."
+    }
+
+    public static let everyPastedPlayerIsYours = "Every pasted player is already yours, so there is nobody to judge."
+    public static let playsNoSlot = "He can play no slot of this tactic."
+
+    private static func capitalised(_ words: String) -> String { words.prefix(1).uppercased() + words.dropFirst() }
 }
