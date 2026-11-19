@@ -45,13 +45,15 @@ extension AdvisorText {
                 lines.append("Nobody who stays can play here.")
             }
         case .weak:
-            if let subject, let measure = need.measure {
-                switch measure {
-                case .rating:
+            if let subject {
+                switch need.measure {
+                case .rating? where need.gap != nil:
                     lines.append("\(subject) rates \(Display.onePercentDecimal(need.gap ?? 0)) under the average of your outfield first choices.")
-                case .ability(let his, let average):
+                case .ability(let his, let average)?:
                     lines.append("\(subject) has ability \(his) against an average of \(String(format: "%.0f", average)) "
                                  + "for your outfield first choices. Goalkeepers are rated on their own scale, so ability is compared.")
+                case .rating?, nil:
+                    lines.append("\(subject) rates under the average of your outfield first choices.")
                 }
             }
         case .ageing:

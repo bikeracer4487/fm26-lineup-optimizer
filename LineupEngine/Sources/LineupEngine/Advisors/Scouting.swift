@@ -117,7 +117,11 @@ public enum Scouting {
     public static func needs(tactic: Tactic, players: [Player], ownClub: String?, going: [Going],
                              retraining: [Retraining], catalog: RoleCatalog, profile: RatingProfile,
                              parameters: EngineParameters) throws -> ScoutingNeeds {
-        let goingByID = Dictionary(going.map { ($0.player, $0) }, uniquingKeysWith: { first, _ in first })
+        // Each player once, with the reason that comes first in `GoingReason`'s order.
+        let reasonOrder = GoingReason.allCases
+        let goingByID = Dictionary(going.map { ($0.player, $0) }, uniquingKeysWith: { a, b in
+            (reasonOrder.firstIndex(of: b.reason) ?? 0) < (reasonOrder.firstIndex(of: a.reason) ?? 0) ? b : a
+        })
         let staying = players.filter { goingByID[$0.id] == nil }
         let byID = Dictionary(players.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let assignments = try tactic.assignments(catalog: catalog)
@@ -154,23 +158,32 @@ public enum Scouting {
             parameters.growthPerSeason.evidence, parameters.growthProfessionalismRates.evidence,
             parameters.markedlyLowerShare.evidence, parameters.markedlyLowerShareYoungest.evidence]
 
+        // A first choice at another slot cannot fill a second one, so he eases nothing and is nobody's successor.
+        func isFirstChoiceElsewhere(_ id: PlayerID, not slot: SlotID) -> Bool {
+            if case .first(let other)? = elevens.tiers.tier(of: id), other != slot { return true }
+            return false
+        }
+
         // A young player staying whose reach clears the weak line at the slot, the highest reach first.
         func easedBy(_ assignment: SlotAssignment) -> NamedPlayer? {
             let isKeeper = assignment.ipPosition == .goalkeeper
             guard let line = (isKeeper ? averageAbility : averageRating).map({ $0 * weakShare }) else { return nil }
             var best: (reach: Double, player: Player)?
             for (id, outlook) in outlooks.sorted(by: { $0.key.key < $1.key.key }) {
-                guard let player = byID[id], let slot = outlook.slots.first(where: { $0.slot == assignment.slot }) else { continue }
+                guard !isFirstChoiceElsewhere(id, not: assignment.slot),
+                      let player = byID[id], let slot = outlook.slots.first(where: { $0.slot == assignment.slot }) else { continue }
                 let reach = isKeeper ? offset + outlook.estimate.reach : slot.reachRating
                 guard reach + roundingNoise >= line else { continue }
-                if best == nil || reach > best!.reach { best = (reach, player) }
+                if let current = best, reach <= current.reach { continue }
+                best = (reach, player)
             }
             return best.map { NamedPlayer(player: $0.player.id, name: $0.player.name, age: $0.player.age) }
         }
 
         func hasSuccessor(at slot: SlotID) -> Bool {
-            outlooks.values.contains { outlook in
-                outlook.slots.contains { $0.slot == slot && ($0.band == .close || $0.band == .onCourse) }
+            outlooks.contains { id, outlook in
+                !isFirstChoiceElsewhere(id, not: slot)
+                    && outlook.slots.contains { $0.slot == slot && ($0.band == .close || $0.band == .onCourse) }
             }
         }
 
@@ -237,15 +250,15 @@ public enum Scouting {
 
         var moreDepth: [DepthNeed] = []
         for slot in depth.thin {
-            guard let staying = depth.slots.first(where: { $0.slot == slot }) else { continue }
+            guard let slotDepth = depth.slots.first(where: { $0.slot == slot }) else { continue }
             let leaving = todayDepth.slots.first { $0.slot == slot }?.options
                 .filter { $0.countsAsCover }.compactMap { goingByID[$0.player] } ?? []
-            let returning: [Returning] = staying.onLoan.filter { $0.isSolid && !$0.isBelowCoverShare }.compactMap { option in
+            let returning: [Returning] = slotDepth.onLoan.filter { $0.isSolid && !$0.isBelowCoverShare }.compactMap { option in
                 guard let player = byID[option.player], case .loanedOut(let club) = LoanStatus.of(player, ownClub: ownClub)
                 else { return nil }
                 return Returning(player: option.player, name: option.name, club: club)
             }
-            moreDepth.append(DepthNeed(depth: staying, going: leaving, returning: returning))
+            moreDepth.append(DepthNeed(depth: slotDepth, going: leaving, returning: returning))
         }
 
         let needed = Set(needs.map(\.need.slot)).union(moreDepth.map(\.depth.slot))
@@ -253,7 +266,7 @@ public enum Scouting {
 
         let evidence = [parameters.scoutingWeakShare.evidence, parameters.firstChoiceAgeNamedFrom.evidence,
                         parameters.ratingAbilityOffset.evidence, depth.basis] + outlookEvidence
-        return ScoutingNeeds(going: going.sorted { $0.player.key < $1.player.key }, betterPlayers: needs.map(\.need),
+        return ScoutingNeeds(going: goingByID.values.sorted { $0.player.key < $1.player.key }, betterPlayers: needs.map(\.need),
                              moreDepth: moreDepth, fine: fine, elevens: elevens, depth: depth,
                              outfieldAverageRating: averageRating, outfieldAverageAbility: averageAbility,
                              basis: Evidence.weakest(evidence)!)

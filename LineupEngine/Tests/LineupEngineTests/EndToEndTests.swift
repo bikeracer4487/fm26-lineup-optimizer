@@ -385,8 +385,28 @@ import Testing
     }
 
     @Test func theCapturedSquadsHaveScoutingNeeds() throws {
+        try checkScoutingNeeds(keeperAbility: nil)
+    }
+
+    /// The captured goalkeeper is ageing, so his need has no measure; at a current ability of 30 he is weak, measured
+    /// by ability. Player Removal would then advise him to leave, which takes him out of the squad scouting judges, so
+    /// he is kept in it here.
+    @Test func aWeakCapturedGoalkeeperIsMeasuredByAbility() throws {
+        let needs = try checkScoutingNeeds(keeperAbility: 30)
+        let keeper = try #require(needs.betterPlayers.first { $0.slot == .GK })
+        #expect(keeper.kind == .weak && keeper.firstChoice?.name == "Jonny Maxted")
+        guard case .ability(let his, _)? = keeper.measure else { Issue.record("the goalkeeper is measured by ability"); return }
+        #expect(his == 30)
+    }
+
+    @discardableResult
+    func checkScoutingNeeds(keeperAbility: Int?) throws -> ScoutingNeeds {
         let book = try realBook()
-        let players = book.allPlayers
+        var players = book.allPlayers
+        if let keeperAbility {
+            let index = try #require(players.firstIndex { $0.name == "Jonny Maxted" })
+            players[index].currentAbility = keeperAbility
+        }
         let ownClub = book.ownClub(override: ownClubName)
         let tactic = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
         let catalog = try RoleCatalog.fm27()
@@ -394,10 +414,11 @@ import Testing
         let parameters = EngineParameters.fm27
         let asOf = try #require(Day(iso: "2026-11-13"))
         let history = try JSONDecoder().decode([ConfirmedLineup].self, from: Fixtures.data("plans/sample-history.json"))
-        let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, money: .weeklyPounds,
+        let removal = try Removal.report(tactic: tactic, players: players, ownClub: ownClub, money: book.moneyStyle,
                                          history: StartHistory(history), asOf: asOf, retraining: [],
                                          catalog: catalog, profile: profile, parameters: parameters)
-        let going = Scouting.going(players: players, ownClub: ownClub, marks: [:], advisedToLeave: removal.advisedToLeave)
+        let going = Scouting.going(players: players, ownClub: ownClub, marks: [:],
+                                   advisedToLeave: removal.advisedToLeave.filter { keeperAbility == nil || $0.key != "jonny maxted" })
         let needs = try Scouting.needs(tactic: tactic, players: players, ownClub: ownClub, going: going, retraining: [],
                                        catalog: catalog, profile: profile, parameters: parameters)
 
@@ -416,6 +437,7 @@ import Testing
         if let keeper = needs.betterPlayers.first(where: { $0.slot == .GK }), let measure = keeper.measure {
             if case .ability = measure {} else { Issue.record("the goalkeeper is measured by ability") }
         }
+        return needs
     }
 
     @Test func theYoungPlayersOfTheCapturedSquadsEachHaveAnOutlookAndAnAdvice() throws {

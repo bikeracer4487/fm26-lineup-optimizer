@@ -113,4 +113,28 @@ import Testing
         #expect(AdvisorText.depthNeedLines(DepthNeed(depth: two, going: [], returning: []), parameters: parameters).first
                 == "2 players count as cover: A One and B Two.")
     }
+
+    @Test func aWeakNeedWithoutAGapPrintsNoNumber() {
+        let line = "Sam Reed rates under the average of your outfield first choices."
+        #expect(AdvisorText.betterPlayerLines(need(.weak, first: sam, measure: rating, gap: nil)) == [line])
+        #expect(AdvisorText.betterPlayerLines(need(.weak, first: sam, measure: nil, gap: 0.06)) == [line])
+        #expect(AdvisorText.betterPlayerLines(need(.weak, first: sam, measure: rating, gap: nil, leaving: going("Lee Hart", .onLoanHere)))
+                == ["Lee Hart, first choice today, is on loan here.",
+                    "Sam Reed, the best who stays, rates under the average of your outfield first choices."])
+    }
+
+    @Test func depthNeedsNameWhoIsGoingAndWhoReturns() {
+        let none = slotDepth(options: [], cover: 0, drop: nil, next: nil)
+        let base = ["Nobody counts as cover; 2 needed.", "Nobody else can step in."]
+        func lines(going: [Going] = [], returning: [Returning] = []) -> [String] {
+            AdvisorText.depthNeedLines(DepthNeed(depth: none, going: going, returning: returning), parameters: parameters)
+        }
+        #expect(lines(going: [going("Lee Hart", .onLoanHere)]) == base + ["Not counting Lee Hart, who is going."])
+        #expect(lines(going: [going("Lee Hart", .onLoanHere), going("Sam Reed", .markedToSell), going("Tom Vale", .advisedToLeave)])
+                == base + ["Not counting Lee Hart, Sam Reed and Tom Vale, who are going."])
+        #expect(lines(returning: [Returning(player: id("max treml"), name: "Max Treml", club: "Wallingford"),
+                                  Returning(player: id("ben cole"), name: "Ben Cole", club: "Didcot")])
+                == base + ["Max Treml, out on loan at Wallingford, would count as cover.",
+                           "Ben Cole, out on loan at Didcot, would count as cover."])
+    }
 }

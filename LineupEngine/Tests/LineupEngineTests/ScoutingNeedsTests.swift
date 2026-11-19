@@ -141,6 +141,90 @@ import Testing
         })
         #expect(withSuccessor.betterPlayers.isEmpty)
     }
+    /// Familiarity 20 at both positions of the slot, as the fixture gives its own players.
+    func playsAt(_ slot: SlotID, _ player: inout Player) throws {
+        let assignment = try #require(try tactic.assignments(catalog: catalog).first { $0.slot == slot })
+        for position in Set([assignment.ipPosition, assignment.oopPosition]) { player.familiarity[position] = 20 }
+    }
+    /// The left back's pair is lowered (12 and 10) so that left back is weak. The young player is the right back's
+    /// first choice at level 14 (his second choice is lowered to 10, so he stays at right back), or, in the second
+    /// arrangement, the right back's second choice at level 11 in place of the fixture's own second choice (who is
+    /// dropped); at 11 he is under the left back's first choice, so he is first choice nowhere.
+    func youngRightBack(asFirst: Bool) throws -> ScoutingNeeds {
+        let young = named(.D_R, asFirst ? "first" : "second")
+        var levels = [named(.D_L, "first"): 12, named(.D_L, "second"): 10]
+        levels[young] = asFirst ? 14 : 11
+        if asFirst { levels[named(.D_R, "second")] = 10 }
+        var players = try squad(levels: levels) {
+            if $0.name == young { $0.age = 19; $0.potentialAbility = 190 }
+        }
+        if !asFirst { players.removeAll { $0.name == named(.D_R, "second") && $0.name != young } }
+        let index = try #require(players.firstIndex { $0.name == young })
+        try playsAt(.D_L, &players[index])
+        return try needs(players)
+    }
+    @Test func aFirstChoiceAtAnotherSlotEasesNothing() throws {
+        let first = try youngRightBack(asFirst: true)
+        #expect(first.elevens.tiers.first[.D_R] == PlannerFixture.id(.D_R, "first"))
+        let blocked = try #require(first.betterPlayers.first { $0.slot == .D_L })
+        #expect(blocked.kind == .weak && blocked.easedBy == nil)
+
+        let second = try youngRightBack(asFirst: false)
+        #expect(second.elevens.tiers.tier(of: PlannerFixture.id(.D_R, "second")).map { if case .first = $0 { true } else { false } } == false)
+        let eased = try #require(second.betterPlayers.first { $0.slot == .D_L })
+        #expect(eased.kind == .weak && eased.easedBy?.name == named(.D_R, "second"))
+    }
+    @Test func aFirstChoiceAtAnotherSlotIsNobodysSuccessor() throws {
+        let old = named(.AM_C, "first"), young = named(.ST_C, "first")
+        let r = try needs(squad(levels: [young: 15, named(.ST_C, "second"): 10]) {
+            if $0.name == old { $0.age = 32 }
+        }.map { p in
+            var p = p
+            if p.name == young { p.age = 19; p.potentialAbility = 190; try! playsAt(.AM_C, &p) }
+            return p
+        })
+        #expect(r.elevens.tiers.first[.ST_C] == PlannerFixture.id(.ST_C, "first"))
+        let need = try #require(r.betterPlayers.first { $0.slot == .AM_C })
+        #expect(need.kind == .ageing && need.firstChoice?.age == 32)
+    }
+    @Test func anEasedWeakNeedComesAfterOneThatIsNot() throws {
+        // Left back (12 against the others at 14) is the larger gap and is eased by its first choice at 19 with a
+        // high potential; right back (12) is the smaller gap and is not.
+        let young = named(.D_L, "first")
+        let players = try squad(levels: [young: 11, named(.D_L, "second"): 10, named(.D_R, "first"): 12,
+                                         named(.D_R, "second"): 10]) {
+            if $0.name == young { $0.age = 19; $0.potentialAbility = 190 }
+        }
+        let r = try needs(players)
+        #expect(r.betterPlayers.map(\.slot) == [.D_R, .D_L])
+        let left = try #require(r.betterPlayers.first { $0.slot == .D_L }), right = try #require(r.betterPlayers.first { $0.slot == .D_R })
+        #expect(left.easedBy != nil && right.easedBy == nil && (left.gap ?? 0) > (right.gap ?? 0))
+        // Without the easing the larger gap comes first.
+        let plain = try needs(squad(levels: [young: 11, named(.D_L, "second"): 10, named(.D_R, "first"): 12,
+                                             named(.D_R, "second"): 10]))
+        #expect(plain.betterPlayers.map(\.slot) == [.D_L, .D_R] && plain.betterPlayers.allSatisfy { $0.easedBy == nil })
+    }
+    @Test func aPlayerOutOnLoanWhoWouldNotCountIsNotNamed() throws {
+        let away = named(.GK, "second")
+        // (a) Every attribute at 4: under the cover share.
+        let weak = try needs(squad(levels: [away: 4]) { if $0.name == away { $0.loanedTo = "Wallingford" } })
+        #expect(try #require(weak.moreDepth.first { $0.depth.slot == .GK }).returning == [])
+        // (b) His normal level with familiarity 14 at the goalkeeper position: not solid.
+        let notSolid = try needs(squad {
+            if $0.name == away { $0.loanedTo = "Wallingford"; $0.familiarity[.goalkeeper] = 14 }
+        })
+        #expect(try #require(notSolid.moreDepth.first { $0.depth.slot == .GK }).returning == [])
+    }
+    @Test func aRepeatedGoingEntryIsCountedOnce() throws {
+        let players = try squad()
+        let p = players[0]
+        let sell = Going(player: p.id, name: p.name, reason: .markedToSell)
+        let advised = Going(player: p.id, name: p.name, reason: .advisedToLeave)
+        let one = try needs(players, going: [sell])
+        let a = try needs(players, going: [advised, sell]), b = try needs(players, going: [sell, advised])
+        #expect(a.going == [sell] && b.going == [sell])
+        #expect(a == b && a == one)
+    }
     @Test func moreDepthCountsOnlyCoverThatStaysAndNamesWhoIsGoing() throws {
         let players = try squad()
         let second = try #require(players.first { $0.name == named(.D_R, "second") })

@@ -697,7 +697,8 @@ public struct EngineParameters: Sendable {
     /// A first choice this age or over is named with his age where a young player is compared with him
     /// (`Rival.isAgeNamed`).
     public var firstChoiceAgeNamedFrom: Parameter<Int>
-    /// Scouting calls a first choice weak when he rates under this share of the average of the outfield first choices.
+    /// Scouting calls a first choice weak when he rates at or under this share of the average of the outfield first choices
+    /// (a gap of 5% or more).
     public var scoutingWeakShare: Parameter<Double>
     /// The numbers behind a fixture's suggested importance.
     public var importanceRules: Parameter<ImportanceSuggestionRules>
