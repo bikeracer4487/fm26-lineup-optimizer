@@ -74,6 +74,16 @@ extension AppModel {
         hold(nil)
     }
 
+    /// Whether "Clear" has anything to clear: players are held.
+    public var canClearCandidates: Bool { scoutingPaste != nil }
+
+    /// Every held candidate's row for the tactic the Scouting screen shows, so all can be opened at once; none while
+    /// no candidates are judged.
+    public func allCandidateRowIDs(for chosen: UUID?) -> Set<PlayerID> {
+        guard case .ready(let report) = candidates(for: chosen) else { return [] }
+        return candidatesSheet(report, order: .today)?.rowIDs ?? []
+    }
+
     /// The tactic the Scouting screen shows for the owner's choice: that tactic while it is saved, else the primary.
     public func scoutingTacticShown(_ chosen: UUID?) -> UUID? {
         elevensTacticShown(chosen)

@@ -34,7 +34,7 @@ public enum MentoringEditing: Identifiable, Equatable, Sendable {
 /// a fixture being edited and the fixture whose suggested importance's reasons are shown, the Elevens screen's view,
 /// tactic and slot, the Player Removal screen's filter and the rows opened or closed, and the Training screen's tab,
 /// the squad its Mentoring tab shows and what that tab has open for editing, and the Scouting screen's tab, tactic,
-/// order and opened rows.
+/// order, opened rows and rest part.
 @MainActor @Observable public final class Navigation {
     public var screen: Screen?
     /// The fixture shown. While nil, or once it has left the plan, `MatchPresentation.initialFixture`.
@@ -64,12 +64,18 @@ public enum MentoringEditing: Identifiable, Equatable, Sendable {
     public var trainingView: TrainingView = .retraining
     public var mentoringSquad: Squad = .firstTeam
     public var mentoringEditing: MentoringEditing?
-    /// The Scouting screen's tab, its tactic (nil: the primary), the order of its candidates, and the candidates'
-    /// rows opened to show their other slots.
+    /// The Scouting screen's tab, its tactic (nil: the primary), the order of its candidates, the candidates' rows
+    /// opened to show their other slots, and whether the rest part is open.
     public var scoutingView: ScoutingView = .needs
     public var scoutingTacticID: UUID?
     public var scoutingOrder: CandidateOrder = .today
     public var scoutingOpen: Set<PlayerID> = []
+    public var scoutingRestOpen = false
+
+    /// Opens the candidate's row, or closes it when open.
+    public func toggleScoutingRow(_ id: PlayerID) {
+        if scoutingOpen.contains(id) { scoutingOpen.remove(id) } else { scoutingOpen.insert(id) }
+    }
 
     public init(screen: Screen? = .squad, matchFixture: FixtureID? = nil, matchSelection: PickSelection? = nil,
                 matchView: MatchView = .teamSheet, squadShown: Squad? = nil, squadSearch: String = "",

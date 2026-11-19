@@ -234,6 +234,154 @@ import LineupEngine
         #expect(t.model.candidatesSheet(report, order: .today) == nil)
     }
 
+    @Test func aNeedRowAndAFineSlotCarryTheirSlotsLine() throws {
+        let t = try ScoutingSetup.ready()
+        let needs = try ScoutingSetup.needs(t.model)
+        let sheet = ScoutingPresentation.needsSheet(needs, parameters: t.model.planParameters)
+        for row in sheet.betterPlayers + sheet.moreDepth { #expect(row.line == PitchLine(row.slot)) }
+        #expect(!sheet.fine.isEmpty)
+        #expect(sheet.fineTokens.map(\.slot) == sheet.fine)
+        for token in sheet.fineTokens {
+            #expect(token.slotText == token.slot.displayName)
+            #expect(token.line == PitchLine(token.slot))
+        }
+        #expect(ScoutingSlotToken(.GK).line == .goalkeeper)
+        #expect(ScoutingSlotToken(.D_L).slotText == "D L")
+    }
+
+    @Test func theRestPartIsMarkedAndCountedForTheLineItIsClosedBehind() throws {
+        let t = try ScoutingSetup.ready()
+        var players = try pasted().players
+        // He can play no slot, so he is in the rest.
+        for position in players[0].familiarity.keys { players[0].familiarity[position] = 1 }
+        let report = try judged(players, in: t.model)
+        let groups = report.groups(orderedBy: .today)
+        let sheet = ScoutingPresentation.candidatesSheet(report, order: .today, pasted: players.count, money: .weeklyPounds)
+        for (row, group) in zip(sheet.groups, groups) { #expect(row.isRest == (group.part == .rest)) }
+        let rest = sheet.groups.filter(\.isRest).flatMap(\.rows)
+        #expect(rest.contains { $0.id == players[0].id })
+        #expect(sheet.restLine == ScoutingPresentation.restLine(rest.count))
+        #expect(sheet.groups.contains { !$0.isRest }, "the parts before the rest are not closed")
+        for group in sheet.groups {
+            #expect(group.showsRows(restOpen: true))
+            #expect(group.showsRows(restOpen: false) == !group.isRest)
+        }
+
+        // With nobody in the rest there is no line.
+        let answering = report.candidates.filter { $0.part != .rest }.map(\.player)
+        let without = ScoutingPresentation.candidatesSheet(try judged(answering, in: t.model), order: .today,
+                                                           pasted: answering.count, money: .weeklyPounds)
+        #expect(!without.groups.contains { $0.isRest })
+        #expect(without.restLine == nil)
+        #expect(ScoutingPresentation.restLine(1) == "1 more player")
+        #expect(ScoutingPresentation.restLine(12) == "12 more players")
+    }
+
+    @Test func aRowsDetailsLeaveOutWhatThePasteDidNotCarry() throws {
+        let t = try ScoutingSetup.ready()
+        var players = try pasted().players
+        let index = try #require(players.firstIndex { $0.contractType != .outOfContract && $0.askingPrice != nil })
+        players[index].loanedTo = "Barnet"
+        let report = try judged(players, in: t.model)
+        let sheet = ScoutingPresentation.candidatesSheet(report, order: .today, pasted: players.count, money: .weeklyPounds)
+        let full = try #require(rows(sheet).first { $0.id == players[index].id })
+        let price = try #require(full.askingPrice)
+        #expect(full.detailsText == ["Age \(full.age)", full.positions, "Banbury United", "On loan at Barnet", price,
+                                     full.wage].joined(separator: " · "))
+
+        try ScoutingSetup.paste(t, paste: try Captures.u21TeamGrid, grids: try Captures.u21TeamGridGrids)
+        let bare = try #require(t.model.candidatesSheet(try ScoutingSetup.report(t.model), order: .today))
+        let plain = try #require(rows(bare).first { $0.club == nil && $0.onLoan == nil })
+        #expect(plain.detailsText == "Age \(plain.age) · \(plain.positions) · \(plain.wage)")
+    }
+
+    @Test func anInjuredCandidateIsStampedAndNoOtherIs() throws {
+        let t = try ScoutingSetup.ready()
+        var players = try pasted().players
+        for index in players.indices { players[index].isInjured = index == 0 }
+        let report = try judged(players, in: t.model)
+        let sheet = ScoutingPresentation.candidatesSheet(report, order: .today, pasted: players.count, money: .weeklyPounds)
+        let injured = try #require(rows(sheet).first { $0.id == players[0].id })
+        #expect(injured.stamps == [ElevensPresentation.injuredStamp])
+        #expect(rows(sheet).filter { $0.id != players[0].id }.allSatisfy { $0.stamps.isEmpty })
+    }
+
+    @Test func aRowOpensOnlyWhenThereIsMoreToShow() throws {
+        let t = try ScoutingSetup.ready()
+        var players = try pasted().players
+        for position in players[0].familiarity.keys { players[0].familiarity[position] = 1 }
+        let report = try judged(players, in: t.model)
+        let sheet = ScoutingPresentation.candidatesSheet(report, order: .today, pasted: players.count, money: .weeklyPounds)
+        // He plays no slot: one line today and a caution, which a closed row in the rest shows, so there is nothing
+        // to open.
+        let nowhere = try #require(rows(sheet).first { $0.id == players[0].id })
+        #expect(nowhere.todayLines.count == 1)
+        #expect(!nowhere.cautions.isEmpty)
+        #expect(!nowhere.opens(inRest: false))
+        #expect(!nowhere.opens(inRest: true))
+        // Other slots open a row anywhere.
+        let others = try #require(rows(sheet).first { !$0.otherSlots.isEmpty })
+        #expect(others.opens(inRest: false))
+        #expect(others.opens(inRest: true))
+        // In the rest, a second line today or a line for later opens a row with no other slots.
+        let alone = ScoutingCandidateRow(id: nowhere.id, name: nowhere.name, age: 20, positions: "D L", club: nil, onLoan: nil,
+                                         askingPrice: nil, wage: "£500 a week", isInjured: false, slotText: "D L",
+                                         todayLines: ["Below cover."], laterLines: [], cautions: [], otherSlots: [])
+        #expect(!alone.opens(inRest: true))
+        for more in [ScoutingCandidateRow(id: alone.id, name: alone.name, age: 20, positions: "D L", club: nil, onLoan: nil,
+                                          askingPrice: nil, wage: alone.wage, isInjured: false, slotText: "D L",
+                                          todayLines: ["Below cover.", "Not yet solid there."], laterLines: [],
+                                          cautions: [], otherSlots: []),
+                     ScoutingCandidateRow(id: alone.id, name: alone.name, age: 20, positions: "D L", club: nil, onLoan: nil,
+                                          askingPrice: nil, wage: alone.wage, isInjured: false, slotText: "D L",
+                                          todayLines: ["Below cover."], laterLines: ["Judged as he is today."],
+                                          cautions: [], otherSlots: [])] {
+            #expect(!more.opens(inRest: false))
+            #expect(more.opens(inRest: true))
+        }
+    }
+
+    @Test func aClosedRowInTheRestShowsOnlyItsFirstLineTodayAndOtherSlotsShowWhenOpen() {
+        let row = ScoutingCandidateRow(id: PlayerID(key: "fmrte:1"), name: "Kofi Mensah", age: 20, positions: "D L",
+                                       club: nil, onLoan: nil, askingPrice: nil, wage: "£500 a week", isInjured: false,
+                                       slotText: "D L", todayLines: ["Would start.", "Not yet solid there."],
+                                       laterLines: ["Could pass the first choice."], cautions: ["Controversy 18"],
+                                       otherSlots: ["Right back: below cover."])
+        let all = ScoutingRowLines(today: row.todayLines, later: row.laterLines, otherSlots: [])
+        #expect(row.linesShown(inRest: false, isOpen: false) == all)
+        #expect(row.linesShown(inRest: true, isOpen: false) == ScoutingRowLines(today: ["Would start."], later: [],
+                                                                                otherSlots: []))
+        let open = ScoutingRowLines(today: row.todayLines, later: row.laterLines, otherSlots: row.otherSlots)
+        #expect(row.linesShown(inRest: false, isOpen: true) == open)
+        #expect(row.linesShown(inRest: true, isOpen: true) == open)
+    }
+
+    @Test func everyRowCanBeOpenedAtOnce() throws {
+        let t = try ScoutingSetup.ready()
+        #expect(t.model.allCandidateRowIDs(for: nil).isEmpty, "nothing pasted")
+        try ScoutingSetup.paste(t)
+        let report = try ScoutingSetup.report(t.model)
+        let sheet = try #require(t.model.candidatesSheet(report, order: .today))
+        #expect(sheet.rowIDs == Set(report.candidates.map(\.id)))
+        #expect(sheet.rowIDs.count == 6)
+        #expect(t.model.allCandidateRowIDs(for: nil) == sheet.rowIDs)
+        t.model.clearCandidates()
+        #expect(t.model.allCandidateRowIDs(for: nil).isEmpty)
+    }
+
+    @Test func clearIsOfferedOnlyWhilePlayersAreHeld() throws {
+        let t = try ScoutingSetup.ready()
+        #expect(!t.model.canClearCandidates)
+        t.input.clipboard = ""
+        t.model.pasteCandidates()
+        #expect(t.model.scoutingPasteProblem != nil)
+        #expect(!t.model.canClearCandidates, "a refusal alone holds nobody")
+        try ScoutingSetup.paste(t)
+        #expect(t.model.canClearCandidates)
+        t.model.clearCandidates()
+        #expect(!t.model.canClearCandidates)
+    }
+
     // MARK: Labels
 
     @Test func theTabsAndLabelsArePlainWords() {
@@ -243,6 +391,16 @@ import LineupEngine
         #expect(ScoutingPresentation.clearButton == "Clear")
         #expect(ScoutingPresentation.nothingPasted == "Copy the rows of a search or a shortlist in FMRTE, then paste them here.")
         #expect(ScoutingPresentation.fineHeading == "Fine")
+        #expect(ScoutingPresentation.betterPlayersHeading == AdvisorText.betterPlayersHeading)
+        #expect(ScoutingPresentation.moreDepthHeading == AdvisorText.moreDepthHeading)
+        #expect(ScoutingPresentation.orderChoices.map(\.order) == [.today, .later])
+        #expect(ScoutingPresentation.orderChoices.map(\.title) == CandidateOrder.allCases.map(AdvisorText.name))
+        #expect(ScoutingPresentation.todayLabel == "Today")
+        #expect(ScoutingPresentation.laterLabel == "Later")
+        #expect(ScoutingPresentation.otherSlotsLabel == "Other slots")
+        #expect(ScoutingPresentation.ageText(19) == "Age 19")
+        #expect(ScoutingPresentation.restHelp(false) != ScoutingPresentation.restHelp(true))
+        #expect(ScoutingPresentation.rowHelp(false) != ScoutingPresentation.rowHelp(true))
     }
 
     @Test func theNavigationStartsOnTheNeedsForThePrimaryInTodaysOrder() {
@@ -251,5 +409,16 @@ import LineupEngine
         #expect(navigation.scoutingTacticID == nil)
         #expect(navigation.scoutingOrder == .today)
         #expect(navigation.scoutingOpen.isEmpty)
+        #expect(!navigation.scoutingRestOpen)
+    }
+
+    @Test func aRowIsOpenedAndClosedByItsKey() {
+        let navigation = Navigation()
+        let id = PlayerID(key: "fmrte:1")
+        navigation.toggleScoutingRow(id)
+        #expect(navigation.scoutingOpen == [id])
+        navigation.toggleScoutingRow(PlayerID(key: "fmrte:2"))
+        navigation.toggleScoutingRow(id)
+        #expect(navigation.scoutingOpen == [PlayerID(key: "fmrte:2")])
     }
 }

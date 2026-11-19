@@ -704,6 +704,28 @@ public enum Theme {
         public static let youngActionGap: CGFloat = 24
     }
 
+    // MARK: Scouting
+
+    public enum Scouting {
+        /// The space between the tabs' parts: the going line, the two lists of needs, the fine slots, and the parts of
+        /// the candidates' list.
+        public static let partGap: CGFloat = 32
+        /// The tabs are no wider than this, so a sentence stays near its slot or its name on a wide window.
+        public static let columnMaximumWidth: CGFloat = 940
+        /// A slot's token before its need's lines: the magnet and "AM C", with room after it.
+        public static let tokenColumn: CGFloat = 76
+        /// Between the fine slots' tokens.
+        public static let fineTokenGap: CGFloat = 20
+        /// The disclosure mark before a candidate's name; his lines sit in from it, under his name.
+        public static let disclosureColumn: CGFloat = Removal.disclosureColumn
+        /// "Today", "Later" and "Other slots" before a candidate's lines, room for the longest.
+        public static let labelColumn: CGFloat = 84
+        /// The most lines a candidate's name wraps to.
+        public static let nameLines = 2
+        /// Between a candidate's cautions on their row.
+        public static let cautionGap: CGFloat = 20
+    }
+
     // MARK: Columns
 
     /// Column widths for the tables on the board. The name and status columns share what a wider window gives.

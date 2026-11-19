@@ -133,6 +133,19 @@
 //                                              and the same with every row open, so a youth-contract row
 //                                              shows why he cannot be marked ("removal-young-open-…"),
 //                                              and in the narrow window's width ("removal-young-narrow-…").
+//                                              The Scouting screen ("scouting-…") is drawn on its Needs tab
+//                                              ("scouting-needs-…", and "scouting-needs-small-…" in the
+//                                              smallest window), with a U21 player on loan here and an outfield
+//                                              first choice marked to sell, so both are counted as going
+//                                              ("scouting-needs-going-…"), and with no squad
+//                                              ("scouting-notready-…"); its Candidates tab with nothing pasted
+//                                              ("scouting-candidates-empty-…"), holding the sample candidates,
+//                                              tall enough for every part ("scouting-candidates-…"), in the
+//                                              Later order ("scouting-candidates-later-…"), with every row and
+//                                              the rest open ("scouting-candidates-open-…"), in the smallest
+//                                              window ("scouting-candidates-small-…"), and after the sample's own
+//                                              U21s were pasted over them and refused
+//                                              ("scouting-candidates-refused-…").
 //                                              Every screen is drawn again in a narrow window, 800 by 700
 //                                              ("<screen>-narrow-…"), and Match Selection, Tactics, Fixtures
 //                                              and the advisor screens in the smallest window
@@ -202,6 +215,7 @@ enum SampleState {
     case differingSuggestion
     case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
     case arrowsRead, harmfulArrow, noInfluence, regrouping, spentGroup, endedGroup, youngPlayers
+    case candidates, refusedCandidates
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -245,6 +259,8 @@ enum SampleState {
         case .endedGroup: return try SampleData.modelWithEndedGroup(repositoryRoot: url)
         case .spentGroup: return try SampleData.modelWithSpentGroup(repositoryRoot: url)
         case .youngPlayers: return try SampleData.modelWithYoungPlayers(repositoryRoot: url)
+        case .candidates: return try SampleData.modelWithCandidates(repositoryRoot: url)
+        case .refusedCandidates: return try SampleData.modelWithRefusedCandidates(repositoryRoot: url)
         }
     } catch {
         fail("\(error)")
@@ -520,6 +536,44 @@ let narrowWindow = CGSize(width: 800, height: 700)
                              variant: "young-narrow", screens: [.removal])
 }
 
+/// The Scouting screen's two tabs: see the usage at the top.
+@MainActor func drawScouting(_ root: String, to directory: URL, size: CGSize) throws {
+    let small = Theme.Layout.minimumWindow
+    let tall = CGSize(width: size.width, height: size.height * 2)
+    // Tall enough for the fine slots and the evidence note under the needs.
+    let needsTall = CGSize(width: size.width, height: size.height * 1.6)
+    try ScreenPictures.write(model: sampleModel(root), to: directory, size: needsTall, variant: "needs",
+                             screens: [.scouting])
+    try ScreenPictures.write(model: sampleModel(root), to: directory, size: small, variant: "needs-small",
+                             screens: [.scouting])
+    // A U21 player on loan here, and an outfield first choice marked to sell, so both are counted as going.
+    let going = sampleModel(root, .loanee)
+    guard case .ready(let report) = going.adviceState,
+          let first = report.elevens.first.first(where: { $0.slot != .GK }) else {
+        fail("The sample's advice has no outfield first choice.")
+    }
+    going.setMark(.toSell, for: first.player)
+    try ScreenPictures.write(model: going, to: directory, size: needsTall, variant: "needs-going", screens: [.scouting])
+
+    let candidates = ScoutingStart(view: .candidates)
+    try ScreenPictures.write(model: sampleModel(root), to: directory, size: size, variant: "candidates-empty",
+                             screens: [.scouting], scoutingStart: candidates)
+    let held = sampleModel(root, .candidates)
+    try ScreenPictures.write(model: held, to: directory, size: tall, variant: "candidates", screens: [.scouting],
+                             scoutingStart: candidates)
+    try ScreenPictures.write(model: held, to: directory, size: tall, variant: "candidates-later", screens: [.scouting],
+                             scoutingStart: ScoutingStart(view: .candidates, order: .later))
+    try ScreenPictures.write(model: held, to: directory, size: CGSize(width: size.width, height: size.height * 3),
+                             variant: "candidates-open", screens: [.scouting],
+                             scoutingStart: ScoutingStart(view: .candidates, allOpen: true))
+    try ScreenPictures.write(model: held, to: directory, size: small, variant: "candidates-small", screens: [.scouting],
+                             scoutingStart: candidates)
+    try ScreenPictures.write(model: sampleModel(root, .refusedCandidates), to: directory, size: size,
+                             variant: "candidates-refused", screens: [.scouting], scoutingStart: candidates)
+    try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size, variant: "notready",
+                             screens: [.scouting])
+}
+
 /// Draws the pictures and returns the process's exit status.
 @MainActor func drawPictures(to path: String, sampleDataRoot: String?) -> Int32 {
     do {
@@ -538,7 +592,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
         if let root = sampleDataRoot {
             // The left back has the most reasons in the first fixture.
             try ScreenPictures.write(model: sampleModel(root), to: directory, size: size,
-                                     screens: Screen.allCases.filter { ![.tactics, .training, .fixtures].contains($0) },
+                                     screens: Screen.allCases.filter { ![.tactics, .training, .fixtures, .scouting].contains($0) },
                                      matchStart: MatchStart(slot: .D_L))
             // With an unsaved change, the left inside forward made a winger and selected, so the role menu,
             // "Remove", what he becomes and the marks for unsaved changes are all shown.
@@ -566,6 +620,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
             try drawRest(root, to: directory, size: size)
             try drawTraining(root, to: directory, size: size)
             try drawRemoval(root, to: directory, size: size)
+            try drawScouting(root, to: directory, size: size)
         } else {
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size)
         }

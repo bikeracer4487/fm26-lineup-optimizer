@@ -33,10 +33,12 @@ public struct RootView: View {
     ///   - fixturesStart: the fixture whose suggestion's reasons the Fixtures screen opens with shown.
     ///   - trainingStart: the tab, the Mentoring tab's squad and what it has open for editing, the Training screen
     ///     opens with.
+    ///   - scoutingStart: the tab and the order the Scouting screen opens with, and whether every candidate's row and
+    ///     the rest part are open.
     public init(model: AppModel, showing screen: Screen = .squad, tacticSlot: TacticSlot? = nil,
                 matchStart: MatchStart = MatchStart(), elevensStart: ElevensStart = ElevensStart(),
                 removalStart: RemovalStart = RemovalStart(), fixturesStart: FixturesStart = FixturesStart(),
-                trainingStart: TrainingStart = TrainingStart()) {
+                trainingStart: TrainingStart = TrainingStart(), scoutingStart: ScoutingStart = ScoutingStart()) {
         self.model = model
         self.tacticSlot = tacticSlot
         var selection: PickSelection?
@@ -57,6 +59,12 @@ public struct RootView: View {
         navigation.trainingView = trainingStart.view
         navigation.mentoringSquad = trainingStart.squad
         navigation.mentoringEditing = trainingStart.editing
+        navigation.scoutingView = scoutingStart.view
+        navigation.scoutingOrder = scoutingStart.order
+        if scoutingStart.allOpen {
+            navigation.scoutingOpen = model.allCandidateRowIDs(for: nil)
+            navigation.scoutingRestOpen = true
+        }
         _navigation = State(initialValue: navigation)
     }
 
