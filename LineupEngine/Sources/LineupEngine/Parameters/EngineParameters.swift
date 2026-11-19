@@ -697,6 +697,8 @@ public struct EngineParameters: Sendable {
     /// A first choice this age or over is named with his age where a young player is compared with him
     /// (`Rival.isAgeNamed`).
     public var firstChoiceAgeNamedFrom: Parameter<Int>
+    /// Scouting calls a first choice weak when he rates under this share of the average of the outfield first choices.
+    public var scoutingWeakShare: Parameter<Double>
     /// The numbers behind a fixture's suggested importance.
     public var importanceRules: Parameter<ImportanceSuggestionRules>
     /// What each attribute is worth, per point, when weighing what an arrow gives its target.
@@ -1124,6 +1126,11 @@ public struct EngineParameters: Sendable {
                 30, .derived,
                 source: "the young players' development design, section 6: a first choice of 30 or over is named with his "
                     + "age and nothing more, since decline is not measured"),
+            scoutingWeakShare: Parameter(
+                0.95, .derived,
+                source: "the scouting design: a first choice 5% or more under the average of the outfield first choices is weak; "
+                    + "the tool's own estimate, with no test behind it. On the captured first team's 4-2-3-1 the ten outfield "
+                    + "first choices rate from 5.9% under to 9.2% over their average, and the line marks three"),
             importanceRules: Parameter(
                 ImportanceSuggestionRules(
                     leagueBase: 80, leagueTitleRaceBase: 100, leagueMidTableBase: 60,

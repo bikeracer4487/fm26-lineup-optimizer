@@ -857,6 +857,21 @@ import Testing
         #expect(problems { $0.professionalismHoldsBackBelow = Parameter(21, .derived, source: "test") }.isEmpty)
     }
 
+    @Test func theScoutingWeakShareIsListedAndItsProblemsReported() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        #expect(listed["scoutingWeakShare"]?.evidence == .derived)
+        #expect(EngineParameters.fm27.scoutingWeakShare.value == 0.95)
+        func problems(_ value: Double) -> [String] {
+            var q = EngineParameters.fm27
+            q.scoutingWeakShare = Parameter(value, .derived, source: "test")
+            return FitnessModel.problems(in: q)
+        }
+        #expect(problems(0) == ["scoutingWeakShare is 0.0, not between 0 and 1"])
+        #expect(problems(1) == ["scoutingWeakShare is 1.0, not between 0 and 1"])
+        #expect(problems(.nan) == ["scoutingWeakShare is nan, not between 0 and 1"])
+        #expect(problems(0.95).isEmpty)
+    }
+
     @Test func theRatingOffsetIsListedWithEvidenceAndSource() {
         let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
         #expect(listed["ratingAbilityOffset"]?.evidence == .derived)

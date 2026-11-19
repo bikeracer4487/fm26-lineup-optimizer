@@ -310,6 +310,10 @@ public enum FitnessModel {
         if !(1...21).contains(holdsBack) {
             found.append("professionalismHoldsBackBelow is \(holdsBack), not between 1 and 21")
         }
+        let weakShare = parameters.scoutingWeakShare.value
+        if !(weakShare.isFinite && weakShare > 0 && weakShare < 1) {
+            found.append("scoutingWeakShare is \(weakShare), not between 0 and 1")
+        }
         let namedFrom = parameters.firstChoiceAgeNamedFrom.value
         if namedFrom < 1 {
             found.append("firstChoiceAgeNamedFrom is \(namedFrom), not 1 or more")
