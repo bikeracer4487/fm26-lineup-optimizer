@@ -35,10 +35,11 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        the mentoring groups suggested and the players left without one.
        advise also prints a Scouting part after Depth: the needs of the squad that stays, with players on loan to the club
        and those Player Removal advises to move on counted as gone. The command line takes no marks to sell or loan out.
-       scout prints advise's Scouting part, then the players read from --candidates (those the owner already holds are
-       left out) in groups: those who answer a need today, those who could answer one later, those who would start
-       where there is no need, and the rest, each with how he would stand today, his reach, cautions and other slots.
-       Wages and asking prices are in the candidates' paste's own currency and period.
+       scout prints only the heading advise prints (tactic, day, squads read and their warnings) and advise's Scouting
+       part, then the players read from --candidates (those the owner already holds are left out) in groups: those
+       who answer a need today, those who could answer one later, those who would start where there is no need, and
+       the rest, each with how he would stand today, his reach, cautions and other slots. With every pasted player
+       already held it says so and exits with a failure. Wages and asking prices are in the candidates' paste's own currency and period.
        --standings is a JSON object from a player's key to {"standing": "teamLeader|highlyInfluential|influential|others",
        "socialGroup"?: "core|others|secondary:<name>"}: the hierarchy as the game's Dynamics screen shows it. Without it
        nobody stands above Others and no group is suggested. The command line takes no arrow readings: every arrow it
@@ -317,40 +318,44 @@ do {
                                    advisedToLeave: advisors.removal.advisedToLeave)
         let scouting = try Scouting.needs(tactic: tactic, players: players, ownClub: ownClub, going: going, retraining: [],
                                           catalog: catalog, profile: profile, parameters: parameters)
-        var suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]?
-        if let fixtures {
-            // The planner's tiers: injured players left out, as they cannot play.
-            let tiers = try SquadTiers.compute(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
-                                               profile: profile, parameters: parameters)
-            suggestions = try fixtures.sorted { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }.map { fixture in
-                (fixture, try ImportanceAdvisor.suggest(for: fixture, among: fixtures, confirmed: history, players: players,
-                                                        tiers: tiers, situation: options.leagueSituation,
-                                                        parameters: parameters))
+        if options.command == .advise {
+            var suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]?
+            if let fixtures {
+                // The planner's tiers: injured players left out, as they cannot play.
+                let tiers = try SquadTiers.compute(tactic: tactic, players: players, ownClub: ownClub, catalog: catalog,
+                                                   profile: profile, parameters: parameters)
+                suggestions = try fixtures.sorted { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }.map { fixture in
+                    (fixture, try ImportanceAdvisor.suggest(for: fixture, among: fixtures, confirmed: history, players: players,
+                                                            tiers: tiers, situation: options.leagueSituation,
+                                                            parameters: parameters))
+                }
             }
-        }
-        let dynamics = Dictionary(uniqueKeysWithValues: (standings ?? [:]).map { (PlayerID(key: $0.key), $0.value) })
-        let names = Dictionary(players.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
-        // A mentoring error for one squad stops that squad's advice only.
-        let mentoring = imports.map { imported in
-            let request = MentoringRequest(
-                squad: imported.squad, players: players, ownClub: ownClub, dynamics: dynamics, dynamicsUpdatedOn: nil,
-                groups: [], readings: [:], arrows: [], names: names, leaving: advisors.removal.advisedToLeave,
-                asOf: options.asOf!)
-            return (squad: imported.squad, result: Result { try Mentoring.report(request, parameters: parameters) })
-        }
-        output = Report.render(header, advice: Report.Advice(
-            asOf: options.asOf!, profile: profile, intensity: options.settings.trainingIntensity, history: history,
-            elevens: advisors.elevens, depth: advisors.depth, rest: advisors.rest, training: advisors.training,
-            removal: advisors.removal, scouting: scouting, suggestions: suggestions, mentoring: mentoring),
-            parameters: parameters)
-        if options.command == .scout {
+            let dynamics = Dictionary(uniqueKeysWithValues: (standings ?? [:]).map { (PlayerID(key: $0.key), $0.value) })
+            let names = Dictionary(players.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+            // A mentoring error for one squad stops that squad's advice only.
+            let mentoring = imports.map { imported in
+                let request = MentoringRequest(
+                    squad: imported.squad, players: players, ownClub: ownClub, dynamics: dynamics, dynamicsUpdatedOn: nil,
+                    groups: [], readings: [:], arrows: [], names: names, leaving: advisors.removal.advisedToLeave,
+                    asOf: options.asOf!)
+                return (squad: imported.squad, result: Result { try Mentoring.report(request, parameters: parameters) })
+            }
+            output = Report.render(header, advice: Report.Advice(
+                asOf: options.asOf!, profile: profile, intensity: options.settings.trainingIntensity, history: history,
+                elevens: advisors.elevens, depth: advisors.depth, rest: advisors.rest, training: advisors.training,
+                removal: advisors.removal, scouting: scouting, suggestions: suggestions, mentoring: mentoring),
+                parameters: parameters)
+        } else {
             // The paste is read as a first-team paste with the same grids; its players are judged, not added to the book.
             let paste = try Importer.importPlayers(clipboard: readText(options.candidates!), fmrteConfig: grids, squad: .firstTeam)
             let report = try Scouting.candidates(pasted: paste.players, held: players, ownClub: ownClub, tactic: tactic,
                                                  needs: scouting, catalog: catalog, profile: profile, parameters: parameters)
+            output = Report.render(header, scouting: scouting, asOf: options.asOf!, profile: profile,
+                                   intensity: options.settings.trainingIntensity, history: history, parameters: parameters)
             if report.candidates.isEmpty && !report.leftOut.isEmpty {
-                print(output + AdvisorText.playersRead(paste.players.count) + "\n"
-                      + AdvisorText.everyPastedPlayerIsYours, terminator: "\n")
+                // Nobody to judge: say so after the needs, each on its own line, and fail.
+                print(output + ["", "=== Candidates ===", AdvisorText.playersRead(paste.players.count),
+                                AdvisorText.everyPastedPlayerIsYours].joined(separator: "\n"))
                 exit(1)
             }
             output += Report.candidates(report, read: paste.players.count, money: paste.money).joined(separator: "\n") + "\n"

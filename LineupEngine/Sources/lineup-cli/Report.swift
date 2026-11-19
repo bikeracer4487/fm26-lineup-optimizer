@@ -95,13 +95,29 @@ enum Report {
         let mentoring: [(squad: Squad, result: Result<MentoringReport, Error>)]
     }
 
+    /// The lines at the top of the advice and the scouting report: tactic, day, the import summary and its warnings, the
+    /// rating profile, the training intensity and the confirmed lineups.
+    private static func heading(_ header: Header, asOf: Day, profile: RatingProfile, intensity: TrainingIntensity,
+                                history: [ConfirmedLineup]) -> [String] {
+        var out = ["Tactic: \(header.tactic.name)   Advice as of \(asOf.iso)", ""]
+        out += summary(header)
+        out.append("Rating profile: \(profile.name)")
+        out.append("Training \(intensity.rawValue) (for rest estimates)")
+        out += confirmed(history, book: header.book)
+        return out
+    }
+
+    /// What `scout` prints before the candidates: the heading and the Scouting part, as `advise` prints them.
+    static func render(_ header: Header, scouting needs: ScoutingNeeds, asOf: Day, profile: RatingProfile,
+                       intensity: TrainingIntensity, history: [ConfirmedLineup], parameters: EngineParameters) -> String {
+        let out = heading(header, asOf: asOf, profile: profile, intensity: intensity, history: history)
+            + scouting(needs, parameters: parameters)
+        return out.joined(separator: "\n") + "\n"
+    }
+
     /// The import summary, then each advisor's report under its heading.
     static func render(_ header: Header, advice: Advice, parameters: EngineParameters) -> String {
-        var out = ["Tactic: \(header.tactic.name)   Advice as of \(advice.asOf.iso)", ""]
-        out += summary(header)
-        out.append("Rating profile: \(advice.profile.name)")
-        out.append("Training \(advice.intensity.rawValue) (for rest estimates)")
-        out += confirmed(advice.history, book: header.book)
+        var out = heading(header, asOf: advice.asOf, profile: advice.profile, intensity: advice.intensity, history: advice.history)
         let squadOf = Dictionary(header.book.allPlayers.map { ($0.id, $0.squad) }, uniquingKeysWith: { first, _ in first })
 
         out += eleven("First XI", advice.elevens.first, average: advice.elevens.firstAverage,
