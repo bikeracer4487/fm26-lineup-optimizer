@@ -268,6 +268,22 @@ import Testing
         #expect(none.first == nil && none.second == nil && none.firstEstimate == nil)
     }
 
+    /// A player who need not be in the squad gets what `outlooks` gives a squad player with his numbers.
+    @Test func slotOutlookForAPlayerIsWhatOutlooksGivesASquadPlayer() throws {
+        let rising = player("Rising", age: 20, current: 100, potential: 140)
+        let old = player("Old", age: 28, current: 100, potential: 100)
+        let young = player("Young", age: 18, potential: 140, slots: [.D_L])
+        let t = tiers(first: [.D_L: rising], second: [.D_L: old],
+                      ratings: [(rising, .D_L, 85), (old, .D_L, 70), (young, .D_L, 60)])
+        let squad = [rising, old, young]
+        let row = try #require(slot(try outlooks(squad, t)[young.id], .D_L))
+        let rivals = try Development.rivals(at: .D_L, tiers: t, squad: squad, ownClub: "Oxford City", parameters: parameters)
+        let estimate = try Reach.estimate(for: young, parameters: parameters)
+        let built = Development.slotOutlook(for: young, estimate: estimate, rating: 60, at: .D_L, rivals: rivals,
+                                            parameters: parameters)
+        #expect(built == row)
+    }
+
     // MARK: Bands
 
     @Test func eachBand() throws {

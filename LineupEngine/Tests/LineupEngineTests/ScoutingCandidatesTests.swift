@@ -166,4 +166,117 @@ import Testing
             try Scouting.cautions(for: c, parameters: .fm27)
         }
     }
+
+    // MARK: Where a candidate could reach, and the list
+
+    func report(_ pasted: [Player], players: [Player], going: [Going] = []) throws -> CandidatesReport {
+        try Scouting.candidates(pasted: pasted, held: players, ownClub: "Oxford City", tactic: tactic,
+                                       needs: needs(players, going: going), catalog: catalog, profile: profile,
+                                       parameters: .fm27)
+    }
+    @Test func aCandidateOfTwentyThreeHasALaterAndOneOfTwentyFourHasNone() throws {
+        let players = try PlannerFixture.squad()
+        let young = try #require(report([candidate(.D_L, level: 12) { $0.age = 23; $0.potentialAbility = 160 }], players: players).candidates.first)
+        #expect(young.outlook != nil && young.slots[0].later != nil && young.outlook?.best?.slot == .D_L)
+        let older = try #require(report([candidate(.D_L, level: 12) { $0.age = 24; $0.potentialAbility = 160 }], players: players).candidates.first)
+        #expect(older.outlook == nil && older.slots[0].later == nil && !older.isAgeNamed)
+        #expect(try #require(report([candidate(.D_L, level: 12) { $0.age = 30 }], players: players).candidates.first).isAgeNamed)
+    }
+    /// His outlook at the slot is what a squad player with his numbers would get there.
+    @Test func theLaterIsTheOutlookCodesOwn() throws {
+        let players = try PlannerFixture.squad()
+        let c = candidate(.D_L, level: 12) { $0.age = 19; $0.potentialAbility = 190 }
+        let slot = try #require(report([c], players: players).candidates.first?.slots.first)
+        let later = try #require(slot.later)
+        #expect(later.level == .couldPassFirst && later.firstChoice?.name == PlannerFixture.name(.D_L, "first"))
+        #expect(later.rating == slot.rating && later.reachRating > slot.rating)
+        let capped = candidate(.D_L, level: 4) { $0.age = 19; $0.potentialAbility = 101 }
+        #expect(try #require(report([capped], players: players).candidates.first?.slots.first?.later).level == .markedlyLower)
+    }
+    @Test func aFirstChoiceWhoIsDevelopingIsComparedAtHisOwnReach() throws {
+        let first = PlannerFixture.name(.D_L, "first")
+        let players = try PlannerFixture.squad().map { p in var p = p; if p.name == first { p.age = 19; p.potentialAbility = 190 }; return p }
+        let c = candidate(.D_L, level: 13) { $0.age = 22; $0.potentialAbility = 110 }
+        let rival = try #require(report([c], players: players).candidates.first?.slots.first?.later?.firstChoice)
+        #expect(rival.compared > rival.rating)
+    }
+    @Test func theHeadlineSlotFollowsItsRule() throws {
+        // Weak left back (a better-player need) and no second right back (a depth need).
+        let players = try squadWithAWeakLeftBack().filter { $0.name != PlannerFixture.name(.D_R, "second") }
+        func headline(_ c: Player) throws -> (SlotID?, NeedAnswer?, CandidatePart) {
+            let r = try #require(report([c], players: players).candidates.first); return (r.headline, r.headlineAnswer, r.part)
+        }
+        #expect(try headline(candidate(.D_L, level: 14, also: [.D_R: 20])) == (.D_L, .betterPlayerToday, .answersToday))
+        #expect(try headline(candidate(.D_R, level: 12)) == (.D_R, .moreDepth, .answersToday))
+        // Under the first choice at 12 today, and expected to pass him.
+        let prospect = candidate(.D_L, level: 11) { $0.age = 18; $0.potentialAbility = 190 }
+        #expect(try headline(prospect) == (.D_L, .betterPlayerLater, .answersLater))
+        #expect(try headline(candidate(.AM_C, level: 15)) == (.AM_C, nil, .wouldStartElsewhere))
+        #expect(try headline(candidate(.AM_C, level: 13)) == (.AM_C, nil, .rest))
+        let nowhere = Player.fixture(name: "Nowhere", club: "Wrexham")
+        #expect(try headline(nowhere) == (nil, nil, .rest))
+    }
+    @Test func theGroupsComeInTheirOrderWithEachCandidateOnce() throws {
+        let players = try squadWithAWeakLeftBack().filter { $0.name != PlannerFixture.name(.D_R, "second") }
+        func c(_ name: String, _ slot: SlotID, _ level: Int, _ edit: @escaping (inout Player) -> Void = { _ in }) -> Player {
+            candidate(slot, level: level) { $0.name = name; $0.id = PlayerID(key: name); edit(&$0) }
+        }
+        let pasted = [c("rest", .AM_C, 13), c("elsewhere", .AM_C, 15), c("later", .D_L, 11) { $0.age = 18; $0.potentialAbility = 190 },
+                      c("depth", .D_R, 12), c("better b", .D_L, 14), c("better a", .D_L, 15)]
+        let groups = try report(pasted, players: players).groups(orderedBy: .today)
+        #expect(groups.map(\.part) == [.answersToday, .answersToday, .answersLater, .wouldStartElsewhere, .rest])
+        #expect(groups.map(\.slot) == [.D_L, .D_R, .D_L, nil, nil])
+        #expect(groups.map(\.answer) == [.betterPlayerToday, .moreDepth, .betterPlayerLater, nil, nil])
+        #expect(groups[0].candidates.map(\.player.name) == ["better a", "better b"])
+        #expect(groups.flatMap(\.candidates).count == 6)
+    }
+    @Test func theLaterOrderRanksByReachInsideAGroupAndMovesNobodyBetweenGroups() throws {
+        let players = try squadWithAWeakLeftBack()
+        let now = candidate(.D_L, level: 15) { $0.name = "now"; $0.id = PlayerID(key: "now"); $0.age = 28 }
+        let grower = candidate(.D_L, level: 14) { $0.name = "grower"; $0.id = PlayerID(key: "grower"); $0.age = 19; $0.potentialAbility = 190 }
+        let r = try report([now, grower], players: players)
+        #expect(r.groups(orderedBy: .today).first?.candidates.map(\.player.name) == ["now", "grower"])
+        #expect(r.groups(orderedBy: .later).first?.candidates.map(\.player.name) == ["grower", "now"])
+        #expect(r.groups(orderedBy: .later).map(\.part) == r.groups(orderedBy: .today).map(\.part))
+    }
+    @Test func heldPlayersAreLeftOutAndNamed() throws {
+        let players = try PlannerFixture.squad()
+        let mine = candidate(.D_L, level: 14) { $0.name = "Mine"; $0.id = PlayerID(key: "mine"); $0.club = "Oxford City" }
+        let r = try report([mine, candidate(.D_L, level: 14)], players: players)
+        #expect(r.leftOut == ["Mine"] && r.candidates.map(\.player.name) == ["Candidate"])
+    }
+    @Test func twoPastedNamesakesAreBothJudged() throws {
+        let a = candidate(.D_L, level: 14) { $0.id = PlayerID(key: "candidate#120") }
+        let b = candidate(.D_L, level: 13) { $0.id = PlayerID(key: "candidate#130"); $0.potentialAbility = 130 }
+        let r = try report([a, b], players: PlannerFixture.squad())
+        #expect(r.candidates.count == 2 && Set(r.candidates.map(\.id)).count == 2)
+        #expect(r.groups(orderedBy: .today).flatMap(\.candidates).count == 2)
+    }
+    @Test func atASlotWithNoFirstChoiceTheReachIsSetAgainstTheWeakLine() throws {
+        let players = try firstElevenWithout(.D_L)
+        let grower = candidate(.D_L, level: 12) { $0.age = 19; $0.potentialAbility = 190 }
+        let r = try #require(report([grower], players: players).candidates.first)
+        #expect(r.slots[0].later?.level == nil && r.reachClearsWeakLine == true)
+        let capped = candidate(.D_L, level: 4) { $0.age = 19; $0.potentialAbility = 101 }
+        #expect(try #require(report([capped], players: players).candidates.first).reachClearsWeakLine == false)
+    }
+    @Test func theSameInputsGiveTheSameReport() throws {
+        let players = try squadWithAWeakLeftBack()
+        let pasted = [candidate(.D_L, level: 14), candidate(.AM_C, level: 15) { $0.name = "B"; $0.id = PlayerID(key: "b") }]
+        #expect(try report(pasted, players: players) == (try report(pasted, players: players.reversed())))
+    }
+    @Test func theLastTwoGroupsAreRankedByMarginAndTiesFallToTheKey() throws {
+        let players = try PlannerFixture.squad()
+        func c(_ name: String, _ level: Int) -> Player {
+            candidate(.AM_C, level: level) { $0.name = name; $0.id = PlayerID(key: name) }
+        }
+        let nowhere = Player.fixture(name: "Nowhere", club: "Wrexham")
+        let pasted = [nowhere, c("b", 13), c("a", 13), c("far", 15), c("near", 14), c("low", 12)]
+        for order in CandidateOrder.allCases {
+            let groups = try report(pasted, players: players).groups(orderedBy: order)
+            #expect(groups.map(\.part) == [.wouldStartElsewhere, .rest])
+            #expect(groups[0].candidates.map(\.player.name) == ["far", "near"])
+            #expect(groups[1].candidates.map(\.player.name) == ["a", "b", "low", "Nowhere"])
+        }
+    }
 }

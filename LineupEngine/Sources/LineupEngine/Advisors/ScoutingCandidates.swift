@@ -23,7 +23,7 @@ public struct CandidateSlot: Equatable, Sendable {
     /// He would start at a slot with a nobody or weak need and is himself under the weak line: his own gap, worked
     /// out as the need's is (by ability at the goalkeeper's slot).
     public let stillWeakBy: Double?
-    /// Task 4 fills this in; nil here.
+    /// His reach at the slot, when he is `developingUpToAge` or under; nil otherwise.
     public let later: SlotOutlook?
     /// `betterPlayerToday`: a better-player need at the slot where he would start. `moreDepth`: a depth need at the
     /// slot where Depth would count him as cover (solid, and at or over `depthCoverShare` of the first choice's rating,
@@ -39,6 +39,7 @@ public struct CandidateCaution: Equatable, Sendable {
 
 extension Scouting {
     private static let candidateNoise = 1e-9
+    private static let levelOrder = CandidateLevel.allCases
 
     /// Whether a pasted player is one the owner holds: both keys are FMRTE ids and equal; or his club or the club he
     /// is loaned to is `ownClub`; or a held player has the same normalised name, age and potential ability.
@@ -156,5 +157,213 @@ extension Scouting {
             found.append(CandidateCaution(attribute: .professionalism, value: professionalism))
         }
         return found
+    }
+}
+
+// MARK: The list
+
+public enum CandidatePart: String, CaseIterable, Sendable { case answersToday, answersLater, wouldStartElsewhere, rest }
+public enum CandidateOrder: String, CaseIterable, Sendable { case today, later }
+
+public struct Candidate: Equatable, Sendable, Identifiable {
+    public var id: PlayerID { player.id }
+    /// As pasted.
+    public let player: Player
+    /// The slots he can play, in the tactic's order; each has `later` when he is `developingUpToAge` or under.
+    public let slots: [CandidateSlot]
+    /// nil when he can play no slot of the tactic.
+    public let headline: SlotID?
+    /// The need his headline slot answers; nil when it answers none.
+    public let headlineAnswer: NeedAnswer?
+    public let part: CandidatePart
+    /// `developingUpToAge` or under: his estimate, his slots' outlooks, and `best` his headline slot's when it has
+    /// a level, so `AdvisorText.reachLine`, `reachWorking` and `standing` read as they do for a squad player.
+    public let outlook: Outlook?
+    /// At a headline slot with no first choice, for a player with an outlook: whether his reach rating there clears
+    /// the weak line. nil otherwise.
+    public let reachClearsWeakLine: Bool?
+    /// He is at or over `firstChoiceAgeNamedFrom`.
+    public let isAgeNamed: Bool
+    public let cautions: [CandidateCaution]
+    public let basis: Evidence
+
+    var headlineSlot: CandidateSlot? { headline.flatMap { slot in slots.first { $0.slot == slot } } }
+}
+
+public struct CandidateGroup: Equatable, Sendable {
+    public let part: CandidatePart
+    /// nil for `wouldStartElsewhere` and `rest`, which are one group each.
+    public let slot: SlotID?
+    public let answer: NeedAnswer?
+    public let candidates: [Candidate]
+}
+
+public struct CandidatesReport: Equatable, Sendable {
+    /// In paste order, without the players already held.
+    public let candidates: [Candidate]
+    /// The names of the pasted players already held, in paste order.
+    public let leftOut: [String]
+    let betterPlayerSlots: [SlotID]
+    let moreDepthSlots: [SlotID]
+
+    /// The groups in order, without empty ones.
+    public func groups(orderedBy order: CandidateOrder) -> [CandidateGroup] {
+        func members(_ part: CandidatePart, _ slot: SlotID?, _ answer: NeedAnswer?) -> [Candidate] {
+            candidates.filter {
+                $0.part == part && $0.headlineAnswer == answer && (slot == nil || $0.headline == slot)
+            }
+        }
+        var found: [CandidateGroup] = []
+        func add(_ part: CandidatePart, _ slot: SlotID?, _ answer: NeedAnswer?) {
+            let list = members(part, slot, answer)
+            guard !list.isEmpty else { return }
+            found.append(CandidateGroup(part: part, slot: slot, answer: answer,
+                                        candidates: Self.sorted(list, part: part, order: order)))
+        }
+        for slot in betterPlayerSlots { add(.answersToday, slot, .betterPlayerToday) }
+        for slot in moreDepthSlots { add(.answersToday, slot, .moreDepth) }
+        for slot in betterPlayerSlots { add(.answersLater, slot, .betterPlayerLater) }
+        add(.wouldStartElsewhere, nil, nil)
+        add(.rest, nil, nil)
+        return found
+    }
+
+    private static let noise = 1e-9
+
+    /// `value` greatest first, a nil value counting as the greatest; the key breaks every tie.
+    private static func sorted(_ list: [Candidate], part: CandidatePart, order: CandidateOrder) -> [Candidate] {
+        func value(_ c: Candidate) -> Double? {
+            guard let slot = c.headlineSlot else { return -.infinity }
+            switch part {
+            case .wouldStartElsewhere, .rest:
+                return slot.marginOverFirst
+            case .answersToday, .answersLater:
+                switch order {
+                case .today: return slot.rating
+                case .later: return slot.later?.reachRating ?? slot.rating
+                }
+            }
+        }
+        return list.sorted { a, b in
+            let x = value(a), y = value(b)
+            switch (x, y) {
+            case (nil, nil): break
+            case (nil, _?): return true
+            case (_?, nil): return false
+            case (let x?, let y?):
+                if abs(x - y) > noise { return x > y }
+            }
+            return a.player.id.key < b.player.id.key
+        }
+    }
+}
+
+extension Scouting {
+    /// Throws what `slotsToday`, `cautions` and `Reach.estimate` throw.
+    public static func candidates(pasted: [Player], held: [Player], ownClub: String?, tactic: Tactic,
+                                  needs: ScoutingNeeds, catalog: RoleCatalog, profile: RatingProfile,
+                                  parameters: EngineParameters) throws -> CandidatesReport {
+        let goingIDs = Set(needs.going.map(\.player))
+        let staying = held.filter { !goingIDs.contains($0.id) }
+        let assignments = try tactic.assignments(catalog: catalog)
+        let offset = parameters.ratingAbilityOffset.value
+        let weakShare = parameters.scoutingWeakShare.value
+        let betterSlots = needs.betterPlayers.map(\.slot)
+        let depthSlots = needs.moreDepth.map(\.depth.slot)
+
+        var found: [Candidate] = []
+        var leftOut: [String] = []
+        for player in pasted {
+            if isHeld(player, among: held, ownClub: ownClub) { leftOut.append(player.name); continue }
+            var slots = try slotsToday(for: player, tactic: tactic, needs: needs, squad: staying, ownClub: ownClub,
+                                       catalog: catalog, profile: profile, parameters: parameters)
+            var estimate: ReachEstimate?
+            if player.age <= parameters.developingUpToAge.value, player.currentAbility > 0 {
+                let reach = try Reach.estimate(for: player, parameters: parameters)
+                estimate = reach
+                slots = try slots.map { slot in
+                    let rivals = try Development.rivals(at: slot.slot, tiers: needs.elevens.tiers, squad: staying,
+                                                        ownClub: ownClub, parameters: parameters)
+                    let later = Development.slotOutlook(for: player, estimate: reach, rating: slot.rating, at: slot.slot,
+                                                        rivals: rivals, parameters: parameters)
+                    var answers = slot.answers
+                    if betterSlots.contains(slot.slot), later.level == .couldPassFirst { answers.insert(.betterPlayerLater) }
+                    return CandidateSlot(
+                        slot: slot.slot, rating: slot.rating, ipFamiliarity: slot.ipFamiliarity,
+                        oopFamiliarity: slot.oopFamiliarity, isSolid: slot.isSolid, level: slot.level,
+                        firstChoice: slot.firstChoice, secondChoice: slot.secondChoice,
+                        marginOverFirst: slot.marginOverFirst, stillWeakBy: slot.stillWeakBy, later: later,
+                        answers: answers)
+                }
+            }
+
+            // The headline slot and the answer it gives.
+            var headline: CandidateSlot?
+            var headlineAnswer: NeedAnswer?
+            func first(in order: [SlotID], answering answer: NeedAnswer) -> CandidateSlot? {
+                for slot in order { if let s = slots.first(where: { $0.slot == slot }), s.answers.contains(answer) { return s } }
+                return nil
+            }
+            if let s = first(in: betterSlots, answering: .betterPlayerToday) {
+                (headline, headlineAnswer) = (s, .betterPlayerToday)
+            } else if let s = first(in: depthSlots, answering: .moreDepth) {
+                (headline, headlineAnswer) = (s, .moreDepth)
+            } else if let s = first(in: betterSlots, answering: .betterPlayerLater) {
+                (headline, headlineAnswer) = (s, .betterPlayerLater)
+            } else {
+                for s in slots {
+                    guard let current = headline else { headline = s; continue }
+                    let a = levelOrder.firstIndex(of: s.level)!, b = levelOrder.firstIndex(of: current.level)!
+                    if a != b { if a < b { headline = s }; continue }
+                    // Greatest margin; none counts as greatest. An earlier slot wins a tie.
+                    switch (s.marginOverFirst, current.marginOverFirst) {
+                    case (nil, nil): break
+                    case (nil, _?): headline = s
+                    case (_?, nil): break
+                    case (let x?, let y?): if x > y + candidateNoise { headline = s }
+                    }
+                }
+            }
+            let part: CandidatePart
+            switch headlineAnswer {
+            case .betterPlayerToday?, .moreDepth?: part = .answersToday
+            case .betterPlayerLater?: part = .answersLater
+            case nil: part = headline?.level == .wouldStart ? .wouldStartElsewhere : .rest
+            }
+
+            var outlook: Outlook?
+            if let estimate {
+                let best = headline?.later.flatMap { $0.level == nil ? nil : $0 }
+                outlook = Outlook(player: player.id, estimate: estimate, slots: slots.compactMap(\.later), best: best,
+                                  level: best?.level, average: nil)
+            }
+
+            var clearsWeakLine: Bool?
+            if let estimate, let headline, headline.firstChoice == nil, let later = headline.later {
+                let isKeeper = assignments.first { $0.slot == headline.slot }?.ipPosition == .goalkeeper
+                let line = (isKeeper ? needs.outfieldAverageAbility : needs.outfieldAverageRating).map { $0 * weakShare }
+                if let line {
+                    let reach = isKeeper ? offset + estimate.reach : later.reachRating
+                    clearsWeakLine = reach + candidateNoise >= line
+                }
+            }
+
+            var evidence = [needs.basis, parameters.depthCoverShare.evidence, parameters.depthCoverFamiliarity.evidence,
+                            parameters.depthSolidFamiliarity.evidence, parameters.ratingAbilityOffset.evidence,
+                            parameters.scoutingWeakShare.evidence, parameters.removalRules.evidence]
+            if estimate != nil {
+                evidence += [parameters.growthPerSeason.evidence, parameters.growthProfessionalismRates.evidence,
+                             parameters.growthAmbitionAtOne.evidence, parameters.growthDeterminationAtOne.evidence,
+                             parameters.growthPersonalityFullFrom.evidence, parameters.markedlyLowerShare.evidence,
+                             parameters.markedlyLowerShareYoungest.evidence, parameters.firstChoiceAgeNamedFrom.evidence]
+            }
+            found.append(Candidate(
+                player: player, slots: slots, headline: headline?.slot, headlineAnswer: headlineAnswer, part: part,
+                outlook: outlook, reachClearsWeakLine: clearsWeakLine,
+                isAgeNamed: player.age >= parameters.firstChoiceAgeNamedFrom.value,
+                cautions: try cautions(for: player, parameters: parameters), basis: Evidence.weakest(evidence)!))
+        }
+        return CandidatesReport(candidates: found, leftOut: leftOut, betterPlayerSlots: betterSlots,
+                                moreDepthSlots: depthSlots)
     }
 }

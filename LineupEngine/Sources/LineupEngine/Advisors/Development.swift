@@ -261,6 +261,15 @@ public enum Development {
         }
     }
 
+    /// The outlook at one slot of a player who need not be in the squad, from his rating there and the rivals
+    /// `rivals(at:)` gave: what `outlooks` works out for a squad player, by the same code.
+    static func slotOutlook(for player: Player, estimate: ReachEstimate, rating: Double, at slot: SlotID,
+                            rivals: (first: Rival?, second: Rival?, firstEstimate: ReachEstimate?),
+                            parameters: EngineParameters) -> SlotOutlook {
+        slotOutlook(player, estimate, slot, rating: rating, isFirstChoice: false, firstChoice: rivals.first,
+                    secondChoice: rivals.second, firstChoiceEstimate: rivals.firstEstimate, parameters: parameters)
+    }
+
     private static func slotOutlook(_ player: Player, _ estimate: ReachEstimate, _ slot: SlotID, rating: Double,
                                     isFirstChoice: Bool, firstChoice: Rival?, secondChoice: Rival?,
                                     firstChoiceEstimate: ReachEstimate?, parameters: EngineParameters) -> SlotOutlook {
