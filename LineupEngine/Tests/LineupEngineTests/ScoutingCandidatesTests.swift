@@ -107,15 +107,9 @@ import Testing
     @Test func heAnswersADepthNeedOnlyWhenHeCountsAndIsSolid() throws {
         let players = try PlannerFixture.squad().filter { $0.name != PlannerFixture.name(.D_L, "second") }
         #expect(try #require(today(candidate(.D_L, level: 12), players: players).first).answers == [.moreDepth])
-        // The second eleven's place at the slot is empty there, so even a very weak player would make it and count: the
-        // fixture's levels give no below-cover player at a thin slot that way. With the second choice injured instead
-        // (he keeps his place, is no cover) a player at 4 is below cover and answers nothing.
-        let injured = try PlannerFixture.squad().map { p in
-            var p = p; if p.name == PlannerFixture.name(.D_L, "second") { p.isInjured = true }; return p
-        }
-        let weak = try #require(today(candidate(.D_L, level: 4), players: injured).first)
-        #expect(try needs(injured).moreDepth.map(\.depth.slot) == [.D_L])
-        #expect(weak.level == .belowCover && weak.answers.isEmpty)
+        // With nobody in position second, a level-4 player "would make the second eleven", yet does not count as cover.
+        let weak = try #require(today(candidate(.D_L, level: 4), players: players).first)
+        #expect(weak.level == .wouldMakeSecond && weak.answers.isEmpty)
         let notSolid = candidate(.D_L, level: 12, also: [.D_L: 14])
         #expect(try #require(today(notSolid, players: players).first).answers.isEmpty)
         // At a slot with no need he answers nothing.

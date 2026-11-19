@@ -25,6 +25,9 @@ public struct CandidateSlot: Equatable, Sendable {
     public let stillWeakBy: Double?
     /// Task 4 fills this in; nil here.
     public let later: SlotOutlook?
+    /// `betterPlayerToday`: a better-player need at the slot where he would start. `moreDepth`: a depth need at the
+    /// slot where Depth would count him as cover (solid, and at or over `depthCoverShare` of the first choice's rating,
+    /// or solid alone with no first choice); his level does not decide it.
     public let answers: Set<NeedAnswer>
 }
 
@@ -111,8 +114,10 @@ extension Scouting {
                 }
             }
             let isSolid = ip >= solidFrom && oop >= solidFrom
-            if needs.moreDepth.contains(where: { $0.depth.slot == slot }), isSolid,
-               level == .wouldStart || level == .wouldMakeSecond || level == .wouldCountAsCover {
+            // Depth would count him as cover: solid, and within the cover share of the first choice (no line without one).
+            let countsAsCover = isSolid && (rivals.first.map {
+                rating + candidateNoise >= parameters.depthCoverShare.value * $0.rating } ?? true)
+            if needs.moreDepth.contains(where: { $0.depth.slot == slot }), countsAsCover {
                 answers.insert(.moreDepth)
             }
             slots.append(CandidateSlot(
