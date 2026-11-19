@@ -30,13 +30,12 @@ extension AdvisorText {
     }
 
     /// The lines for one better-player need, in order: the first choice who is going, the case's own line, and what
-    /// would ease it.
+    /// would ease it. A weak first choice of `firstChoiceAgeNamedFrom` or over is named with his age.
     public static func betterPlayerLines(_ need: BetterPlayerNeed) -> [String] {
         var lines: [String] = []
         if let leaving = need.goingFirstChoice {
             lines.append("\(leaving.name), first choice today, is \(name(leaving.reason)).")
         }
-        let subject = need.goingFirstChoice == nil ? need.firstChoice?.name : need.firstChoice.map { "\($0.name), the best who stays," }
         switch need.kind {
         case .nobody:
             if let first = need.firstChoice {
@@ -45,14 +44,19 @@ extension AdvisorText {
                 lines.append("Nobody who stays can play here.")
             }
         case .weak:
-            if let subject {
-                switch need.measure {
-                case .rating? where need.gap != nil:
-                    lines.append("\(subject) rates \(Display.onePercentDecimal(need.gap ?? 0)) under the average of your outfield first choices.")
-                case .ability(let his, let average)?:
+            if let first = need.firstChoice {
+                // "Sam Reed", "Sam Reed, 31,", "Sam Reed, the best who stays,", "Sam Reed, 31, the best who stays,".
+                var parts = [first.name]
+                if need.namesFirstChoiceAge { parts.append("\(first.age)") }
+                if need.goingFirstChoice != nil { parts.append("the best who stays") }
+                let subject = parts.count == 1 ? first.name : parts.joined(separator: ", ") + ","
+                switch (need.measure, need.gap) {
+                case (.rating?, let gap?):
+                    lines.append("\(subject) rates \(Display.onePercentDecimal(gap)) under the average of your outfield first choices.")
+                case (.ability(let his, let average)?, _):
                     lines.append("\(subject) has ability \(his) against an average of \(String(format: "%.0f", average)) "
                                  + "for your outfield first choices. Goalkeepers are rated on their own scale, so ability is compared.")
-                case .rating?, nil:
+                case (.rating?, nil), (nil, _):
                     lines.append("\(subject) rates under the average of your outfield first choices.")
                 }
             }
@@ -63,20 +67,44 @@ extension AdvisorText {
             }
         }
         if need.kind != .ageing, let eased = need.easedBy {
-            let who = eased.player == need.firstChoice?.player ? "He" : eased.name
+            let who: String
+            if eased.player == need.firstChoice?.player {
+                who = "He"
+            } else if let club = eased.onLoanAt {
+                who = "\(eased.name), out on loan at \(club),"
+            } else {
+                who = eased.name
+            }
             lines.append("\(who) is \(eased.age); his reach would bring him level (this tool's estimate).")
         }
         return lines
     }
 
-    /// The lines for one depth need: the count and who counts, the next best, cover that is going, and players out on
-    /// loan who would count.
+    /// The lines for one depth need, each when it applies: the count and who counts; the next best against the first
+    /// choice; who would count but for an injury, and that the need lasts only while they are out; cover that is going;
+    /// and players out on loan who would count.
     public static func depthNeedLines(_ need: DepthNeed, parameters: EngineParameters) -> [String] {
         let slot = need.depth
         let counting = slot.options.filter(\.countsAsCover).map(\.name)
         var lines = [cover(slot, parameters: parameters) + (counting.isEmpty ? "" : ": " + andList(counting)) + "."]
         let nextName = slot.nextBest.flatMap { id in slot.options.first { $0.player == id }?.name }
-        lines.append(nextBest(slot, name: nextName) + ".")
+        switch (nextName, need.firstChoice, need.nextBestShareUnder) {
+        case (let next?, let first?, let share?):
+            let size = Display.onePercentDecimal(share)
+            let how = size == Display.onePercentDecimal(0) ? "level with" : share > 0 ? "\(size) under" : "\(size) above"
+            lines.append("The next best, \(next), rates \(how) \(first.name).")
+        case (let next?, _, _):
+            lines.append("The next best is \(next).")
+        case (nil, _, _):
+            lines.append("Nobody else can step in.")
+        }
+        if !need.injured.isEmpty {
+            let one = need.injured.count == 1
+            lines.append("Not counting \(andList(need.injured.map(\.name))), who \(one ? "is" : "are") injured.")
+            if need.lastsOnlyWhileInjured {
+                lines.append("The need lasts only while \(one ? "he is" : "they are") out.")
+            }
+        }
         if !need.going.isEmpty {
             lines.append("Not counting \(andList(need.going.map(\.name))), who \(need.going.count == 1 ? "is" : "are") going.")
         }
@@ -136,7 +164,10 @@ extension AdvisorText {
         case (let first?, let margin?):
             let size = Display.onePercentDecimal(margin)
             let how = size == Display.onePercentDecimal(0) ? "level with" : margin > 0 ? "\(size) above" : "\(size) under"
-            lines.append("\(name(slot.level)): rates \(how) \(first.name), your first choice at \(position).")
+            let who = slot.firstChoiceIsOutOfPosition
+                ? "\(first.name), who fills in at \(position) out of position"
+                : "\(first.name), your first choice at \(position)"
+            lines.append("\(name(slot.level)): rates \(how) \(who).")
         case (nil, _), (_, nil):
             lines.append("\(name(slot.level)): nobody who stays can play at \(position).")
         }
@@ -156,15 +187,15 @@ extension AdvisorText {
         return lines
     }
 
-    /// For his headline slot: his reach and where it leaves him, or that he is judged as he is. Empty when he can play
-    /// no slot.
+    /// For his headline slot: his reach and where it leaves him there, or that he is judged as he is. Empty when he
+    /// can play no slot. Every sentence about his reach names the slot.
     public static func laterLines(_ candidate: Candidate) -> [String] {
         guard let slot = candidate.headlineSlot else { return [] }
         guard let outlook = candidate.outlook else {
             return ["Judged as he is today." + (candidate.isAgeNamed ? " He is \(candidate.player.age): decline is not measured." : "")]
         }
         let names: (SlotID) -> String = { PositionText.plain($0) }
-        if slot.later?.level != nil, let reach = reachLine(outlook, names: names) {
+        if let later = slot.later, let reach = reachAt(later) {
             var lines = [reach + ".", reachWorking(outlook.estimate)]
             if let standing = standing(outlook, names: names) { lines.append(standing) }
             switch slot.level {
@@ -175,19 +206,50 @@ extension AdvisorText {
             return lines
         }
         var lines = [reachWorking(outlook.estimate)]
-        if let clears = candidate.reachClearsWeakLine {
-            let position = PositionText.plain(slot.slot)
-            lines.append(clears
-                ? "His reach would clear the line for a weak slot at \(position)."
-                : "His reach would still be under the line for a weak slot at \(position).")
+        if let weakLine = slot.laterAgainstWeakLine { lines.append(reachAgainst(weakLine, at: slot.slot) + ".") }
+        return lines
+    }
+
+    /// For a slot that is not his headline: his lines for today there, then, with a reach, one line for later.
+    public static func otherSlotLines(_ slot: CandidateSlot) -> [String] {
+        var lines = todayLines(slot)
+        if let later = slot.later, let reach = reachAt(later) {
+            lines.append("Later: " + lowerFirst(reach) + ".")
+        } else if let weakLine = slot.laterAgainstWeakLine {
+            lines.append("Later: " + lowerFirst(reachAgainst(weakLine, at: slot.slot)) + ".")
         }
         return lines
     }
 
-    /// "Right back: would make the second eleven." for a slot that is not his headline.
-    public static func otherSlotLine(_ slot: CandidateSlot) -> String {
-        "\(capitalised(PositionText.plain(slot.slot))): \(name(slot.level).lowercased())."
+    /// A candidate's reach at one slot by its level, naming the slot: "Could pass Smith at left back". Player Removal's
+    /// `reachLine` speaks of a squad player's best slot and of "any position"; a candidate's other slots may differ, so
+    /// his is his own. nil for a slot with no first choice, which has no level.
+    static func reachAt(_ later: SlotOutlook) -> String? {
+        guard let level = later.level, let first = later.firstChoice else { return nil }
+        let position = PositionText.plain(later.slot)
+        switch level {
+        case .couldPassFirst: return "Could pass \(first.name) at \(position)"
+        case .couldMakeSecond: return "Could make the second eleven at \(position)"
+        case .couldBeCover: return "Could become cover at \(position), no more"
+        case .markedlyLower: return "Not expected to reach the level of cover at \(position)"
+        }
     }
+
+    /// "His reach would rate about 112 at left back, which clears the line for a weak slot"; at the goalkeeper's slot,
+    /// "His reach of about 100 ability at goalkeeper clears the line for a weak slot".
+    static func reachAgainst(_ weakLine: WeakLineReach, at slot: SlotID) -> String {
+        let position = PositionText.plain(slot)
+        switch weakLine.reach {
+        case .rating(let reach):
+            return "His reach would rate about \(Int(reach.rounded())) at \(position), which "
+                + (weakLine.clears ? "clears the line for a weak slot" : "is still under the line for a weak slot")
+        case .ability(let reach):
+            return "His reach of about \(Int(reach.rounded())) ability at \(position) "
+                + (weakLine.clears ? "clears the line for a weak slot" : "is still under the line for a weak slot")
+        }
+    }
+
+    private static func lowerFirst(_ words: String) -> String { words.prefix(1).lowercased() + words.dropFirst() }
 
     /// "Injury Proneness 16".
     public static func caution(_ caution: CandidateCaution) -> String { "\(caution.attribute.rawValue) \(caution.value)" }

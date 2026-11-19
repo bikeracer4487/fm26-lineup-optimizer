@@ -184,11 +184,12 @@ enum Report {
         return out
     }
 
-    /// The pasted candidates: how many were read, who was left out as already the owner's, then each group under its
-    /// part's name and heading with each candidate's details, his lines for today and for later, his cautions and his
-    /// other slots. Wages and asking prices are written in the candidates' own paste's style.
+    /// The pasted candidates under a heading carrying the weakest evidence among them: how many were read, who was left
+    /// out as already the owner's, then each group under its part's name and heading with each candidate's details, his
+    /// lines for today and for later, his cautions and his other slots, each with its lines. Wages and asking prices are
+    /// written in the candidates' own paste's style.
     static func candidates(_ report: CandidatesReport, read count: Int, money: MoneyStyle) -> [String] {
-        var out = ["", "=== Candidates ===", AdvisorText.playersRead(count)]
+        var out = ["", "=== Candidates ===\(report.basis.map(mark) ?? "")", AdvisorText.playersRead(count)]
         if let left = AdvisorText.leftOutAlreadyYours(report.leftOut) { out.append(left) }
         for group in report.groups(orderedBy: .today) {
             var heading = AdvisorText.name(group.part)
@@ -204,7 +205,7 @@ enum Report {
                 if let loanedTo = player.loanedTo { details.append(AdvisorText.onLoan(at: loanedTo)) }
                 if let price = player.askingPrice { details.append(AdvisorText.askingPrice(price, money)) }
                 details.append(Display.wage(perWeek: player.wagePerWeek, money))
-                out.append("  " + details.joined(separator: ", ") + mark(candidate.basis))
+                out.append("  " + details.joined(separator: ", "))
                 if let headline = candidate.slots.first(where: { $0.slot == candidate.headline }) {
                     for line in AdvisorText.todayLines(headline) + AdvisorText.laterLines(candidate) { out.append("    \(line)") }
                 } else {
@@ -212,7 +213,8 @@ enum Report {
                 }
                 for caution in candidate.cautions { out.append("    \(AdvisorText.caution(caution))") }
                 for slot in candidate.slots where slot.slot != candidate.headline {
-                    out.append("    \(AdvisorText.otherSlotLine(slot))")
+                    out.append("    Also at \(PositionText.plain(slot.slot)):")
+                    for line in AdvisorText.otherSlotLines(slot) { out.append("      \(line)") }
                 }
             }
         }

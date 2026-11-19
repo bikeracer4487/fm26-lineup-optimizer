@@ -100,8 +100,9 @@ import Testing
 
     @Test func depthLines() {
         let one = slotDepth(options: [option("Jonny Maxted"), option("Josh Ashby", cover: false)], cover: 1, drop: 6.66, next: "Josh Ashby")
-        #expect(AdvisorText.depthNeedLines(depthNeed(one, going: [], returning: []), parameters: parameters)
-                == ["1 player counts as cover; 2 needed: Jonny Maxted.", "Next best: Josh Ashby, 6.7 lower."])
+        #expect(AdvisorText.depthNeedLines(depthNeed(one, first: named("Jonny Maxted", age: 30), shareUnder: 0.0666),
+                                           parameters: parameters)
+                == ["1 player counts as cover; 2 needed: Jonny Maxted.", "The next best, Josh Ashby, rates 6.7% under Jonny Maxted."])
         let none = slotDepth(options: [], cover: 0, drop: nil, next: nil)
         #expect(AdvisorText.depthNeedLines(depthNeed(none, going: [], returning: []), parameters: parameters)
                 == ["Nobody counts as cover; 2 needed.", "Nobody else can step in."])
@@ -140,6 +141,65 @@ import Testing
                                   Returning(player: id("ben cole"), name: "Ben Cole", club: "Didcot")])
                 == base + ["Max Treml, out on loan at Wallingford, would count as cover.",
                            "Ben Cole, out on loan at Didcot, would count as cover."])
+    }
+
+    @Test func theNextBestIsGivenAgainstTheFirstChoice() {
+        let fernando = named("Fernando Forestieri", age: 28)
+        let slot = slotDepth(options: [option("Fernando Forestieri"), option("Zac McEachran", cover: false)], cover: 1,
+                             drop: 9, next: "Zac McEachran")
+        func second(_ need: DepthNeed) -> String { AdvisorText.depthNeedLines(need, parameters: parameters)[1] }
+        #expect(second(depthNeed(slot, first: fernando, shareUnder: 0.064))
+                == "The next best, Zac McEachran, rates 6.4% under Fernando Forestieri.")
+        let reed = slotDepth(options: [option("Lee Hart"), option("Sam Reed", cover: false)], cover: 1, drop: -2, next: "Sam Reed")
+        #expect(second(depthNeed(reed, first: named("Lee Hart", age: 25), shareUnder: -0.02))
+                == "The next best, Sam Reed, rates 2.0% above Lee Hart.")
+        #expect(second(depthNeed(slot, first: fernando, shareUnder: 0.0001))
+                == "The next best, Zac McEachran, rates level with Fernando Forestieri.")
+        #expect(second(depthNeed(slot, first: nil, shareUnder: nil)) == "The next best is Zac McEachran.")
+        let nobody = slotDepth(options: [option("Fernando Forestieri")], cover: 1, drop: nil, next: nil)
+        #expect(second(depthNeed(nobody, first: fernando, shareUnder: nil)) == "Nobody else can step in.")
+    }
+
+    @Test func aDepthNeedNamesWhoIsInjuredAndWhetherItLastsOnlyWhileTheyAreOut() {
+        let fernando = named("Fernando Forestieri", age: 28)
+        let slot = slotDepth(options: [option("Zac McEachran"), option("Fernando Forestieri", cover: false)], cover: 1,
+                             drop: nil, next: nil)
+        let base = ["1 player counts as cover; 2 needed: Zac McEachran.", "Nobody else can step in."]
+        func lines(_ need: DepthNeed) -> [String] { AdvisorText.depthNeedLines(need, parameters: parameters) }
+        #expect(lines(depthNeed(slot, injured: [fernando], lasts: true))
+                == base + ["Not counting Fernando Forestieri, who is injured.", "The need lasts only while he is out."])
+        #expect(lines(depthNeed(slot, injured: [fernando], lasts: false))
+                == base + ["Not counting Fernando Forestieri, who is injured."])
+        #expect(lines(depthNeed(slot, going: [going("Lee Hart", .onLoanHere)],
+                                returning: [Returning(player: id("max treml"), name: "Max Treml", club: "Wallingford")],
+                                injured: [fernando, named("Ben Cole", age: 22)], lasts: true))
+                == base + ["Not counting Fernando Forestieri and Ben Cole, who are injured.",
+                           "The need lasts only while they are out.",
+                           "Not counting Lee Hart, who is going.",
+                           "Max Treml, out on loan at Wallingford, would count as cover."])
+        #expect(lines(depthNeed(slot)) == base)
+    }
+
+    @Test func aWeakFirstChoiceOfThirtyOrOverIsNamedWithHisAge() {
+        let alfie = named("Alfie Potter", age: 37)
+        #expect(AdvisorText.betterPlayerLines(need(.weak, first: alfie, measure: rating, gap: 0.059, namesAge: true))
+                == ["Alfie Potter, 37, rates 5.9% under the average of your outfield first choices."])
+        #expect(AdvisorText.betterPlayerLines(need(.weak, first: named("Sam Reed", age: 31), measure: rating, gap: 0.0574,
+                                                   leaving: going("Lee Hart", .onLoanHere), namesAge: true))
+                == ["Lee Hart, first choice today, is on loan here.",
+                    "Sam Reed, 31, the best who stays, rates 5.7% under the average of your outfield first choices."])
+        #expect(AdvisorText.betterPlayerLines(need(.weak, slot: .GK, first: alfie, measure: .ability(his: 60, average: 104.6),
+                                                   gap: 0.4, namesAge: true))
+                == ["Alfie Potter, 37, has ability 60 against an average of 105 for your outfield first choices. Goalkeepers are rated on their own scale, so ability is compared."])
+        // Under 30 the line names no age.
+        #expect(AdvisorText.betterPlayerLines(need(.weak, first: sam, measure: rating, gap: 0.0574, namesAge: false))
+                == ["Sam Reed rates 5.7% under the average of your outfield first choices."])
+    }
+
+    @Test func aNeedEasedByAPlayerOutOnLoanSaysWhere() {
+        let max = NamedPlayer(player: id("max treml"), name: "Max Treml", age: 18, onLoanAt: "Wallingford")
+        #expect(AdvisorText.betterPlayerLines(need(.weak, first: sam, measure: rating, gap: 0.0574, eased: max)).last
+                == "Max Treml, out on loan at Wallingford, is 18; his reach would bring him level (this tool's estimate).")
     }
 
     // MARK: The candidates
@@ -210,6 +270,14 @@ import Testing
                 == ["Would start: rates level with Evan Humphries, your first choice at left back."])
         #expect(AdvisorText.todayLines(candidateSlot(margin: nil))
                 == ["Would start: nobody who stays can play at left back."])
+        // A first choice who fills in out of position is not called "your first choice".
+        let ellis = rival("Ellis Brown")
+        #expect(AdvisorText.todayLines(candidateSlot(margin: 0.06, first: ellis, outOfPosition: true))
+                == ["Would start: rates 6.0% above Ellis Brown, who fills in at left back out of position."])
+        #expect(AdvisorText.todayLines(candidateSlot(level: .wouldMakeSecond, margin: 0, first: ellis, outOfPosition: true))
+                == ["Would make the second eleven: rates level with Ellis Brown, who fills in at left back out of position."])
+        #expect(AdvisorText.todayLines(candidateSlot(level: .belowCover, margin: -0.3, first: ellis, outOfPosition: true))
+                == ["Below cover: rates 30.0% under Ellis Brown, who fills in at left back out of position."])
     }
 
     @Test func todayLinesSayWhenHeIsNotSolidOrTheSlotStaysWeak() {
@@ -246,15 +314,35 @@ import Testing
             .contains(caveat))
     }
 
+    @Test func laterLinesNameTheSlotAtEveryLevel() {
+        let first = rival("Smith", age: 28)
+        func reachLine(_ level: ReachLevel) -> String? {
+            let later = slotOutlook(level: level, first: first)
+            return AdvisorText.laterLines(candidate(candidateSlot(level: .wouldMakeSecond, first: first, later: later), young: true)).first
+        }
+        #expect(reachLine(.couldPassFirst) == "Could pass Smith at left back.")
+        #expect(reachLine(.couldMakeSecond) == "Could make the second eleven at left back.")
+        #expect(reachLine(.couldBeCover) == "Could become cover at left back, no more.")
+        #expect(reachLine(.markedlyLower) == "Not expected to reach the level of cover at left back.")
+    }
+
     @Test func laterLinesWithNoFirstChoice() {
         let later = slotOutlook(level: nil, first: nil)
-        let slot = candidateSlot(margin: nil, later: later)
-        let clears = candidate(slot, young: true, level: nil, clearsWeakLine: true)
-        #expect(AdvisorText.laterLines(clears) == [
-            AdvisorText.reachWorking(clears.outlook!.estimate),
-            "His reach would clear the line for a weak slot at left back."])
-        let under = candidate(slot, young: true, level: nil, clearsWeakLine: false)
-        #expect(AdvisorText.laterLines(under).last == "His reach would still be under the line for a weak slot at left back.")
+        func lines(_ slot: SlotID, _ reach: ReachFigure, clears: Bool) -> [String] {
+            let s = candidateSlot(slot, margin: nil, later: later, weakLine: WeakLineReach(reach: reach, clears: clears))
+            return AdvisorText.laterLines(candidate(s, young: true, level: nil))
+        }
+        let working = AdvisorText.reachWorking(estimate())
+        #expect(lines(.D_L, .rating(112.4), clears: true)
+                == [working, "His reach would rate about 112 at left back, which clears the line for a weak slot."])
+        #expect(lines(.D_L, .rating(98.6), clears: false)
+                == [working, "His reach would rate about 99 at left back, which is still under the line for a weak slot."])
+        #expect(lines(.GK, .ability(100.2), clears: true)
+                == [working, "His reach of about 100 ability at goalkeeper clears the line for a weak slot."])
+        #expect(lines(.GK, .ability(80), clears: false)
+                == [working, "His reach of about 80 ability at goalkeeper is still under the line for a weak slot."])
+        // With no average to set it against, only the working.
+        #expect(AdvisorText.laterLines(candidate(candidateSlot(margin: nil, later: later), young: true, level: nil)) == [working])
     }
 
     @Test func laterLinesWithNoOutlook() {
@@ -265,8 +353,36 @@ import Testing
         #expect(AdvisorText.laterLines(candidate(candidateSlot(), young: true, headline: false)) == [])
     }
 
+    @Test func otherSlotLinesAreTheTodayLinesThenOneForLater() {
+        let deago = Rival(player: id("deago nelson"), name: "Deago Nelson", age: 26, rating: 70, compared: 70, isAgeNamed: false)
+        let today = AdvisorText.todayLines(candidateSlot(.D_R, level: .wouldMakeSecond, margin: -0.03, first: deago, solid: false,
+                                                         ip: 12, oop: 14))
+        #expect(today == ["Would make the second eleven: rates 3.0% under Deago Nelson, your first choice at right back.",
+                          "Not yet solid there: familiarity 12 in possession, 14 out."])
+        #expect(AdvisorText.otherSlotLines(candidateSlot(.D_R, level: .wouldMakeSecond, margin: -0.03, first: deago, solid: false,
+                                                         ip: 12, oop: 14)) == today)
+        func later(_ level: ReachLevel) -> String? {
+            let outlook = SlotOutlook(slot: .D_R, rating: 50, reachRating: 75, isFirstChoice: false, firstChoice: deago,
+                                      secondChoice: nil, band: .onCourse, pointsNeeded: 14, level: level)
+            return AdvisorText.otherSlotLines(candidateSlot(.D_R, margin: -0.03, first: deago, later: outlook)).last
+        }
+        #expect(later(.couldPassFirst) == "Later: could pass Deago Nelson at right back.")
+        #expect(later(.couldMakeSecond) == "Later: could make the second eleven at right back.")
+        #expect(later(.couldBeCover) == "Later: could become cover at right back, no more.")
+        #expect(later(.markedlyLower) == "Later: not expected to reach the level of cover at right back.")
+        let open = SlotOutlook(slot: .D_R, rating: 50, reachRating: 112, isFirstChoice: false, firstChoice: nil,
+                               secondChoice: nil, band: nil, pointsNeeded: nil, level: nil)
+        let lines = AdvisorText.otherSlotLines(candidateSlot(.D_R, margin: nil, later: open,
+                                                             weakLine: WeakLineReach(reach: .rating(112), clears: true)))
+        #expect(lines == ["Would start: nobody who stays can play at right back.",
+                          "Later: his reach would rate about 112 at right back, which clears the line for a weak slot."])
+        let keeper = AdvisorText.otherSlotLines(candidateSlot(.GK, margin: nil, later: open,
+                                                              weakLine: WeakLineReach(reach: .ability(100), clears: false)))
+        #expect(keeper.last == "Later: his reach of about 100 ability at goalkeeper is still under the line for a weak slot.")
+    }
+
     @Test func otherSlotsCautionsAndTheRest() {
-        #expect(AdvisorText.otherSlotLine(candidateSlot(.D_R, level: .wouldMakeSecond)) == "Right back: would make the second eleven.")
+        #expect(AdvisorText.caution(CandidateCaution(attribute: .consistency, value: 6)) == "Consistency 6")
         #expect(AdvisorText.caution(CandidateCaution(attribute: .injuryProneness, value: 16)) == "Injury Proneness 16")
         #expect(AdvisorText.club(of: .fixture(name: "A", club: "Wrexham")) == "Wrexham")
         #expect(AdvisorText.club(of: .fixture(name: "A", club: nil)) == nil)

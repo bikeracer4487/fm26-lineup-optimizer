@@ -463,5 +463,11 @@ import Testing
         let slot = try #require(today(notSolid, players: players).first)
         #expect(!slot.answers.contains(.moreDepth) && slot.answers.contains(.betterPlayerToday))
     }
+    @Test func theReportCarriesTheWeakestEvidenceAmongItsCandidates() throws {
+        let players = try PlannerFixture.squad()
+        let mine = candidate(.D_L, level: 14) { $0.club = "Oxford City" }
+        #expect(try report([mine], players: players).basis == nil)
+        let r = try report([candidate(.D_L, level: 14), pasted("young", .AM_C, 12, age: 19, potential: 150)], players: players)
+        #expect(r.basis == Evidence.weakest(r.candidates.map(\.basis)) && r.basis == .derived)
+    }
 }
-
