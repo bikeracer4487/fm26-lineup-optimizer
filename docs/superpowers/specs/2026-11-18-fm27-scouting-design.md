@@ -83,16 +83,18 @@ Each slot of the tactic can carry a "Better player" line, a "More depth" line, b
 **Better player.** The first of these that holds:
 
 1. **Nobody.** The slot has no first choice, or its first choice is out of position there (familiarity under 10 in either phase).
-2. **Weak.** For an outfield slot: the first choice's rating there is 5% or more under the average rating of the outfield first choices. First choices who are out of position are left out of the average. The line gives the gap: "rates 5.7% under the average of your outfield first choices".
+2. **Weak.** For an outfield slot: the first choice's rating there is 5% or more under the average rating of the outfield first choices. First choices who are out of position are left out of the average. The line gives the gap: "rates 5.7% under the average of your outfield first choices". A weak first choice of 30 or over is named with his age on that line, since the weak rule comes before the ageing one and would otherwise hide it (revised on 18 November 2026 after the whole-branch review).
 3. **Ageing.** The first choice is 30 or over, and no player of the club's own who is 23 or under, staying and not first choice at another slot is close or on course to pass him at the slot (the reach bands Player Removal and the planner use; the planner already holds that a first choice at any slot is nobody's successor). The line names his age and says decline is not measured, so this is a prompt to look and not a finding.
 
 When the slot's first choice in today's elevens is going, the line says so, naming him and why: "Canice Carroll, first choice today, is on loan here. Josh Ashby, the best who stays, rates 7.2% under the average of your outfield first choices."
 
-A "Nobody" or "Weak" need is **eased** when a player of the club's own who is 23 or under and staying, the first choice himself included, has a reach rating at the slot that clears the weak line (95% of the outfield average); a "Nobody" need is measured against that same line. A player who is first choice at another slot eases nothing, since he cannot fill both (revised during the build on 18 November 2026: on the captured squad the need at left defensive midfield was shown as eased by the first choice at right defensive midfield). The need stays on the list, below the ones that are not eased, and its line names him: "Evan Humphries is 20; his reach would bring him level (this tool's estimate)."
+A "Nobody" or "Weak" need is **eased** when a player of the club's own who is 23 or under and staying, the first choice himself included, has a reach rating at the slot that clears the weak line (95% of the outfield average); a "Nobody" need is measured against that same line. A player of the club's own who is out on loan and 23 or under counts here, and as a successor for "Ageing", as one who is staying: he is rated at the slot directly, as a pasted player is, and the line says where he is on loan (revised on 18 November 2026 after the whole-branch review): on the captured squad the goalkeeper's line said nobody was on course while a goalkeeper out on loan was). A player who is first choice at another slot eases nothing, since he cannot fill both (revised during the build on 18 November 2026: on the captured squad the need at left defensive midfield was shown as eased by the first choice at right defensive midfield). The need stays on the list, below the ones that are not eased, and its line names him: "Evan Humphries is 20; his reach would bring him level (this tool's estimate)."
 
 **The goalkeeper.** Goalkeepers are rated on their own scale: on the captured squad the goalkeeper rates 83 where outfield first choices of like ability rate 106 to 124. So the goalkeeper is not compared with the outfield by rating. His current ability is compared with the average current ability of the outfield first choices, each taken through the same offset the tool already uses to scale a rating with ability (`ratingAbilityOffset`), against the same 5% line. The line shows the two abilities and says ability was compared. A goalkeeper's need is eased the same way: by a young goalkeeper whose reach, as ability through the offset, clears that line.
 
 **More depth.** Fewer than two players who are staying count as cover at the slot, by Depth's own rule and Depth's own count (solid, rated at least 80% of the first choice, not injured, not first choice elsewhere). That count includes the slot's first choice when he qualifies, so a slot is not thin when it has its first choice and one more; the numbers and sentences are Depth's ("1 player counts as cover; 2 needed") and agree with the Elevens and Training screens. The line gives the count, who counts, and the drop to the next best. It names a player who counts as cover today and is going, as Training's needs do. It names a player out on loan who would count as cover on his return.
+
+An injured player does not count as cover, as on the Elevens screen, because FMRTE does not say how long he is out. A depth need names each player who would count but for his injury ("Not counting Fernando Forestieri, who is injured."), and when counting them would lift the slot to the line it says the need lasts only while he is out. Such a need comes after the depth needs that do not rest on an injury. The next best is given against the slot's named first choice, as a percentage like the rest of the screen ("The next best, Zac McEachran, rates 6.4% under Fernando Forestieri.") (revised on 18 November 2026 after the whole-branch review): on the captured squad a slot was thin only through an injury, and its line named one man as both the cover and the next best).
 
 **Order.** The Needs tab shows two lists and makes no ranking between the two kinds, since nothing measures a weak first choice against a missing stand-in.
 
@@ -124,9 +126,9 @@ A candidate is judged at each slot of the chosen tactic he can play: familiarity
 | Would count as cover | he rates at least 80% of the first choice (`depthCoverShare`) |
 | Below cover | under that |
 
-The line names who he was compared with and gives the gap: "Would start: rates 6% above Evan Humphries, your first choice at left back." At a slot whose first choice is out of position, the candidate is compared with that player's rating there like any other first choice. When his familiarity is under 15 in either phase the line says he is not yet solid there, with the two numbers. When he would start at a slot with a "Nobody" or "Weak" need and his own rating is still under the weak line (for a goalkeeper, his ability), the line says the slot would still be weak with him, with the gap.
+The line names who he was compared with and gives the gap: "Would start: rates 6% above Evan Humphries, your first choice at left back." At a slot whose first choice is out of position, the candidate is compared with that player's rating there like any other first choice, and the line says he fills in there out of position, not that he is "your first choice". When his familiarity is under 15 in either phase the line says he is not yet solid there, with the two numbers. When he would start at a slot with a "Nobody" or "Weak" need and his own rating is still under the weak line (for a goalkeeper, his ability), the line says the slot would still be weak with him, with the gap.
 
-**Later.** For a candidate of 23 or under (`developingUpToAge`, the age Player Removal uses). His reach is `Reach.estimate`, unchanged: growth for his age scaled for Professionalism, Ambition and Determination, never above his potential. His reach rating at the slot, his level against the first and second choice (could pass the first choice, could make the second eleven, could become cover, markedly lower), his band (close, on course, possible, not expected) and the working are those Player Removal shows for the owner's own young players, from the same code, made to take a player who is not in the squad. A first choice who is himself developing is compared at his own reach, as now. At a slot with no first choice there is nobody to compare with and so no level: the line gives his reach rating and whether it clears the weak line.
+**Later.** For a candidate of 23 or under (`developingUpToAge`, the age Player Removal uses). His reach is `Reach.estimate`, unchanged: growth for his age scaled for Professionalism, Ambition and Determination, never above his potential. His reach rating at the slot, his level against the first and second choice (could pass the first choice, could make the second eleven, could become cover, markedly lower), his band (close, on course, possible, not expected) and the working are those Player Removal shows for the owner's own young players, from the same code, made to take a player who is not in the squad. A first choice who is himself developing is compared at his own reach, as now. At a slot with no first choice there is nobody to compare with and so no level: the line gives his reach rating and whether it clears the weak line. Every sentence about his reach names the slot it is about: "at any position" is never said of a candidate, whose other slots may differ (revised on 18 November 2026 after the whole-branch review)).
 
 The growth table rests on a player getting 20 to 30 matches a season. For a candidate who would not make the second eleven today, the line says the estimate assumes regular matches.
 
@@ -139,16 +141,27 @@ A candidate of 24 or over has no "Later": the line says he is judged as he is to
 - He answers a "Better player" need today when he would start at that slot, and later when he is 23 or under and could pass the first choice there.
 - He answers a "More depth" need when Depth would count him as cover at that slot: he is solid there and rates at least 80% of the first choice (`depthCoverShare`), whatever his level; with no first choice there is no such line. A player far below the first choice who would make the second eleven only because nobody else is there does not answer it (revised during the build on 18 November 2026, when a test showed such a player listed as answering the need).
 
-**His headline slot** is the first of: a slot where he answers a "Better player" need today; one where he answers a "More depth" need; one where he answers a "Better player" need later; otherwise the slot where his level today is best, then where his rating over the first choice's is greatest, then the earlier slot. His other slots are shown when his row is opened.
+**His headline slot** is the first of: a slot where he answers a "Better player" need today; one where he answers a "More depth" need; one where he answers a "Better player" need later; a slot where he would start; a slot where, at 23 or under, he could pass the first choice; otherwise the slot where his level today is best, then where his rating over the first choice's is greatest, then the earlier slot. In that last step a place in the second eleven that he would hold only because nobody in position is there, while he rates under the cover share, ranks below "would count as cover". His other slots are shown when his row is opened, each with the same lines for today as the headline slot has and, at 23 or under, one line for later.
 
-**The list.** Four parts, in this order, each candidate once, under his headline slot:
+**The list.** Five parts, in this order, each candidate once, under his headline slot (revised on 18 November 2026 after the whole-branch review): there were four, and a young player who could pass the first choice at a slot with no need fell into the rest, which is closed until opened; the owner asked for growth to be judged as well as today):
 
-1. Answers a need today, grouped by slot: the "Better player" slots in their order, then the "More depth" slots in theirs, best rating first. A slot with both needs has a group under each kind.
-2. Could answer a need later, grouped the same way, best reach rating first.
-3. Would start at a slot where he answers no need, greatest margin first. That is a slot that is fine, or a slot with only a depth need where he is not yet solid.
-4. The rest, one line each. A candidate who can play no slot of the tactic is here, with a sentence saying so.
+1. Answers a need today, grouped by slot: the "Better player" slots in their order, then the "More depth" slots in theirs. A slot with both needs has a group under each kind.
+2. Could answer a need later, grouped the same way.
+3. Would start at a slot where he answers no need. That is a slot that is fine, or a slot with only a depth need where he is not yet solid.
+4. Could pass the first choice later at a slot where he answers no need.
+5. The rest, one line each. A candidate who can play no slot of the tactic is here, with a sentence saying so.
 
-A "Today / Later" control orders the candidates inside each slot's group by rating today or by reach rating. It does not move a candidate between parts.
+**The order inside a group or part.** "His reach margin" is his reach rating at his headline slot over what the first choice there is compared at, and "his margin" his rating today over the first choice's.
+
+| Part | Order "Today" | Order "Later" |
+|---|---|---|
+| 1 | rating at the slot, best first | reach rating, best first |
+| 2 | reach rating, best first | the same |
+| 3 | his margin, greatest first | his reach margin, greatest first |
+| 4 | his reach margin, greatest first | the same |
+| 5 | his margin, greatest first | his reach margin, greatest first |
+
+A candidate with no reach (24 or over) is placed by today's figure in a "Later" order. Those who play no slot come last. The key breaks every tie. The "Today / Later" control chooses the order and never moves a candidate between parts.
 
     Scouting · Sample 4-2-3-1                         [ Needs | Candidates ]
 
@@ -200,6 +213,8 @@ A "Scouting" screen in the sidebar, after Player Removal, with two tabs, "Needs"
     D R · DM R · AM C
 
 (The lines above show the shape; the names and numbers are made up from the captured squad and are not what the build will print.)
+
+The Candidates tab carries the evidence note the Needs tab carries ("this tool's estimate"), once, for the weakest evidence among the candidates shown, so that a reach is never read as fact (revised on 18 November 2026 after the whole-branch review)).
 
 The look follows the Tactics board direction and `Theme`. Every word about a need or a candidate is the engine's; Core holds headings and plain labels. Slots are "D L" on a token and "left back" in a sentence. The pictures of both tabs (empty, with needs, with candidates, with a refusal, with players left out), light and dark, are looked at before the work is called done.
 
