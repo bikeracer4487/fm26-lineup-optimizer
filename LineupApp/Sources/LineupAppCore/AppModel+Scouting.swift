@@ -74,8 +74,8 @@ extension AppModel {
         hold(nil)
     }
 
-    /// Whether "Clear" has anything to clear: players are held.
-    public var canClearCandidates: Bool { scoutingPaste != nil }
+    /// Whether "Clear" has anything to clear: players are held, or a refusal is shown, which it dismisses.
+    public var canClearCandidates: Bool { scoutingPaste != nil || scoutingPasteProblem != nil }
 
     /// Every held candidate's row for the tactic the Scouting screen shows, so all can be opened at once; none while
     /// no candidates are judged.

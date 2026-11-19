@@ -89,13 +89,14 @@ import LineupEngine
         #expect(row.positions == candidate.player.positionsText)
         #expect(row.wage == Display.wage(perWeek: candidate.player.wagePerWeek, money))
         #expect(row.isInjured == candidate.player.isInjured)
-        #expect(row.slotText == headline.slot.displayName)
         #expect(row.todayLines == AdvisorText.todayLines(headline))
         #expect(row.laterLines == AdvisorText.laterLines(candidate))
         #expect(row.cautions == candidate.cautions.map(AdvisorText.caution))
         let others = candidate.slots.filter { $0.slot != headline.slot }
-        #expect(row.otherSlots == others.map(AdvisorText.otherSlotLine))
+        // Each other slot's lines together, as the engine gives them.
+        #expect(row.otherSlots == others.map { ScoutingOtherSlot(slot: $0.slot, lines: AdvisorText.otherSlotLines($0)) })
         #expect(row.otherSlots.count == candidate.slots.count - 1)
+        #expect(row.otherSlots.allSatisfy { !$0.lines.isEmpty })
         // The tactic's order.
         let order = try #require(t.model.primaryTactic).tactic.assignments(catalog: t.model.catalog).map(\.slot)
         let indices = others.map { order.firstIndex(of: $0.slot) ?? -1 }
@@ -201,7 +202,6 @@ import LineupEngine
         let report = try judged(players, in: t.model)
         let sheet = ScoutingPresentation.candidatesSheet(report, order: .today, pasted: players.count, money: .weeklyPounds)
         let row = try #require(rows(sheet).first { $0.id == players[0].id })
-        #expect(row.slotText == nil)
         #expect(row.todayLines == [AdvisorText.playsNoSlot])
         #expect(row.laterLines.isEmpty)
         #expect(row.otherSlots.isEmpty)
@@ -215,6 +215,10 @@ import LineupEngine
         let sheet = ScoutingPresentation.candidatesSheet(report, order: .today, pasted: 6, money: paste.money)
         #expect(sheet.readLine == AdvisorText.playersRead(6))
         #expect(sheet.leftOutLine == nil)
+        // The evidence note for the candidates shown, as the Needs tab has its own.
+        let basis = try #require(report.basis)
+        #expect(sheet.evidenceNote == AdvisorText.note(for: basis))
+        #expect(sheet.evidenceNote != nil, "a reach is this tool's estimate")
         #expect(t.model.candidatesSheet(report, order: .today) == sheet)
 
         try t.importU21()
@@ -224,6 +228,7 @@ import LineupEngine
         #expect(left.leftOutLine == AdvisorText.leftOutAlreadyYours(after.leftOut))
         #expect(left.leftOutLine != nil)
         #expect(left.groups.isEmpty)
+        #expect(left.evidenceNote == nil, "no candidates, no note")
     }
 
     @Test func withNothingPastedThereIsNoSheet() throws {
@@ -260,7 +265,10 @@ import LineupEngine
         for (row, group) in zip(sheet.groups, groups) { #expect(row.isRest == (group.part == .rest)) }
         let rest = sheet.groups.filter(\.isRest).flatMap(\.rows)
         #expect(rest.contains { $0.id == players[0].id })
-        #expect(sheet.restLine == ScoutingPresentation.restLine(rest.count))
+        // The rest says the line it is closed behind; no other group is closed.
+        for group in sheet.groups {
+            #expect(group.closedLine == (group.isRest ? ScoutingPresentation.restLine(rest.count) : nil))
+        }
         #expect(sheet.groups.contains { !$0.isRest }, "the parts before the rest are not closed")
         for group in sheet.groups {
             #expect(group.showsRows(restOpen: true))
@@ -272,7 +280,7 @@ import LineupEngine
         let without = ScoutingPresentation.candidatesSheet(try judged(answering, in: t.model), order: .today,
                                                            pasted: answering.count, money: .weeklyPounds)
         #expect(!without.groups.contains { $0.isRest })
-        #expect(without.restLine == nil)
+        #expect(without.groups.allSatisfy { $0.closedLine == nil })
         #expect(ScoutingPresentation.restLine(1) == "1 more player")
         #expect(ScoutingPresentation.restLine(12) == "12 more players")
     }
@@ -325,15 +333,15 @@ import LineupEngine
         #expect(others.opens(inRest: true))
         // In the rest, a second line today or a line for later opens a row with no other slots.
         let alone = ScoutingCandidateRow(id: nowhere.id, name: nowhere.name, age: 20, positions: "D L", club: nil, onLoan: nil,
-                                         askingPrice: nil, wage: "£500 a week", isInjured: false, slotText: "D L",
+                                         askingPrice: nil, wage: "£500 a week", isInjured: false,
                                          todayLines: ["Below cover."], laterLines: [], cautions: [], otherSlots: [])
         #expect(!alone.opens(inRest: true))
         for more in [ScoutingCandidateRow(id: alone.id, name: alone.name, age: 20, positions: "D L", club: nil, onLoan: nil,
-                                          askingPrice: nil, wage: alone.wage, isInjured: false, slotText: "D L",
+                                          askingPrice: nil, wage: alone.wage, isInjured: false,
                                           todayLines: ["Below cover.", "Not yet solid there."], laterLines: [],
                                           cautions: [], otherSlots: []),
                      ScoutingCandidateRow(id: alone.id, name: alone.name, age: 20, positions: "D L", club: nil, onLoan: nil,
-                                          askingPrice: nil, wage: alone.wage, isInjured: false, slotText: "D L",
+                                          askingPrice: nil, wage: alone.wage, isInjured: false,
                                           todayLines: ["Below cover."], laterLines: ["Judged as he is today."],
                                           cautions: [], otherSlots: [])] {
             #expect(!more.opens(inRest: false))
@@ -344,9 +352,10 @@ import LineupEngine
     @Test func aClosedRowInTheRestShowsOnlyItsFirstLineTodayAndOtherSlotsShowWhenOpen() {
         let row = ScoutingCandidateRow(id: PlayerID(key: "fmrte:1"), name: "Kofi Mensah", age: 20, positions: "D L",
                                        club: nil, onLoan: nil, askingPrice: nil, wage: "£500 a week", isInjured: false,
-                                       slotText: "D L", todayLines: ["Would start.", "Not yet solid there."],
+                                       todayLines: ["Would start.", "Not yet solid there."],
                                        laterLines: ["Could pass the first choice."], cautions: ["Controversy 18"],
-                                       otherSlots: ["Right back: below cover."])
+                                       otherSlots: [ScoutingOtherSlot(slot: .D_R, lines: ["Below cover.",
+                                                                                          "Later: could become cover."])])
         let all = ScoutingRowLines(today: row.todayLines, later: row.laterLines, otherSlots: [])
         #expect(row.linesShown(inRest: false, isOpen: false) == all)
         #expect(row.linesShown(inRest: true, isOpen: false) == ScoutingRowLines(today: ["Would start."], later: [],
@@ -369,13 +378,16 @@ import LineupEngine
         #expect(t.model.allCandidateRowIDs(for: nil).isEmpty)
     }
 
-    @Test func clearIsOfferedOnlyWhilePlayersAreHeld() throws {
+    @Test func clearIsOfferedWhilePlayersAreHeldOrARefusalIsShown() throws {
         let t = try ScoutingSetup.ready()
         #expect(!t.model.canClearCandidates)
+        // A refusal shown with nothing held can be dismissed.
         t.input.clipboard = ""
         t.model.pasteCandidates()
-        #expect(t.model.scoutingPasteProblem != nil)
-        #expect(!t.model.canClearCandidates, "a refusal alone holds nobody")
+        #expect(t.model.scoutingPasteProblem != nil && t.model.scoutingPaste == nil)
+        #expect(t.model.canClearCandidates, "a refusal alone can be cleared")
+        t.model.clearCandidates()
+        #expect(t.model.scoutingPasteProblem == nil && !t.model.canClearCandidates)
         try ScoutingSetup.paste(t)
         #expect(t.model.canClearCandidates)
         t.model.clearCandidates()

@@ -341,8 +341,17 @@ import LineupEngine
         let model = try SampleData.modelWithCandidates(repositoryRoot: Captures.repositoryRoot)
         defer { try? FileManager.default.removeItem(at: model.store.directory) }
         let report = try ScoutingSetup.report(model)
-        #expect(report.leftOut.isEmpty, "the sample's candidates are not the sample's own U21s")
-        #expect(report.candidates.count == model.scoutingPaste?.players.count)
+        // One of the sample's own U21s is pasted as he is, so the row saying who was left out shows.
+        #expect(report.leftOut == [SampleData.candidateAlreadyHeldName])
+        #expect(report.candidates.count == (model.scoutingPaste?.players.count ?? 0) - 1)
+        // A group of two, open from the start (not the rest), whose order the Today and Later control changes, so a
+        // picture shows it: the older starter rates higher today, the young one reaches higher.
+        func shown(_ order: CandidateOrder) -> [[String]] {
+            report.groups(orderedBy: order).filter { $0.part != .rest }.map { $0.candidates.map(\.player.name) }
+        }
+        #expect(shown(.today).contains([SampleData.candidateOlderStarterName, SampleData.candidateWhoStartsName]))
+        #expect(shown(.later).contains([SampleData.candidateWhoStartsName, SampleData.candidateOlderStarterName]))
+        #expect(report.groups(orderedBy: .today).map(\.part) == report.groups(orderedBy: .later).map(\.part))
         let starter = try #require(report.candidates.first { $0.player.name == SampleData.candidateWhoStartsName })
         #expect(starter.part == .answersToday)
         #expect(starter.headlineAnswer == .betterPlayerToday)

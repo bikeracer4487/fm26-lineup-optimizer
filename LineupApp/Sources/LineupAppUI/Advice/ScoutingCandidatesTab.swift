@@ -93,7 +93,7 @@ private struct CandidateGroups: View {
                     if let heading = group.heading {
                         BoardHeading(heading)
                     }
-                    if group.isRest, let line = sheet.restLine {
+                    if let line = group.closedLine {
                         RestToggle(line: line, isOpen: navigation.scoutingRestOpen) {
                             navigation.scoutingRestOpen.toggle()
                         }
@@ -186,7 +186,15 @@ private struct ScoutingCandidateRowView: View {
                         }
                     }
                 }
-                LabelledLines(label: ScoutingPresentation.otherSlotsLabel, lines: lines.otherSlots)
+                if !lines.otherSlots.isEmpty {
+                    Labelled(label: ScoutingPresentation.otherSlotsLabel) {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                            ForEach(lines.otherSlots) { slot in
+                                SentenceLines(lines: slot.lines)
+                            }
+                        }
+                    }
+                }
             }
             .padding(.leading, Theme.Scouting.disclosureColumn)
             .textSelection(.enabled)
@@ -233,15 +241,24 @@ private struct LabelledLines: View {
     var body: some View {
         if !lines.isEmpty {
             Labelled(label: label) {
-                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    // Keyed by place, so two identical lines are both shown.
-                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                        Text(line)
-                            .font(Theme.Typeface.text())
-                            .foregroundStyle(Theme.Colour.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                SentenceLines(lines: lines)
+            }
+        }
+    }
+}
+
+/// The engine's sentences, one under another.
+private struct SentenceLines: View {
+    let lines: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            // Keyed by place, so two identical lines are both shown.
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                Text(line)
+                    .font(Theme.Typeface.text())
+                    .foregroundStyle(Theme.Colour.ink)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

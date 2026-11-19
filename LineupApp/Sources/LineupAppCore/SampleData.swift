@@ -356,17 +356,24 @@ public enum SampleData {
     /// with a held player's name, age and potential ability is taken for him and left out.
     static let candidateNames = [
         "Brayden Daniel": "Kofi Mensah", "Max Treml": "Owen Pryce", "Tyrae Njogu": "Jaden Okafor",
-        "Caleb Moir": "Rhys Calloway", "Aydin Ulas": "Emre Kaya", "Kauan Bitencourt de Oliveira": "Lucas Ferreira da Silva",
+        "Aydin Ulas": "Emre Kaya", "Kauan Bitencourt de Oliveira": "Lucas Ferreira da Silva",
     ]
     /// The sample candidate made good enough to start at once where the sample needs a better player.
     static let candidateWhoStartsName = "Kofi Mensah"
     /// The sample candidate given hidden attributes on the wrong side of their lines.
     static let candidateWithCautionsName = "Lucas Ferreira da Silva"
+    /// The sample's own U21 pasted as he is, so the paste shows who was left out as already the club's.
+    static let candidateAlreadyHeldName = "Caleb Moir"
+    /// A second starter where the sample needs a better player: the first one's row at 27 and one point higher, so
+    /// he rates higher today and has no reach, and the Today and Later orders put the two the other way round.
+    static let candidateOlderStarterName = "Dan Whitfield"
 
-    /// The sample model holding the sample candidates: the U21 capture's rows at another club under other names, read
-    /// through the importer, with two edited so that one answers a better-player need today (every attribute but the
-    /// hidden ones and his personality raised by two) and one has cautions (Injury Proneness 17 and Controversy 18).
-    /// The clipboard keeps what the sample's last import left on it.
+    /// The sample model holding the sample candidates: the U21 capture's rows at another club, all but one under other
+    /// names, read through the importer, with two edited so that one answers a better-player need today (every
+    /// attribute but the hidden ones and his personality raised by two) and one has cautions (Injury Proneness 17 and
+    /// Controversy 18), and a seventh, an older copy of the first, beside him. The one left under his own name is the
+    /// sample's own U21 and is left out as already the club's. The clipboard keeps what the sample's last import left
+    /// on it.
     @MainActor public static func modelWithCandidates(repositoryRoot: URL) throws -> AppModel {
         let model = try build(repositoryRoot: repositoryRoot).model
         model.hold(try sampleCandidates(repositoryRoot: repositoryRoot))
@@ -401,13 +408,13 @@ public enum SampleData {
         } catch {
             throw SampleDataError(description: "The sample candidates could not be read: \(ErrorDescriptions.describe(error))")
         }
-        guard Set(result.players.map(\.name)) == Set(candidateNames.values) else {
+        guard Set(result.players.map(\.name)) == Set(candidateNames.values).union([candidateAlreadyHeldName]) else {
             throw SampleDataError(description: "The sample candidates are not the U21s renamed.")
         }
         let untouched: Set<Attribute> = [.consistency, .importantMatches, .injuryProneness, .controversy, .temperament,
                                          .professionalism, .ambition, .determination, .dirtiness, .versatility,
                                          .eccentricity, .adaptability, .loyalty, .pressure, .sportsmanship]
-        let players = result.players.map { player -> Player in
+        var players = result.players.map { player -> Player in
             var player = player
             switch player.name {
             case candidateWhoStartsName:
@@ -421,6 +428,17 @@ public enum SampleData {
             }
             return player
         }
+        guard let starter = players.first(where: { $0.name == candidateWhoStartsName }) else {
+            throw SampleDataError(description: "The sample candidates have no \(candidateWhoStartsName).")
+        }
+        var older = starter
+        older.name = candidateOlderStarterName
+        older.id = PlayerID(key: PlayerID.normalise(candidateOlderStarterName))
+        older.age = 27
+        for (attribute, value) in older.attributes where !untouched.contains(attribute) {
+            older.attributes[attribute] = min(20, value + 1)
+        }
+        players.append(older)
         return ScoutingPaste(players: players, money: result.money)
     }
 

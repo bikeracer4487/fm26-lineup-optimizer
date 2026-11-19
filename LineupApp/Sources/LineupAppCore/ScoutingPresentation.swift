@@ -60,15 +60,13 @@ public struct ScoutingCandidateRow: Identifiable, Equatable, Sendable {
     /// In the paste's currency and FMRTE's period: "£500 a week".
     public let wage: String
     public let isInjured: Bool
-    /// The headline slot's token text; nil when he plays no slot.
-    public let slotText: String?
     /// How he would stand at his headline slot today; the engine's sentence that he can play no slot when he has none.
     public let todayLines: [String]
     public let laterLines: [String]
     /// "Injury Proneness 16".
     public let cautions: [String]
-    /// A line for each other slot he can play, in the tactic's order.
-    public let otherSlots: [String]
+    /// Each other slot he can play, in the tactic's order, with its lines.
+    public let otherSlots: [ScoutingOtherSlot]
 
     /// What the paste says of him, on one line under his name: "Age 19 · D/WB L · Banbury United · On loan at Barnet ·
     /// Asking £25,250 · £500 a week", leaving out what the paste did not carry.
@@ -95,11 +93,24 @@ public struct ScoutingCandidateRow: Identifiable, Equatable, Sendable {
     }
 }
 
+/// One slot a candidate can play that is not his headline: the engine's lines for it, drawn together.
+public struct ScoutingOtherSlot: Identifiable, Equatable, Sendable {
+    public var id: SlotID { slot }
+    public let slot: SlotID
+    /// His lines for today there, then one for later when he has a reach; each names the position.
+    public let lines: [String]
+
+    public init(slot: SlotID, lines: [String]) {
+        self.slot = slot
+        self.lines = lines
+    }
+}
+
 /// The lines a candidate's row shows under his name, by label; an empty list shows no label.
 public struct ScoutingRowLines: Equatable, Sendable {
     public let today: [String]
     public let later: [String]
-    public let otherSlots: [String]
+    public let otherSlots: [ScoutingOtherSlot]
 }
 
 /// One group of candidates: those answering one need at one slot, or one of the two parts that are a group each.
@@ -113,6 +124,8 @@ public struct CandidateGroupRows: Identifiable, Equatable, Sendable {
     /// their first line today and their cautions until opened.
     public let isRest: Bool
     public let rows: [ScoutingCandidateRow]
+    /// The line the group is closed behind, "6 more players", for the rest; nil for a group that is never closed.
+    public let closedLine: String?
 
     /// Whether the group's rows show: always, except for the rest part while it is closed.
     public func showsRows(restOpen: Bool) -> Bool { !isRest || restOpen }
@@ -126,12 +139,8 @@ public struct CandidatesSheet: Equatable, Sendable {
     public let leftOutLine: String?
     /// In the engine's order, without empty groups.
     public let groups: [CandidateGroupRows]
-
-    /// "6 more players": the line the rest part is closed behind; nil when it has nobody.
-    public var restLine: String? {
-        let count = groups.filter(\.isRest).map(\.rows.count).reduce(0, +)
-        return count == 0 ? nil : ScoutingPresentation.restLine(count)
-    }
+    /// How well backed the candidates shown are, once for them all; nil for FM27 evidence or none shown.
+    public let evidenceNote: String?
 
     /// Every candidate's row, so every row can be opened at once.
     public var rowIDs: Set<PlayerID> { Set(groups.flatMap(\.rows).map(\.id)) }
@@ -199,14 +208,16 @@ public enum ScoutingPresentation {
                 .joined(separator: "-")
             let isRest: Bool
             switch group.part {
-            case .answersToday, .answersLater, .wouldStartElsewhere: isRest = false
+            case .answersToday, .answersLater, .wouldStartElsewhere, .couldPassElsewhere: isRest = false
             case .rest: isRest = true
             }
             return CandidateGroupRows(id: id, partTitle: isFirstOfPart ? AdvisorText.name(group.part) : nil,
-                                      heading: heading, isRest: isRest, rows: group.candidates.map { row($0, money: money) })
+                                      heading: heading, isRest: isRest, rows: group.candidates.map { row($0, money: money) },
+                                      closedLine: isRest ? restLine(group.candidates.count) : nil)
         }
         return CandidatesSheet(readLine: AdvisorText.playersRead(pasted),
-                               leftOutLine: AdvisorText.leftOutAlreadyYours(report.leftOut), groups: groups)
+                               leftOutLine: AdvisorText.leftOutAlreadyYours(report.leftOut), groups: groups,
+                               evidenceNote: report.basis.flatMap(AdvisorText.note(for:)))
     }
 
     static func row(_ candidate: LineupEngine.Candidate, money: MoneyStyle) -> ScoutingCandidateRow {
@@ -217,10 +228,11 @@ public enum ScoutingPresentation {
             club: AdvisorText.club(of: player), onLoan: player.loanedTo.map(AdvisorText.onLoan(at:)),
             askingPrice: player.askingPrice.map { AdvisorText.askingPrice($0, money) },
             wage: Display.wage(perWeek: player.wagePerWeek, money), isInjured: player.isInjured,
-            slotText: headline?.slot.displayName,
             todayLines: headline.map(AdvisorText.todayLines) ?? [AdvisorText.playsNoSlot],
             laterLines: AdvisorText.laterLines(candidate),
             cautions: candidate.cautions.map(AdvisorText.caution),
-            otherSlots: candidate.slots.filter { $0.slot != headline?.slot }.map(AdvisorText.otherSlotLine))
+            otherSlots: candidate.slots.filter { $0.slot != headline?.slot }.map {
+                ScoutingOtherSlot(slot: $0.slot, lines: AdvisorText.otherSlotLines($0))
+            })
     }
 }
