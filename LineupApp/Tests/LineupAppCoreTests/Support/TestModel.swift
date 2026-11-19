@@ -29,6 +29,11 @@ enum Captures {
     static var firstTeamWithIDGrids: Data { get throws { try data("first-team-with-id.grids.json") } }
     static var u21: String { get throws { try text("u21.tsv") } }
     static var u21Grids: Data { get throws { try data("u21.grids.json") } }
+    /// The U21 paste with its club made another, as a search of another club's players would paste them.
+    static var u21AtAnotherClub: String { get throws { try u21.replacingOccurrences(of: "Oxford City", with: "Banbury United") } }
+    /// The U21s from the team grid, which carries no club and no asking price.
+    static var u21TeamGrid: String { get throws { try text("u21-team-grid.tsv") } }
+    static var u21TeamGridGrids: Data { get throws { try data("u21-team-grid.grids.json") } }
 
     /// The paste with every pound sign made a dollar, as FMRTE pastes it when set to show dollars.
     static func inDollars(_ paste: String) -> String { paste.replacingOccurrences(of: "£", with: "$") }

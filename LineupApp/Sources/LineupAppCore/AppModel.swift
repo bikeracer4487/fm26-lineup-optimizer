@@ -115,6 +115,11 @@ public struct AppEnvironment: Sendable {
     /// The mentoring advice by squad, with the game's date it was worked out for; cleared by every replan and every
     /// change to the mentoring state (see `mentoringAdvice(for:)`).
     @ObservationIgnored var mentoringCache: [Squad: (asOf: Day, advice: MentoringAdvice)] = [:]
+    /// The players of the last paste on the Scouting screen, held in memory only: never saved, so gone when the app
+    /// quits. Changed only through `hold(_:)`, which `pasteCandidates()`, `clearCandidates()` and the sample data call.
+    public internal(set) var scoutingPaste: ScoutingPaste?
+    /// Why the last paste on the Scouting screen was refused, in the engine's sentence; nil after a good paste.
+    public internal(set) var scoutingPasteProblem: String?
 
     /// How many times the plan has been worked out, so tests can tell when a change did not replan.
     @ObservationIgnored var timesPlanned = 0
@@ -125,6 +130,8 @@ public struct AppEnvironment: Sendable {
     @ObservationIgnored var timesElevensWorkedOut = 0
     /// How many times one squad's mentoring advice has been worked out.
     @ObservationIgnored var timesMentoringWorkedOut = 0
+    /// How many times the held candidates have been judged.
+    @ObservationIgnored var timesCandidatesJudged = 0
     @ObservationIgnored let store: Store
     @ObservationIgnored let environment: AppEnvironment
 

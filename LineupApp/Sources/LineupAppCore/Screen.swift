@@ -1,6 +1,6 @@
 /// The app's screens, in the order the top row lists them: the advisors after Match Selection, Settings last.
 public enum Screen: String, CaseIterable, Identifiable, Sendable {
-    case squad, tactics, fixtures, matchSelection, elevens, rest, training, removal, settings
+    case squad, tactics, fixtures, matchSelection, elevens, rest, training, removal, scouting, settings
 
     public var id: String { rawValue }
 
@@ -15,15 +15,16 @@ public enum Screen: String, CaseIterable, Identifiable, Sendable {
         case .rest: "Rest"
         case .training: "Training"
         case .removal: "Player Removal"
+        case .scouting: "Scouting"
         case .settings: "Settings"
         }
     }
 
-    /// The screen's name on its pill in the top row: the title, shortened where nine pills need the room.
+    /// The screen's name on its pill in the top row: the title, shortened where ten pills need the room.
     public var pillTitle: String {
         switch self {
         case .removal: "Removal"
-        case .squad, .tactics, .fixtures, .matchSelection, .elevens, .rest, .training, .settings: title
+        case .squad, .tactics, .fixtures, .matchSelection, .elevens, .rest, .training, .scouting, .settings: title
         }
     }
 }

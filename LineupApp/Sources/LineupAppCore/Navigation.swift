@@ -33,7 +33,8 @@ public enum MentoringEditing: Identifiable, Equatable, Sendable {
 /// Match Selection's fixture, selected pick and view, the squad table's filter, search and sort, the tactic shown,
 /// a fixture being edited and the fixture whose suggested importance's reasons are shown, the Elevens screen's view,
 /// tactic and slot, the Player Removal screen's filter and the rows opened or closed, and the Training screen's tab,
-/// the squad its Mentoring tab shows and what that tab has open for editing.
+/// the squad its Mentoring tab shows and what that tab has open for editing, and the Scouting screen's tab, tactic,
+/// order and opened rows.
 @MainActor @Observable public final class Navigation {
     public var screen: Screen?
     /// The fixture shown. While nil, or once it has left the plan, `MatchPresentation.initialFixture`.
@@ -63,6 +64,12 @@ public enum MentoringEditing: Identifiable, Equatable, Sendable {
     public var trainingView: TrainingView = .retraining
     public var mentoringSquad: Squad = .firstTeam
     public var mentoringEditing: MentoringEditing?
+    /// The Scouting screen's tab, its tactic (nil: the primary), the order of its candidates, and the candidates'
+    /// rows opened to show their other slots.
+    public var scoutingView: ScoutingView = .needs
+    public var scoutingTacticID: UUID?
+    public var scoutingOrder: CandidateOrder = .today
+    public var scoutingOpen: Set<PlayerID> = []
 
     public init(screen: Screen? = .squad, matchFixture: FixtureID? = nil, matchSelection: PickSelection? = nil,
                 matchView: MatchView = .teamSheet, squadShown: Squad? = nil, squadSearch: String = "",

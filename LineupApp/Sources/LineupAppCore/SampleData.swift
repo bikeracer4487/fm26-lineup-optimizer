@@ -111,9 +111,12 @@ public enum SampleData {
 
     /// The sample model for a window the owner clicks in: as `model`, but on the Mac's monotonic clock, so a second
     /// click within the training actions' interval is ignored as in the real app. The pictures and the tests keep the
-    /// scripted clock, which moves a second at each reading.
+    /// scripted clock, which moves a second at each reading. It holds the sample candidates, so the Scouting screen has
+    /// players to show before anything is pasted.
     @MainActor public static func interactiveModel(repositoryRoot: URL) throws -> AppModel {
-        try build(repositoryRoot: repositoryRoot, usesRealClock: true).model
+        let model = try build(repositoryRoot: repositoryRoot, usesRealClock: true).model
+        model.hold(try sampleCandidates(repositoryRoot: repositoryRoot))
+        return model
     }
 
     /// The sample model after an import of text that is not FMRTE rows: the squads are unchanged and
@@ -342,6 +345,83 @@ public enum SampleData {
         var draft = model.fixtureDraft(for: model.fixtures[1])
         model.pasteOpponentSquad(into: &draft)
         return (model, draft)
+    }
+
+    // MARK: Scouting
+
+    /// The club the sample candidates are pasted from.
+    public static let candidateClub = "Banbury United"
+
+    /// The names the sample candidates are given in place of the U21s'. The sample holds the U21s, and a pasted player
+    /// with a held player's name, age and potential ability is taken for him and left out.
+    static let candidateNames = [
+        "Brayden Daniel": "Kofi Mensah", "Max Treml": "Owen Pryce", "Tyrae Njogu": "Jaden Okafor",
+        "Caleb Moir": "Rhys Calloway", "Aydin Ulas": "Emre Kaya", "Kauan Bitencourt de Oliveira": "Lucas Ferreira da Silva",
+    ]
+    /// The sample candidate made good enough to start at once where the sample needs a better player.
+    static let candidateWhoStartsName = "Kofi Mensah"
+    /// The sample candidate given hidden attributes on the wrong side of their lines.
+    static let candidateWithCautionsName = "Lucas Ferreira da Silva"
+
+    /// The sample model holding the sample candidates: the U21 capture's rows at another club under other names, read
+    /// through the importer, with two edited so that one answers a better-player need today (every attribute but the
+    /// hidden ones and his personality raised by two) and one has cautions (Injury Proneness 17 and Controversy 18).
+    /// The clipboard keeps what the sample's last import left on it.
+    @MainActor public static func modelWithCandidates(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        model.hold(try sampleCandidates(repositoryRoot: repositoryRoot))
+        return model
+    }
+
+    /// The sample model holding the sample candidates after the sample's own U21s were pasted, which is refused: every
+    /// pasted player is already the club's. The candidates are still held.
+    @MainActor public static func modelWithRefusedCandidates(repositoryRoot: URL) throws -> AppModel {
+        let (model, input) = try build(repositoryRoot: repositoryRoot)
+        model.hold(try sampleCandidates(repositoryRoot: repositoryRoot))
+        input.clipboard = String(decoding: try fixture("captures/u21.tsv", under: repositoryRoot), as: UTF8.self)
+        input.config = .data(try fixture("captures/u21.grids.json", under: repositoryRoot))
+        model.pasteCandidates()
+        guard model.scoutingPasteProblem != nil else {
+            throw SampleDataError(description: "Pasting the sample's own U21s as candidates was not refused.")
+        }
+        return model
+    }
+
+    /// The sample candidates, as a paste of them is held.
+    static func sampleCandidates(repositoryRoot: URL) throws -> ScoutingPaste {
+        var text = String(decoding: try fixture("captures/u21.tsv", under: repositoryRoot), as: UTF8.self)
+            .replacingOccurrences(of: clubName, with: candidateClub)
+        for (name, given) in candidateNames.sorted(by: { $0.key < $1.key }) {
+            text = text.replacingOccurrences(of: "\"\(name)\"", with: "\"\(given)\"")
+        }
+        let result: ImportResult
+        do {
+            result = try Importer.importPlayers(clipboard: text, fmrteConfig: try fixture("captures/u21.grids.json", under: repositoryRoot),
+                                                squad: .firstTeam)
+        } catch {
+            throw SampleDataError(description: "The sample candidates could not be read: \(ErrorDescriptions.describe(error))")
+        }
+        guard Set(result.players.map(\.name)) == Set(candidateNames.values) else {
+            throw SampleDataError(description: "The sample candidates are not the U21s renamed.")
+        }
+        let untouched: Set<Attribute> = [.consistency, .importantMatches, .injuryProneness, .controversy, .temperament,
+                                         .professionalism, .ambition, .determination, .dirtiness, .versatility,
+                                         .eccentricity, .adaptability, .loyalty, .pressure, .sportsmanship]
+        let players = result.players.map { player -> Player in
+            var player = player
+            switch player.name {
+            case candidateWhoStartsName:
+                for (attribute, value) in player.attributes where !untouched.contains(attribute) {
+                    player.attributes[attribute] = min(20, value + 2)
+                }
+            case candidateWithCautionsName:
+                player.attributes[.injuryProneness] = 17
+                player.attributes[.controversy] = 18
+            default: break
+            }
+            return player
+        }
+        return ScoutingPaste(players: players, money: result.money)
     }
 
     /// The sample model with two first-team players' jadedness raised in its copy of the squads, so the rest advice has

@@ -108,6 +108,7 @@ struct ScreenView: View {
         case .rest: RestScreen(model: model)
         case .training: TrainingScreen(model: model, navigation: navigation)
         case .removal: RemovalScreen(model: model, navigation: navigation)
+        case .scouting: ScoutingScreen(model: model, navigation: navigation)
         case .settings: SettingsScreen(model: model)
         }
     }
