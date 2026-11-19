@@ -137,7 +137,7 @@ A candidate of 24 or over has no "Later": the line says he is judged as he is to
 **Answering a need.**
 
 - He answers a "Better player" need today when he would start at that slot, and later when he is 23 or under and could pass the first choice there.
-- He answers a "More depth" need when he would count as cover or better at that slot today and is solid there.
+- He answers a "More depth" need when Depth would count him as cover at that slot: he is solid there and rates at least 80% of the first choice (`depthCoverShare`), whatever his level; with no first choice there is no such line. A player far below the first choice who would make the second eleven only because nobody else is there does not answer it (revised during the build on 18 November 2026, when a test showed such a player listed as answering the need).
 
 **His headline slot** is the first of: a slot where he answers a "Better player" need today; one where he answers a "More depth" need; one where he answers a "Better player" need later; otherwise the slot where his level today is best, then where his rating over the first choice's is greatest, then the earlier slot. His other slots are shown when his row is opened.
 
