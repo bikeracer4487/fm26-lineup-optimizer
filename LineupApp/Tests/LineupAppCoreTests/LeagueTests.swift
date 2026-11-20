@@ -214,17 +214,109 @@ import LineupEngine
         #expect(t.model.leagueTableIsOutOfDate)
     }
 
-    @Test func aFormatProblemIsGoneAfterTheNextPasteAndAfterRemovingTheTable() throws {
+    @Test func aRefusedDraftIsCheckedAgainAfterAPasteAndAfterRemovingTheTable() throws {
         let (t, _) = try ready()
         try t.pasteLeagueTable()
-        t.model.setLeagueFormatDraft(LeagueFormatDraft(promoted: 20, playOffs: 20, relegated: 20))
-        #expect(t.model.leagueFormatProblem != nil)
+        let big = LeagueFormat(promoted: 20, playOffs: 20, relegated: 20)
+        t.model.setLeagueFormatDraft(LeagueFormatDraft(big))
+        let refused = ErrorDescriptions.describe(LeagueFormatError.tooMany(format: big, teams: 24))
+        #expect(t.model.leagueFormatProblem == refused)
+        // A new paste of a table it still does not fit keeps the problem in view.
         try t.pasteLeagueTable()
-        #expect(t.model.leagueFormatProblem == nil)
-        t.model.setLeagueFormatDraft(LeagueFormatDraft(promoted: 20, playOffs: 20, relegated: 20))
-        #expect(t.model.leagueFormatProblem != nil)
+        #expect(t.model.leagueFormatProblem == refused)
+        #expect(t.model.leagueFormatDraft == LeagueFormatDraft(big))
+        // With no table it fits, and is saved as typing it would save it.
         t.model.removeLeagueTable()
         #expect(t.model.leagueFormatProblem == nil)
+        #expect(t.model.league.format == big)
+    }
+
+    @Test func aRefusedDraftThatFitsTheNewTableIsSaved() throws {
+        let (t, _) = try ready()
+        try t.pasteLeagueTable(tenTeams())
+        let format = LeagueFormat(promoted: 1, playOffs: 6, relegated: 4)
+        t.model.setLeagueFormatDraft(LeagueFormatDraft(format))
+        #expect(t.model.leagueFormatProblem == ErrorDescriptions.describe(LeagueFormatError.tooMany(format: format, teams: 10)))
+        #expect(t.model.league.format == nil)
+        try t.pasteLeagueTable()
+        #expect(t.model.leagueFormatProblem == nil)
+        #expect(t.model.league.format == format)
+        #expect(t.reopened().league.format == format)
+        guard case .read = t.model.leagueReading else {
+            Issue.record("expected a reading, got \(t.model.leagueReading)")
+            return
+        }
+    }
+
+    @Test func aDraftThatNoLongerFitsAfterAPasteSaysSo() throws {
+        let (t, _) = try ready()
+        try read(t)
+        try t.pasteLeagueTable(tenTeams())
+        let format = LeagueFormat(promoted: 1, playOffs: 6, relegated: 4)
+        #expect(t.model.leagueFormatProblem == ErrorDescriptions.describe(LeagueFormatError.tooMany(format: format, teams: 10)))
+        #expect(t.model.league.format == format)
+    }
+
+    @Test func anIncompleteDraftHasNoProblemAfterAPaste() throws {
+        let (t, _) = try ready()
+        try t.pasteLeagueTable(tenTeams())
+        t.model.setLeagueFormatDraft(LeagueFormatDraft(promoted: 1, playOffs: 30))
+        try t.pasteLeagueTable()
+        #expect(t.model.leagueFormatProblem == nil)
+        #expect(t.model.league.format == nil)
+    }
+
+    /// Ten teams, places 1 to 10, Oxford City in 4th, each with wins, draws and losses that add up to the matches played.
+    private func tenTeams() -> String {
+        (1...10).map { place in
+            let name = place == 4 ? "Oxford City" : "Team \(place)"
+            let (played, wins, draws, losses) = (18, 10 - place / 2, 3, 5 + place / 2)
+            return ["\(place)", name, "\(played)", "\(wins)", "\(draws)", "\(losses)", "\(wins * 2)", "\(losses)",
+                    "\(wins * 3 + draws)"].map { "\"\($0)\"" }.joined(separator: "\t")
+        }.joined(separator: "\n")
+    }
+
+    // MARK: the number fields as typed
+
+    @Test func aFieldShowsItsNumberInDigitsOrNothing() {
+        let draft = LeagueFormatDraft(promoted: 1, playOffs: nil, relegated: 1234)
+        #expect(draft.text(.promoted) == "1")
+        #expect(draft.text(.playOffs) == "")
+        #expect(draft.text(.relegated) == "1234")
+    }
+
+    @Test(arguments: [("6", 6), ("", nil), ("a", nil), ("1a2", 12), ("-3", 3), (" 7 ", 7), ("06", 6), ("\u{2212}", nil)] as [(String, Int?)])
+    func typedTextIsItsDigits(_ typed: String, _ number: Int?) {
+        var draft = LeagueFormatDraft(promoted: 9, playOffs: 9, relegated: 9)
+        draft.set(.playOffs, text: typed)
+        #expect(draft.playOffs == number)
+        #expect(draft.promoted == 9 && draft.relegated == 9)
+    }
+
+    @Test func eachFieldIsSetOnItsOwn() {
+        var draft = LeagueFormatDraft()
+        draft.set(.promoted, text: "1")
+        draft.set(.relegated, text: "4")
+        #expect(draft == LeagueFormatDraft(promoted: 1, playOffs: nil, relegated: 4))
+    }
+
+    @Test func anEditThroughABlankFieldKeepsTheFormatAndTheChoiceByHand() throws {
+        let (t, _) = try ready()
+        try read(t)
+        t.model.setLeagueSituation(.midTable)
+        for typed in ["6", "", "8"] {
+            var draft = t.model.leagueFormatDraft
+            draft.set(.playOffs, text: typed)
+            t.model.setLeagueFormatDraft(draft)
+            if typed.isEmpty {
+                #expect(t.model.league.format == LeagueFormat(promoted: 1, playOffs: 6, relegated: 4))
+                #expect(t.model.leagueScreen.formatInUseLine != nil)
+            }
+            #expect(t.model.settings.leagueSituation == .midTable)
+        }
+        #expect(t.model.league.format == LeagueFormat(promoted: 1, playOffs: 8, relegated: 4))
+        #expect(t.model.settings.leagueSituation == .midTable)
+        #expect(t.model.leagueScreen.formatInUseLine == nil)
     }
 
     @Test func aClubNoLongerInTheTableStopsTheReadingAndSaysSo() throws {

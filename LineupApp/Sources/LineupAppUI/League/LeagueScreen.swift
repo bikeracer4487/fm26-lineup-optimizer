@@ -56,27 +56,28 @@ public struct LeagueScreen: View {
                 if content.rows.isEmpty {
                     EmptyState(content.emptyLines.joined(separator: " "))
                 } else {
-                    LeagueTable(rows: content.rows)
+                    LeagueTable(rows: content.rows, withinMarginKey: content.withinMarginKey)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(.bottom, Theme.Spacing.l)
         }
-        .alert("Remove the league table?", isPresented: $removing) {
+        .alert(AppModel.removeTableAlertTitle, isPresented: $removing) {
             Button(AppModel.removeTableTitle, role: .destructive) { model.removeLeagueTable() }
-            Button("Cancel", role: .cancel) {}
+            Button(AppModel.cancelTitle, role: .cancel) {}
         } message: {
-            Text("The three numbers stay.")
+            Text(AppModel.removeTableAlertMessage)
         }
     }
 
-    /// The three numbers, each with its label, and the bye line under them.
+    /// The three numbers, each with its label, and the bye line under them; then why a draft was refused, and which
+    /// numbers the table is still read with while the fields show something else.
     private func format(_ content: LeagueScreenContent) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.xl) {
-                numberField(AppModel.promotedLabel, \.promoted)
-                numberField(AppModel.playOffsLabel, \.playOffs)
-                numberField(AppModel.relegatedLabel, \.relegated)
+                numberField(AppModel.promotedLabel, .promoted)
+                numberField(AppModel.playOffsLabel, .playOffs)
+                numberField(AppModel.relegatedLabel, .relegated)
             }
             if let bye = content.byeLine {
                 Text(bye)
@@ -86,22 +87,30 @@ public struct LeagueScreen: View {
             if let problem = content.formatProblem {
                 CautionLine(problem)
             }
+            if let inUse = content.formatInUseLine {
+                Text(inUse)
+                    .font(Theme.Typeface.text(Theme.TypeSize.small))
+                    .foregroundStyle(Theme.Colour.mutedInk)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
-    private func numberField(_ label: String, _ field: WritableKeyPath<LeagueFormatDraft, Int?>) -> some View {
+    /// Each keystroke goes to the model, so the numbers take effect as they are typed; Core turns the text into the
+    /// number and back.
+    private func numberField(_ label: String, _ field: LeagueFormatField) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
             Text(label)
                 .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
                 .foregroundStyle(Theme.Colour.mutedInk)
                 .fixedSize()
-            TextField(label, value: Binding(
-                get: { model.leagueFormatDraft[keyPath: field] },
-                set: { picked in
+            TextField(label, text: Binding(
+                get: { model.leagueFormatDraft.text(field) },
+                set: { typed in
                     var draft = model.leagueFormatDraft
-                    draft[keyPath: field] = picked
+                    draft.set(field, text: typed)
                     model.setLeagueFormatDraft(draft)
-                }), format: .number.grouping(.never), prompt: Text(""))
+                }), prompt: Text(""))
                 .labelsHidden()
                 .boardField()
                 .multilineTextAlignment(.trailing)

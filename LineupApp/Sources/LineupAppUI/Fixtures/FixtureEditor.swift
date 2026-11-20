@@ -31,10 +31,10 @@ struct FixtureEditor: View {
                 GridRow {
                     label("Opponent")
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        if let teams = draft.opponentMenu {
-                            opponentMenu(teams)
+                        if draft.opponentMenu != nil {
+                            opponentMenu()
                         } else {
-                            TextField("Opponent", text: $draft.opponent, prompt: Text(Self.opponentPrompt))
+                            TextField("Opponent", text: $draft.opponent, prompt: Text(FixtureDraft.opponentPrompt))
                                 .labelsHidden()
                                 .boardField()
                         }
@@ -119,22 +119,17 @@ struct FixtureEditor: View {
         .boardCard()
     }
 
-    private static let opponentPrompt = "Who the match is against"
-
-    /// The league's teams to pick the opponent from, as wide as the text box. A saved opponent that is not in the table
-    /// is the menu's current entry until a team is picked, with the engine's caution under it.
-    private func opponentMenu(_ teams: [String]) -> some View {
-        let current = draft.opponentInTable ?? draft.opponent
-        return Picker("Opponent", selection: Binding(get: { current }, set: { draft.pick(opponent: $0) })) {
-            if draft.opponentInTable == nil {
-                Text(current.isEmpty ? Self.opponentPrompt : current).tag(current)
-            }
-            ForEach(teams, id: \.self) { team in
-                Text(team).tag(team)
+    /// The league's teams to pick the opponent from, as wide as the text box, with the entries and the one chosen as
+    /// Core gives them. A saved opponent that is not in the table is the menu's current entry until a team is picked,
+    /// with the engine's caution under it.
+    private func opponentMenu() -> some View {
+        Picker("Opponent", selection: Binding(get: { draft.opponentMenuSelection }, set: { draft.pick(opponent: $0) })) {
+            ForEach(draft.opponentMenuEntries, id: \.value) { entry in
+                Text(entry.title).tag(entry.value)
             }
         }
         .labelsHidden()
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(width: Theme.Layout.fixtureOpponentMenuWidth, alignment: .leading)
     }
 
     private func label(_ text: String) -> some View {

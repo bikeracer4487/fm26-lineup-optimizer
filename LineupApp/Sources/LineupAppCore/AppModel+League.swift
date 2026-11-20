@@ -45,35 +45,40 @@ extension AppModel {
     /// when it does not, `leagueFormatProblem` says why and the saved format stays.
     public func setLeagueFormatDraft(_ draft: LeagueFormatDraft) {
         leagueFormatDraft = draft
-        guard let format = draft.format else {
+        let hadReading = leagueIsRead
+        if checkFormatDraft() { leagueChanged(hadReading: hadReading) }
+    }
+
+    /// Checks the draft against the table held: an incomplete draft has no problem; a complete one that does not fit
+    /// says why; one that fits and is not the saved format is saved. True when it saved the format.
+    private func checkFormatDraft() -> Bool {
+        guard let format = leagueFormatDraft.format else {
             leagueFormatProblem = nil
-            return
+            return false
         }
         do {
             try format.check(teams: league.table?.teams.count)
         } catch {
             leagueFormatProblem = ErrorDescriptions.describe(error)
-            return
+            return false
         }
         leagueFormatProblem = nil
-        guard league.format != format else { return }
-        let hadReading = leagueIsRead
+        guard league.format != format else { return false }
         league.format = format
         save(.league)
-        leagueChanged(hadReading: hadReading)
+        return true
     }
 
     /// The first reading switches the League situation menu to the table; every change clears the kept suggestions.
-    /// It never plans.
+    /// It never plans. The draft in the fields is checked again against the table now held, so a problem found against
+    /// the old table does not stay, and a draft refused before is saved once it fits.
     private func leagueChanged(hadReading: Bool) {
+        _ = checkFormatDraft()
         if !hadReading, leagueIsRead, settings.leagueSituation != nil {
             settings.leagueSituation = nil
             save(.settings)
         }
         adviceCache?.suggestions = nil
-        // A problem found against the old table says nothing about the new one; a saved format that no longer fits the
-        // new table still shows through the reading's own failure.
-        leagueFormatProblem = nil
     }
 
     private var leagueIsRead: Bool {

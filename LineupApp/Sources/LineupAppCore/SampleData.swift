@@ -407,12 +407,11 @@ public enum SampleData {
         return model
     }
 
-    /// The league sample and a draft of its league fixture against "Chester", or, with `unmatched`, against "Buxton FC",
-    /// which is not a team in the table.
-    @MainActor public static func draftWithLeagueOpponent(repositoryRoot: URL, unmatched: Bool = false) throws
+    /// The league sample and a draft of its league fixture against `opponent`: "Chester"; "Buxton FC", which is not a
+    /// team in the table; or "Buxton", a side within the margin in a fixture the table speaks for.
+    @MainActor public static func draftWithLeagueOpponent(repositoryRoot: URL, opponent wanted: String) throws
         -> (model: AppModel, draft: FixtureDraft) {
         let model = try modelWithLeague(repositoryRoot: repositoryRoot)
-        let wanted = unmatched ? "Buxton FC" : "Chester"
         guard let stored = model.fixtures.first(where: { $0.opponent == wanted }) else {
             throw SampleDataError(description: "The league sample has no fixture against \(wanted).")
         }

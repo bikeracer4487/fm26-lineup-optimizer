@@ -3,9 +3,11 @@ import SwiftUI
 
 /// The league table: a heading row, then a row for each team with its figures right-aligned in the body face, and
 /// under a row at a line that counts a rule across with the line's name at its trailing end. The club's own row stands
-/// in marker blue; a side within the margin of the club carries a small mark.
+/// in marker blue; a side within the margin of the club carries a small mark, with its key under the table.
 struct LeagueTable: View {
     let rows: [LeagueRow]
+    /// The engine's words for the mark; nil when no side carries it.
+    let withinMarginKey: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -18,6 +20,18 @@ struct LeagueTable: View {
                 } else {
                     FaintRule()
                 }
+            }
+            if let key = withinMarginKey {
+                HStack(alignment: .center, spacing: Theme.Spacing.s) {
+                    Circle()
+                        .fill(Theme.Colour.mutedInk)
+                        .frame(width: Theme.League.markDiameter, height: Theme.League.markDiameter)
+                        .accessibilityHidden(true)
+                    Text(key)
+                        .font(Theme.Typeface.text(Theme.TypeSize.small))
+                        .foregroundStyle(Theme.Colour.mutedInk)
+                }
+                .padding(.top, Theme.Spacing.s)
             }
         }
     }
@@ -73,7 +87,8 @@ private struct LeagueTableRow: View {
                 .frame(width: Theme.League.markDiameter, height: Theme.League.markDiameter)
                 .opacity(row.isBattled ? 1 : 0)
                 .frame(width: Theme.League.markColumn)
-                .accessibilityHidden(true)
+                .accessibilityLabel(row.mark ?? "")
+                .accessibilityHidden(row.mark == nil)
         }
         .font(Theme.Typeface.text(Theme.TypeSize.body, weight: row.isOwn ? .bold : .regular))
         .foregroundStyle(row.isOwn ? Theme.Colour.markerBlue : Theme.Colour.ink)

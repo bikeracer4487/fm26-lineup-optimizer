@@ -157,8 +157,11 @@
 //                                              ("league-byhand-…") and in the smallest window
 //                                              ("league-small-…"); Fixtures with the menu on "From the table" and
 //                                              the league suggestions ("fixtures-fromtable-…"); and the fixture
-//                                              editor with the opponent menu ("fixtures-editor-league-…") and for
-//                                              an opponent not in the table ("fixtures-editor-league-unmatched-…").
+//                                              editor with the opponent menu ("fixtures-editor-league-…"), for
+//                                              an opponent not in the table ("fixtures-editor-league-unmatched-…")
+//                                              and for a side within the margin in a fixture the table speaks for,
+//                                              whose suggestion carries the table's base and the battling line
+//                                              ("fixtures-editor-league-battling-…").
 //                                              Every screen is drawn again in a narrow window, 800 by 700
 //                                              ("<screen>-narrow-…"), and Match Selection, Tactics, Fixtures
 //                                              and the advisor screens in the smallest window
@@ -426,9 +429,10 @@ let narrowWindow = CGSize(width: 800, height: 700)
     try ScreenPictures.write(model: sampleModel(root, .league), to: directory, size: size, variant: "fromtable",
                              screens: [.fixtures])
     let url = URL(fileURLWithPath: root, isDirectory: true)
-    for (name, unmatched) in [("fixtures-editor-league", false), ("fixtures-editor-league-unmatched", true)] {
+    for (name, opponent) in [("fixtures-editor-league", "Chester"), ("fixtures-editor-league-unmatched", "Buxton FC"),
+                             ("fixtures-editor-league-battling", "Buxton")] {
         let made: (model: AppModel, draft: FixtureDraft)
-        do { made = try SampleData.draftWithLeagueOpponent(repositoryRoot: url, unmatched: unmatched) } catch { fail("\(error)") }
+        do { made = try SampleData.draftWithLeagueOpponent(repositoryRoot: url, opponent: opponent) } catch { fail("\(error)") }
         try ScreenPictures.writeFixtureEditor(model: made.model, draft: made.draft, to: directory, name: name,
                                               size: Theme.Layout.fixtureEditorSuggestionPicture)
     }

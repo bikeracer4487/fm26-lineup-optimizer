@@ -31,6 +31,35 @@ public struct LeagueFormatDraft: Equatable, Sendable {
         self.init(promoted: format?.promoted, playOffs: format?.playOffs, relegated: format?.relegated)
     }
 
+    /// What a field shows: the number in digits with no grouping, or nothing when it is blank.
+    public func text(_ field: LeagueFormatField) -> String {
+        self[field].map { String($0) } ?? ""
+    }
+
+    /// Sets a field from what was typed in it: the digits of the text are the number, and text with no digit is blank,
+    /// so a letter typed never shows and nothing is negative from the keyboard. Digits too many to hold leave it blank.
+    public mutating func set(_ field: LeagueFormatField, text: String) {
+        let digits = text.filter { $0.isASCII && $0.isNumber }
+        self[field] = digits.isEmpty ? nil : Int(digits)
+    }
+
+    private subscript(field: LeagueFormatField) -> Int? {
+        get {
+            switch field {
+            case .promoted: promoted
+            case .playOffs: playOffs
+            case .relegated: relegated
+            }
+        }
+        set {
+            switch field {
+            case .promoted: promoted = newValue
+            case .playOffs: playOffs = newValue
+            case .relegated: relegated = newValue
+            }
+        }
+    }
+
     /// The format, when all three are entered.
     var format: LeagueFormat? {
         guard let promoted, let playOffs, let relegated else { return nil }

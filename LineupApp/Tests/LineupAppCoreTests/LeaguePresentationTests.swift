@@ -54,7 +54,7 @@ import LineupEngine
         let reading = try #require(t.model.leagueContext?.reading)
         let screen = t.model.leagueScreen
         #expect(screen.sentences == AdvisorText.standingLines(reading))
-        #expect(screen.evidenceNote == AdvisorText.leagueEvidenceNote(reading))
+        #expect(screen.evidenceNote == AdvisorText.leagueEvidenceNote(reading, rules: EngineParameters.fm27.leagueStandingRules.value))
         #expect(screen.byeLine == "2nd and 3rd get a bye.")
         #expect(screen.pastedLine == AdvisorText.tablePastedLine(on: TestModel.today))
         #expect(screen.offersRemove)
@@ -77,7 +77,10 @@ import LineupEngine
         try t.pasteLeagueTable()
         let screen = t.model.leagueScreen
         #expect(screen.rows.count == 24)
-        #expect(screen.rows.allSatisfy { $0.lineBelow == nil && !$0.isOwn && !$0.isBattled })
+        #expect(screen.rows.allSatisfy { $0.lineBelow == nil && !$0.isBattled })
+        // The club's own row is marked by its name, with no format and so no reading.
+        #expect(screen.rows.filter(\.isOwn).map(\.id) == [5])
+        #expect(screen.withinMarginKey == nil)
         #expect(screen.sentences == [AdvisorText.noFormatLine])
         #expect(screen.evidenceNote == nil)
         #expect(screen.byeLine == nil)
@@ -95,8 +98,93 @@ import LineupEngine
         #expect(screen.sentences == [ErrorDescriptions.describe(
             LeagueTableError.clubNotInTable(club: "Banbury United", teams: table.teams.count))])
         #expect(screen.rows.count == 24)
-        #expect(screen.rows.allSatisfy { $0.lineBelow == nil && !$0.isOwn && !$0.isBattled })
+        #expect(screen.rows.allSatisfy { !$0.isOwn && !$0.isBattled })
+        // The format fits the table, so its rules are drawn though there is no reading.
+        #expect(screen.rows.filter { $0.lineBelow != nil }.map { "\($0.id) \($0.lineBelow!)" }
+                == ["1 promoted", "3 bye", "7 play-offs", "20 relegated"])
         #expect(screen.evidenceNote == nil)
+    }
+
+    /// The owner's table with every team's season played out.
+    private func finishSeason(_ t: TestModel) throws {
+        var table = try #require(t.model.league.table)
+        for index in table.teams.indices { table.teams[index].played = 46 }
+        t.model.league.table = table
+    }
+
+    @Test func aFinishedSeasonDrawsItsRulesAndDoesNotSayTheTableStops() throws {
+        let t = try readReady()
+        try finishSeason(t)
+        addLeague(t, "Next season", on: day(30))
+        let reading = try #require(t.model.leagueContext?.reading)
+        #expect(reading.seasonIsOver)
+        #expect(t.model.leagueFixturesBeyondTheTable > 0)
+        let screen = t.model.leagueScreen
+        #expect(!screen.cautions.contains { $0.hasPrefix("The table has") })
+        #expect(screen.rows.filter { $0.lineBelow != nil }.map { "\($0.id) \($0.lineBelow!)" }
+                == ["1 promoted", "3 bye", "7 play-offs", "20 relegated"])
+        #expect(screen.rows.filter(\.isOwn).map(\.id) == [5])
+    }
+
+    @Test func aSeasonStillOnSaysTheTableStops() throws {
+        let t = try readReady()
+        let left = try #require(t.model.leagueContext?.reading.matchesLeft)
+        for week in 1...(left + 1) { addLeague(t, "Team \(week)", on: day(7 * week)) }
+        #expect(t.model.leagueScreen.cautions == [AdvisorText.tableStopsLine(matchesLeft: left, beyond: 1)])
+    }
+
+    @Test func pointsBelowZeroAreWrittenWithATrueMinus() throws {
+        let t = try readReady()
+        var table = try #require(t.model.league.table)
+        table.teams[23].points = -10
+        t.model.league.table = table
+        #expect(t.model.leagueScreen.rows[23].points == "\u{2212}10")
+        #expect(t.model.leagueScreen.rows[22].points.allSatisfy { $0.isNumber })
+    }
+
+    @Test func theMarkOnSidesWithinTheMarginHasAKey() throws {
+        let t = try readReady()
+        let reading = try #require(t.model.leagueContext?.reading)
+        let screen = t.model.leagueScreen
+        let key = AdvisorText.withinMarginKey(reading)
+        #expect(screen.withinMarginKey == key)
+        #expect(screen.rows.filter(\.isBattled).allSatisfy { $0.mark == key })
+        #expect(screen.rows.filter { !$0.isBattled }.allSatisfy { $0.mark == nil })
+    }
+
+    @Test func withNoSideWithinTheMarginThereIsNoKey() throws {
+        let t = try readReady()
+        var table = try #require(t.model.league.table)
+        for index in table.teams.indices { table.teams[index].played = 0 }
+        t.model.league.table = table
+        let reading = try #require(t.model.leagueContext?.reading)
+        #expect(reading.rivals.isEmpty)
+        #expect(t.model.leagueScreen.withinMarginKey == nil)
+        #expect(t.model.leagueScreen.rows.allSatisfy { $0.mark == nil })
+    }
+
+    @Test func theFormatInUseIsSaidWhileTheFieldsShowSomethingElse() throws {
+        let t = try readReady()
+        let saved = LeagueFormat(promoted: 1, playOffs: 6, relegated: 4)
+        #expect(t.model.leagueScreen.formatInUseLine == nil)
+        t.model.setLeagueFormatDraft(LeagueFormatDraft(promoted: 1, playOffs: nil, relegated: 4))
+        #expect(t.model.league.format == saved)
+        #expect(t.model.leagueScreen.formatInUseLine == AdvisorText.formatInUseLine(saved))
+        #expect(t.model.leagueScreen.formatProblem == nil)
+        t.model.setLeagueFormatDraft(LeagueFormatDraft(promoted: 1, playOffs: 30, relegated: 4))
+        #expect(t.model.leagueScreen.formatProblem != nil)
+        #expect(t.model.leagueScreen.formatInUseLine == AdvisorText.formatInUseLine(saved))
+        t.model.setLeagueFormatDraft(LeagueFormatDraft(saved))
+        #expect(t.model.leagueScreen.formatInUseLine == nil)
+    }
+
+    @Test func withNoFormatSavedNothingIsInUse() throws {
+        let t = try ScoutingSetup.ready()
+        try t.pasteLeagueTable()
+        t.model.setLeagueFormatDraft(LeagueFormatDraft(promoted: 1, playOffs: 6))
+        #expect(t.model.leagueScreen.formatInUseLine == nil)
+        t.model.setLeagueFormatDraft(LeagueFormatDraft(promoted: 20, playOffs: 20, relegated: 20))
+        #expect(t.model.leagueScreen.formatInUseLine == nil)
     }
 
     @Test func theCautionsComeInOrder() throws {
@@ -159,9 +247,16 @@ import LineupEngine
         addLeague(t, "City", on: day(10), competition: .cup)
         addLeague(t, "Rangers", on: day(11), competition: nil)
         addLeague(t, "Athletic", on: day(0))
-        t.model.history = [ConfirmedRecord(
-            lineup: ConfirmedLineup(fixture: confirmed, date: day(9), starters: [:]), names: [:], tacticName: "x")]
-        #expect(t.model.leagueScreen.fixturesNotInTheTable == ["Buxton FC on \(DayText.short(day(7)))"])
+        let confirmedToday = addLeague(t, "Wanderers", on: day(0))
+        t.model.history = [
+            ConfirmedRecord(lineup: ConfirmedLineup(fixture: confirmed, date: day(9), starters: [:]), names: [:],
+                            tacticName: "x"),
+            ConfirmedRecord(lineup: ConfirmedLineup(fixture: confirmedToday, date: day(0), starters: [:]), names: [:],
+                            tacticName: "x"),
+        ]
+        // Today's match is still to play until its lineup is confirmed.
+        #expect(t.model.leagueScreen.fixturesNotInTheTable
+                == ["Athletic on \(DayText.short(day(0)))", "Buxton FC on \(DayText.short(day(7)))"])
     }
 
     @Test func withNoTableNoFixtureIsNamed() throws {
@@ -198,10 +293,20 @@ import LineupEngine
         #expect(bare.leagueScreen.sentences == [AdvisorText.noFormatLine])
     }
 
+    @Test func theSamplesBuxtonFixtureCarriesTheTablesBaseAndTheBattlingLine() throws {
+        let made = try SampleData.draftWithLeagueOpponent(repositoryRoot: Captures.repositoryRoot, opponent: "Buxton")
+        let suggestion = try #require(made.model.suggestion(for: made.draft))
+        #expect(suggestion.reasons.first?.hasSuffix(": 100") == true)
+        #expect(suggestion.reasons.contains("Buxton are level on points with you (\u{00D7}1.2)"))
+    }
+
     @Test func theLabelsAreThePlainWords() {
         #expect(AppModel.pasteTableTitle == "Paste table")
         #expect(AppModel.removeTableTitle == "Remove table")
         #expect(AppModel.useTheTableTitle == "Use the table")
         #expect(AppModel.leagueColumnHeadings == ["Pl", "W", "D", "L", "F", "A", "GD", "Pts"])
+        #expect(AppModel.removeTableAlertTitle == "Remove the league table?")
+        #expect(AppModel.removeTableAlertMessage == "The three numbers stay.")
+        #expect(AppModel.cancelTitle == "Cancel")
     }
 }

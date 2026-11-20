@@ -99,6 +99,22 @@ public struct FixtureDraft: Equatable, Sendable {
         return AdvisorText.notInTheTable(opponent.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
+    /// What the opponent menu shows before the teams when nobody is chosen; also the text box's prompt.
+    public static let opponentPrompt = "Who the match is against"
+
+    /// What the opponent menu shows as chosen: the table's spelling when the opponent is one of its teams, otherwise the
+    /// name as saved ("" when blank).
+    public var opponentMenuSelection: String { opponentInTable ?? opponent }
+
+    /// The opponent menu's entries: a saved name that is not in the table (or the prompt, when blank) first, so it stays
+    /// chosen until a team is picked, then the table's teams.
+    public var opponentMenuEntries: [(value: String, title: String)] {
+        let teams = (opponentMenu ?? []).map { (value: $0, title: $0) }
+        guard opponentInTable == nil else { return teams }
+        let current = opponentMenuSelection
+        return [(value: current, title: current.isEmpty ? Self.opponentPrompt : current)] + teams
+    }
+
     /// Takes a team from the table's menu as the opponent.
     public mutating func pick(opponent team: String) {
         opponent = team

@@ -1348,6 +1348,36 @@ extension FixturePresentationTests {
         #expect(leagueDraft(bare, opponent: "Buxton FC").opponentNotInTableText == nil)
     }
 
+    @Test func theMenuShowsTheTablesSpellingAsChosenAndOffersOnlyTheTeams() throws {
+        let t = try ScoutingSetup.ready()
+        try t.pasteLeagueTable()
+        let draft = leagueDraft(t, opponent: " buxton")
+        #expect(draft.opponentMenuSelection == "Buxton")
+        let entries = draft.opponentMenuEntries
+        #expect(entries.map(\.value) == draft.opponentMenu)
+        #expect(entries.allSatisfy { $0.value == $0.title })
+    }
+
+    @Test func aSavedNameNotInTheTableIsTheMenusFirstEntry() throws {
+        let t = try ScoutingSetup.ready()
+        try t.pasteLeagueTable()
+        let draft = leagueDraft(t, opponent: "Buxton FC")
+        #expect(draft.opponentMenuSelection == "Buxton FC")
+        let entries = draft.opponentMenuEntries
+        #expect(entries.first?.value == "Buxton FC" && entries.first?.title == "Buxton FC")
+        #expect(entries.dropFirst().map(\.value) == draft.opponentMenu)
+    }
+
+    @Test func aBlankOpponentIsTheMenusPrompt() throws {
+        let t = try ScoutingSetup.ready()
+        try t.pasteLeagueTable()
+        let draft = leagueDraft(t)
+        #expect(draft.opponentMenuSelection == "")
+        #expect(draft.opponentMenuEntries.first?.value == "")
+        #expect(draft.opponentMenuEntries.first?.title == FixtureDraft.opponentPrompt)
+        #expect(FixtureDraft.opponentPrompt == "Who the match is against")
+    }
+
     @Test func savingKeepsTheSpellingPicked() throws {
         let t = try ScoutingSetup.ready()
         try t.pasteLeagueTable()

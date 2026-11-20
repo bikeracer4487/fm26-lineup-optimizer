@@ -464,6 +464,9 @@ public enum Theme {
         /// The fixture editor's card: wide enough for the opponent's strength menu with "Paste their squad" beside it,
         /// their label not cut short.
         public static let fixtureEditorWidth: CGFloat = 520
+        /// The opponent menu in the fixture editor, as wide as the text box it stands in for draws there (the popup
+        /// ignores a width of infinity): the card's width less its padding, the "Opponent" label and the grid's gap.
+        public static let fixtureOpponentMenuWidth: CGFloat = 393
         /// The picture of the fixture editor on its own.
         public static let fixtureEditorPicture = CGSize(width: 600, height: 440)
         /// The picture of the fixture editor with a suggestion, its reasons and "Use it", or with a pasted squad's
