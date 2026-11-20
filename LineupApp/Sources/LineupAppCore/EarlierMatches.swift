@@ -12,6 +12,9 @@ public struct EarlierMatchesLine: Equatable, Sendable {
     public init(text: String, action: String, showsWhenPressed: Bool) {
         self.text = text; self.action = action; self.showsWhenPressed = showsWhenPressed
     }
+
+    /// What VoiceOver says for the button, which "Show" alone would not name.
+    public var actionLabel: String { showsWhenPressed ? "Show earlier matches" : "Hide earlier matches" }
 }
 
 /// Earlier matches: those from before the days the advice reads. Fixtures and Match Selection leave them out, so a past

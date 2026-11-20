@@ -34,7 +34,7 @@ public struct MatchSelectionScreen: View {
     /// The layout for the pitch: while the plan is stopped, the reason why takes the top of the screen, so the missed
     /// fixtures below it scroll with their pitch sized by its width rather than squeezed into the height left.
     private var pitchLayout: PageLayout {
-        layout == .filling && MatchPresentation.notReady(model.planState) != nil ? .scrolling : layout
+        layout == .filling && model.matchNotReady != nil ? .scrolling : layout
     }
 
     public var body: some View {
@@ -51,7 +51,7 @@ public struct MatchSelectionScreen: View {
     private var page: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             let shown = model.shownPlans
-            if let notReady = MatchPresentation.notReady(model.planState) {
+            if let notReady = model.matchNotReady {
                 BoardHeading(Screen.matchSelection.title, size: Theme.TypeSize.title)
                 NotReadyView(notReady: notReady)
             }
@@ -103,9 +103,7 @@ public struct MatchSelectionScreen: View {
             BoardTabs(choices: MatchView.allCases.map { ($0, $0.title) }, selection: $navigation.matchView)
         } trailing: {
             ConfirmControl(model: model, plan: plan, stacked: layout == .stacked) {
-                if case .ready(let plans) = model.planState {
-                    navigation.matchFixture = MatchPresentation.fixtureAfterConfirming(plan.id, in: plans)
-                }
+                navigation.matchFixture = MatchPresentation.fixtureAfterConfirming(plan.id, in: model.shownPlans)
             }
         }
     }

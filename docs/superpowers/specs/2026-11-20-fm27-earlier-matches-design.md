@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: keeping earlier matches out of the way
 
 Date: 20 November 2026
-Status: written for the owner's approval. He chose the approach (the first of three, below) and said he has no reason to go back to old fixtures. Everything marked "this design's call" is the builder's, and is his to change.
+Status: built on 20 November 2026 (plan: `docs/superpowers/plans/2026-11-20-fm27-earlier-matches.md`), after the owner approved this text the same day. He chose the approach (the first of three, below) and said he has no reason to go back to old fixtures. Everything marked "this design's call" is the builder's, and is his to change. One thing was added while building: the button's name for VoiceOver ("Show earlier matches", "Hide earlier matches").
 
 ## Intent
 

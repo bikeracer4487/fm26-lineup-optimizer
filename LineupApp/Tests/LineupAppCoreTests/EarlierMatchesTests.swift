@@ -101,6 +101,15 @@ import Testing
         #expect(t.model.earlierMatchesLine?.text == "Showing 1 match from before Tue 15 Sep.")
     }
 
+    /// "Show" and "Hide" alone tell VoiceOver nothing, so the button says what it shows or hides.
+    @Test func theLinesButtonSaysWhatItShowsOrHides() throws {
+        let t = try TestModel()
+        t.model.addFixture(date: day("2026-08-01"), opponent: "Old", importance: .low)
+        #expect(t.model.earlierMatchesLine?.actionLabel == "Show earlier matches")
+        t.model.setShowsEarlierMatches(true)
+        #expect(t.model.earlierMatchesLine?.actionLabel == "Hide earlier matches")
+    }
+
     /// A fixture whose date is corrected to long ago leaves the table, and the line counts it.
     @Test func aFixtureSavedWithADateBeforeTheWindowJoinsTheEarlierOnes() throws {
         let t = try TestModel()

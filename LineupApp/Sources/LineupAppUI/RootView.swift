@@ -42,8 +42,7 @@ public struct RootView: View {
         self.model = model
         self.tacticSlot = tacticSlot
         var selection: PickSelection?
-        if let slot = matchStart.slot, case .ready(let plans) = model.planState,
-           let plan = MatchPresentation.chosen(matchStart.fixture, in: plans) {
+        if let slot = matchStart.slot, let plan = MatchPresentation.chosen(matchStart.fixture, in: model.shownPlans) {
             selection = MatchPresentation.selection(at: slot, in: plan)
         }
         let navigation = Navigation(screen: screen, matchFixture: matchStart.fixture, matchSelection: selection,

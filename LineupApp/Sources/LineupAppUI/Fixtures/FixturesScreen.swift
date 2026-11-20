@@ -16,7 +16,8 @@ public struct FixturesStart: Sendable {
 /// so it survives a change of screen. Under a fixture's note, the importance the advice suggests when it differs from
 /// the owner's; a click on it shows its reasons under the row, one fixture's at a time, and "Use it" under it takes it.
 /// While there are fixtures, the league situation's menu sits at the heading's trailing edge. The table opens scrolled
-/// so the next match with no lineup confirmed is in the middle. The rows always fit the board:
+/// so the next match with no lineup confirmed is in the middle. Matches from before the days the advice reads are left
+/// out, and a line under the column headings says how many, with a button to show them. The rows always fit the board:
 /// the opponent, tactic, state and suggestion wrap, and when there is still no room, Edit and Delete go on a line of
 /// their own under each fixture.
 public struct FixturesScreen: View {
@@ -113,12 +114,16 @@ public struct FixturesScreen: View {
             }
             .frame(height: Theme.Table.headingHeight)
             HeavyRule()
+            if let line = model.earlierMatchesLine {
+                EarlierMatchesNote(line: line) { model.setShowsEarlierMatches(line.showsWhenPressed) }
+                FaintRule()
+            }
             // The rows open with the next match in the middle, so the matches already played are above it; when
             // another becomes the next match they scroll only as far as it takes to show it.
             ScrollViewReader { scroller in
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(model.fixtures.enumerated()), id: \.element.id) { index, fixture in
+                        ForEach(Array(model.listedFixtures.enumerated()), id: \.element.id) { index, fixture in
                             VStack(alignment: .leading, spacing: 0) {
                                 row(fixture, index: index, actionsBeside: actionsBeside)
                                 FaintRule()
@@ -265,6 +270,29 @@ private struct FixtureRow: View {
         case .confirmed: Theme.Colour.mutedInk
         case .pastNotConfirmed: Theme.Colour.amberText
         }
+    }
+}
+
+/// How many earlier matches the table leaves out, or is showing, in muted ink, with "Show" or "Hide" beside it written
+/// in ink and underlined, as "Use it" is. It stands under the column headings and does not scroll with the rows.
+private struct EarlierMatchesNote: View {
+    let line: EarlierMatchesLine
+    let press: () -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
+            Text(line.text)
+                .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
+                .foregroundStyle(Theme.Colour.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(line.action, action: press)
+                .buttonStyle(.onNote)
+                .foregroundStyle(Theme.Colour.ink)
+                .fixedSize()
+                .accessibilityLabel(line.actionLabel)
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: Theme.Table.headingHeight)
     }
 }
 

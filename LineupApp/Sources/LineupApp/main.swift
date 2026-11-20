@@ -226,7 +226,7 @@ func fail(_ message: String) -> Never {
 /// Which state of the sample data to start from.
 enum SampleState {
     case plain, failedImport, afterImport, tacticProblem, unsavedTacticChange, pastFixtures
-    case afterConfirmingFirst, midSeason, bans, bansNotForTheFirst, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
+    case afterConfirmingFirst, midSeason, earlierSeason, summer, bans, bansNotForTheFirst, choices, missedFixture, missedEleven, missedElevenWhileStopped, twoMatchesOnOneDay
     case jadedPlayers, nobodyNeedingRest, beforeRetraining, retrainingUnderWay, retrainingBehind, nothingToRetrain, loanee
     case differingSuggestion
     case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
@@ -249,6 +249,8 @@ enum SampleState {
         case .afterConfirmingFirst: return try SampleData.modelAfterConfirmingFirst(repositoryRoot: url)
         case .choices: return try SampleData.modelWithChoices(repositoryRoot: url)
         case .midSeason: return try SampleData.modelMidSeason(repositoryRoot: url)
+        case .earlierSeason: return try SampleData.modelWithEarlierSeason(repositoryRoot: url)
+        case .summer: return try SampleData.modelInTheSummer(repositoryRoot: url)
         case .bans: return try SampleData.modelWithBans(repositoryRoot: url)
         case .bansNotForTheFirst: return try SampleData.modelWithBans(repositoryRoot: url, notForTheFirstMatch: true)
         case .missedFixture: return try SampleData.modelWithMissedFixture(repositoryRoot: url)
@@ -315,6 +317,14 @@ let narrowWindow = CGSize(width: 800, height: 700)
     try ScreenPictures.write(model: midSeason, to: directory, size: size, variant: "midseason", screens: [.matchSelection])
     try ScreenPictures.write(model: midSeason, to: directory, size: size, variant: "midseason-starts",
                              screens: [.matchSelection], matchStart: MatchStart(view: .starts))
+    // A season behind the sample's five fixtures: the six matches from before the days the advice reads are left out
+    // of the notes and of the starts grid. Then the summer, with every match earlier and none to play.
+    let earlierSeason = sampleModel(root, .earlierSeason)
+    try ScreenPictures.write(model: earlierSeason, to: directory, size: size, variant: "earlier", screens: [.matchSelection])
+    try ScreenPictures.write(model: earlierSeason, to: directory, size: size, variant: "earlier-starts",
+                             screens: [.matchSelection], matchStart: MatchStart(view: .starts))
+    try ScreenPictures.write(model: sampleModel(root, .summer), to: directory, size: size, variant: "summer",
+                             screens: [.matchSelection])
     // The third fixture, against a much stronger side, with no pick selected: the game plan part with all three sentences.
     let sample = sampleModel(root)
     guard let strong = sample.fixtures.first(where: { $0.opponentStrength == .muchStronger }) else {
@@ -401,6 +411,16 @@ let narrowWindow = CGSize(width: 800, height: 700)
     // match in the middle.
     try ScreenPictures.write(model: sampleModel(root, .midSeason), to: directory, size: Theme.Layout.minimumWindow,
                              variant: "midseason", screens: [.fixtures])
+
+    // A season behind the sample's five fixtures: the line saying six matches are not shown; the same with them shown;
+    // and the summer, with every match earlier, so the table has the line and no rows.
+    try ScreenPictures.write(model: sampleModel(root, .earlierSeason), to: directory, size: size, variant: "earlier",
+                             screens: [.fixtures])
+    let shown = sampleModel(root, .earlierSeason)
+    shown.setShowsEarlierMatches(true)
+    try ScreenPictures.write(model: shown, to: directory, size: size, variant: "earlier-shown", screens: [.fixtures])
+    try ScreenPictures.write(model: sampleModel(root, .summer), to: directory, size: size, variant: "summer",
+                             screens: [.fixtures])
 
     // The editor after the opponent's squad was pasted, and after the owner's own squad was pasted and refused.
     let url = URL(fileURLWithPath: root, isDirectory: true)
