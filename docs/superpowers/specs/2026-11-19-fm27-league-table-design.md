@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: the league table
 
 Date: 19 November 2026
-Status: approved by the owner on 19 November 2026 ("Approved"), with the twelve calls listed under "Calls made in this design". Revised the same day in one place, marked "revised" below, which the owner accepted.
+Status: approved by the owner on 19 November 2026 ("Approved"), with the twelve calls listed under "Calls made in this design". Revised the same day in one place, marked "revised" below, which the owner accepted. Revised during the build on 20 November 2026 in four more places, each marked "revised during the build" with its reason; none changes what a league match is worth on the owner's table.
 
 ## Intent
 
@@ -63,6 +63,8 @@ The owner enters three whole numbers, once, on the League screen:
 
 Each is 0 or more, and together they are at most the number of teams in the pasted table when one is held. A number that breaks this is refused in the engine's sentence and the format kept as it was. Until all three have been entered there is no format, and nothing is worked out from the table (no silent default); the screen says what is missing.
 
+A format, or the club's name, can stop fitting a table after both were accepted: a later paste of a smaller league, or the club's name changed in Settings or by another club's squad. The table is then kept, the reading is replaced by the engine's sentence saying why (the numbers that do not fit, or the club not among the teams), and no suggestion uses the table until the numbers or the name fit again (revised during the build, 20 November 2026: the design checked the numbers only as they were entered, and the club only at the paste).
+
 **Byes (the owner's rule, 19 November 2026).** The number of play-off teams that get a bye in the first round is the next power of two at or above the play-off count, minus the count: 6 gives 2, 5 gives 3, 7 gives 1, 3 gives 1, and 0, 1, 2, 4 and 8 give none. The byes go to the highest of the play-off places. It is shown, not entered: "2nd and 3rd get a bye."
 
 **The lines.** A line lies between two places. With T teams, P promoted, O in the play-offs, B byes and R relegated:
@@ -76,12 +78,14 @@ Each is 0 or more, and together they are at most the number of teams in the past
 
 For the owner's league (24, 1, 6, 4): after 1st, 3rd, 7th and 20th.
 
+A line that would lie after the last place has no side across it, and is left out (revised during the build, 20 November 2026: with promotion and the play-offs filling the table and nobody relegated, the play-off line lay after the last team, and reading it would have looked for a side below it that does not exist).
+
 **Matches in a season.** Each team plays 2 × (T − 1) matches; a team's matches left are that less its matches played.
 
 ### Reading the paste
 
 - **Where the columns come from.** FMRTE copies rows with no header, as for squads. FMRTE's settings file holds the layout of its standings grid under `ColumnsSettings`, as it does for player grids (key `CompetitionStandings`; `CompetitionGroupStandings` has the same columns). The reader takes every grid in the file whose columns include both `TeamName` and `Points`, and uses the one whose number of columns is the paste's number of fields; none fitting, or two that fit with different columns, is an error in a sentence. The paths, as FMRTE writes them: `Position`, `TeamName`, `GamesPlayed`, `Wins`, `Draws`, `Loses`, `GoalsScored`, `GoalsAllowed`, `Points`.
-- **What is required.** `TeamName`, `GamesPlayed`, `Wins`, `Draws`, `Loses`, `GoalsScored`, `GoalsAllowed` and `Points`. A missing column, or a blank or non-numeric cell, is an error naming the team and the column. `Position` is used when the grid has it.
+- **What is required.** `TeamName`, `GamesPlayed`, `Wins`, `Draws`, `Loses`, `GoalsScored`, `GoalsAllowed` and `Points`. A missing column, or a blank or non-numeric cell, is an error naming the team and the column. `Position` is used when the grid has it. A row with a blank team name is refused too, in a sentence of its own ("A row of the table has no team name."), since there is no team to name (revised during the build, 20 November 2026: the first reader took a blank name as a team).
 - **The splitter.** `ClipboardText.rows` refuses a first line of fewer than 20 fields, since it was written for player grids. The standings reader needs the same splitting (line endings, quotes, ragged rows) without that floor.
 - **The order of the table.** With a `Position` column, the places are the game's own: they must be 1 to T, each once, or the paste is refused. This takes the game's word on ties, whose rules differ by league. Without the column, the order is points, then goal difference, then goals for, then name, and the screen says the order was worked out.
 - **Checks.** At least two teams. No team twice (names compared as above). A team whose wins, draws and losses do not add up to its matches played, or that has played more than a season holds, refuses the paste, naming the team. A team whose points are not three for a win and one for a draw is kept, with the pasted points used, and raises a warning in a sentence ("Marine have 35 points where their results give 38; the table's points are used"), since the game deducts points.
@@ -192,7 +196,7 @@ With no table: an empty state that says to copy the league's standings in FMRTE 
 
 ### The League situation menu
 
-The menu on Fixtures stays. When a table and a format are held it gains a first entry, "From the table", which shows the table's reading beside it. Picking one of the four sets it by hand, and that wins; picking "From the table" gives it back to the table.
+The menu on Fixtures stays. When a table and a format are held and give a reading it gains a first entry, "From the table", which shows the table's reading beside it (revised during the build, 20 November 2026: "held" became "give a reading", so that the entry follows the reading the League screen shows; while a table the numbers or the club's name no longer fit, as above, is held, the menu has the four only, and with no choice by hand shows in contention, which is what such a table's fixtures are read as). Picking one of the four sets it by hand, and that wins; picking "From the table" gives it back to the table.
 
 Whenever the app goes from having no reading to having one (a table and a format are both held where one of them was missing before: the first paste with the format entered, or the format entered after the first paste, or a paste after "Remove table"), the menu is set to "From the table", dropping an earlier choice by hand, since that choice was a guess made without a table. Until that moment a choice by hand stands, so pasting a table before entering the format changes no suggestion. Later pastes, and later changes to the format, leave the menu as the owner has it. "Remove table" leaves the choice by hand as it is (none, if the menu was on "From the table", which then reads as in contention).
 

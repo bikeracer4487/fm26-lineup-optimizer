@@ -644,3 +644,53 @@ Expected: the run ends with no error and writes the new files.
 - [ ] **Step 4: The last check.** Run: `cd LineupEngine && swift test`, `cd LineupApp && swift build && swift test`, and the picture run of Task 6. Expected: all pass, no warnings, the pictures drawn.
 
 - [ ] **Step 5: Commit.**
+
+---
+
+## Changes made while building
+
+1. **A blank team name is refused.** The first reader took a row with no name as a team. It is now refused in a sentence of its own, "A row of the table has no team name.", since there is no team to name. The design was revised.
+2. **A line with no side across it is left out.** When promotion and the play-offs fill the table and nobody is relegated, the play-off line would lie after the last team, and reading it would look for a side below it that does not exist. Such a line is dropped. The design was revised.
+3. **The sentence refusing three numbers too large for the table names all three**: "1 promoted, 6 in the play-offs and 4 relegated make 11, more than the 10 teams in the table." The plan's error carried only their total, so the sentence could not say which numbers the owner had entered. A negative number ("The play-offs cannot have −1 teams.") and a negative goal difference on the League screen ("−29") are written with a true minus.
+4. **A table that the numbers or the club's name no longer fit is kept, and says why.** The design checked the numbers only as they were typed and the club only at the paste. A smaller league pasted over the three numbers, or a change of the club's name in Settings, now keeps the table, puts the engine's sentence in place of the reading, and leaves every suggestion as with no table until they fit again. This was the plan's (its review points 3 and 4); the design was revised to match.
+5. **"From the table" is in the menu only while the table gives a reading**, not whenever a table and three numbers are held, so the menu follows what the League screen shows. The design was revised.
+6. **A problem shown under the three numbers is cleared by a paste or a removal of the table.** It was found against the table that was held; a saved format that no longer fits a new table shows through the reading's own sentence instead.
+7. **The club's own row is drawn in marker blue, bold, on a faint tint.** The plan asked for the accent the Fixtures table gives the next match, which does not exist.
+8. **The command line's League part also prints the bye line, and a note when the order of the table was worked out**, besides the reading's sentences, the paste's warnings and the evidence note.
+9. **The base reason when the table sets a match's situation is the table's phrase and its score**, "League match, your play-off place is within 6 points: 100"; the plan's end-to-end step named only the phrase. The end-to-end tests check the whole reason.
+10. **The capture tool's `--list-grids` was run only against the rebuilt fixture's layout**, never FMRTE's own settings file, since nothing in this build reads `~/Library/Application Support`. Whether it finds the standings grid in the real file is the owner's to see.
+11. **The last check moved.** This task changes documents only. Both packages' tests passed on the last code of the build at the end of Task 7 (the engine's 1,422, the app's 862, no warnings), and the pictures were drawn on the same views in Task 6. The whole-branch review follows, and both suites and the picture run are run after its fixes.
+
+## Known limits and small faults left
+
+The design's limits, as they stand after the build:
+
+- **The two tests for a settled line ignore that the other sides play each other.** "Safe" and "out of reach" count what each side could reach alone, so a line can be called open that is in fact settled, never the other way round. The sentences say "can still", not "will".
+- **Matches in hand are not counted** when choosing the sides he is battling, by the owner's rule as he gave it: a side 6 points behind with two matches in hand counts the same as one with none. The gaps on the lines are in points only, too; only the safe and out-of-reach tests count each side's matches left.
+- **An old table is used until it is replaced.** The screen says it is out of date once a league match with a confirmed lineup is dated after the paste, and not before. The day of the paste is the app's day in the game, so a paste made while the app's day is behind the game's counts the fixtures in between as still to come.
+- **The owner's table was rebuilt, not captured.** It was pasted into a conversation on 19 November 2026 and written out from the design's appendix, as the capture `scouting-search` was. The first real paste shows whether FMRTE's clipboard matches it.
+- **A paste of part of the table is refused** as a team having played more matches than a season holds, since the length of the season is worked out from the rows pasted (12 rows of a league of 24 give a season of 22 matches). The sentence does not say that part of the table was pasted.
+- **One league, played home and away by everyone.** Continental places, a relegation play-off, split seasons and groups are not covered, and play-off matches are not league matches; in a top division 1 "promoted automatically" can stand for the champion.
+- **Most of the numbers are not measured.** The margin (6 points, 3 with one match left) and the byes are the owner's rules; the ten matches are carried over from the old app's table; one point a match for "within reach" and the factor of 1.2 are this tool's estimate, with no test behind them.
+
+Small faults, found during the build:
+
+- **The club's own row is not marked while there is no reading**: with a table and no three numbers, or when the reading fails. The design says it is marked whenever the table is shown.
+- **The League screen's evidence note calls the margin of 6 points "this tool's estimate"**, though the margin is the owner's rule; only the one point a match and the factor are the tool's.
+- **The mark on a side within the margin has no key** beyond the "Within 6 points of you" sentence above the table, and is hidden from VoiceOver.
+- **The opponent menu in the fixture editor is narrower than the text box was**; it fits its longest team. A comment in the view says it is as wide.
+- **The words of the question "Remove table" asks** ("Remove the league table?", "Cancel", "The three numbers stay.") are written in the view, where the app's rules want them in Core.
+- **No picture shows a suggestion carrying the table's base and the battling line.** The editor's pictures are of the sample's fixtures against Chester and "Buxton FC", both beyond the three league fixtures the table speaks for, so they read "League match: 80", which is right. `league-small` shows nothing of the table, since a picture does not scroll.
+- **A change of the club's name that makes the table readable again does not switch the menu to "From the table"**; only a paste, the three numbers and a removal do. The design says the menu switches whenever a reading first exists.
+- **When two lines lie after the same place**, which only an unusual format gives (relegation and the play-offs meeting), only the first is drawn on the table.
+- **Two sentences read oddly.** Above the relegation line and not close, it is "The side across the relegation line, Harborough in 21st, is 35 points behind you.", unlike the other lines' "Morecambe, in 8th, are 12 points behind your play-off place."; and the line on a choice by hand gives the situations capitalised mid-sentence ("You have set league matches to Mid-table; the table reads Title race or relegation fight.").
+- **Some paths have no test of their own:** a next fixture the table does not speak for, in the "bigger match follows" rule; the evidence of a suggestion that read the table only through the next fixture; a reading whose season is over that still speaks for fixtures; suggestions kept from before a change of the club's name; that clearing the suggestions on such a change does anything the replan it also causes does not. The app's end-to-end test checks that the table's base reason is still used after the table is out of date, not that the match is still High, and the engine's passes no other fixtures, so the schedule rules are not on its path.
+
+## For the owner
+
+- Install with `tools/build_app.sh` from the repository root. It closes the open copy of the app and replaces it. It was not run in this build.
+- In FMRTE, copy the league's standings and press "Paste table" on the League screen. Check it reads as the rebuilt table did: every team, in the game's order, with no warning unless the game has deducted points. If it is refused, the sentence says why; say what it said.
+- With the standings on the clipboard, run `tools/capture_fmrte_paste.sh --list-grids` to see that the standings grid is found, then `tools/capture_fmrte_paste.sh league-table` to replace the rebuilt capture with the clipboard's exact bytes.
+- Enter the three numbers (1, 6 and 4 for this league), and check the bye line says "2nd and 3rd get a bye." and that the League situation menu on Fixtures has moved to "From the table".
+- Read the League screen against the game's own table: the places and points, the lines drawn, each sentence, and the sides marked as within 6 points. Then read the suggested importance of the coming league fixtures, above all one against a side he is battling.
+- Paste the table again after each round of league matches; the screen says when a league match has been played since.
