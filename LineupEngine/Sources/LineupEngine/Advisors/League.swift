@@ -78,8 +78,9 @@ public struct LeagueFormat: Equatable, Codable, Sendable {
         if let teams, total > teams { throw LeagueFormatError.tooMany(format: self, teams: teams) }
     }
 
-    /// The lines that exist, in table order: promotion, bye, play-off, relegation. A line with no side across it
-    /// (after the last place, as when promotion and play-offs fill the table and nobody is relegated) is left out.
+    /// The lines that exist, in table order: promotion, bye, play-off, relegation. A line with no side across it is left
+    /// out: one after the last place (as when promotion and play-offs fill the table and nobody is relegated), and one
+    /// before the first (as when every team is relegated), since nobody is above it.
     public func lines(teams: Int) throws -> [LeagueLine] {
         try check(teams: teams)
         var found: [LeagueLine] = []
@@ -87,7 +88,7 @@ public struct LeagueFormat: Equatable, Codable, Sendable {
         if byes > 0 { found.append(LeagueLine(kind: .bye, after: promoted + byes)) }
         if playOffs > 0 { found.append(LeagueLine(kind: .playOff, after: promoted + playOffs)) }
         if relegated > 0 { found.append(LeagueLine(kind: .relegation, after: teams - relegated)) }
-        return found.filter { $0.after < teams }
+        return found.filter { $0.after >= 1 && $0.after < teams }
     }
 }
 
@@ -255,7 +256,8 @@ public enum League {
             var best: (reading: LineReading, gap: Int)?
             for reading in candidates {
                 guard let gap = reading.gap else { continue }
-                if best == nil || gap < best!.gap { best = (reading, gap) }
+                if let current = best, current.gap <= gap { continue }
+                best = (reading, gap)
             }
             return best?.reading
         }

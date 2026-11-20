@@ -266,6 +266,40 @@ import Testing
         #expect(r.lines.map(\.line.kind) == [.promotion, .bye])
     }
 
+    @Test func everyTeamRelegatedLeavesNoLineAndReadsAsNothingToPlayFor() throws {
+        let all = LeagueFormat(promoted: 0, playOffs: 0, relegated: 24)
+        #expect(try all.lines(teams: 24).isEmpty)
+        let t = table((1...24).map { place in (place == 5 ? "Me" : "T\(place)", played: 10, points: 30 - place) })
+        let r = try read(t, all)
+        #expect(r.lines.isEmpty)
+        #expect(r.situation == .nothingToPlayFor)
+    }
+
+    @Test func allButOneRelegatedKeepsTheLineAfterFirst() throws {
+        #expect(try LeagueFormat(promoted: 0, playOffs: 0, relegated: 23).lines(teams: 24)
+                == [LeagueLine(kind: .relegation, after: 1)])
+    }
+
+    @Test func noFormatTheCheckAcceptsPutsALineOutsideTheTable() throws {
+        #expect(try LeagueFormat(promoted: 24, playOffs: 0, relegated: 0).lines(teams: 24).isEmpty)
+        #expect(try LeagueFormat(promoted: 0, playOffs: 24, relegated: 0).lines(teams: 24)
+                == [LeagueLine(kind: .bye, after: 8)])
+        let teams = 6
+        for promoted in 0...teams {
+            for playOffs in 0...(teams - promoted) {
+                for relegated in 0...(teams - promoted - playOffs) {
+                    let format = LeagueFormat(promoted: promoted, playOffs: playOffs, relegated: relegated)
+                    let lines = try format.lines(teams: teams)
+                    #expect(lines.allSatisfy { (1..<teams).contains($0.after) }, "\(format)")
+                    for place in 1...teams {
+                        let rows = (1...teams).map { (i: Int) in (i == place ? "Me" : "T\(i)", played: 5, points: 3 * (teams - i)) }
+                        _ = try read(table(rows), format)
+                    }
+                }
+            }
+        }
+    }
+
     @Test func aClubNotInTheTableIsRefused() throws {
         let t = table((1...24).map { ("T\($0)", played: 0, points: 0) })
         #expect(throws: LeagueTableError.clubNotInTable(club: "Nobody", teams: 24)) {

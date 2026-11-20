@@ -93,7 +93,7 @@ import Testing
             [("A", 1, 30), ("B", 1, 28), ("Me", 1, 25), ("D", 1, 16), ("E", 1, 8), ("F", 1, 2)]
         let l = try lines(rows)
         #expect(l[2] == "D, in 4th, are 9 points behind your play-off place.")
-        #expect(l[3] == "The side across the relegation line, F in 6th, is 23 points behind you.")
+        #expect(l[3] == "F, in 6th, are 23 points behind you, across the relegation line.")
     }
 
     @Test func aLineBelowAndOutOfReachNamesTheLastSideAboveAndHisMost() throws {
@@ -124,11 +124,45 @@ import Testing
         let within = AdvisorText.standingLines(try reading(reach)).dropFirst(3)
         #expect(within.contains("League matches read as In contention: a play-off place is 9 points away with 9 matches left "
                                 + "(this tool's estimate)."))
-        let mid = try lines([("A", 1, 40), ("B", 1, 38), ("C", 1, 30), ("D", 1, 28), ("Me", 1, 15), ("F", 1, 2)])
+        let mid = try lines([("A", 1, 40), ("B", 1, 38), ("C", 1, 30), ("D", 1, 28), ("Me", 1, 15), ("F", 1, 2)], noDrop)
         #expect(mid.contains("League matches read as Mid-table: nothing is within reach (this tool's estimate)."))
         let nothing = try lines(settled)
         #expect(nothing.contains("League matches read as Nothing to play for: nothing can change for you."))
         #expect(!nothing.joined().contains("estimate"))
+    }
+
+    /// Five matches left: Me 20 (1st), B 13, C 12, D 5, E 4, F 0. B is 7 points behind, over the margin of 6 and the 5
+    /// within reach, so the promotion line is far; so is the play-off line (D, 15 behind); the drop is safe, since only
+    /// three sides can reach 20. Nothing is close or within reach: Mid-table.
+    private let clear: [(String, played: Int, points: Int)] =
+        [("Me", 5, 20), ("B", 5, 13), ("C", 5, 12), ("D", 5, 5), ("E", 5, 4), ("F", 5, 0)]
+    /// The six-team format with nobody relegated, so a club in mid-table is above no line.
+    private let noDrop = LeagueFormat(promoted: 1, playOffs: 2, relegated: 0)
+
+    @Test func aClubFarClearOfALineSaysWhatHeHolds() throws {
+        let r = try reading(clear)
+        #expect(r.situation == .midTable)
+        #expect(r.lines.map(\.state) == [.far, .far, .safe])
+        #expect(AdvisorText.standingLines(r).contains(
+            "League matches read as Mid-table: your promotion place is 7 points clear with 5 matches left, and nothing else is "
+                + "within reach (this tool's estimate)."))
+        #expect(AdvisorText.leagueBaseReason(r) == "League match, your promotion place is 7 points clear with 5 matches left")
+    }
+
+    @Test func aMidTableClubAboveNoFarLineSaysNothingIsWithinReach() throws {
+        let r = try reading([("A", 1, 40), ("B", 1, 38), ("C", 1, 30), ("D", 1, 28), ("Me", 1, 15), ("F", 1, 2)], noDrop)
+        #expect(r.situation == .midTable && r.lines.allSatisfy { !$0.isAbove })
+        #expect(AdvisorText.standingLines(r).last == "League matches read as Mid-table: nothing is within reach (this tool's estimate).")
+        #expect(AdvisorText.leagueBaseReason(r) == "League match, nothing within reach")
+    }
+
+    @Test func negativePointsAreWrittenWithATrueMinus() throws {
+        let r = try reading([("A", 1, 40), ("B", 1, 38), ("C", 1, 30), ("D", 1, 28), ("E", 1, -2), ("Me", 1, -10)])
+        let l = AdvisorText.standingLines(r)
+        #expect(l[0] == "You are 6th on \u{2212}10 points with 9 matches left.")
+        #expect(l[3] == "Safety is 8 points away: E, in 5th, have \u{2212}2.")
+        let deducted = ErrorDescriptions.describe(LeagueTableWarning.pointsDoNotFit(team: "Marine", points: -10, fromResults: 35))
+        #expect(deducted == "Marine have \u{2212}10 points where their results give 35; the table's points are used.")
     }
 
     @Test func noRivalsLeavesTheLastLineOut() throws {
@@ -138,7 +172,7 @@ import Testing
 
     @Test func theBaseReasonsFollowTheSituation() throws {
         #expect(AdvisorText.leagueBaseReason(try reading(reach)) == "League match, a play-off place is 9 points away with 9 matches left")
-        let mid = try reading([("A", 1, 40), ("B", 1, 38), ("C", 1, 30), ("D", 1, 28), ("Me", 1, 15), ("F", 1, 2)])
+        let mid = try reading([("A", 1, 40), ("B", 1, 38), ("C", 1, 30), ("D", 1, 28), ("Me", 1, 15), ("F", 1, 2)], noDrop)
         #expect(AdvisorText.leagueBaseReason(mid) == "League match, nothing within reach")
         #expect(AdvisorText.leagueBaseReason(try reading(settled)) == "League match, nothing left to settle")
     }
@@ -196,7 +230,29 @@ import Testing
         #expect(!AdvisorText.orderWorkedOutLine.isEmpty && !AdvisorText.noFormatLine.isEmpty && !AdvisorText.noTableLines.isEmpty)
     }
 
+    @Test func theFormatInUseIsSaidInTheWordsOfTheRefusal() {
+        #expect(AdvisorText.formatInUseLine(LeagueFormat(promoted: 1, playOffs: 6, relegated: 4))
+                == "The table is still read with 1 promoted, 6 in the play-offs and 4 relegated.")
+        #expect(AdvisorText.formatInUseLine(LeagueFormat(promoted: 0, playOffs: 0, relegated: 3))
+                == "The table is still read with 0 promoted, 0 in the play-offs and 3 relegated.")
+    }
+
+    @Test func theKeyToTheMarkNamesTheMargin() throws {
+        #expect(AdvisorText.withinMarginKey(try owners()) == "Within 6 points of you")
+        let last = try reading([("A", 9, 20), ("B", 9, 16), ("Me", 9, 14), ("D", 9, 12), ("E", 9, 8), ("F", 9, 2)])
+        #expect(last.matchesLeft == 1 && !last.rivals.isEmpty)
+        #expect(AdvisorText.withinMarginKey(last) == "Within 3 points of you")
+    }
+
     @Test func theEvidenceNoteSaysWhatTheReadingRestsOn() throws {
-        #expect(AdvisorText.leagueEvidenceNote(try owners()).contains("this tool's estimate"))
+        #expect(AdvisorText.leagueEvidenceNote(try owners(), rules: EngineParameters.fm27.leagueStandingRules.value)
+                == "The places and points are the table's own. The margin of 6 points is your rule (3 with one match left). "
+                + "Which lines are within reach or far, and the \u{00D7}1.2 for a side within the margin, are this tool's "
+                + "estimate, with no test behind them.")
+        // One match left: the reading's margin is 3, and the note still names the rule's 6.
+        let last = try reading(settled)
+        #expect(last.margin == 3)
+        #expect(AdvisorText.leagueEvidenceNote(last, rules: EngineParameters.fm27.leagueStandingRules.value)
+                .contains("The margin of 6 points is your rule (3 with one match left)."))
     }
 }

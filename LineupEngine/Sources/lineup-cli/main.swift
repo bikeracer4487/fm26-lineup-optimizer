@@ -356,7 +356,7 @@ do {
                 if let bye = AdvisorText.byeLine(format) { leagueLines.insert(bye, at: 0) }
                 if table.orderWorkedOut { leagueLines.append(AdvisorText.orderWorkedOutLine) }
                 leagueLines += table.warnings.map { ErrorDescriptions.describe($0) }
-                leagueLines.append(AdvisorText.leagueEvidenceNote(reading))
+                leagueLines.append(AdvisorText.leagueEvidenceNote(reading, rules: parameters.leagueStandingRules.value))
             }
             var suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]?
             if let fixtures {

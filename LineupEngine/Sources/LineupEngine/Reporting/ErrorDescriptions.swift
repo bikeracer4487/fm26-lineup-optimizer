@@ -175,7 +175,8 @@ public enum ErrorDescriptions {
     public static func describe(_ warning: LeagueTableWarning) -> String {
         switch warning {
         case .pointsDoNotFit(let team, let points, let fromResults):
-            "\(team) have \(points) points where their results give \(fromResults); the table's points are used."
+            "\(team) have \(AdvisorText.signedNumber(points)) points where their results give "
+                + "\(AdvisorText.signedNumber(fromResults)); the table's points are used."
         }
     }
 

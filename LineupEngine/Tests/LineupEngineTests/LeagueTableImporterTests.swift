@@ -94,12 +94,45 @@ import Testing
         #expect(throws: LeagueTableError.placesNotInOrder) { try read(text(three)) }
     }
 
-    @Test(arguments: ["", "x", "-3", "4.5", "+7"])
+    @Test(arguments: ["", "x", "4.5", "+7", "--3", "-", "3-", "\u{2212}", "-\u{2212}3"])
     func aBlankOrWordyCellNamesTheTeamAndColumn(_ value: String) throws {
         let changed = try row("Buxton", set: "Points", to: value, in: lines())
         #expect(throws: LeagueTableError.invalidValue(team: "Buxton", column: "Points", value: value)) {
             try read(text(changed))
         }
+    }
+
+    /// Only the points can be below zero, since the game deducts points; every other number is digits only.
+    @Test(arguments: ["Position", "GamesPlayed", "Wins", "Draws", "Loses", "GoalsScored", "GoalsAllowed"])
+    func aMinusIsRefusedOutsideThePoints(_ column: String) throws {
+        let changed = try row("Buxton", set: column, to: "-3", in: lines())
+        #expect(throws: LeagueTableError.invalidValue(team: "Buxton", column: column, value: "-3")) {
+            try read(text(changed))
+        }
+        let trueMinus = try row("Buxton", set: column, to: "\u{2212}3", in: lines())
+        #expect(throws: LeagueTableError.invalidValue(team: "Buxton", column: column, value: "\u{2212}3")) {
+            try read(text(trueMinus))
+        }
+    }
+
+    @Test(arguments: ["-10", "\u{2212}10"])
+    func aClubBelowZeroIsReadWithAWarningAndPlaced(_ value: String) throws {
+        let changed = try row("Marine", set: "Points", to: value, in: lines())
+        let table = try read(text(changed))
+        #expect(table.team(named: "Marine")?.points == -10)
+        #expect(table.warnings == [.pointsDoNotFit(team: "Marine", points: -10, fromResults: 35)])
+        // Without the place column the order is worked out, and Marine fall to the bottom.
+        let without = changed.map { line in
+            line.split(separator: "\t", omittingEmptySubsequences: false).dropFirst().joined(separator: "\t")
+        }
+        let worked = try read(text(without), config: config(Array(paths.dropFirst())))
+        #expect(worked.teams.last?.name == "Marine")
+        let format = LeagueFormat(promoted: 1, playOffs: 6, relegated: 4)
+        let marine = try League.read(table: worked, format: format, club: "Marine", parameters: .fm27)
+        #expect(marine.place == 24 && marine.points == -10)
+        #expect(marine.mostReachable == -10 + 3 * marine.matchesLeft)
+        let oxford = try League.read(table: worked, format: format, club: "Oxford City", parameters: .fm27)
+        #expect(oxford.place == 5)
     }
 
     @Test(arguments: ["", "  "])

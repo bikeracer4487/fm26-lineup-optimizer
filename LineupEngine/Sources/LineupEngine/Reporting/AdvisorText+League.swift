@@ -39,7 +39,9 @@ extension AdvisorText {
     public static func leagueBaseReason(_ reading: LeagueReading) -> String {
         guard let situation = reading.situation else { return "League match" }
         switch situation {
-        case .midTable: return "League match, nothing within reach"
+        case .midTable:
+            guard let held = farLineHeld(reading) else { return "League match, nothing within reach" }
+            return "League match, " + decidedText(held, reading, withMatchesWhenClose: false)
         case .nothingToPlayFor: return "League match, nothing left to settle"
         case .titleRaceOrRelegationFight, .inContention:
             guard let decided = reading.decidedBy else { return "League match" }
@@ -82,6 +84,18 @@ extension AdvisorText {
         "You have set league matches to \(name(byHand)); the table reads \(name(table)). Your choice is used."
     }
 
+    /// Said under the three numbers while the saved format is in use and the fields show something else (a blank field,
+    /// or numbers that were refused), in the words `LeagueFormatError.tooMany`'s sentence uses.
+    public static func formatInUseLine(_ format: LeagueFormat) -> String {
+        "The table is still read with \(format.promoted) promoted, \(format.playOffs) in the play-offs and "
+            + "\(format.relegated) relegated."
+    }
+
+    /// The key to the mark beside a side within the margin: "Within 6 points of you" (3 with one match left).
+    public static func withinMarginKey(_ reading: LeagueReading) -> String {
+        "Within \(points(reading.margin)) of you"
+    }
+
     public static func notInTheTable(_ opponent: String) -> String { "\(opponent) is not in the league table." }
 
     public static let orderWorkedOutLine = "The paste had no Position column, so the order of the table was worked out from "
@@ -99,11 +113,15 @@ extension AdvisorText {
         situation.map { "From the table (\(name($0)))" } ?? "From the table"
     }
 
-    public static func leagueEvidenceNote(_ reading: LeagueReading) -> String {
+    /// What the reading rests on. The margin is the owner's rule; which lines are within reach and the factor for a side
+    /// within the margin are the tool's estimate (as `LeagueStandingRules`' own source in `EngineParameters` says).
+    public static func leagueEvidenceNote(_ reading: LeagueReading, rules: LeagueStandingRules) -> String {
         switch reading.basis {
         case .derived:
-            return "The places and points are the table's own. Which lines are close, within reach or far, and the margin of "
-                + "\(points(reading.margin)), are this tool's estimate, with no test behind them."
+            return "The places and points are the table's own. The margin of \(points(rules.marginPoints)) is your rule "
+                + "(\(rules.marginPointsLastMatch) with one match left). Which lines are within reach or far, and the "
+                + "\u{00D7}\(String(format: "%.1f", rules.battlingFactor)) for a side within the margin, are this tool's "
+                + "estimate, with no test behind them."
         case .carriedOverFM26: return "The lines and the margin use FM26-era numbers."
         case .fm27Measured, .fm27Official, .fm27Observation:
             return "The lines and the margin rest on FM27 evidence."
@@ -127,7 +145,8 @@ extension AdvisorText {
         return "\(n)\(suffix)"
     }
 
-    private static func points(_ n: Int) -> String { n == 1 ? "1 point" : "\(n) points" }
+    /// "1 point", "6 points", "−10 points" (a true minus, U+2212).
+    private static func points(_ n: Int) -> String { n == 1 ? "1 point" : "\(signedNumber(n)) points" }
     private static func matches(_ n: Int) -> String { n == 1 ? "1 match" : "\(n) matches" }
 
     private static func list(_ names: [String]) -> String {
@@ -175,7 +194,7 @@ extension AdvisorText {
                 return "\(lead): \(other), in \(place), \(behind)."
             case .withinReach, .far:
                 if kind == .relegation {
-                    return "The side across the relegation line, \(other) in \(place), is \(points(gap)) behind you."
+                    return "\(other), in \(place), are \(points(gap)) behind you, across the relegation line."
                 }
                 return "\(other), in \(place), are \(points(gap)) behind \(held(kind))."
             }
@@ -184,10 +203,10 @@ extension AdvisorText {
         switch reading.state {
         case .outOfReach:
             return "\(missing) is out of reach: \(other) have \(points(reading.other?.points ?? 0)) and the most you can "
-                + "reach is \(mostReachable)."
+                + "reach is \(signedNumber(mostReachable))."
         case .safe, .close, .withinReach, .far:
             let away = gap == 0 ? "level on points" : "\(points(gap)) away"
-            return "\(missing) is \(away): \(other), in \(place), have \(reading.other?.points ?? 0)."
+            return "\(missing) is \(away): \(other), in \(place), have \(signedNumber(reading.other?.points ?? 0))."
         }
     }
 
@@ -205,11 +224,20 @@ extension AdvisorText {
         }
     }
 
+    /// The highest line a club in mid-table is far above (promotion first, relegation last), so the words say what he
+    /// holds rather than that nothing is within reach; nil when he is far above none.
+    private static func farLineHeld(_ reading: LeagueReading) -> LineReading? {
+        reading.lines.first { $0.isAbove && $0.state == .far }
+    }
+
     private static func situationLine(_ situation: LeagueSituation, _ reading: LeagueReading) -> String {
         let head = "League matches read as \(name(situation))"
         switch situation {
         case .nothingToPlayFor: return "\(head): nothing can change for you."
-        case .midTable: return "\(head): nothing is within reach (this tool's estimate)."
+        case .midTable:
+            guard let held = farLineHeld(reading) else { return "\(head): nothing is within reach (this tool's estimate)." }
+            return "\(head): \(decidedText(held, reading, withMatchesWhenClose: true)), and nothing else is within reach "
+                + "(this tool's estimate)."
         case .titleRaceOrRelegationFight, .inContention:
             guard let decided = reading.decidedBy else { return "\(head) (this tool's estimate)." }
             return "\(head): \(decidedText(decided, reading, withMatchesWhenClose: true)) (this tool's estimate)."

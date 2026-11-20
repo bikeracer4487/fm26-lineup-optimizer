@@ -480,6 +480,37 @@ import Testing
         #expect(with == (try suggest(fixture(), league: nil)))
     }
 
+    @Test func aBiggerLeagueMatchTheTableDoesNotSpeakForTakesTheDefaultBase() throws {
+        // This is a cup match (60). The next is a league match against a weaker side: 80 × 0.8 = 64 with the default
+        // base, under the line; the table's base would make it 100 × 0.8 = 80, on it.
+        let cup = fixture(competition: .cup)
+        let next = fixture("next", daysFromToday: 2, opponent: .weaker)
+        let outside = try suggest(cup, among: [next], league: context("this"))
+        #expect(!outside.reasons.contains { $0.hasPrefix("A bigger match") })
+        #expect(outside.score == 60)
+        let inside = try suggest(cup, among: [next], league: context("next"))
+        #expect(inside.reasons.contains("A bigger match follows in 2 days (\u{00D7}0.6)"))
+    }
+
+    @Test func theBasisCountsTheTableWhenOnlyTheNextFixtureReadsIt() throws {
+        let cup = fixture(competition: .cup)
+        let next = fixture("next", daysFromToday: 2)
+        #expect(try suggest(cup, among: [next], league: context("next")).basis == .derived)
+        #expect(try suggest(cup, among: [next], league: context("other")).basis == parameters.importanceRules.evidence)
+    }
+
+    @Test func aSeasonThatIsOverChangesNothingEvenWhenItSpeaksForFixtures() throws {
+        let rows = [("A", 10, 20), ("B", 10, 16), ("Me", 10, 14), ("D", 10, 10), ("E", 10, 8), ("F", 10, 2)]
+        let t = LeagueTable(teams: rows.map { LeagueTeam(name: $0.0, played: $0.1, won: 0, drawn: 0, lost: 0, goalsFor: 0,
+                                                         goalsAgainst: 0, points: $0.2) }, orderWorkedOut: false, warnings: [])
+        let over = try League.read(table: t, format: LeagueFormat(promoted: 1, playOffs: 2, relegated: 1), club: "Me",
+                                   parameters: parameters)
+        let context = LeagueContext(reading: over, speaksFor: [FixtureID("this"), FixtureID("next")])
+        let this = fixture(against: "D"), next = fixture("next", daysFromToday: 2, against: "B")
+        #expect(try suggest(this, among: [next], league: context) == (try suggest(this, among: [next], league: nil)))
+        #expect(try suggest(next, among: [this], league: context) == (try suggest(next, among: [this], league: nil)))
+    }
+
     @Test func theBasisIsTheWeakerOfTheTwoRuleSets() throws {
         #expect(try suggest(fixture(), league: context("this")).basis == .derived)
         #expect(try suggest(fixture(), league: nil).basis == parameters.importanceRules.evidence)

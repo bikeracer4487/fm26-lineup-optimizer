@@ -99,18 +99,26 @@ public enum LeagueTableImporter {
             guard !name.trimmingCharacters(in: .whitespaces).isEmpty else {
                 throw LeagueTableError.invalidValue(team: "", column: namePath, value: name)
             }
-            func number(_ path: String) throws -> Int {
+            /// Digits only; the points alone may carry one leading minus (a hyphen or a true minus, U+2212), since the
+            /// game deducts points and an early deduction puts a club below zero.
+            func number(_ path: String, mayBeNegative: Bool = false) throws -> Int {
                 let cell = row[index[path]!]
-                guard !cell.isEmpty, cell.allSatisfy({ $0.isASCII && $0.isNumber }), let value = Int(cell) else {
+                var digits = Substring(cell)
+                var negative = false
+                if mayBeNegative, let first = digits.first, first == "-" || first == "\u{2212}" {
+                    negative = true
+                    digits = digits.dropFirst()
+                }
+                guard !digits.isEmpty, digits.allSatisfy({ $0.isASCII && $0.isNumber }), let value = Int(digits) else {
                     throw LeagueTableError.invalidValue(team: name, column: path, value: cell)
                 }
-                return value
+                return negative ? -value : value
             }
             let place = try index[positionPath].map { _ in try number(positionPath) }
             entries.append((place, LeagueTeam(
                 name: name, played: try number("GamesPlayed"), won: try number("Wins"), drawn: try number("Draws"),
                 lost: try number("Loses"), goalsFor: try number("GoalsScored"), goalsAgainst: try number("GoalsAllowed"),
-                points: try number("Points"))))
+                points: try number("Points", mayBeNegative: true))))
         }
 
         guard entries.count >= 2 else { throw LeagueTableError.tooFewTeams(found: entries.count) }

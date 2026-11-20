@@ -264,6 +264,11 @@ public enum AdvisorText {
 
     /// A negative number with a true minus sign (U+2212), as the app writes it; any other as it is.
     private static func signed(_ number: Int) -> String {
+        signedNumber(number)
+    }
+
+    /// A whole number as the owner reads it: "12", "0", or "−10" with a true minus sign (U+2212), never a hyphen.
+    public static func signedNumber(_ number: Int) -> String {
         number < 0 ? "\u{2212}\(number.magnitude)" : String(number)
     }
 
