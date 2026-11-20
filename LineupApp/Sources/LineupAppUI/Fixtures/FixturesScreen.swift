@@ -74,8 +74,8 @@ public struct FixturesScreen: View {
                 .foregroundStyle(Theme.Colour.mutedInk)
                 .fixedSize()
             Picker(AppModel.leagueSituationLabel,
-                   selection: Binding(get: { model.settings.situation }, set: { model.setLeagueSituation($0) })) {
-                ForEach(AppModel.leagueSituationChoices, id: \.value) { choice in
+                   selection: Binding(get: { model.leagueSituationSelection }, set: { model.setLeagueSituation($0) })) {
+                ForEach(model.leagueSituationChoices, id: \.value) { choice in
                     Text(choice.title).tag(choice.value)
                 }
             }

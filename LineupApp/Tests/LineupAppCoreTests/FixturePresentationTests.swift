@@ -605,10 +605,11 @@ import Testing
         #expect(FileManager.default.fileExists(atPath: t.directory.appendingPathComponent("settings.unreadable-1.json").path))
     }
 
-    @Test func theMenuListsTheFourSituationsInTheEnginesWords() {
-        #expect(AppModel.leagueSituationChoices.map(\.value) == LeagueSituation.allCases)
-        #expect(AppModel.leagueSituationChoices.map(\.title) == LeagueSituation.allCases.map { AdvisorText.name($0) })
-        #expect(AppModel.leagueSituationChoices.count == 4)
+    @Test func theMenuListsTheFourSituationsInTheEnginesWords() throws {
+        let t = try TestModel()
+        #expect(t.model.leagueSituationChoices.map(\.value) == LeagueSituation.allCases)
+        #expect(t.model.leagueSituationChoices.map(\.title) == LeagueSituation.allCases.map { AdvisorText.name($0) })
+        #expect(t.model.leagueSituationChoices.count == 4)
         #expect(AppModel.leagueSituationLabel == "League situation")
     }
 

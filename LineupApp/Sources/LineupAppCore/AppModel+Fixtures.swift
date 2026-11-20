@@ -73,24 +73,13 @@ extension AppModel {
         save(.settings)
         // The club's name decides who reads as on loan here, and a loanee holds no mark.
         if before.clubOverride != settings.clubOverride { dropSpentMarks() }
-        if before.situation != settings.situation { adviceCache?.suggestions = nil }
+        if before.leagueSituation != settings.leagueSituation || before.clubOverride != settings.clubOverride {
+            adviceCache?.suggestions = nil
+        }
         if before.plan != settings.plan || before.conditionFloor != settings.conditionFloor
             || before.clubOverride != settings.clubOverride || before.primaryTacticID != settings.primaryTacticID {
             replan()
         }
-    }
-
-    /// The owner's word on where the club stands in the league. It changes the suggested importance of league matches
-    /// only: the kept suggestions are cleared and worked out again when read, and nothing is planned or advised again.
-    public func setLeagueSituation(_ situation: LeagueSituation) {
-        settings.leagueSituation = situation
-        save(.settings)
-        adviceCache?.suggestions = nil
-    }
-
-    /// The league situation menu, in the engine's words and order.
-    public static var leagueSituationChoices: [(value: LeagueSituation, title: String)] {
-        LeagueSituation.allCases.map { ($0, AdvisorText.name($0)) }
     }
 
     public static let leagueSituationLabel = "League situation"

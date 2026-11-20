@@ -11,6 +11,8 @@ public enum StoreFile: String, CaseIterable, Sendable {
     case marks
     /// The hierarchy, the mentoring groups recorded, and a personality reading of each player at every import.
     case mentoring
+    /// The league table pasted, and the league's format.
+    case league
 
     /// How a notice refers to the file, in the owner's words.
     var description: String {
@@ -24,6 +26,7 @@ public enum StoreFile: String, CaseIterable, Sendable {
         case .training: "your retraining choices"
         case .marks: "your sale and loan marks"
         case .mentoring: "your mentoring groups and hierarchy"
+        case .league: "your league table"
         }
     }
 
@@ -39,6 +42,7 @@ public enum StoreFile: String, CaseIterable, Sendable {
         case .training: "the list starts empty"
         case .marks: "the list starts empty"
         case .mentoring: "the list starts empty"
+        case .league: "the league starts with no table"
         }
     }
 
@@ -53,6 +57,7 @@ public enum StoreFile: String, CaseIterable, Sendable {
         case .training: "retraining choices"
         case .marks: "sale and loan marks"
         case .mentoring: "mentoring groups"
+        case .league: "league table"
         }
     }
 
@@ -62,7 +67,7 @@ public enum StoreFile: String, CaseIterable, Sendable {
     var isNoticedWhenMissing: Bool {
         switch self {
         case .settings, .tactics, .fixtures, .history, .squad: true
-        case .drafts, .training, .marks, .mentoring: false
+        case .drafts, .training, .marks, .mentoring, .league: false
         }
     }
 }

@@ -39,6 +39,10 @@ enum Captures {
     static var u21TeamGrid: String { get throws { try text("u21-team-grid.tsv") } }
     static var u21TeamGridGrids: Data { get throws { try data("u21-team-grid.grids.json") } }
 
+    /// The owner's league table of 24 teams, and the grid layouts that read it.
+    static var leagueTable: String { get throws { try text("league-table.tsv") } }
+    static var leagueTableGrids: Data { get throws { try data("league-table.grids.json") } }
+
     /// The paste with every pound sign made a dollar, as FMRTE pastes it when set to show dollars.
     static func inDollars(_ paste: String) -> String { paste.replacingOccurrences(of: "£", with: "$") }
 
@@ -90,6 +94,13 @@ enum Captures {
     func importFirstTeamInDollarsMonthly() throws {
         importSquad(.firstTeam, paste: Captures.inDollars(try Captures.firstTeam),
                     grids: try Captures.grids(try Captures.firstTeamGrids, wages: "Monthly"))
+    }
+
+    /// Puts the league table (or `paste`) and its grid layout where the model reads them, then pastes it.
+    func pasteLeagueTable(_ paste: String? = nil) throws {
+        input.clipboard = try paste ?? Captures.leagueTable
+        input.config = .data(try Captures.leagueTableGrids)
+        model.pasteLeagueTable()
     }
 
     deinit {

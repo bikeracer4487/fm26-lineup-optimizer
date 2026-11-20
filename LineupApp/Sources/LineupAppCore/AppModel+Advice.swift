@@ -18,7 +18,7 @@ extension AppModel {
     /// all such fixtures, with the planner's tiers for the fixture's own tactic. Empty while the advice is not ready; a
     /// fixture whose suggestion cannot be worked out has none.
     public var suggestions: [FixtureID: ImportanceSuggestion] {
-        _ = settings   // observed: a change of the league situation tells a view reading this, kept or not
+        _ = settings; _ = league   // observed: a change of the league situation tells a view reading this, kept or not
         guard case .ready = adviceState else { return [:] }
         if let suggestions = adviceCache?.suggestions { return suggestions }
         let suggestions = workedOutSuggestions()
@@ -99,9 +99,10 @@ extension AppModel {
         guard let tactic = tactic(for: stored), unusableSentence(tactic.tactic) == nil,
               let tiers = tiers(for: tactic), let fixture = fixtureForPlanner(stored) else { return nil }
         let among = openFixtures().map(\.fixture).filter { $0.id != draft.id }
+        let context = makeLeagueContext(draft: (id: stored.id, date: draft.date, competition: draft.competition))
         return try? ImportanceAdvisor.suggest(for: fixture, among: among, confirmed: history.map(\.lineup),
-                                              players: squad.book.allPlayers, tiers: tiers, situation: settings.situation, league: nil,
-                                              parameters: planParameters)
+                                              players: squad.book.allPlayers, tiers: tiers, situation: settings.leagueSituation,
+                                              league: context, parameters: planParameters)
     }
 
     /// Whether a fixture on `day` is past, so its importance no longer matters: before the game's current date, or
@@ -139,13 +140,14 @@ extension AppModel {
         let players = squad.book.allPlayers
         let parameters = planParameters
         let lineups = history.map(\.lineup)
+        let context = leagueContext
         var found: [FixtureID: ImportanceSuggestion] = [:]
         for (tactic, fixture) in open {
             guard let tiers = tiers(for: tactic) else { continue }
             do {
                 found[fixture.id] = try ImportanceAdvisor.suggest(for: fixture, among: among, confirmed: lineups,
-                                                                  players: players, tiers: tiers, situation: settings.situation, league: nil,
-                                                                  parameters: parameters)
+                                                                  players: players, tiers: tiers, situation: settings.leagueSituation,
+                                                                  league: context, parameters: parameters)
             } catch {
                 continue   // that fixture has no suggestion
             }

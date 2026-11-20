@@ -88,6 +88,15 @@ public struct AppEnvironment: Sendable {
     /// The hierarchy, the mentoring groups and the personality readings. Changed only through `changeMentoring`, which
     /// saves it; the plan does not use it, so it does not replan.
     public private(set) var mentoring: MentoringState
+    /// The league table, its format and the day it was pasted. Changed only through `pasteLeagueTable()`,
+    /// `removeLeagueTable()` and `setLeagueFormatDraft(_:)`, which save it; none of them plans.
+    public internal(set) var league: LeagueState
+    /// Why the last paste of the table was refused, in the engine's sentence; nil after a good paste. Not saved.
+    public internal(set) var leaguePasteProblem: String?
+    /// The three numbers as typed; starts from the saved format. Not saved.
+    public internal(set) var leagueFormatDraft: LeagueFormatDraft
+    /// Why the format typed was not saved, in the engine's sentence. Not saved.
+    public internal(set) var leagueFormatProblem: String?
     /// For a marked player in no squad, the squads imported since he was last seen. His mark goes only once every squad
     /// held has been imported without him: squads are imported one at a time, so a player moved between two is in
     /// neither for a moment. Not saved: after a restart the count starts again, which only keeps a mark longer.
@@ -160,6 +169,7 @@ public struct AppEnvironment: Sendable {
         let training = store.load(.training, as: TrainingState.self, otherwise: TrainingState())
         let marks = store.load(.marks, as: [PlayerID: SaleMark].self, otherwise: [:])
         let mentoring = store.load(.mentoring, as: MentoringState.self, otherwise: MentoringState())
+        let league = store.load(.league, as: LeagueState.self, otherwise: LeagueState())
         self.settings = settings.value
         self.tactics = tactics.value
         self.fixtures = fixtures.value.sorted(by: Self.dateOrder)
@@ -168,6 +178,8 @@ public struct AppEnvironment: Sendable {
         self.training = training.value
         self.marks = marks.value
         self.mentoring = mentoring.value
+        self.league = league.value
+        self.leagueFormatDraft = LeagueFormatDraft(league.value.format)
         // A draft is kept only for a saved tactic it differs from. When the tactics file could not be read and was left
         // where it is, its tactics are still on disk, so every draft is kept for them.
         let saved = Dictionary(tactics.value.map { ($0.id, $0.tactic) }, uniquingKeysWith: { first, _ in first })
@@ -177,7 +189,7 @@ public struct AppEnvironment: Sendable {
             : drafts.value.filter { saved[$0.id] != nil && saved[$0.id] != $0.tactic }
         self.tacticDrafts = Dictionary(kept.map { ($0.id, TacticDraft($0.tactic)) }, uniquingKeysWith: { first, _ in first })
         self.notices = [settings.notice, tactics.notice, fixtures.notice, history.notice, squad.notice, drafts.notice,
-                        training.notice, marks.notice, mentoring.notice]
+                        training.notice, marks.notice, mentoring.notice, league.notice]
             .compactMap { $0 }.map(Notice.init(text:))
         self.lastImport = nil
         self.planState = .needsSquad
@@ -187,7 +199,8 @@ public struct AppEnvironment: Sendable {
                                             (.fixtures, fixtures.replaceOnDisk), (.history, history.replaceOnDisk),
                                             (.squad, squad.replaceOnDisk),
                                             (.drafts, drafts.replaceOnDisk || kept.count != drafts.value.count),
-                                            (.training, training.replaceOnDisk), (.marks, marks.replaceOnDisk), (.mentoring, mentoring.replaceOnDisk)]
+                                            (.training, training.replaceOnDisk), (.marks, marks.replaceOnDisk), (.mentoring, mentoring.replaceOnDisk),
+                                            (.league, league.replaceOnDisk)]
         for (file, replace) in replaced where replace { save(file) }
         // A state saved before personality was read at each import has no reading: start from the squads held.
         if self.mentoring.readings.isEmpty {
@@ -226,6 +239,7 @@ public struct AppEnvironment: Sendable {
             case .training: try store.save(training, to: .training)
             case .marks: try store.save(marks, to: .marks)
             case .mentoring: try store.save(mentoring, to: .mentoring)
+            case .league: try store.save(league, to: .league)
             }
             return true
         } catch {

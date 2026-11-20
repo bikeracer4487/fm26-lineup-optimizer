@@ -357,6 +357,27 @@ import LineupEngine
         }
     }
 
+    @Test func anUnreadableLeagueFileIsKeptAsideWithANotice() throws {
+        try withStore { store, dir in
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data("{".utf8).write(to: dir.appendingPathComponent("league.json"))
+            let loaded = store.load(.league, as: LeagueState.self, otherwise: LeagueState())
+            #expect(loaded.value == LeagueState())
+            #expect(try #require(loaded.notice).hasPrefix("Your league table could not be read as saved data"))
+            #expect(try #require(loaded.notice).contains("the league starts with no table"))
+            expectKeptAside(dir, original: "league.json", kept: "league.unreadable-1.json")
+        }
+    }
+
+    @Test func aMissingLeagueFileIsNotNoticedBesideOthers() throws {
+        try withStore { store, _ in
+            try store.save(settings, to: .settings)
+            let loaded = store.load(.league, as: LeagueState.self, otherwise: LeagueState())
+            #expect(loaded.notice == nil)
+            #expect(loaded.value == LeagueState())
+        }
+    }
+
     @Test func aMissingMarksFileIsNotNoticedBesideOthers() throws {
         // A missing marks file means nobody is marked, as for every app saved before the file existed.
         try withStore { store, _ in
