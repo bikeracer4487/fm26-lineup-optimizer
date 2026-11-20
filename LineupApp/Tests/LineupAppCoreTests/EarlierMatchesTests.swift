@@ -132,6 +132,25 @@ import Testing
         #expect(t.model.listedFixtures == t.model.fixtures)
     }
 
+    // MARK: The import's warning
+
+    /// An import tells the owner to confirm a missed match in Match Selection. An earlier one is not shown there and
+    /// changes no advice, so the import says nothing about it; a missed match inside the window is still named.
+    @Test func anImportDoesNotAskForAnEarlierMatchToBeConfirmed() throws {
+        let t = try TestModel()
+        t.model.addFixture(date: day("2026-09-01"), opponent: "Long ago", importance: .low)
+        t.model.addFixture(date: day("2026-11-10"), opponent: "Last week", importance: .low)
+        try t.importFirstTeam()
+        guard case .imported(let summary)? = t.model.lastImport else {
+            Issue.record("expected an import summary, got \(String(describing: t.model.lastImport))")
+            return
+        }
+        let asked = summary.warnings.filter { $0.hasSuffix("Confirm it in Match Selection so its starts count.") }
+        #expect(asked == ["The match against Last week on Tue 10 Nov has no confirmed lineup. "
+                          + "Confirm it in Match Selection so its starts count."])
+        #expect(t.model.shownPlans.map(\.fixture.opponent) == ["Last week"])
+    }
+
     // MARK: What Match Selection shows
 
     private func earlierSeason() throws -> AppModel {

@@ -63,10 +63,15 @@ extension AppModel {
             warnings: result.warnings.map(ErrorDescriptions.describe) + unconfirmedBeforeToday, change: change))
     }
 
-    /// A sentence for each fixture before the game's current date with no confirmed lineup, in date order.
+    /// A sentence for each fixture before the game's current date with no confirmed lineup, in date order. One from
+    /// before the days Match Selection shows (`earlierMatchesBefore`) is left out: it is not there to be confirmed,
+    /// and its starts would no longer count.
     private var unconfirmedBeforeToday: [String] {
         let confirmed = Set(history.map(\.lineup.fixture))
-        return fixtures.filter { $0.date < settings.currentDate && !confirmed.contains($0.id) }.map { fixture in
+        let shownFrom = earlierMatchesBefore
+        return fixtures.filter {
+            $0.date < settings.currentDate && $0.date >= shownFrom && !confirmed.contains($0.id)
+        }.map { fixture in
             "The match against \(fixture.opponent) on \(DayText.short(fixture.date)) has no confirmed lineup. "
                 + "Confirm it in Match Selection so its starts count."
         }

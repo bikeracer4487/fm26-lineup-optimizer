@@ -22,7 +22,8 @@ public struct EarlierMatchesLine: Equatable, Sendable {
 /// `history` and `planState` stay whole, and the planner, the advisors and the league read them as before.
 extension AppModel {
     /// The first day of the window the two screens show: as many days ending today in the game, today included, as the
-    /// engine counts confirmed matches over (`matchesHereWindowDays`), so what is shown is what still counts.
+    /// engine counts confirmed matches over (`matchesHereWindowDays`). The count is the engine's; the days are not
+    /// quite, since the advice counts back from the last import and the screens from today in the game.
     public var earlierMatchesBefore: Day {
         settings.currentDate.adding(days: -(planParameters.matchesHereWindowDays.value - 1))
     }
