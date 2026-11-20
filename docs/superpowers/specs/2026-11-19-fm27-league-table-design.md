@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: the league table
 
 Date: 19 November 2026
-Status: approved by the owner on 19 November 2026 ("Approved"), with the twelve calls listed under "Calls made in this design". Revised the same day in one place, marked "revised" below, which the owner accepted. Revised during the build on 20 November 2026 in four more places, each marked "revised during the build" with its reason; none changes what a league match is worth on the owner's table.
+Status: approved by the owner on 19 November 2026 ("Approved"), with the twelve calls listed under "Calls made in this design". Revised the same day in one place, marked "revised" below, which the owner accepted. Revised during the build on 20 November 2026 in four more places, and after the whole-branch review the same day in four more, each marked "revised during the build" with its reason; none changes what a league match is worth on the owner's table.
 
 ## Intent
 
@@ -88,7 +88,7 @@ A line that would lie after the last place has no side across it, and is left ou
 - **What is required.** `TeamName`, `GamesPlayed`, `Wins`, `Draws`, `Loses`, `GoalsScored`, `GoalsAllowed` and `Points`. A missing column, or a blank or non-numeric cell, is an error naming the team and the column. `Position` is used when the grid has it. A row with a blank team name is refused too, in a sentence of its own ("A row of the table has no team name."), since there is no team to name (revised during the build, 20 November 2026: the first reader took a blank name as a team).
 - **The splitter.** `ClipboardText.rows` refuses a first line of fewer than 20 fields, since it was written for player grids. The standings reader needs the same splitting (line endings, quotes, ragged rows) without that floor.
 - **The order of the table.** With a `Position` column, the places are the game's own: they must be 1 to T, each once, or the paste is refused. This takes the game's word on ties, whose rules differ by league. Without the column, the order is points, then goal difference, then goals for, then name, and the screen says the order was worked out.
-- **Checks.** At least two teams. No team twice (names compared as above). A team whose wins, draws and losses do not add up to its matches played, or that has played more than a season holds, refuses the paste, naming the team. A team whose points are not three for a win and one for a draw is kept, with the pasted points used, and raises a warning in a sentence ("Marine have 35 points where their results give 38; the table's points are used"), since the game deducts points.
+- **Checks.** At least two teams. No team twice (names compared as above). A team whose wins, draws and losses do not add up to its matches played, or that has played more than a season holds, refuses the paste, naming the team. A team whose points are not three for a win and one for a draw is kept, with the pasted points used, and raises a warning in a sentence ("Marine have 35 points where their results give 38; the table's points are used"), since the game deducts points. The points may be below zero, with one leading minus (a hyphen or a true minus), and are written back with a true minus; every other number is digits only (revised during the build, 20 November 2026: the first reader took digits only, so an early deduction that put a club below zero made the whole table unreadable).
 - **The owner's club.** It must be one of the teams, by the app's own club name (the settings' override, else the squad book's). If it is not, or no club is known yet, the paste is refused in a sentence that names the club looked for.
 - **What is kept.** The teams as read, in order, the warnings, and the day (the game's current date, as the app has it). A later paste replaces it whole. A refused paste leaves what was held. "Remove table" on the League screen drops the table and keeps the format.
 
@@ -145,7 +145,9 @@ The bye line counts for "In contention" at most: a bye is worth having, and less
 - "League matches read as Title race or relegation fight: your play-off place is within 6 points with 3 matches left (this tool's estimate)."
 - "Within 6 points of you: Spalding, Hednesford, Buxton, Macclesfield and Morecambe."
 
-The reading carries the weakest evidence among the parameters it read, shown as the evidence note is shown elsewhere.
+A club in mid-table that is far clear of a line is told what he holds, not that nothing is within reach: "League matches read as Mid-table: your promotion place is 7 points clear with 5 matches left, and nothing else is within reach (this tool's estimate)." The situation is the table's above, unchanged (revised during the build, 20 November 2026: a leader 7 points clear with 5 left was told "nothing is within reach").
+
+The reading carries the weakest evidence among the parameters it read, shown as the evidence note is shown elsewhere. The note says which numbers are the owner's rule (the margin) and which are this tool's estimate (which lines are within reach, and the ×1.2).
 
 ### The suggested importance
 
@@ -160,13 +162,13 @@ The reading carries the weakest evidence among the parameters it read, shown as 
 A new screen, "League", after Fixtures in the top row. From the top:
 
 - The heading row, with "Paste table".
-- The format: the three numbers, each with its label, and the bye line under them.
+- The format: the three numbers, each with its label, and the bye line under them. The numbers take effect as they are typed. While a field is blank, or the numbers typed are refused, a line under them says which numbers the table is still read with: "The table is still read with 1 promoted, 6 in the play-offs and 4 relegated." (revised during the build, 20 November 2026: the fields first showed numbers that were not in use, with nothing saying so).
 - "Table pasted on Sat 18 Apr.", with "Remove table" beside it. When a league fixture with a confirmed lineup is dated after that day, a caution: "A league match has been played since; paste the table again." The table is still used.
 - Any warning from the paste, and the refusal of the last paste if it was refused.
 - When the League situation is set by hand and differs from the table's: a line saying both, with "Use the table".
 - The reading: the sentences above, in the order place, promotion, bye, play-off, relegation, situation, sides within the margin; then the evidence note.
 - League fixtures still to play whose opponent is not in the table, named by opponent and date, with nothing to press (the fixture is edited on Fixtures).
-- The table: place, team, played, won, drawn, lost, for, against, goal difference, points. A rule is drawn across at each line with its name ("promoted", "bye", "play-offs", "relegated"). The owner's row is marked, and the sides within the margin carry a small mark.
+- The table: place, team, played, won, drawn, lost, for, against, goal difference, points. A rule is drawn across at each line with its name ("promoted", "bye", "play-offs", "relegated"), whenever the three numbers fit the table, so a finished season still shows them. The owner's row is marked, by his club's name, and the sides within the margin carry a small mark, with a key under the table: the mark and "Within 6 points of you" (revised during the build, 20 November 2026: the mark had no key, and the own row was marked only while there was a reading).
 
       League                                              [ Paste table ]
       Promoted automatically [1]   In the play-offs [6]   Relegated [4]

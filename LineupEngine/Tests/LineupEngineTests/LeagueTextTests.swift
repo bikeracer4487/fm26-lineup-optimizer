@@ -149,6 +149,12 @@ import Testing
         #expect(AdvisorText.leagueBaseReason(r) == "League match, your promotion place is 7 points clear with 5 matches left")
     }
 
+    @Test func aMidTableClubFarAboveTheDropAloneIsToldSo() throws {
+        let r = try reading([("A", 1, 40), ("B", 1, 38), ("C", 1, 30), ("D", 1, 28), ("Me", 1, 15), ("F", 1, 2)])
+        #expect(r.situation == .midTable)
+        #expect(AdvisorText.leagueBaseReason(r) == "League match, the drop is 13 points clear with 9 matches left")
+    }
+
     @Test func aMidTableClubAboveNoFarLineSaysNothingIsWithinReach() throws {
         let r = try reading([("A", 1, 40), ("B", 1, 38), ("C", 1, 30), ("D", 1, 28), ("Me", 1, 15), ("F", 1, 2)], noDrop)
         #expect(r.situation == .midTable && r.lines.allSatisfy { !$0.isAbove })
