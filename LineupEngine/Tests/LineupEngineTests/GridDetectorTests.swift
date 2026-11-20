@@ -128,8 +128,9 @@ private func violations(_ column: String, _ value: String) -> Int {
     ("Age", ["14", "60", "20"], ["13", "61", "", "x"]),
     ("CA", ["1", "200"], ["0", "201", ""]),
     ("PA", ["1", "200"], ["0", "201", ""]),
-    ("Contract.WagePerWeek", ["£500", "€1,200", "$12.000", "£1,234.50", "£1,234.5", "£1.234"],
-     ["500", "£", "£abc", "", "£5 00x", "£1.2345", "£1.", "£1.2.3", "£12.34.56", "£.50", "£1.23,4"]),
+    // A blank wage is a player with no contract; the importer checks his other contract cells are blank too.
+    ("Contract.WagePerWeek", ["£500", "€1,200", "$12.000", "£1,234.50", "£1,234.5", "£1.234", "", "  "],
+     ["500", "£", "£abc", "£5 00x", "£1.2345", "£1.", "£1.2.3", "£12.34.56", "£.50", "£1.23,4"]),
     ("AskingPrice", ["£25,250"], ["25,250", ""]),
     ("DisplayedName", ["Brayden Daniel", "R2D2 Jr"], ["", "12345"]),
     ("Contract.Club", ["", "Oxford City", "123"], []),

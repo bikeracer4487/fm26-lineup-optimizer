@@ -59,6 +59,29 @@ private func teamColumn(_ path: String) throws -> Int {
     try #require(Fixtures.gridColumns("first-team-with-id", grid: "TeamPlayersColumns").firstIndex(of: path))
 }
 
+/// The three cells FMRTE leaves blank together for a player with no contract.
+private let contractPaths = ["Contract.ContractType", "Contract.MonthsLeft", "Contract.WagePerWeek"]
+
+/// The search-grid paste with the contract cells of the rows at `indices` blanked (every row when nil), as FMRTE
+/// pastes a player with no contract; `alsoClub` blanks his club too, as it does for one with no club.
+private func importU21(withNoContractAt indices: Set<Int>?, alsoClub: Bool = true) throws -> ImportResult {
+    let cells = try (contractPaths + (alsoClub ? ["Contract.Club"] : [])).map(column)
+    return try importU21 { rows in
+        rows.enumerated().map { index, row in
+            guard indices?.contains(index) ?? true else { return row }
+            var row = row
+            for cell in cells { row[cell] = quoted("") }
+            return row
+        }
+    }
+}
+
+/// The owner's search result of 19 November 2026: 109 players of other clubs and of none, in dollars a month.
+private func importSearch() throws -> ImportResult {
+    try Importer.importPlayers(clipboard: Fixtures.text("captures/scouting-search.tsv"),
+                               fmrteConfig: Fixtures.settings("scouting-search", wages: "Monthly"), squad: .firstTeam)
+}
+
 /// True for the warnings that come from telling namesakes apart, or from having no ids at all.
 private func isNameWarning(_ warning: ImportWarning) -> Bool {
     switch warning {
@@ -549,5 +572,107 @@ private func isNameWarning(_ warning: ImportWarning) -> Bool {
         #expect(p.attributes.count == 62 && p.attributes[.pace] == 18 && p.attributes[.vision] == 12)
         #expect(p.familiarity.count == 14 && p.familiarity[.striker] == 20 && p.familiarity[.goalkeeper] == 1)
         #expect(p.id.key == "test player" && p.club == "Oxford City")
+    }
+
+    // A player with no contract: FMRTE leaves his contract type, months left and wage blank together.
+
+    @Test func aPlayerWithNoContractIsReadAsOutOfContractWithNoWage() throws {
+        let r = try importU21(withNoContractAt: [0])
+        let daniel = try #require(r.players.first { $0.name == "Brayden Daniel" })
+        #expect(daniel.contractType == .outOfContract && daniel.monthsLeft == nil && daniel.wagePerWeek == 0)
+        #expect(daniel.club == nil)
+        #expect(r.warnings.contains(.outOfContract("Brayden Daniel")))
+        // The other rows are read as before, and the currency comes from the first row that has a wage.
+        #expect(r.players.count == 6 && r.money == .weeklyPounds)
+        #expect(try #require(r.players.first { $0.name == "Max Treml" }).contractType == .fullTime)
+    }
+
+    @Test func aPlayerWithNoContractKeepsAClubThePasteGivesHim() throws {
+        let r = try importU21(withNoContractAt: [0], alsoClub: false)
+        let daniel = try #require(r.players.first { $0.name == "Brayden Daniel" })
+        #expect(daniel.contractType == .outOfContract && daniel.club == "Oxford City")
+    }
+
+    /// One blank contract cell beside filled ones is a fault in the paste, not a player with no contract.
+    @Test(arguments: ["Contract.ContractType", "Contract.MonthsLeft", "Contract.WagePerWeek"])
+    func oneBlankContractCellAloneStopsTheImportAndNamesTheColumn(path: String) throws {
+        let cell = try column(path)
+        #expect(throws: ImportError.invalidValue(player: "Brayden Daniel", column: path, value: "")) {
+            try importU21 { rows in
+                var rows = rows
+                rows[0][cell] = quoted("")
+                return rows
+            }
+        }
+    }
+
+    @Test func twoBlankContractCellsStopTheImportAndNameTheFirstBlank() throws {
+        let cells = try ["Contract.ContractType", "Contract.MonthsLeft"].map(column)
+        #expect(throws: ImportError.invalidValue(player: "Brayden Daniel", column: "Contract.ContractType", value: "")) {
+            try importU21 { rows in
+                var rows = rows
+                for cell in cells { rows[0][cell] = quoted("") }
+                return rows
+            }
+        }
+    }
+
+    @Test func aPasteOfOnlyPlayersWithNoContractTakesItsCurrencyFromTheAskingPrice() throws {
+        let r = try importU21(withNoContractAt: nil)
+        #expect(r.players.count == 6 && r.players.allSatisfy { $0.contractType == .outOfContract && $0.wagePerWeek == 0 })
+        #expect(r.money == .weeklyPounds)
+    }
+
+    /// The team grid has no asking price, so with no wage on any row nothing says what the currency is.
+    @Test func withNoWageAndNoAskingPriceTheCurrencyCannotBeTold() throws {
+        let cells = try contractPaths.map(teamColumn)
+        #expect(throws: ImportError.invalidValue(player: "Alfie Potter", column: "Contract.WagePerWeek", value: "")) {
+            try importFirstTeamWithIDs { rows in
+                rows.map { row in
+                    var row = row
+                    for cell in cells { row[cell] = quoted("") }
+                    return row
+                }
+            }
+        }
+    }
+
+    @Test func aWageInAnotherCurrencyIsStillCaughtAfterAPlayerWithNoContract() throws {
+        let wage = try column("Contract.WagePerWeek")
+        let cells = try (contractPaths + ["Contract.Club"]).map(column)
+        #expect(throws: ImportError.mixedCurrency(player: "Tyrae Njogu", symbol: "$", expected: "£")) {
+            try importU21 { rows in
+                var rows = rows
+                for cell in cells { rows[0][cell] = quoted("") }
+                let njogu = try! #require(rows.firstIndex { $0.contains(quoted("Tyrae Njogu")) })
+                rows[njogu][wage] = rows[njogu][wage].replacingOccurrences(of: "£", with: "$")
+                return rows
+            }
+        }
+    }
+
+    @Test func importsTheRealSearchResult() throws {
+        let r = try importSearch()
+        #expect(r.grid == "SearchPlayersColumns" && r.players.count == 109)
+        #expect(r.money == MoneyStyle(symbol: "$", period: .monthly))
+        // The fifteen with no club have no contract; four more are out of contract at a club (FMRTE's "4").
+        let noClub = r.players.filter { $0.club == nil }
+        #expect(noClub.count == 15)
+        #expect(noClub.allSatisfy { $0.contractType == .outOfContract && $0.monthsLeft == nil && $0.wagePerWeek == 0 })
+        #expect(r.players.filter { $0.contractType == .outOfContract }.count == 19)
+        #expect(r.players.filter { $0.contractType == .other("PartTime") }.count == 41)
+        #expect(r.players.filter { $0.contractType == .other("Amateur") }.count == 41)
+        #expect(r.players.filter { $0.contractType == .fullTime }.count == 8)
+        // An amateur's months left are FMRTE's -1527, read as none; his wage is $0.
+        let kerrigan = try #require(r.players.first { $0.name == "Sean Kerrigan" })
+        #expect(kerrigan.monthsLeft == nil && kerrigan.wagePerWeek == 0 && kerrigan.club == "Portstewart" && kerrigan.isBanned)
+        // $2,040 a month is kept per week.
+        let wilson = try #require(r.players.first { $0.name == "George Wilson" })
+        #expect(abs(wilson.wagePerWeek - 2040.0 * 12 / 52) < 0.01 && wilson.monthsLeft == 2)
+        #expect(r.players.filter { $0.loanedTo != nil }.map(\.name).sorted()
+                == ["Ben Woollam", "Destiny Oladipo", "Dylan Graham", "Morgan Owen"])
+        #expect(r.players.filter(\.isInjured).count == 2)
+        let first = try #require(r.players.first)
+        #expect(first.name == "Tobi Adebayo-Rowling" && first.askingPrice == 0 && first.positionsText == "D/WB/M R")
     }
 }

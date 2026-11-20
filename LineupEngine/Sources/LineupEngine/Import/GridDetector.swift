@@ -89,11 +89,19 @@ public enum GridDetector {
         case "Jadedness": return !isWholeNumber(cell, in: jadednessRange)
         case "Age": return !isWholeNumber(cell, in: ageRange)
         case "CA", "PA": return !isWholeNumber(cell, in: abilityRange)
-        case "Contract.WagePerWeek", "AskingPrice": return moneyValue(cell) == nil
+        // FMRTE leaves the wage blank for a player with no contract; the importer checks that his other contract
+        // cells are blank with it.
+        case "Contract.WagePerWeek": return !isBlank(cell) && moneyValue(cell) == nil
+        case "AskingPrice": return moneyValue(cell) == nil
         case "DisplayedName": return cell.isEmpty || cell.allSatisfy(\.isASCIIDigit)
         case idPath: return fmrteID(cell) == nil
         default: return false
         }
+    }
+
+    /// Nothing but spaces, tabs and line ends.
+    static func isBlank(_ cell: String) -> Bool {
+        cell.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// The value of an `Id` cell: ASCII digits only, no sign or separator, at least 1; else nil.

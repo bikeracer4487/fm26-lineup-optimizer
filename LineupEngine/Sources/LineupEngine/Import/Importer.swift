@@ -66,6 +66,11 @@ public enum Importer {
     /// any text here, so the importer checks them.
     private static let nonBlankColumns: Set<String> = ["DisplayedName", "Positions.PositionsDesc", "Contract.ContractType"]
 
+    /// The cells FMRTE leaves blank, all together, for a player with no contract (one with no club, in the search
+    /// grid): his contract type, months left and wage. Blank together they are read as out of contract, with no months
+    /// left and no wage; one blank beside one filled is a fault in the paste. In the order a fault is named.
+    private static let contractColumns = ["Contract.ContractType", "Contract.MonthsLeft", wagePath]
+
     public static func importPlayers(clipboard: String, fmrteConfig: Data, squad: Squad) throws -> ImportResult {
         let rows = try ClipboardText.rows(clipboard)
         let grids = try FMRTEConfig.playerGrids(from: fmrteConfig)
@@ -116,17 +121,23 @@ public enum Importer {
             func fail(_ path: String) -> ImportError {
                 .invalidValue(player: display, column: path, value: row[index[path]!])
             }
+            func cell(_ path: String) -> String { row[index[path]!] }
+            let blankContractCells = contractColumns.filter { GridDetector.isBlank(cell($0)) }
+            let hasNoContract = blankContractCells.count == contractColumns.count
+            if let blank = blankContractCells.first, !hasNoContract { throw fail(blank) }
             for (path, cell) in zip(layout.columns, row) where GridDetector.violates(cell, path: path)
-                || (nonBlankColumns.contains(path) && cell.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                || (nonBlankColumns.contains(path) && GridDetector.isBlank(cell)
+                    && !(hasNoContract && contractColumns.contains(path))) {
                 throw fail(path)
             }
-            func cell(_ path: String) -> String { row[index[path]!] }
-            // A wage cell that fits its column starts with its currency symbol.
-            let symbol = String(cell(wagePath).prefix(1))
-            if let currency, symbol != currency {
-                throw ImportError.mixedCurrency(player: display, symbol: symbol, expected: currency)
+            // A wage cell that fits its column starts with its currency symbol; a player with no contract has none.
+            if !hasNoContract {
+                let symbol = String(cell(wagePath).prefix(1))
+                if let currency, symbol != currency {
+                    throw ImportError.mixedCurrency(player: display, symbol: symbol, expected: currency)
+                }
+                currency = symbol
             }
-            currency = symbol
             func int(_ path: String) throws -> Int {
                 guard let value = Int(cell(path)) else { throw fail(path) }
                 return value
@@ -162,9 +173,13 @@ public enum Importer {
             case "4":
                 contractType = .outOfContract
                 warnings.append(.outOfContract(display))
+            case _ where hasNoContract:
+                contractType = .outOfContract
+                warnings.append(.outOfContract(display))
             case let other: contractType = .other(other)
             }
-            let months = try int("Contract.MonthsLeft")
+            // FMRTE writes a negative number for a contract that has run out; a player with none has no cell at all.
+            let months = hasNoContract ? -1 : try int("Contract.MonthsLeft")
             let loan = cell("LoanContract.LoanedToTeam").trimmingCharacters(in: .whitespaces)
             let club = index["Contract.Club"].map { row[$0].trimmingCharacters(in: .whitespaces) }
             let conditionRaw = try int("Condition")
@@ -194,7 +209,7 @@ public enum Importer {
                 isInjured: cell("IsInjured") == "True", isBanned: cell("IsBanned") == "True",
                 club: club.flatMap { $0.isEmpty ? nil : $0 }, loanedTo: loan.isEmpty ? nil : loan,
                 contractType: contractType, monthsLeft: months < 0 ? nil : months,
-                wagePerWeek: period.perWeek(Double(try money(wagePath))),
+                wagePerWeek: hasNoContract ? 0 : period.perWeek(Double(try money(wagePath))),
                 askingPrice: index["AskingPrice"] == nil ? nil : try money("AskingPrice"),
                 nationalities: index["Nationalities"].map {
                     row[$0].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
@@ -208,8 +223,13 @@ public enum Importer {
 
         // FMRTE's ids already tell every player apart; only name keys need the namesake handling.
         if idColumn == nil { warnings += disambiguateDuplicates(&players) }
-        // `ClipboardText.rows` gives at least one row, so the first row's symbol is known.
-        guard let currency else { throw ImportError.emptyClipboard }
+        // With no wage on any row (a paste of players with no contract), the asking price says what the currency is;
+        // with neither, nothing does, and the first row's blank wage is named.
+        let askingSymbol = index["AskingPrice"].flatMap { rows.first?[$0].first }.map(String.init)
+        guard let currency = currency ?? askingSymbol else {
+            let name = rows.first.map { $0[index["DisplayedName"]!].trimmingCharacters(in: .whitespaces) } ?? ""
+            throw ImportError.invalidValue(player: name, column: wagePath, value: "")
+        }
         return ImportResult(grid: layout.key, players: players, warnings: warnings,
                             money: MoneyStyle(symbol: currency, period: period))
     }
