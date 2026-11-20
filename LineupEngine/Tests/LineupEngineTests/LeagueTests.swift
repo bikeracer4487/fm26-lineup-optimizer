@@ -285,4 +285,46 @@ import Testing
         q.leagueStandingRules = Parameter(rules, .derived, source: "test")
         #expect(throws: PlanError.self) { try read(sixTable(), six, parameters: q) }
     }
+
+    // MARK: which fixtures the table speaks for
+
+    private func fx(_ id: String, _ iso: String, confirmed: Bool = false) -> (id: FixtureID, date: Day, isConfirmed: Bool) {
+        (FixtureID(id), Day(iso: iso)!, confirmed)
+    }
+
+    private let pasted = Day(iso: "2026-11-19")!
+
+    @Test func aTableSpeaksForAsManyFixturesAsItHasMatchesLeft() {
+        let fixtures = [fx("e", "2026-12-20"), fx("a", "2026-11-21"), fx("c", "2026-12-05"), fx("b", "2026-11-28"),
+                        fx("d", "2026-12-12")]
+        #expect(League.spokenFor(matchesLeft: 3, pastedOn: pasted, leagueFixtures: fixtures)
+                == [FixtureID("a"), FixtureID("b"), FixtureID("c")])
+    }
+
+    @Test func aFixtureOnTheDayCountsUnlessItWasConfirmed() {
+        let open = [fx("today", "2026-11-19"), fx("a", "2026-11-21"), fx("b", "2026-11-28")]
+        #expect(League.spokenFor(matchesLeft: 2, pastedOn: pasted, leagueFixtures: open) == [FixtureID("today"), FixtureID("a")])
+        let played = [fx("today", "2026-11-19", confirmed: true), fx("a", "2026-11-21"), fx("b", "2026-11-28")]
+        #expect(League.spokenFor(matchesLeft: 2, pastedOn: pasted, leagueFixtures: played) == [FixtureID("a"), FixtureID("b")])
+    }
+
+    @Test func aConfirmedFixtureAfterTheDayUsesUpAMatch() {
+        let fixtures = [fx("a", "2026-11-21", confirmed: true), fx("b", "2026-11-28"), fx("c", "2026-12-05"), fx("d", "2026-12-12")]
+        #expect(League.spokenFor(matchesLeft: 3, pastedOn: pasted, leagueFixtures: fixtures)
+                == [FixtureID("a"), FixtureID("b"), FixtureID("c")])
+    }
+
+    @Test func fixturesBeforeTheDayAreNeverSpokenFor() {
+        let fixtures = [fx("a", "2026-11-01"), fx("b", "2026-11-18", confirmed: true)]
+        #expect(League.spokenFor(matchesLeft: 3, pastedOn: pasted, leagueFixtures: fixtures).isEmpty)
+    }
+
+    @Test func noMatchesLeftSpeaksForNothing() {
+        #expect(League.spokenFor(matchesLeft: 0, pastedOn: pasted, leagueFixtures: [fx("a", "2026-11-21")]).isEmpty)
+    }
+
+    @Test func fixturesOnOneDayAreTakenByIdOrder() {
+        let fixtures = [fx("b", "2026-11-21"), fx("a", "2026-11-21")]
+        #expect(League.spokenFor(matchesLeft: 1, pastedOn: pasted, leagueFixtures: fixtures) == [FixtureID("a")])
+    }
 }

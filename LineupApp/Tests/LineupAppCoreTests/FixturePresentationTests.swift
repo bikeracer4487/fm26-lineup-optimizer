@@ -313,7 +313,7 @@ import Testing
                                            catalog: model.catalog, profile: model.profile, parameters: model.planParameters)
         return try ImportanceAdvisor.suggest(
             for: fixture, among: among.compactMap(model.fixtureForPlanner), confirmed: model.history.map(\.lineup),
-            players: model.squad.book.allPlayers, tiers: tiers, situation: .inContention, parameters: model.planParameters)
+            players: model.squad.book.allPlayers, tiers: tiers, situation: .inContention, league: nil, parameters: model.planParameters)
     }
 
     /// The draft as the engine sees it, on the primary tactic.
@@ -427,7 +427,7 @@ import Testing
         let expected = try ImportanceAdvisor.suggest(
             for: fixture, among: model.fixtures.filter { $0.id != saved.id }.compactMap(model.fixtureForPlanner),
             confirmed: model.history.map(\.lineup), players: model.squad.book.allPlayers, tiers: tiers,
-            situation: .inContention, parameters: model.planParameters)
+            situation: .inContention, league: nil, parameters: model.planParameters)
         #expect(model.suggestion(for: draft) == expected)
     }
 

@@ -15,40 +15,43 @@ public enum ImportanceAdvisor {
     /// `tiers` are meant to be the planner's (`SquadTiers.compute`, injured players left out). An injured player is never
     /// counted as unsharp, nor is a first-eleven player missing from `players`, so with tiers that keep injured players
     /// the injured are still not counted (though the fit player who would stand in for one is not counted either).
-    /// `situation` sets a league match's base (this fixture's and the next one's) and nothing else.
+    /// `situation` is the owner's choice by hand, nil when he has made none; it sets a league match's base (this fixture's
+    /// and the next one's). Without it, a league fixture the table speaks for (`league`) takes the table's situation, and
+    /// any other is in contention. A side he is battling raises a league match the table speaks for, whichever way the
+    /// situation was set.
     /// Throws `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, or when a score is too large
     /// to give as a whole number.
     public static func suggest(for fixture: Fixture, among fixtures: [Fixture], confirmed: [ConfirmedLineup],
                                players: [Player], tiers: SquadTiers,
-                               situation: LeagueSituation, parameters: EngineParameters) throws -> ImportanceSuggestion {
+                               situation: LeagueSituation?, league: LeagueContext?,
+                               parameters: EngineParameters) throws -> ImportanceSuggestion {
         let problems = FitnessModel.problems(in: parameters)
         guard problems.isEmpty else { throw PlanError.badParameters(problems) }
         let rules = parameters.importanceRules.value
         let others = fixtures.filter { $0.id != fixture.id }
         var reasons: [String] = []
 
-        let base = try baseScore(competition: fixture.competition, situation: situation, rules: rules)
-        reasons.append(base.reason)
-        var score = base.value
-        let opponent = opponentFactor(fixture.opponentStrength, rules: rules)
-        score *= opponent.value
-        if let reason = opponent.reason { reasons.append(reason) }
+        let own = try size(of: fixture, situation: situation, league: league, parameters: parameters)
+        reasons += own.reasons
+        var score = own.value
         let ownSize = score
 
         // The next match after this one, earliest first, lowest id on a tie.
         let next = others.filter { $0.date > fixture.date }
             .min { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }
         var reduced = false
+        var tableUsed = own.usedTable
         if let next {
-            let nextScore = try baseScore(competition: next.competition, situation: situation, rules: rules).value
-                * opponentFactor(next.opponentStrength, rules: rules).value
+            let following = try size(of: next, situation: situation, league: league, parameters: parameters)
+            tableUsed = tableUsed || following.usedTable
+            let nextScore = following.value
             let gap = fixture.date.days(to: next.date)
-            // The next match must reach the line and be bigger than this one, by base times opponent.
+            // The next match must reach the line and be bigger than this one, by base times opponent times battling.
             if nextScore >= rules.biggerMatchFrom, nextScore > ownSize,
                let step = rules.biggerMatchSteps.sorted(by: { $0.withinDays < $1.withinDays }).first(where: { gap <= $0.withinDays }) {
                 score *= step.factor
                 reduced = true
-                reasons.append("A bigger match follows in \(gap) day\(gap == 1 ? "" : "s") (×\(factorText(step.factor)))")
+                reasons.append("A bigger match follows in \(gap) day\(gap == 1 ? "" : "s") (\u{00D7}\(factorText(step.factor)))")
             }
         }
 
@@ -96,8 +99,41 @@ public enum ImportanceAdvisor {
             }
         }
 
+        let evidence = [parameters.importanceRules.evidence] + (tableUsed ? [parameters.leagueStandingRules.evidence] : [])
         return ImportanceSuggestion(importance: importance, score: score, reasons: reasons,
-                                    basis: Evidence.weakest([parameters.importanceRules.evidence])!)
+                                    basis: Evidence.weakest(evidence)!)
+    }
+
+    /// A fixture's size, base times the opponent's strength times the factor for a side he is battling, with the reasons
+    /// for each, and whether the table was read to give it.
+    private static func size(of fixture: Fixture, situation: LeagueSituation?, league: LeagueContext?,
+                             parameters: EngineParameters) throws -> (value: Double, reasons: [String], usedTable: Bool) {
+        let rules = parameters.importanceRules.value
+        var reasons: [String] = []
+        var usedTable = false
+        var tableReading: LeagueReading?
+        if fixture.competition == .league, let league, league.speaksFor.contains(fixture.id) { tableReading = league.reading }
+        var base = try baseScore(competition: fixture.competition, situation: situation ?? .inContention, rules: rules)
+        if situation == nil, let reading = tableReading, let fromTable = reading.situation {
+            let value = try baseScore(competition: fixture.competition, situation: fromTable, rules: rules).value
+            base = (value, "\(AdvisorText.leagueBaseReason(reading)): \(try wholeNumber(value))")
+            usedTable = true
+        }
+        reasons.append(base.reason)
+        var value = base.value
+        let opponent = opponentFactor(fixture.opponentStrength, rules: rules)
+        value *= opponent.value
+        if let reason = opponent.reason { reasons.append(reason) }
+        if let reading = tableReading {
+            let wanted = PlayerID.normalise(fixture.opponent)
+            if let rival = reading.rivals.first(where: { PlayerID.normalise($0.name) == wanted }) {
+                let factor = parameters.leagueStandingRules.value.battlingFactor
+                value *= factor
+                reasons.append(AdvisorText.battlingReason(rival, factor: factor))
+                usedTable = true
+            }
+        }
+        return (value, reasons, usedTable)
     }
 
     private static func baseScore(competition: Competition?, situation: LeagueSituation,

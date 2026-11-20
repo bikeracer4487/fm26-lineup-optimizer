@@ -100,7 +100,7 @@ extension AppModel {
               let tiers = tiers(for: tactic), let fixture = fixtureForPlanner(stored) else { return nil }
         let among = openFixtures().map(\.fixture).filter { $0.id != draft.id }
         return try? ImportanceAdvisor.suggest(for: fixture, among: among, confirmed: history.map(\.lineup),
-                                              players: squad.book.allPlayers, tiers: tiers, situation: settings.situation,
+                                              players: squad.book.allPlayers, tiers: tiers, situation: settings.situation, league: nil,
                                               parameters: planParameters)
     }
 
@@ -144,7 +144,7 @@ extension AppModel {
             guard let tiers = tiers(for: tactic) else { continue }
             do {
                 found[fixture.id] = try ImportanceAdvisor.suggest(for: fixture, among: among, confirmed: lineups,
-                                                                  players: players, tiers: tiers, situation: settings.situation,
+                                                                  players: players, tiers: tiers, situation: settings.situation, league: nil,
                                                                   parameters: parameters)
             } catch {
                 continue   // that fixture has no suggestion

@@ -89,6 +89,8 @@ enum Report {
         let training: TrainingReport
         let removal: RemovalReport
         let scouting: ScoutingNeeds
+        /// The League part's lines; empty when no table was given.
+        let league: [String]
         /// In date order; nil when no fixtures were given.
         let suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]?
         /// One entry for each squad given, in the order given.
@@ -129,6 +131,7 @@ enum Report {
         out += rest(advice.rest)
         out += training(advice.training)
         out += removal(advice.removal)
+        if !advice.league.isEmpty { out += ["", "=== League ==="] + advice.league.map { "  " + $0 } }
         if let suggestions = advice.suggestions { out += importance(suggestions) }
         out += mentoring(advice.mentoring)
         return out.joined(separator: "\n") + "\n"

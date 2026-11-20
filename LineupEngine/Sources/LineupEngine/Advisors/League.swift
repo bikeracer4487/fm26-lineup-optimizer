@@ -104,6 +104,15 @@ public struct LineReading: Equatable, Sendable {
     /// Above: the side in place after + 1. Below: the side in place after. Nil when safe.
     public let other: LeagueTeam?
     public let otherPlace: Int?
+
+    public init(line: LeagueLine, isAbove: Bool, state: LineState, gap: Int?, other: LeagueTeam?, otherPlace: Int?) {
+        self.line = line
+        self.isAbove = isAbove
+        self.state = state
+        self.gap = gap
+        self.other = other
+        self.otherPlace = otherPlace
+    }
 }
 
 /// A side the club is battling: `pointsAhead` is negative when it is behind.
@@ -131,9 +140,45 @@ public struct LeagueReading: Equatable, Sendable {
     public let basis: Evidence
 
     public var seasonIsOver: Bool { matchesLeft == 0 }
+
+    public init(club: String, place: Int, points: Int, matchesLeft: Int, mostReachable: Int, margin: Int,
+                lines: [LineReading], situation: LeagueSituation?, decidedBy: LineReading?, rivals: [LeagueRival],
+                basis: Evidence) {
+        self.club = club
+        self.place = place
+        self.points = points
+        self.matchesLeft = matchesLeft
+        self.mostReachable = mostReachable
+        self.margin = margin
+        self.lines = lines
+        self.situation = situation
+        self.decidedBy = decidedBy
+        self.rivals = rivals
+        self.basis = basis
+    }
+}
+
+/// A reading of the table and the fixtures it speaks for: what the suggested importance is handed.
+public struct LeagueContext: Equatable, Sendable {
+    public let reading: LeagueReading
+    public let speaksFor: Set<FixtureID>
+
+    public init(reading: LeagueReading, speaksFor: Set<FixtureID>) {
+        self.reading = reading
+        self.speaksFor = speaksFor
+    }
 }
 
 public enum League {
+    /// The ids of the first `matchesLeft` league fixtures, in date order then id, among those dated after `pastedOn`
+    /// and those on it with no lineup confirmed. A confirmed one after the day counts as one of the matches left.
+    public static func spokenFor(matchesLeft: Int, pastedOn: Day,
+                                 leagueFixtures: [(id: FixtureID, date: Day, isConfirmed: Bool)]) -> Set<FixtureID> {
+        let coming = leagueFixtures.filter { $0.date > pastedOn || ($0.date == pastedOn && !$0.isConfirmed) }
+            .sorted { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }
+        return Set(coming.prefix(max(0, matchesLeft)).map(\.id))
+    }
+
     /// What is wrong with the rules, in plain words; empty when they can be used.
     static func problems(in rules: LeagueStandingRules) -> [String] {
         var found: [String] = []

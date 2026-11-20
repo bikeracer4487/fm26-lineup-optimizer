@@ -19,6 +19,7 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
                          [--history <confirmed.json>] [--fixtures <fixtures.json>] [--intensity low|medium|high]
                          [--profile fm27|carried-over] [--standings <standings.json>]
                          [--league-situation title-race|in-contention|mid-table|nothing-to-play-for]
+                         [--league-table <paste.tsv> --league-format <promoted>,<play-offs>,<relegated>]
        lineup-cli scout  everything advise takes, and --candidates <paste.tsv>, which is required: a paste of players
                          from FMRTE's search grid, read with --grids as a first-team paste
        At least one of --first-team, --u21, --u18 is required.
@@ -46,8 +47,14 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        nobody stands above Others and no group is suggested. The command line takes no arrow readings: every arrow it
        shows is this tool's guess from the levels, and says so.
        --league-situation says where the club stands in the league, which sets how much each league match in --fixtures
-       is worth to the suggested importance: title-race (title race or relegation fight), in-contention (the default),
-       mid-table or nothing-to-play-for. It changes nothing else.
+       is worth to the suggested importance: title-race (title race or relegation fight), in-contention,
+       mid-table or nothing-to-play-for. It is the choice by hand and wins over the table; without it, a league match
+       the table speaks for takes the table's situation, and any other is in contention. It changes nothing else.
+       --league-table is a paste of the league's standings from FMRTE, read with --grids (which must then carry the
+       standings layout); --league-format says how many places are promoted, in the play-offs and relegated, for
+       example 1,6,4. Give both or neither. With them advise prints a League part (where the club stands, in
+       sentences) before the importances, and the table sets the situation of the next league fixtures it has matches
+       left for, --as-of being the day it was pasted; a league match against a side the club is battling is worth more.
        --fixtures is a JSON array of {"id", "date", "opponent", "importance", "overrides"?: {"<slot>": "<player key>"},
        "rejected"?: ["<player key>"], "competition"?: "league|cup|minorCup|friendly",
        "opponentStrength"?: "muchStronger|stronger|similar|weaker|muchWeaker"}. plan ignores competition and
@@ -79,7 +86,9 @@ struct Options {
     var history: String?
     var standings: String?
     var candidates: String?
-    var leagueSituation: LeagueSituation = .inContention
+    var leagueSituation: LeagueSituation?
+    var leagueTable: String?
+    var leagueFormat: LeagueFormat?
     var asOf: Day?
     var settings = PlanSettings.standard
 }
@@ -102,7 +111,7 @@ func parse(_ arguments: [String]) throws -> Options {
     let allowed = switch command {
     case .select: shared + ["--importance"]
     case .plan: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--stability", "--saving", "--horizon", "--development"]
-    case .advise: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--standings", "--league-situation"]
+    case .advise: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--standings", "--league-situation", "--league-table", "--league-format"]
     case .scout: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--standings", "--league-situation", "--candidates"]
     }
     let name = command.rawValue
@@ -139,6 +148,13 @@ func parse(_ arguments: [String]) throws -> Options {
             case "nothing-to-play-for": options.leagueSituation = .nothingToPlayFor
             default: throw UsageError(reason: "--league-situation is title-race, in-contention, mid-table or nothing-to-play-for, not '\(value)'")
             }
+        case "--league-table": options.leagueTable = value
+        case "--league-format":
+            let numbers = value.split(separator: ",", omittingEmptySubsequences: false).map { Int($0) }
+            guard numbers.count == 3, numbers.allSatisfy({ $0 != nil }) else {
+                throw UsageError(reason: "--league-format needs three whole numbers, <promoted>,<play-offs>,<relegated>, not '\(value)'")
+            }
+            options.leagueFormat = LeagueFormat(promoted: numbers[0]!, playOffs: numbers[1]!, relegated: numbers[2]!)
         case "--as-of":
             guard let day = Day(iso: value) else { throw UsageError(reason: "--as-of needs a date in the form YYYY-MM-DD, not '\(value)'") }
             options.asOf = day
@@ -166,6 +182,9 @@ func parse(_ arguments: [String]) throws -> Options {
         guard options.asOf != nil else { throw UsageError(reason: "--as-of is required") }
     case .advise:
         guard options.asOf != nil else { throw UsageError(reason: "--as-of is required") }
+        guard (options.leagueTable == nil) == (options.leagueFormat == nil) else {
+            throw UsageError(reason: "--league-table and --league-format go together: give both or neither")
+        }
     case .scout:
         guard options.asOf != nil else { throw UsageError(reason: "--as-of is required") }
         guard options.candidates != nil else { throw UsageError(reason: "--candidates is required") }
@@ -320,6 +339,25 @@ do {
         let scouting = try Scouting.needs(tactic: tactic, players: players, ownClub: ownClub, going: going, retraining: [],
                                           catalog: catalog, profile: profile, parameters: parameters)
         if options.command == .advise {
+            // The table, read with --grids, and what it makes of where the club stands.
+            var league: LeagueContext?
+            var leagueLines: [String] = []
+            if let path = options.leagueTable, let format = options.leagueFormat {
+                let table = try LeagueTableImporter.read(clipboard: readText(path), fmrteConfig: grids, ownClub: ownClub,
+                                                         parameters: parameters)
+                guard let ownClub else { throw LeagueTableError.noClubKnown }
+                let reading = try League.read(table: table, format: format, club: ownClub, parameters: parameters)
+                let leagueFixtures = (fixtures ?? []).filter { $0.competition == .league }.map { fixture in
+                    (id: fixture.id, date: fixture.date, isConfirmed: history.contains { $0.fixture == fixture.id })
+                }
+                league = LeagueContext(reading: reading, speaksFor: League.spokenFor(
+                    matchesLeft: reading.matchesLeft, pastedOn: options.asOf!, leagueFixtures: leagueFixtures))
+                leagueLines = AdvisorText.standingLines(reading)
+                if let bye = AdvisorText.byeLine(format) { leagueLines.insert(bye, at: 0) }
+                if table.orderWorkedOut { leagueLines.append(AdvisorText.orderWorkedOutLine) }
+                leagueLines += table.warnings.map { ErrorDescriptions.describe($0) }
+                leagueLines.append(AdvisorText.leagueEvidenceNote(reading))
+            }
             var suggestions: [(fixture: Fixture, suggestion: ImportanceSuggestion)]?
             if let fixtures {
                 // The planner's tiers: injured players left out, as they cannot play.
@@ -328,6 +366,7 @@ do {
                 suggestions = try fixtures.sorted { ($0.date, $0.id.raw) < ($1.date, $1.id.raw) }.map { fixture in
                     (fixture, try ImportanceAdvisor.suggest(for: fixture, among: fixtures, confirmed: history, players: players,
                                                             tiers: tiers, situation: options.leagueSituation,
+                                                            league: league,
                                                             parameters: parameters))
                 }
             }
@@ -344,7 +383,7 @@ do {
             output = Report.render(header, advice: Report.Advice(
                 asOf: options.asOf!, profile: profile, intensity: options.settings.trainingIntensity, history: history,
                 elevens: advisors.elevens, depth: advisors.depth, rest: advisors.rest, training: advisors.training,
-                removal: advisors.removal, scouting: scouting, suggestions: suggestions, mentoring: mentoring),
+                removal: advisors.removal, scouting: scouting, league: leagueLines, suggestions: suggestions, mentoring: mentoring),
                 parameters: parameters)
         } else {
             // The paste is read as a first-team paste with the same grids; its players are judged, not added to the book.

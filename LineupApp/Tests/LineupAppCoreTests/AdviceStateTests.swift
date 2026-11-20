@@ -321,7 +321,7 @@ import LineupEngine
         return try ImportanceAdvisor.suggest(
             for: try #require(model.fixtureForPlanner(fixture)), among: among.compactMap(model.fixtureForPlanner),
             confirmed: model.history.map(\.lineup), players: model.squad.book.allPlayers, tiers: tiers,
-            situation: .inContention, parameters: model.planParameters)
+            situation: .inContention, league: nil, parameters: model.planParameters)
     }
 
     @Test func suggestionsAreForUnconfirmedFixturesOnlyAndAreTheEngines() throws {

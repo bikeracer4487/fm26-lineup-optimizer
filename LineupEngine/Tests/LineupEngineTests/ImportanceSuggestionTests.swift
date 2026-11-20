@@ -7,8 +7,8 @@ import Testing
     let tactic: Tactic = try! PlannerFixture.tactic()
 
     func fixture(_ id: String = "this", daysFromToday offset: Int = 0, competition: Competition? = .league,
-                 opponent: OpponentStrength? = .similar) -> Fixture {
-        var f = Fixture(id: FixtureID(id), date: today.adding(days: offset), opponent: "Rovers", importance: .medium, tactic: tactic)
+                 opponent: OpponentStrength? = .similar, against name: String = "Rovers") -> Fixture {
+        var f = Fixture(id: FixtureID(id), date: today.adding(days: offset), opponent: name, importance: .medium, tactic: tactic)
         f.competition = competition
         f.opponentStrength = opponent
         return f
@@ -34,11 +34,12 @@ import Testing
 
     func suggest(_ f: Fixture, among others: [Fixture] = [], confirmed: [ConfirmedLineup] = [],
                  sharpness: [Double] = [], injured: Int = 0, outside: Double = 1,
-                 situation: LeagueSituation = .inContention,
+                 situation: LeagueSituation? = nil, league: LeagueContext? = nil,
                  parameters: EngineParameters? = nil) throws -> ImportanceSuggestion {
         let s = squad(sharpness: sharpness, injured: injured, outsideSharpness: outside)
         return try ImportanceAdvisor.suggest(for: f, among: others, confirmed: confirmed, players: s.players, tiers: s.tiers,
-                                             situation: situation, parameters: parameters ?? self.parameters)
+                                             situation: situation, league: league,
+                                             parameters: parameters ?? self.parameters)
     }
 
     /// The standard parameters with the importance rules changed by `change`.
@@ -390,5 +391,98 @@ import Testing
         #expect(throws: PlanError.self) { try suggest(fixture(opponent: .stronger), parameters: overflow) }
         // Not a number never reaches the count: the parameter check stops it.
         #expect(throws: PlanError.self) { try suggest(fixture(), parameters: rules { $0.leagueBase = .nan }) }
+    }
+
+    // MARK: The league table
+
+    /// The owner's table (19 November 2026): 5th on 74, three matches left, Buxton level on points.
+    func owners() throws -> LeagueReading {
+        let t = try LeagueTableImporter.read(clipboard: Fixtures.leagueTable, fmrteConfig: Fixtures.leagueTableGrids,
+                                             ownClub: "Oxford City", parameters: parameters)
+        return try League.read(table: t, format: LeagueFormat(promoted: 1, playOffs: 6, relegated: 4), club: "Oxford City",
+                               parameters: parameters)
+    }
+
+    func context(_ speaksFor: String...) throws -> LeagueContext {
+        LeagueContext(reading: try owners(), speaksFor: Set(speaksFor.map(FixtureID.init)))
+    }
+
+    @Test func withNoChoiceByHandACoveredLeagueFixtureTakesTheTablesSituation() throws {
+        let s = try suggest(fixture(), league: context("this"))
+        #expect(s.score == 100 && s.importance == .high)
+        #expect(s.reasons.first == "League match, your play-off place is within 6 points: 100")
+    }
+
+    @Test func aChoiceByHandWinsOverTheTable() throws {
+        let s = try suggest(fixture(), situation: .midTable, league: context("this"))
+        #expect(s.score == 60)
+        #expect(s.reasons.first == "League match, mid-table: 60")
+    }
+
+    @Test func aFixtureTheTableDoesNotSpeakForIsReadWithoutIt() throws {
+        let s = try suggest(fixture(against: "Buxton"), league: context("other"))
+        #expect(s.score == 80)
+        #expect(s.reasons.first == "League match: 80")
+        #expect(!s.reasons.contains { $0.contains("level on points") })
+    }
+
+    @Test func aSideHeIsBattlingRaisesTheMatch() throws {
+        let s = try suggest(fixture(against: "Buxton"), league: context("this"))
+        #expect(s.score == 120)
+        #expect(s.reasons[0] == "League match, your play-off place is within 6 points: 100")
+        #expect(s.reasons[1] == "Buxton are level on points with you (\u{00D7}1.2)")
+    }
+
+    @Test func aBattlingReasonFollowsTheOpponentsOwn() throws {
+        let s = try suggest(fixture(opponent: .stronger, against: "Buxton"), league: context("this"))
+        #expect(s.reasons[1] == "Stronger opponent (\u{00D7}1.1)")
+        #expect(s.reasons[2] == "Buxton are level on points with you (\u{00D7}1.2)")
+        #expect(abs(s.score - 132) < 1e-9)
+    }
+
+    @Test func aSideOutsideTheMarginDoesNotRaiseIt() throws {
+        let s = try suggest(fixture(against: "Chester"), league: context("this"))
+        #expect(s.score == 100)
+        #expect(!s.reasons.contains { $0.contains("(\u{00D7}1.2)") })
+    }
+
+    @Test func theFactorAppliesUnderAChoiceByHandToo() throws {
+        let s = try suggest(fixture(against: "Buxton"), situation: .inContention, league: context("this"))
+        #expect(abs(s.score - 96) < 1e-9 && s.importance == .high)
+    }
+
+    @Test func theFactorMatchesNamesAsTheSquadBookDoesAndOnlyInTheLeague() throws {
+        let league = try context("a", "b")
+        #expect(try suggest(fixture("a", against: " buxton"), league: league).score == 120)
+        #expect(try suggest(fixture("b", against: "BUXTON  "), league: league).score == 120)
+        #expect(try suggest(fixture("c", competition: .cup, against: "Buxton"), league: league).score == 60)
+        #expect(try suggest(fixture("d", competition: .cup, against: "Buxton"), league: try context("d")).score == 60)
+    }
+
+    @Test func aBiggerMatchIsMeasuredWithTheFactorIn() throws {
+        let league = try context("this", "next")
+        let against = fixture("next", daysFromToday: 2, against: "Buxton")
+        let s = try suggest(fixture(), among: [against], situation: .inContention, league: league)
+        #expect(s.reasons.contains("A bigger match follows in 2 days (\u{00D7}0.6)"))
+        let chester = fixture("next", daysFromToday: 2, against: "Chester")
+        let t = try suggest(fixture(), among: [chester], situation: .inContention, league: league)
+        #expect(!t.reasons.contains { $0.hasPrefix("A bigger match") })
+    }
+
+    @Test func aTableWhoseSeasonIsOverChangesNothing() throws {
+        let rows = [("A", 10, 20), ("B", 10, 16), ("Me", 10, 14), ("D", 10, 10), ("E", 10, 8), ("F", 10, 2)]
+        let t = LeagueTable(teams: rows.map { LeagueTeam(name: $0.0, played: $0.1, won: 0, drawn: 0, lost: 0, goalsFor: 0,
+                                                         goalsAgainst: 0, points: $0.2) }, orderWorkedOut: false, warnings: [])
+        let over = try League.read(table: t, format: LeagueFormat(promoted: 1, playOffs: 2, relegated: 1), club: "Me",
+                                   parameters: parameters)
+        #expect(over.seasonIsOver)
+        let with = try suggest(fixture(), league: LeagueContext(reading: over, speaksFor: []))
+        #expect(with == (try suggest(fixture(), league: nil)))
+    }
+
+    @Test func theBasisIsTheWeakerOfTheTwoRuleSets() throws {
+        #expect(try suggest(fixture(), league: context("this")).basis == .derived)
+        #expect(try suggest(fixture(), league: nil).basis == parameters.importanceRules.evidence)
+        #expect(try suggest(fixture(), league: context("other")).basis == parameters.importanceRules.evidence)
     }
 }
