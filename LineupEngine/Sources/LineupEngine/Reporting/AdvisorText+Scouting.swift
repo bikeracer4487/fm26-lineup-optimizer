@@ -254,10 +254,12 @@ extension AdvisorText {
     /// "Injury Proneness 16".
     public static func caution(_ caution: CandidateCaution) -> String { "\(caution.attribute.rawValue) \(caution.value)" }
 
-    /// "Free agent" for a player out of contract, else his club; nil when the paste carried none.
+    /// "Free agent" for a player with no contract and no club; "Darlington, out of contract" for one out of contract
+    /// who is still at a club (FMRTE's `4`); else his club; nil when the paste carried none. A grid with no club column
+    /// cannot tell the first two apart, and reads both as a free agent.
     public static func club(of player: Player) -> String? {
         switch player.contractType {
-        case .outOfContract: "Free agent"
+        case .outOfContract: player.club.map { "\($0), out of contract" } ?? "Free agent"
         case .fullTime, .youth, .other: player.club
         }
     }

@@ -139,7 +139,10 @@ import LineupEngine
     @Test func aFreeAgentAndALoanAreNamed() throws {
         let t = try ScoutingSetup.ready()
         var players = try pasted().players
-        let free = try #require(players.first { $0.contractType == .outOfContract })
+        // A free agent has no club; the sample's player out of contract is still at one, so his club is taken away.
+        let freeIndex = try #require(players.firstIndex { $0.contractType == .outOfContract })
+        players[freeIndex].club = nil
+        let free = players[freeIndex]
         let loanIndex = try #require(players.firstIndex { $0.contractType != .outOfContract && $0.loanedTo == nil })
         players[loanIndex].loanedTo = "Barnet"
         let loaned = players[loanIndex]

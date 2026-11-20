@@ -118,6 +118,23 @@ import LineupEngine
         #expect(t.model.scoutingPasteProblem == nil)
     }
 
+    /// The paste that was refused on 19 November 2026 for the blank contract cells of its players with no club.
+    @Test func theOwnersRealSearchResultIsReadAndJudged() throws {
+        let t = try ScoutingSetup.ready()
+        try ScoutingSetup.paste(t, paste: Captures.scoutingSearch, grids: Captures.scoutingSearchGrids)
+        #expect(t.model.scoutingPasteProblem == nil)
+        #expect(t.model.scoutingPaste?.players.count == 109)
+        #expect(t.model.scoutingPaste?.money == MoneyStyle(symbol: "$", period: .monthly))
+        let report = try ScoutingSetup.report(t.model)
+        #expect(report.candidates.count == 109 && report.leftOut.isEmpty)
+        let sheet = try #require(t.model.candidatesSheet(report, order: .today))
+        let rows = sheet.groups.flatMap(\.rows)
+        #expect(rows.count == 109)
+        #expect(rows.filter { $0.club == "Free agent" }.count == 15)
+        #expect(rows.first { $0.name == "Brad Walker" }?.club == "Darlington, out of contract")
+        #expect(rows.first { $0.name == "George Wilson" }?.wage == "$2,040 a month")
+    }
+
     @Test func aPasteHoldsThePlayersAndSavesNothing() throws {
         let t = try ScoutingSetup.ready()
         _ = t.model.adviceState

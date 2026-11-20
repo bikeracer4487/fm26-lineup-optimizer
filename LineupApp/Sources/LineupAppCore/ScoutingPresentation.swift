@@ -51,7 +51,7 @@ public struct ScoutingCandidateRow: Identifiable, Equatable, Sendable {
     public let age: Int
     /// As FMRTE writes them: "D/WB/M L".
     public let positions: String
-    /// "Wrexham", "Free agent"; nil when the paste carried no club.
+    /// "Wrexham", "Darlington, out of contract", "Free agent"; nil when the paste carried no club.
     public let club: String?
     /// "On loan at Barnet"; nil when he is not on loan.
     public let onLoan: String?

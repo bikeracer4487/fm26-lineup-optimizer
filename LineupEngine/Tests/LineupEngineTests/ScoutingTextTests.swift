@@ -386,9 +386,13 @@ import Testing
         #expect(AdvisorText.caution(CandidateCaution(attribute: .injuryProneness, value: 16)) == "Injury Proneness 16")
         #expect(AdvisorText.club(of: .fixture(name: "A", club: "Wrexham")) == "Wrexham")
         #expect(AdvisorText.club(of: .fixture(name: "A", club: nil)) == nil)
-        var free = Player.fixture(name: "A", club: "Wrexham")
+        // A free agent has no club and no contract; a player out of contract at a club keeps the club's name.
+        var free = Player.fixture(name: "A", club: nil)
         free.contractType = .outOfContract
         #expect(AdvisorText.club(of: free) == "Free agent")
+        var outOfContract = Player.fixture(name: "A", club: "Darlington")
+        outOfContract.contractType = .outOfContract
+        #expect(AdvisorText.club(of: outOfContract) == "Darlington, out of contract")
         #expect(AdvisorText.onLoan(at: "Barnet") == "On loan at Barnet")
         #expect(AdvisorText.askingPrice(350000, .weeklyPounds) == "Asking £350,000")
         #expect(AdvisorText.playersRead(1) == "1 player read.")

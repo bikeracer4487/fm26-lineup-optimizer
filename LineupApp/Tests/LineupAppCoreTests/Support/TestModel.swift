@@ -31,6 +31,10 @@ enum Captures {
     static var u21Grids: Data { get throws { try data("u21.grids.json") } }
     /// The U21 paste with its club made another, as a search of another club's players would paste them.
     static var u21AtAnotherClub: String { get throws { try u21.replacingOccurrences(of: "Oxford City", with: "Banbury United") } }
+    /// The owner's search result of 19 November 2026: 109 players of other clubs and of none, in dollars a month.
+    /// Fifteen have no club, and FMRTE left their contract cells blank.
+    static var scoutingSearch: String { get throws { try text("scouting-search.tsv") } }
+    static var scoutingSearchGrids: Data { get throws { try grids(try data("scouting-search.grids.json"), wages: "Monthly") } }
     /// The U21s from the team grid, which carries no club and no asking price.
     static var u21TeamGrid: String { get throws { try text("u21-team-grid.tsv") } }
     static var u21TeamGridGrids: Data { get throws { try data("u21-team-grid.grids.json") } }
