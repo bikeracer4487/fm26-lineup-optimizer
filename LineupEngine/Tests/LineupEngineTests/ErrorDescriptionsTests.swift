@@ -326,11 +326,11 @@ import Testing
     }
 
     @Test func leagueFormatErrorsAreSaidInWholeSentences() {
-        #expect(ErrorDescriptions.describe(LeagueFormatError.negative(.playOffs, -1)) == "The play-offs cannot have -1 teams.")
-        #expect(ErrorDescriptions.describe(LeagueFormatError.negative(.promoted, -2)) == "The promoted places cannot have -2 teams.")
-        #expect(ErrorDescriptions.describe(LeagueFormatError.negative(.relegated, -3)) == "The relegated places cannot have -3 teams.")
-        #expect(ErrorDescriptions.describe(LeagueFormatError.tooMany(total: 11, teams: 10) as Error)
-                == "The promoted, play-off and relegated places make 11, more than the 10 teams in the table.")
+        #expect(ErrorDescriptions.describe(LeagueFormatError.negative(.playOffs, -1)) == "The play-offs cannot have \u{2212}1 teams.")
+        #expect(ErrorDescriptions.describe(LeagueFormatError.negative(.promoted, -2)) == "The promoted places cannot have \u{2212}2 teams.")
+        #expect(ErrorDescriptions.describe(LeagueFormatError.negative(.relegated, -3)) == "The relegated places cannot have \u{2212}3 teams.")
+        #expect(ErrorDescriptions.describe(LeagueFormatError.tooMany(format: LeagueFormat(promoted: 1, playOffs: 6, relegated: 4), teams: 10) as Error)
+                == "1 promoted, 6 in the play-offs and 4 relegated make 11, more than the 10 teams in the table.")
     }
 
     @Test func aLeagueTableWarningIsASentence() {

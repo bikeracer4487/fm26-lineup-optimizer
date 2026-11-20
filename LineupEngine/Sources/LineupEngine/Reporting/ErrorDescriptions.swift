@@ -163,9 +163,12 @@ public enum ErrorDescriptions {
             case .playOffs: "play-offs"
             case .relegated: "relegated places"
             }
-            return "The \(name) cannot have \(value) teams."
-        case .tooMany(let total, let teams):
-            return "The promoted, play-off and relegated places make \(total), more than the \(teams) teams in the table."
+            let shown = value < 0 ? "\u{2212}\(-value)" : "\(value)"
+            return "The \(name) cannot have \(shown) teams."
+        case .tooMany(let format, let teams):
+            let total = format.promoted + format.playOffs + format.relegated
+            return "\(format.promoted) promoted, \(format.playOffs) in the play-offs and \(format.relegated) relegated make "
+                + "\(total), more than the \(teams) teams in the table."
         }
     }
 

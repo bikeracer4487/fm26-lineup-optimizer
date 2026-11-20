@@ -34,7 +34,7 @@ public enum LeagueFormatField: String, Sendable, CaseIterable { case promoted, p
 
 public enum LeagueFormatError: Error, Equatable {
     case negative(LeagueFormatField, Int)
-    case tooMany(total: Int, teams: Int)
+    case tooMany(format: LeagueFormat, teams: Int)
 }
 
 public enum LeagueLineKind: String, Codable, CaseIterable, Sendable { case promotion, bye, playOff, relegation }
@@ -75,11 +75,11 @@ public struct LeagueFormat: Equatable, Codable, Sendable {
             throw LeagueFormatError.negative(field, value)
         }
         let total = promoted + playOffs + relegated
-        if let teams, total > teams { throw LeagueFormatError.tooMany(total: total, teams: teams) }
+        if let teams, total > teams { throw LeagueFormatError.tooMany(format: self, teams: teams) }
     }
 
     /// The lines that exist, in table order: promotion, bye, play-off, relegation. A line with no side across it
-    /// (after the last place) is left out.
+    /// (after the last place, as when promotion and play-offs fill the table and nobody is relegated) is left out.
     public func lines(teams: Int) throws -> [LeagueLine] {
         try check(teams: teams)
         var found: [LeagueLine] = []
@@ -207,11 +207,12 @@ public enum League {
         }
 
         func nearest(_ candidates: [LineReading]) -> LineReading? {
-            var best: LineReading?
+            var best: (reading: LineReading, gap: Int)?
             for reading in candidates {
-                if best == nil || reading.gap! < best!.gap! { best = reading }
+                guard let gap = reading.gap else { continue }
+                if best == nil || gap < best!.gap { best = (reading, gap) }
             }
-            return best
+            return best?.reading
         }
 
         var situation: LeagueSituation?

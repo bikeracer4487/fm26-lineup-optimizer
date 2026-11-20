@@ -43,7 +43,7 @@ import Testing
     }
 
     @Test func aFormatLargerThanTheTableIsRefused() throws {
-        #expect(throws: LeagueFormatError.tooMany(total: 11, teams: 10)) {
+        #expect(throws: LeagueFormatError.tooMany(format: LeagueFormat(promoted: 1, playOffs: 6, relegated: 4), teams: 10)) {
             try LeagueFormat(promoted: 1, playOffs: 6, relegated: 4).lines(teams: 10)
         }
         _ = try LeagueFormat(promoted: 1, playOffs: 6, relegated: 3).lines(teams: 10)
@@ -144,9 +144,8 @@ import Testing
 
     private let owners = LeagueFormat(promoted: 1, playOffs: 6, relegated: 4)
 
-    /// 24 teams, the club "Me" in place 8 (the first side below the play-off line is place 8, played `played`), points 50.
-    /// Every other side is far above or far below, except the one set in place 8 by `below`, which is `below` points
-    /// behind the club, given a match in hand when `played - 1` makes it the closer one.
+    /// 24 teams, the club "Me" in place 7 (the last play-off place) on 50 points, "Next" in place 8 `gap` points behind;
+    /// the six above are far ahead and the rest far behind. Every side has played 46 - `left` matches.
     private func league(left: Int, gapToPlayOff gap: Int) -> LeagueTable {
         let played = 46 - left
         var rows: [(String, played: Int, points: Int)] = []
@@ -211,9 +210,6 @@ import Testing
         #expect(gaps == [5, 4])
         #expect(r.decidedBy?.line.kind == .relegation)
         // Equal gaps: the earlier line.
-        let level = table([("A", 8, 21), ("Me", 8, 16), ("C", 8, 14), ("D", 8, 12), ("E", 8, 10), ("F", 8, 2)])
-        let equal = try read(level, promotionAndRelegation)
-        #expect(equal.lines.map(\.gap) == [5, 6])
         let same = table([("A", 8, 21), ("Me", 8, 16), ("C", 8, 14), ("D", 8, 11), ("E", 8, 11), ("F", 8, 2)])
         let tie = try read(same, promotionAndRelegation)
         #expect(tie.lines.map(\.gap) == [5, 5])
@@ -263,6 +259,13 @@ import Testing
         #expect(r.rivals.isEmpty)
     }
 
+    @Test func aLineWithNoSideAcrossItIsLeftOutAndTheReadingStillWorks() throws {
+        let full = LeagueFormat(promoted: 1, playOffs: 5, relegated: 0)
+        #expect(try full.lines(teams: 6) == [LeagueLine(kind: .promotion, after: 1), LeagueLine(kind: .bye, after: 4)])
+        let r = try read(sixTable(), full)
+        #expect(r.lines.map(\.line.kind) == [.promotion, .bye])
+    }
+
     @Test func aClubNotInTheTableIsRefused() throws {
         let t = table((1...24).map { ("T\($0)", played: 0, points: 0) })
         #expect(throws: LeagueTableError.clubNotInTable(club: "Nobody", teams: 24)) {
@@ -272,7 +275,7 @@ import Testing
 
     @Test func aFormatThatDoesNotFitTheTableIsRefused() throws {
         let t = table((1...10).map { (place: Int) in (place == 3 ? "Me" : "T\(place)", played: 0, points: 0) })
-        #expect(throws: LeagueFormatError.tooMany(total: 11, teams: 10)) { try read(t, owners) }
+        #expect(throws: LeagueFormatError.tooMany(format: LeagueFormat(promoted: 1, playOffs: 6, relegated: 4), teams: 10)) { try read(t, owners) }
     }
 
     @Test func badParametersAreRefused() throws {
