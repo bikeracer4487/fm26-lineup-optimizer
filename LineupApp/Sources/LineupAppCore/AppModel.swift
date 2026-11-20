@@ -76,6 +76,9 @@ public struct AppEnvironment: Sendable {
     public internal(set) var lastImport: ImportOutcome?
     /// The plan for the saved fixtures, worked out again by every action that changes what it depends on.
     public internal(set) var planState: PlanState
+    /// Whether Fixtures and Match Selection show the matches from before the days the advice reads (`isEarlier`) as
+    /// well. Held here only: never saved, so it is off at every launch. Changed through `setShowsEarlierMatches`.
+    public internal(set) var showsEarlierMatches = false
     /// Unsaved changes to saved tactics, by tactic id, kept in their own file until saved or reverted. Changed only
     /// through `changeDrafts`, which saves them.
     private(set) var tacticDrafts: [UUID: TacticDraft] = [:]
