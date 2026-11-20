@@ -726,6 +726,30 @@ public enum Theme {
         public static let cautionGap: CGFloat = 20
     }
 
+    // MARK: League
+
+    /// The League screen: the three numbers, and the table's columns and rules.
+    public enum League {
+        /// A number field for the format: three digits fit.
+        public static let numberFieldWidth: CGFloat = 56
+        /// The table's columns: the place, then each number, the goal difference and the points a little wider.
+        public static let placeColumn: CGFloat = 40
+        public static let teamMinimum: CGFloat = 150
+        public static let numberColumn: CGFloat = 44
+        public static let goalDifferenceColumn: CGFloat = 56
+        public static let pointsColumn: CGFloat = 52
+        /// The mark on a side within the margin of the club, in its own narrow column.
+        public static let markColumn: CGFloat = 28
+        public static let markDiameter: CGFloat = 8
+        /// A row is shorter than the Fixtures table's: it holds one line of figures.
+        public static let rowHeight: CGFloat = 34
+        /// The weight of the line drawn across the table at a place that counts, and the room its name takes.
+        public static let lineWeight: CGFloat = 2
+        public static let lineGap: CGFloat = Spacing.s
+        /// The club's own row stands on this much of marker blue.
+        public static let ownRowOpacity: Double = 0.1
+    }
+
     // MARK: Columns
 
     /// Column widths for the tables on the board. The name and status columns share what a wider window gives.

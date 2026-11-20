@@ -353,6 +353,74 @@ public enum SampleData {
     /// teams, and (with `format`) the format entered: 1 promoted, 6 in the play-offs, 4 relegated. Three league fixtures
     /// after today, against Buxton, Chester and "Buxton FC", the last of which is not a team in the table.
     @MainActor public static func modelWithLeague(repositoryRoot: URL, format: Bool = true) throws -> AppModel {
+        let model = try buildWithLeague(repositoryRoot: repositoryRoot, format: format).model
+        guard case .read = model.leagueReading else {
+            if !format { return model }
+            throw SampleDataError(description: "The sample league table was not read: \(model.leagueReading)")
+        }
+        return model
+    }
+
+    /// The league sample after a squad was pasted as the table and refused: the table held stays, and the screen says
+    /// why the paste was refused.
+    @MainActor public static func modelWithRefusedLeaguePaste(repositoryRoot: URL) throws -> AppModel {
+        let (model, input) = try buildWithLeague(repositoryRoot: repositoryRoot)
+        input.clipboard = String(decoding: try fixture("captures/first-team.tsv", under: repositoryRoot), as: UTF8.self)
+        input.config = .data(try fixture("captures/first-team.grids.json", under: repositoryRoot))
+        model.pasteLeagueTable()
+        guard model.leaguePasteProblem != nil else {
+            throw SampleDataError(description: "Pasting the sample's first team as the league table was not refused.")
+        }
+        return model
+    }
+
+    /// The league sample with its first two fixtures confirmed, the second a league match dated after the table was
+    /// pasted, and five more league fixtures after them, so the table is out of date and does not reach every match.
+    @MainActor public static func modelWithStaleLeague(repositoryRoot: URL) throws -> AppModel {
+        let (model, _) = try buildWithLeague(repositoryRoot: repositoryRoot)
+        for _ in 0..<2 {
+            guard let next = model.fixtures.first(where: { model.canConfirm($0.id) }) else {
+                throw SampleDataError(description: "The league sample has no fixture that can be confirmed.")
+            }
+            model.confirm(next.id)
+        }
+        guard let last = model.fixtures.last else {
+            throw SampleDataError(description: "The league sample has no fixtures.")
+        }
+        for (week, letter) in ["Q", "R", "S", "T", "U"].enumerated() {
+            let id = model.addFixture(date: last.date.adding(days: 7 * (week + 1)), opponent: "Opponent \(letter)",
+                                      importance: .medium)
+            guard var stored = model.fixtures.first(where: { $0.id == id }) else {
+                throw SampleDataError(description: "The sample fixture against Opponent \(letter) was not saved.")
+            }
+            stored.competition = .league
+            model.update(stored)
+        }
+        return model
+    }
+
+    /// The league sample with where the club stands chosen by hand as "Nothing to play for", which differs from the
+    /// table's reading.
+    @MainActor public static func modelWithLeagueChosenByHand(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithLeague(repositoryRoot: repositoryRoot)
+        model.setLeagueSituation(.nothingToPlayFor)
+        return model
+    }
+
+    /// The league sample and a draft of its league fixture against "Chester", or, with `unmatched`, against "Buxton FC",
+    /// which is not a team in the table.
+    @MainActor public static func draftWithLeagueOpponent(repositoryRoot: URL, unmatched: Bool = false) throws
+        -> (model: AppModel, draft: FixtureDraft) {
+        let model = try modelWithLeague(repositoryRoot: repositoryRoot)
+        let wanted = unmatched ? "Buxton FC" : "Chester"
+        guard let stored = model.fixtures.first(where: { $0.opponent == wanted }) else {
+            throw SampleDataError(description: "The league sample has no fixture against \(wanted).")
+        }
+        return (model, model.fixtureDraft(for: stored))
+    }
+
+    /// `modelWithLeague` with its scripted input, so a variant can paste again.
+    @MainActor private static func buildWithLeague(repositoryRoot: URL, format: Bool = true) throws -> (model: AppModel, input: ScriptedInput) {
         let (model, input) = try build(repositoryRoot: repositoryRoot)
         guard let last = model.fixtures.last else {
             throw SampleDataError(description: "The sample model has no fixtures.")
@@ -372,11 +440,7 @@ public enum SampleData {
             throw SampleDataError(description: "The sample league table could not be read: \(problem)")
         }
         if format { model.setLeagueFormatDraft(LeagueFormatDraft(promoted: 1, playOffs: 6, relegated: 4)) }
-        guard case .read = model.leagueReading else {
-            if !format { return model }
-            throw SampleDataError(description: "The sample league table was not read: \(model.leagueReading)")
-        }
-        return model
+        return (model, input)
     }
 
     // MARK: Scouting

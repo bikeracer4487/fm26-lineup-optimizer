@@ -31,11 +31,18 @@ struct FixtureEditor: View {
                 GridRow {
                     label("Opponent")
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        TextField("Opponent", text: $draft.opponent, prompt: Text("Who the match is against"))
-                            .labelsHidden()
-                            .boardField()
+                        if let teams = draft.opponentMenu {
+                            opponentMenu(teams)
+                        } else {
+                            TextField("Opponent", text: $draft.opponent, prompt: Text(Self.opponentPrompt))
+                                .labelsHidden()
+                                .boardField()
+                        }
                         if let problem = draft.shownProblem {
                             CautionLine(problem)
+                        }
+                        if let text = draft.opponentNotInTableText {
+                            CautionLine(text)
                         }
                         Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Theme.Spacing.m,
                              verticalSpacing: Theme.Spacing.xs) {
@@ -110,6 +117,24 @@ struct FixtureEditor: View {
         .padding(Theme.Card.padding + Theme.Spacing.xs)
         .frame(width: Theme.Layout.fixtureEditorWidth, alignment: .topLeading)
         .boardCard()
+    }
+
+    private static let opponentPrompt = "Who the match is against"
+
+    /// The league's teams to pick the opponent from, as wide as the text box. A saved opponent that is not in the table
+    /// is the menu's current entry until a team is picked, with the engine's caution under it.
+    private func opponentMenu(_ teams: [String]) -> some View {
+        let current = draft.opponentInTable ?? draft.opponent
+        return Picker("Opponent", selection: Binding(get: { current }, set: { draft.pick(opponent: $0) })) {
+            if draft.opponentInTable == nil {
+                Text(current.isEmpty ? Self.opponentPrompt : current).tag(current)
+            }
+            ForEach(teams, id: \.self) { team in
+                Text(team).tag(team)
+            }
+        }
+        .labelsHidden()
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func label(_ text: String) -> some View {

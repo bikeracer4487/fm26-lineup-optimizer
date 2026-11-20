@@ -148,6 +148,17 @@
 //                                              window ("scouting-candidates-small-…"), and after the sample's own
 //                                              U21s were pasted over them and refused
 //                                              ("scouting-candidates-refused-…").
+//                                              The League screen ("league-…") is drawn with the owner's table and
+//                                              format, empty ("league-empty-…"), with the table and no format
+//                                              ("league-noformat-…"), after a squad was pasted over the table and
+//                                              refused ("league-refused-…"), with a league match confirmed since
+//                                              and more league fixtures than the table has matches left
+//                                              ("league-stale-…"), with the situation chosen by hand differing
+//                                              ("league-byhand-…") and in the smallest window
+//                                              ("league-small-…"); Fixtures with the menu on "From the table" and
+//                                              the league suggestions ("fixtures-fromtable-…"); and the fixture
+//                                              editor with the opponent menu ("fixtures-editor-league-…") and for
+//                                              an opponent not in the table ("fixtures-editor-league-unmatched-…").
 //                                              Every screen is drawn again in a narrow window, 800 by 700
 //                                              ("<screen>-narrow-…"), and Match Selection, Tactics, Fixtures
 //                                              and the advisor screens in the smallest window
@@ -218,6 +229,7 @@ enum SampleState {
     case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
     case arrowsRead, harmfulArrow, noInfluence, regrouping, spentGroup, endedGroup, youngPlayers
     case candidates, refusedCandidates
+    case league, leagueNoFormat, leagueRefused, leagueStale, leagueByHand
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -254,6 +266,11 @@ enum SampleState {
         case .mentoringWarning: return try SampleData.modelWithMentoringWarning(repositoryRoot: url)
         case .stoppedGroup: return try SampleData.modelWithStoppedGroup(repositoryRoot: url)
         case .mentoringFailure: return try SampleData.modelWithMentoringFailure(repositoryRoot: url)
+        case .league: return try SampleData.modelWithLeague(repositoryRoot: url)
+        case .leagueNoFormat: return try SampleData.modelWithLeague(repositoryRoot: url, format: false)
+        case .leagueRefused: return try SampleData.modelWithRefusedLeaguePaste(repositoryRoot: url)
+        case .leagueStale: return try SampleData.modelWithStaleLeague(repositoryRoot: url)
+        case .leagueByHand: return try SampleData.modelWithLeagueChosenByHand(repositoryRoot: url)
         case .arrowsRead: return try SampleData.modelWithArrowsRead(repositoryRoot: url)
         case .harmfulArrow: return try SampleData.modelWithHarmfulArrow(repositoryRoot: url)
         case .noInfluence: return try SampleData.modelWithNoInfluence(repositoryRoot: url)
@@ -389,6 +406,30 @@ let narrowWindow = CGSize(width: 800, height: 700)
         let pasted: (model: AppModel, draft: FixtureDraft)
         do { pasted = try make(url) } catch { fail("\(error)") }
         try ScreenPictures.writeFixtureEditor(model: pasted.model, draft: pasted.draft, to: directory, name: name,
+                                              size: Theme.Layout.fixtureEditorSuggestionPicture)
+    }
+}
+
+/// The League screen, the Fixtures screen's menu on the table and the editor's opponent menu: see the usage at the top.
+@MainActor func drawLeague(_ root: String, to directory: URL, size: CGSize) throws {
+    // Tall enough for the whole table of 24 teams.
+    let tall = CGSize(width: size.width, height: size.height * 2.3)
+    try ScreenPictures.write(model: sampleModel(root, .league), to: directory, size: tall, variant: nil, screens: [.league])
+    try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size, variant: "empty", screens: [.league])
+    for (variant, state) in [("noformat", SampleState.leagueNoFormat), ("refused", .leagueRefused),
+                             ("stale", .leagueStale), ("byhand", .leagueByHand)] {
+        try ScreenPictures.write(model: sampleModel(root, state), to: directory, size: tall, variant: variant,
+                                 screens: [.league])
+    }
+    try ScreenPictures.write(model: sampleModel(root, .league), to: directory, size: Theme.Layout.minimumWindow,
+                             variant: "small", screens: [.league])
+    try ScreenPictures.write(model: sampleModel(root, .league), to: directory, size: size, variant: "fromtable",
+                             screens: [.fixtures])
+    let url = URL(fileURLWithPath: root, isDirectory: true)
+    for (name, unmatched) in [("fixtures-editor-league", false), ("fixtures-editor-league-unmatched", true)] {
+        let made: (model: AppModel, draft: FixtureDraft)
+        do { made = try SampleData.draftWithLeagueOpponent(repositoryRoot: url, unmatched: unmatched) } catch { fail("\(error)") }
+        try ScreenPictures.writeFixtureEditor(model: made.model, draft: made.draft, to: directory, name: name,
                                               size: Theme.Layout.fixtureEditorSuggestionPicture)
     }
 }
@@ -625,6 +666,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
             try drawTraining(root, to: directory, size: size)
             try drawRemoval(root, to: directory, size: size)
             try drawScouting(root, to: directory, size: size)
+            try drawLeague(root, to: directory, size: size)
         } else {
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size)
         }
