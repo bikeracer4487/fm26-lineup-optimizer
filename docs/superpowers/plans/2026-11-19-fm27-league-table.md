@@ -673,7 +673,7 @@ After the whole-branch review the design was revised on 20 November 2026 (its pa
 19. **The club's own row is marked by its name**, with or without the three numbers.
 20. **The three numbers take effect as they are typed.** Each keystroke goes to the model; the digits typed are the number and text with no digit is blank (Core holds the conversion). While a field is blank or the numbers typed are refused, a line under the fields says which numbers the table is still read with ("The table is still read with 1 promoted, 6 in the play-offs and 4 relegated."), and a choice made by hand in the menu is not touched by an edit that passes through a blank field. A paste or a removal of the table checks the numbers in the fields again: refused numbers that still do not fit keep their sentence, and ones that now fit are saved. This replaces change 6.
 21. **The mark on a side within the margin has a key** under the table, the dot and "Within 6 points of you" in the engine's words, and each marked row says it to VoiceOver.
-22. **The opponent menu's entries, the one chosen, and the words of the question "Remove table" asks are worked out in Core**; the menu is as wide as the text box it replaces.
+22. **The opponent menu's entries, the one chosen, and the words of the question "Remove table" asks are worked out in Core.** The menu was to be made as wide as the text box it replaces; it could not be (see the small faults), and the view's comment now says so.
 23. **Three paths of the suggestion are tested**: a next league fixture the table does not speak for takes the ordinary base in the "bigger match follows" rule; a suggestion that read the table only through the next fixture carries the table's evidence; a season that is over changes no suggestion even when it is handed fixtures to speak for.
 24. **One more picture**, `fixtures-editor-league-battling`: the editor for the sample's league fixture against Buxton, which the table speaks for, whose suggestion reads from the table's base and carries "Buxton are level on points with you (×1.2)".
 
@@ -695,6 +695,7 @@ The design's limits, as they stand after the build:
 Small faults, found during the build:
 
 - **`league-small` shows nothing of the table**, since a picture does not scroll.
+- **The opponent menu in the fixture editor is narrower than the text box it replaces**; it fits its longest team. On macOS 26 a popup takes the width of its widest entry whatever frame it is given: a menu framed at 393 points, framed to infinity, or built as a `Menu`, all drew at their content's width when measured in a window, and the Mentoring editors' menus, framed at 170 points, draw at 125 and 149. Making it as wide would need a control of the app's own.
 - **The engine words the day the table was pasted itself** (`AdvisorText.tablePastedLine`), while Core has `DayText.short` for every other day; the two could drift.
 - **The number fields are checked only by test and picture.** That a letter typed never shows rests on the field taking the model's text back after each keystroke; it has not been tried in the running app.
 - **A change of the club's name that makes the table readable again does not switch the menu to "From the table"**; only a paste, the three numbers and a removal do. The design says the menu switches whenever a reading first exists.

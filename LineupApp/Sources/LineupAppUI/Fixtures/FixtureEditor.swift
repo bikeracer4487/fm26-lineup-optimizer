@@ -119,9 +119,11 @@ struct FixtureEditor: View {
         .boardCard()
     }
 
-    /// The league's teams to pick the opponent from, as wide as the text box, with the entries and the one chosen as
-    /// Core gives them. A saved opponent that is not in the table is the menu's current entry until a team is picked,
-    /// with the engine's caution under it.
+    /// The league's teams to pick the opponent from, with the entries and the one chosen as Core gives them. A saved
+    /// opponent that is not in the table is the menu's current entry until a team is picked, with the engine's caution
+    /// under it. The menu fits its longest entry, as the editor's other menus do: on macOS 26 a popup takes the width of
+    /// its widest entry whatever frame it is given (measured: a menu framed at 393 points, at infinity or as a `Menu`
+    /// drew at its content's width), so it cannot be made as wide as the text box.
     private func opponentMenu() -> some View {
         Picker("Opponent", selection: Binding(get: { draft.opponentMenuSelection }, set: { draft.pick(opponent: $0) })) {
             ForEach(draft.opponentMenuEntries, id: \.value) { entry in
@@ -129,7 +131,7 @@ struct FixtureEditor: View {
             }
         }
         .labelsHidden()
-        .frame(width: Theme.Layout.fixtureOpponentMenuWidth, alignment: .leading)
+        .fixedSize()
     }
 
     private func label(_ text: String) -> some View {
