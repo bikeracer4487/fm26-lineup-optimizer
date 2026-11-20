@@ -156,10 +156,11 @@ extension AppModel {
     }
 
     /// The fixtures Match Selection shows: the plan's when it is ready; otherwise the missed fixtures, whose remembered
-    /// elevens need no planner and can still be put right and confirmed.
+    /// elevens need no planner and can still be put right and confirmed. Either way the earlier matches (`isEarlier`)
+    /// are left out unless the owner has asked to see them; `planState` keeps them.
     public var shownPlans: [FixturePlan] {
-        if case .ready(let plans) = planState { return plans }
-        return fixtures.filter(isMissed).map(missedPlan)
+        if case .ready(let plans) = planState { return withoutEarlierMatches(plans) }
+        return withoutEarlierMatches(fixtures.filter(isMissed).map(missedPlan))
     }
 
     /// The players not out on loan.

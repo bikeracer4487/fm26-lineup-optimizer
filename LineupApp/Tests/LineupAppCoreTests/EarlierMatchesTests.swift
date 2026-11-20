@@ -122,4 +122,95 @@ import Testing
         #expect(t.model.earlierMatchesLine == nil)
         #expect(t.model.listedFixtures == t.model.fixtures)
     }
+
+    // MARK: What Match Selection shows
+
+    private func earlierSeason() throws -> AppModel {
+        try SampleData.modelWithEarlierSeason(repositoryRoot: Captures.repositoryRoot)
+    }
+
+    private func summer() throws -> AppModel {
+        try SampleData.modelInTheSummer(repositoryRoot: Captures.repositoryRoot)
+    }
+
+    @Test func matchSelectionShowsNoEarlierMatch() throws {
+        let m = try earlierSeason()
+        #expect(m.earlierMatchCount == 6)
+        #expect(m.fixturePlans.count - m.shownPlans.count == 6)
+        #expect(m.shownPlans.allSatisfy { !m.isEarlier($0.fixture) })
+        #expect(m.startsGrid(for: m.shownPlans).columns.count == m.shownPlans.count)
+    }
+
+    @Test func showBringsEarlierMatchesBackToMatchSelection() throws {
+        let m = try earlierSeason()
+        m.setShowsEarlierMatches(true)
+        #expect(m.shownPlans == m.fixturePlans)
+    }
+
+    @Test func hidingMatchesChangesNoPlanAndNoSuggestion() throws {
+        let m = try earlierSeason()
+        let plan = m.planState, planned = m.timesPlanned
+        let lines = m.fixtures.map { m.suggestionLine(for: $0) }
+        m.setShowsEarlierMatches(true)
+        #expect(m.planState == plan)
+        #expect(m.timesPlanned == planned)
+        #expect(m.fixtures.map { m.suggestionLine(for: $0) } == lines)
+    }
+
+    @Test func aHiddenFixtureThatWasChosenGivesWayToTheNextToPlay() throws {
+        let m = try earlierSeason()
+        let hidden = try #require(m.fixtures.first { m.isEarlier($0) })
+        let chosen = MatchPresentation.chosen(hidden.id, in: m.shownPlans)
+        #expect(chosen?.id == MatchPresentation.initialFixture(in: m.shownPlans))
+        #expect(chosen.map { !m.isEarlier($0.fixture) } == true)
+    }
+
+    /// The squad was imported long ago and today has moved far on: the planned matches are before the window, and are
+    /// shown until they are confirmed.
+    @Test func plannedMatchesBeforeTheWindowAreShownUntilConfirmed() throws {
+        let m = try SampleData.model(repositoryRoot: Captures.repositoryRoot)
+        m.moveToday(by: 120)   // no import since: the plan still starts in November
+        let first = try #require(m.fixtures.first)
+        #expect(first.date < m.earlierMatchesBefore)
+        #expect(m.shownPlans == m.fixturePlans)
+        #expect(m.listedFixtures == m.fixtures)
+        m.confirm(first.id)
+        #expect(!m.shownPlans.contains { $0.id == first.id })
+        #expect(MatchPresentation.fixtureAfterConfirming(first.id, in: m.shownPlans) == m.shownPlans.first?.id)
+    }
+
+    /// Every match is earlier and none is entered for the next season.
+    @Test func inTheSummerBothScreensSayWhatIsHidden() throws {
+        let m = try summer()
+        guard case .ready = m.planState else {
+            Issue.record("expected a plan, got \(m.planState)")
+            return
+        }
+        #expect(m.listedFixtures.isEmpty)
+        #expect(m.earlierMatchesLine?.text == "8 matches from before Sat 14 Nov are not shown.")
+        #expect(m.shownPlans.isEmpty)
+        #expect(m.matchNotReady == NotReady(
+            message: "No match to play, and none played since Sat 14 Nov. Add the next matches on the Fixtures screen.",
+            problems: [], isFailure: false, action: "Go to Fixtures", screen: .fixtures))
+        m.setShowsEarlierMatches(true)
+        #expect(m.matchNotReady == nil)
+        #expect(m.shownPlans.count == 8)
+    }
+
+    @Test func otherwiseMatchSelectionsEmptyStateIsThePlansOwn() throws {
+        let t = try TestModel()
+        #expect(t.model.matchNotReady == MatchPresentation.notReady(.needsSquad))
+        #expect(try SampleData.model(repositoryRoot: Captures.repositoryRoot).matchNotReady == nil)
+    }
+
+    /// While the plan is stopped Match Selection lists the missed matches, and leaves an old one out of them too.
+    @Test func whileThePlanIsStoppedAnEarlierMissedMatchIsNotShown() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()   // no tactic, so nothing is planned and the missed matches are shown
+        t.model.addFixture(date: day("2026-09-01"), opponent: "Long ago", importance: .low)
+        let recent = t.model.addFixture(date: day("2026-11-10"), opponent: "Last week", importance: .low)
+        #expect(t.model.shownPlans.map(\.id) == [recent])
+        t.model.setShowsEarlierMatches(true)
+        #expect(t.model.shownPlans.count == 2)
+    }
 }

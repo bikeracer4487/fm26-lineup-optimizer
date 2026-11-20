@@ -215,6 +215,41 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model with a season behind it: eight more fixtures, all confirmed, a week apart on either side of the
+    /// first day Fixtures and Match Selection show (`earlierMatchesBefore`). Six are before it, so they are earlier
+    /// matches and left off both screens, and two are inside the window. Each is confirmed with the starters of the
+    /// last sample lineup, added to the history directly, since a match before the squad's import cannot be planned.
+    @MainActor public static func modelWithEarlierSeason(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        guard let played = model.history.last else {
+            throw SampleDataError(description: "The sample model has no confirmed lineup.")
+        }
+        let first = model.earlierMatchesBefore
+        let days = [-42, -35, -28, -21, -14, -7, 7, 14]
+        for (letter, offset) in zip(["M", "N", "O", "P", "Q", "R", "S", "T"], days) {
+            let date = first.adding(days: offset)
+            var record = played
+            record.lineup.fixture = model.addFixture(date: date, opponent: "Opponent \(letter)", importance: .medium)
+            record.lineup.date = date
+            model.history.append(record)
+        }
+        model.save(.history)
+        model.replan()
+        return model
+    }
+
+    /// `modelWithEarlierSeason` in the summer: the fixtures still to play deleted, and today moved on 60 days to
+    /// 12 January 2027, so the window starts on 14 November 2026 and every match saved is an earlier one.
+    @MainActor public static func modelInTheSummer(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithEarlierSeason(repositoryRoot: repositoryRoot)
+        let confirmed = Set(model.history.map(\.lineup.fixture))
+        for fixture in model.fixtures where !confirmed.contains(fixture.id) {
+            model.deleteFixture(fixture.id)
+        }
+        model.moveToday(by: 60)
+        return model
+    }
+
     /// The names of the three first-team players banned in `modelWithBans`.
     public static let bannedNames = ["Darnell Johnson", "Dejan Tetek", "Tyrone Marsh"]
 

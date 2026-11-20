@@ -62,6 +62,26 @@ extension AppModel {
         showsEarlierMatches = shows
     }
 
+    /// The plans without those of earlier matches, or all of them while `showsEarlierMatches`. A planned lineup's
+    /// fixture is never earlier, so only confirmed and missed matches are left out.
+    func withoutEarlierMatches(_ plans: [FixturePlan]) -> [FixturePlan] {
+        guard !showsEarlierMatches else { return plans }
+        let confirmed = confirmedFixtures
+        return plans.filter { !isEarlier($0.fixture, confirmed: confirmed) }
+    }
+
+    /// What Match Selection shows in place of a plan: what is missing or why the plan stopped; or, when there is a plan
+    /// and every match in it is earlier (the summer, before the next season's fixtures are entered), that there is no
+    /// match to play, with the way to Fixtures. Nil when there is something to show.
+    public var matchNotReady: NotReady? {
+        if let notReady = MatchPresentation.notReady(planState) { return notReady }
+        guard shownPlans.isEmpty, earlierMatchCount > 0 else { return nil }
+        return NotReady(
+            message: "No match to play, and none played since \(DayText.short(earlierMatchesBefore)). "
+                + "Add the next matches on the Fixtures screen.",
+            problems: [], isFailure: false, action: MatchPresentation.goTo(.fixtures), screen: .fixtures)
+    }
+
     /// The fixtures with a confirmed lineup.
     private var confirmedFixtures: Set<FixtureID> {
         Set(history.map(\.lineup.fixture))
