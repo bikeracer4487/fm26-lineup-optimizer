@@ -230,6 +230,19 @@ import Testing
         #expect(q.mentoringRegroupFactor.value == 1.5)
     }
 
+    @Test func theLeagueStandingRulesAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        #expect(listed["leagueStandingRules"]?.evidence == .derived)
+        let source = listed["leagueStandingRules"]?.source ?? ""
+        #expect(source.contains("19 November 2026"))
+        #expect(source.contains("this tool's estimate"))
+        #expect(source.contains("scoring_parameters.py"))
+        #expect(EngineParameters.fm27.leagueStandingRules.value
+                == LeagueStandingRules(marginPoints: 6, marginPointsLastMatch: 3, reachPointsPerMatch: 1,
+                                       topLevelInLastMatches: 10, battlingInLastMatches: 10, battlingFactor: 1.2,
+                                       pointsForWin: 3, pointsForDraw: 1))
+    }
+
     @Test func theOpponentStrengthLinesAreListedWithEvidenceAndSource() {
         let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
         #expect(listed["opponentStrengthLines"]?.evidence == .derived)

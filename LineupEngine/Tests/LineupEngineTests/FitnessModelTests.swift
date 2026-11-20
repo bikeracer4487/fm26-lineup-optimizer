@@ -163,4 +163,23 @@ import Testing
         parameters.importanceRules = Parameter(rules, .derived, source: "test")
         #expect(FitnessModel.problems(in: parameters) == ["importanceRules \(name) is inf, not a finite number"])
     }
+
+    @Test func leagueStandingRuleProblemsAreReported() {
+        var q = EngineParameters.fm27
+        var r = q.leagueStandingRules.value
+        r.marginPoints = -1
+        r.battlingFactor = .nan
+        r.pointsForWin = 1
+        q.leagueStandingRules = Parameter(r, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == [
+            "leagueStandingRules marginPoints is -1, not 0 or more",
+            "leagueStandingRules battlingFactor is nan, not a finite number above 0",
+            "leagueStandingRules pointsForWin is 1, not over pointsForDraw (1)",
+        ])
+        var last = EngineParameters.fm27.leagueStandingRules.value
+        last.marginPointsLastMatch = 7
+        q.leagueStandingRules = Parameter(last, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["leagueStandingRules marginPointsLastMatch is 7, over marginPoints (6)"])
+        #expect(FitnessModel.problems(in: .fm27).isEmpty)
+    }
 }

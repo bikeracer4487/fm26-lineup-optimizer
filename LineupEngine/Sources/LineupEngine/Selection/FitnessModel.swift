@@ -407,6 +407,7 @@ public enum FitnessModel {
             found.append("importanceRules \(name) is \(days), not 1 or more")
         }
         found += GamePlanAdvisor.problems(in: parameters.gamePlanRules.value)
+        found += League.problems(in: parameters.leagueStandingRules.value)
         return found
     }
 }

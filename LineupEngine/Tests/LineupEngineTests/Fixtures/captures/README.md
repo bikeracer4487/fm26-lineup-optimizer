@@ -1,6 +1,6 @@
 # Captured FMRTE pastes
 
-Each `<name>.tsv` is clipboard text copied from an FMRTE 27 player grid, and `<name>.grids.json` is the grid layout snapshot taken from FMRTE's configuration at that time. The `.tsv` files use CRLF line endings and are marked `-text` in `.gitattributes`; do not let an editor or git rewrite them.
+Each `<name>.tsv` is clipboard text copied from an FMRTE 27 player grid, and `<name>.grids.json` is the grid layout snapshot taken from FMRTE's configuration at that time. The `.tsv` files use CRLF line endings, except `league-table.tsv`, which is LF (see its row), and are marked `-text` in `.gitattributes`; do not let an editor or git rewrite them.
 
 | Capture | Grid | How it was taken |
 |---|---|---|

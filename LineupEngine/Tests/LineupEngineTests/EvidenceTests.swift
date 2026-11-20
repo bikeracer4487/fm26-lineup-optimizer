@@ -31,6 +31,7 @@ import Testing
 /// parameter's value kept inline the set was 4.8 KB and a planning test ran out of stack.
 @Test func aParameterIsOnePointerWideSoTheWholeSetStaysSmall() {
     #expect(MemoryLayout<Parameter<ImportanceSuggestionRules>>.size == MemoryLayout<Int>.size)
+    #expect(MemoryLayout<Parameter<LeagueStandingRules>>.size == MemoryLayout<Int>.size)
     #expect(MemoryLayout<EngineParameters>.size <= 1024)
     let parameter = Parameter(3, .derived, source: "test")
     #expect(parameter.value == 3)

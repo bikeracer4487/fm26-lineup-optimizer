@@ -102,6 +102,14 @@ import Testing
         }
     }
 
+    @Test(arguments: ["", "  "])
+    func aBlankTeamNameIsRefused(_ value: String) throws {
+        let changed = try row("Buxton", set: "TeamName", to: value, in: lines())
+        #expect(throws: LeagueTableError.invalidValue(team: "", column: "TeamName", value: value)) {
+            try read(text(changed))
+        }
+    }
+
     @Test func aMissingColumnIsNamed() throws {
         let columns = paths.filter { $0 != "GoalsAllowed" }
         let rows = try lines().map { line in

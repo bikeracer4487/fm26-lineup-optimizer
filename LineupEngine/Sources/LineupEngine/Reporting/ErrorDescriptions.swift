@@ -14,6 +14,7 @@ public enum ErrorDescriptions {
         case let e as PlanError: describe(e)
         case let e as OpponentReadingError: describe(e)
         case let e as LeagueTableError: describe(e)
+        case let e as LeagueFormatError: describe(e)
         default: "Unexpected error: \(error.localizedDescription)"
         }
     }
@@ -137,6 +138,7 @@ public enum ErrorDescriptions {
             "More than one of FMRTE's league table layouts fits the paste: \(keys.sorted().joined(separator: ", "))."
         case .missingColumns(let grid, let columns):
             "FMRTE's league table layout \(grid) lacks: \(columns.map(columnName).joined(separator: ", "))."
+        case .invalidValue(let team, _, _) where team.isEmpty: "A row of the table has no team name."
         case .invalidValue(let team, let column, let value):
             "\(team)'s \(columnName(column)) is '\(value)', not a whole number."
         case .tooFewTeams(let found):
@@ -150,6 +152,20 @@ public enum ErrorDescriptions {
         case .noClubKnown: "The club is not known yet. Import a squad first."
         case .clubNotInTable(let club, let teams):
             "\(club) is not among the \(teams) teams pasted. Paste your own league's table, or correct the club's name in Settings."
+        }
+    }
+
+    public static func describe(_ error: LeagueFormatError) -> String {
+        switch error {
+        case .negative(let field, let value):
+            let name = switch field {
+            case .promoted: "promoted places"
+            case .playOffs: "play-offs"
+            case .relegated: "relegated places"
+            }
+            return "The \(name) cannot have \(value) teams."
+        case .tooMany(let total, let teams):
+            return "The promoted, play-off and relegated places make \(total), more than the \(teams) teams in the table."
         }
     }
 

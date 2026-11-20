@@ -307,6 +307,7 @@ import Testing
              "FMRTE's league table layout CompetitionStandings lacks: Goals allowed, Points."),
             (.invalidValue(team: "Buxton", column: "Points", value: "x"), "Buxton's Points is 'x', not a whole number."),
             (.invalidValue(team: "Buxton", column: "GamesPlayed", value: ""), "Buxton's Games played is '', not a whole number."),
+            (.invalidValue(team: "", column: "TeamName", value: "  "), "A row of the table has no team name."),
             (.tooFewTeams(found: 1), "The paste has only 1 team; a league table needs at least two."),
             (.duplicateTeam("chester "), "chester  is in the table twice."),
             (.placesNotInOrder, "The places pasted are not 1 to the number of teams, each once."),
@@ -322,6 +323,14 @@ import Testing
             #expect(ErrorDescriptions.describe(error) == sentence)
             #expect(ErrorDescriptions.describe(error as Error) == sentence)
         }
+    }
+
+    @Test func leagueFormatErrorsAreSaidInWholeSentences() {
+        #expect(ErrorDescriptions.describe(LeagueFormatError.negative(.playOffs, -1)) == "The play-offs cannot have -1 teams.")
+        #expect(ErrorDescriptions.describe(LeagueFormatError.negative(.promoted, -2)) == "The promoted places cannot have -2 teams.")
+        #expect(ErrorDescriptions.describe(LeagueFormatError.negative(.relegated, -3)) == "The relegated places cannot have -3 teams.")
+        #expect(ErrorDescriptions.describe(LeagueFormatError.tooMany(total: 11, teams: 10) as Error)
+                == "The promoted, play-off and relegated places make 11, more than the 10 teams in the table.")
     }
 
     @Test func aLeagueTableWarningIsASentence() {

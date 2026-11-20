@@ -729,6 +729,8 @@ public struct EngineParameters: Sendable {
     /// Which game plans to use and to avoid when a match is simulated, by the opponent's strength, and the points of
     /// the one test of the plans.
     public var gamePlanRules: Parameter<GamePlanRules>
+    /// The margin, reach and points rules behind where the club stands in the league table.
+    public var leagueStandingRules: Parameter<LeagueStandingRules>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -1201,7 +1203,19 @@ public struct EngineParameters: Sendable {
                     + "the plans (FRVR, FM26, 18 December 2025) was ten instant results a plan against one much stronger "
                     + "side, and its points are kept here; No game plan was not in it. Every rule but the one against a "
                     + "much stronger side is the research's reasoning from that test and from FM27 engine tests in which "
-                    + "sitting deep cost points. Neither search covered every community, so a test may exist that it missed"))
+                    + "sitting deep cost points. Neither search covered every community, so a test may exist that it missed"),
+            leagueStandingRules: Parameter(
+                LeagueStandingRules(marginPoints: 6, marginPointsLastMatch: 3, reachPointsPerMatch: 1,
+                                    topLevelInLastMatches: 10, battlingInLastMatches: 10, battlingFactor: 1.2,
+                                    pointsForWin: 3, pointsForDraw: 1),
+                .derived,
+                source: "the weakest of its numbers. The margin of 6 points, and 3 with one match left, are the owner's rule "
+                    + "of 19 November 2026 (two wins; one win in the last match). One point a match for a line to be within "
+                    + "reach, and the factor of 1.2 on a match against a side he is battling, are this tool's estimate with "
+                    + "no test behind them. The last ten matches are carried over from the old app's table "
+                    + "(scoring_parameters.py, where 100 was given only in the last ten league matches), and are used both "
+                    + "for the top situation and, by the owner's later rule, for the sides he is battling. Three points for "
+                    + "a win and one for a draw are the game's rule"))
     }()
 
     private static let removalSource = "ui/api/api_player_removal.py (branch customizable-tactics)"

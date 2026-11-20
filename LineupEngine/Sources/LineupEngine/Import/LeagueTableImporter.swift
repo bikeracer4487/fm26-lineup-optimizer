@@ -72,10 +72,6 @@ public enum LeagueTableError: Error, Equatable {
 /// Reads the league table FMRTE copies from its standings grid. The text has no header; the column meaning comes from the
 /// layout in FMRTE's settings file, as for squads.
 public enum LeagueTableImporter {
-    // Task 2 moves these to EngineParameters
-    private static let pointsForAWin = 3
-    private static let pointsForADraw = 1
-
     /// The paths a standings layout must hold; `Position` is optional.
     private static let positionPath = "Position"
     private static let namePath = "TeamName"
@@ -83,6 +79,7 @@ public enum LeagueTableImporter {
 
     public static func read(clipboard: String, fmrteConfig: Data, ownClub: String?,
                             parameters: EngineParameters) throws -> LeagueTable {
+        let points = parameters.leagueStandingRules.value
         let rows = try ClipboardText.rows(clipboard, minimumFields: 2)
         let grids = try FMRTEConfig.standingsGrids(from: fmrteConfig)
         guard !grids.isEmpty else { throw LeagueTableError.noStandingsGrid }
@@ -99,6 +96,9 @@ public enum LeagueTableImporter {
         var entries: [(place: Int?, team: LeagueTeam)] = []
         for row in rows {
             let name = row[index[namePath]!]
+            guard !name.trimmingCharacters(in: .whitespaces).isEmpty else {
+                throw LeagueTableError.invalidValue(team: "", column: namePath, value: name)
+            }
             func number(_ path: String) throws -> Int {
                 let cell = row[index[path]!]
                 guard !cell.isEmpty, cell.allSatisfy({ $0.isASCII && $0.isNumber }), let value = Int(cell) else {
@@ -149,7 +149,7 @@ public enum LeagueTableImporter {
             }
         }
         for team in ordered {
-            let fromResults = team.won * pointsForAWin + team.drawn * pointsForADraw
+            let fromResults = team.won * points.pointsForWin + team.drawn * points.pointsForDraw
             if team.points != fromResults {
                 warnings.append(.pointsDoNotFit(team: team.name, points: team.points, fromResults: fromResults))
             }
