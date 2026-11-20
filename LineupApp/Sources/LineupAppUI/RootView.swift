@@ -111,6 +111,7 @@ struct ScreenView: View {
         case .squad: SquadScreen(model: model, navigation: navigation)
         case .tactics: TacticsScreen(model: model, navigation: navigation, startingSlot: tacticSlot)
         case .fixtures: FixturesScreen(model: model, navigation: navigation)
+        case .league: EmptyView()
         case .matchSelection: MatchSelectionScreen(model: model, navigation: navigation)
         case .elevens: ElevensScreen(model: model, navigation: navigation)
         case .rest: RestScreen(model: model)

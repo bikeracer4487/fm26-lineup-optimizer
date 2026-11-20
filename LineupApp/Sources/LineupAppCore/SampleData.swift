@@ -347,6 +347,38 @@ public enum SampleData {
         return (model, draft)
     }
 
+    // MARK: League
+
+    /// The sample model with the league table pasted, read through a scripted clipboard from the owner's capture of 24
+    /// teams, and (with `format`) the format entered: 1 promoted, 6 in the play-offs, 4 relegated. Three league fixtures
+    /// after today, against Buxton, Chester and "Buxton FC", the last of which is not a team in the table.
+    @MainActor public static func modelWithLeague(repositoryRoot: URL, format: Bool = true) throws -> AppModel {
+        let (model, input) = try build(repositoryRoot: repositoryRoot)
+        guard let last = model.fixtures.last else {
+            throw SampleDataError(description: "The sample model has no fixtures.")
+        }
+        for (week, opponent) in ["Buxton", "Chester", "Buxton FC"].enumerated() {
+            let id = model.addFixture(date: last.date.adding(days: 7 * (week + 1)), opponent: opponent, importance: .medium)
+            guard var stored = model.fixtures.first(where: { $0.id == id }) else {
+                throw SampleDataError(description: "The sample fixture against \(opponent) was not saved.")
+            }
+            stored.competition = .league
+            model.update(stored)
+        }
+        input.clipboard = String(decoding: try fixture("captures/league-table.tsv", under: repositoryRoot), as: UTF8.self)
+        input.config = .data(try fixture("captures/league-table.grids.json", under: repositoryRoot))
+        model.pasteLeagueTable()
+        if let problem = model.leaguePasteProblem {
+            throw SampleDataError(description: "The sample league table could not be read: \(problem)")
+        }
+        if format { model.setLeagueFormatDraft(LeagueFormatDraft(promoted: 1, playOffs: 6, relegated: 4)) }
+        guard case .read = model.leagueReading else {
+            if !format { return model }
+            throw SampleDataError(description: "The sample league table was not read: \(model.leagueReading)")
+        }
+        return model
+    }
+
     // MARK: Scouting
 
     /// The club the sample candidates are pasted from.

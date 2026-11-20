@@ -1278,3 +1278,82 @@ extension FixturePresentationTests {
         #expect(after.opponentStrength == reading.strength)
     }
 }
+
+extension FixturePresentationTests {
+    private func leagueDraft(_ t: TestModel, opponent: String = "") -> FixtureDraft {
+        var draft = t.model.newFixtureDraft()
+        draft.competition = .league
+        draft.opponent = opponent
+        return draft
+    }
+
+    @Test func aLeagueDraftOffersTheTablesTeamsWithoutTheClub() throws {
+        let t = try ScoutingSetup.ready()
+        try t.pasteLeagueTable()
+        let menu = try #require(leagueDraft(t).opponentMenu)
+        #expect(menu.count == 23)
+        #expect(menu.first == "AFC Telford")
+        #expect(!menu.contains("Oxford City"))
+        #expect(menu == menu.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending })
+        // A saved fixture's draft is filled in too.
+        let id = t.model.addFixture(date: TestModel.today.adding(days: 5), opponent: "Buxton", importance: .low)
+        let stored = try #require(t.model.fixtures.first { $0.id == id })
+        var editing = t.model.fixtureDraft(for: stored)
+        editing.competition = .league
+        #expect(editing.opponentMenu?.count == 23)
+    }
+
+    @Test func anyOtherCompetitionOrNoTableKeepsTheTextBox() throws {
+        let t = try ScoutingSetup.ready()
+        var draft = leagueDraft(t, opponent: "Buxton")
+        #expect(draft.opponentMenu == nil)
+        try t.pasteLeagueTable()
+        draft = leagueDraft(t, opponent: "Buxton")
+        #expect(draft.opponentMenu != nil)
+        draft.competition = .cup
+        #expect(draft.opponentMenu == nil)
+        draft.competition = nil
+        #expect(draft.opponentMenu == nil)
+        draft.competition = .league
+        #expect(draft.opponent == "Buxton")
+        #expect(draft.opponentMenu != nil)
+    }
+
+    @Test func aSavedOpponentThatMatchesShowsInTheTablesSpelling() throws {
+        let t = try ScoutingSetup.ready()
+        try t.pasteLeagueTable()
+        let draft = leagueDraft(t, opponent: " buxton")
+        #expect(draft.opponentInTable == "Buxton")
+        #expect(draft.opponentNotInTableText == nil)
+    }
+
+    @Test func oneThatMatchesNoneIsKeptWithACaution() throws {
+        let t = try ScoutingSetup.ready()
+        try t.pasteLeagueTable()
+        var draft = leagueDraft(t, opponent: "Buxton FC")
+        #expect(draft.opponentInTable == nil)
+        #expect(draft.opponentNotInTableText == AdvisorText.notInTheTable("Buxton FC"))
+        #expect(draft.opponent == "Buxton FC")
+        draft.opponent = "   "
+        #expect(draft.opponentNotInTableText == nil)
+        draft.opponent = "Buxton FC"
+        draft.pick(opponent: "Buxton")
+        #expect(draft.opponent == "Buxton")
+        #expect(draft.opponentNotInTableText == nil)
+        // No caution for a cup, nor with no table.
+        draft.opponent = "Buxton FC"
+        draft.competition = .cup
+        #expect(draft.opponentNotInTableText == nil)
+        let bare = try ScoutingSetup.ready()
+        #expect(leagueDraft(bare, opponent: "Buxton FC").opponentNotInTableText == nil)
+    }
+
+    @Test func savingKeepsTheSpellingPicked() throws {
+        let t = try ScoutingSetup.ready()
+        try t.pasteLeagueTable()
+        var draft = leagueDraft(t, opponent: "Buxton FC")
+        draft.pick(opponent: "Buxton")
+        let id = try #require(t.model.save(draft))
+        #expect(t.model.fixtures.first { $0.id == id }?.opponent == "Buxton")
+    }
+}

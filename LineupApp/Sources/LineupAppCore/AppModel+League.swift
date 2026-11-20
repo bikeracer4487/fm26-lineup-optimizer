@@ -71,6 +71,9 @@ extension AppModel {
             save(.settings)
         }
         adviceCache?.suggestions = nil
+        // A problem found against the old table says nothing about the new one; a saved format that no longer fits the
+        // new table still shows through the reading's own failure.
+        leagueFormatProblem = nil
     }
 
     private var leagueIsRead: Bool {

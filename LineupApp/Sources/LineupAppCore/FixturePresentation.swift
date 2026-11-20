@@ -59,6 +59,9 @@ public struct FixtureDraft: Equatable, Sendable {
     /// The other saved fixtures' opponents by day, the first in date order where a day has several: a club plays one
     /// match a day. The model fills it in.
     public var otherMatches: [Day: String] = [:]
+    /// The names of the league table's other teams (the club's own left out), as the table spells them. The model fills
+    /// it in, as it fills `otherMatches`; empty with no table.
+    public var leagueTeams: [String] = []
 
     /// A new fixture of medium importance on the primary tactic.
     public init(date: Day) {
@@ -74,6 +77,32 @@ public struct FixtureDraft: Equatable, Sendable {
     }
 
     public var isNew: Bool { id == nil }
+
+    /// The league's teams in alphabetical order, to pick the opponent from; nil, so the text box is shown, unless the
+    /// competition is the league and a table is held.
+    public var opponentMenu: [String]? {
+        guard competition == .league, !leagueTeams.isEmpty else { return nil }
+        return leagueTeams.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    /// The table's spelling of the opponent, when the competition is the league and the opponent is one of its teams.
+    public var opponentInTable: String? {
+        guard competition == .league else { return nil }
+        let wanted = PlayerID.normalise(opponent)
+        return leagueTeams.first { PlayerID.normalise($0) == wanted }
+    }
+
+    /// The engine's caution for an opponent in a league match that is in none of the table's teams; nil when it is
+    /// blank, in the table, or the match is not a league match with a table held.
+    public var opponentNotInTableText: String? {
+        guard competition == .league, !leagueTeams.isEmpty, !Self.isBlank(opponent), opponentInTable == nil else { return nil }
+        return AdvisorText.notInTheTable(opponent.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// Takes a team from the table's menu as the opponent.
+    public mutating func pick(opponent team: String) {
+        opponent = team
+    }
 
     /// The competition menu: "Not set", then each competition in the engine's words.
     public static var competitionChoices: [(value: Competition?, title: String)] {
@@ -218,6 +247,7 @@ extension AppModel {
         let last = fixtures.last { $0.date >= settings.currentDate }
         var draft = FixtureDraft(date: last.map { $0.date.adding(days: 1) } ?? settings.currentDate)
         draft.otherMatches = matches(besides: nil)
+        draft.leagueTeams = leagueTeamNames
         return draft
     }
 
@@ -225,7 +255,15 @@ extension AppModel {
     public func fixtureDraft(for fixture: StoredFixture) -> FixtureDraft {
         var draft = FixtureDraft(fixture)
         draft.otherMatches = matches(besides: fixture.id)
+        draft.leagueTeams = leagueTeamNames
         return draft
+    }
+
+    /// The held table's teams other than the club's own, as the table spells them; empty with no table.
+    private var leagueTeamNames: [String] {
+        guard let table = league.table else { return [] }
+        let own = ownClub.map(PlayerID.normalise)
+        return table.teams.map(\.name).filter { PlayerID.normalise($0) != own }
     }
 
     /// Every saved fixture's opponent by day except `id`'s, the first in date order where a day has several.

@@ -135,7 +135,7 @@ public enum ScreenPictures {
     static func pictureName(of screen: Screen) -> String {
         switch screen {
         case .matchSelection: "match"
-        case .squad, .tactics, .fixtures, .elevens, .rest, .training, .removal, .scouting, .settings: screen.rawValue
+        case .squad, .tactics, .fixtures, .league, .elevens, .rest, .training, .removal, .scouting, .settings: screen.rawValue
         }
     }
 

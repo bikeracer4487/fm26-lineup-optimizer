@@ -165,6 +165,8 @@ import LineupEngine
         let battling = after.map { $0.reasons.contains { $0.hasPrefix("Buxton are ") } }
         #expect(battling[0] == true)
         #expect(battling[2] == false)
+        // Chester are 13 points ahead, so not a side he is battling.
+        #expect(!after[1].reasons.contains { $0.hasPrefix("Chester are ") })
     }
 
     @Test func fixturesBeyondTheMatchesLeftAreReadWithoutIt() throws {
@@ -212,12 +214,29 @@ import LineupEngine
         #expect(t.model.leagueTableIsOutOfDate)
     }
 
+    @Test func aFormatProblemIsGoneAfterTheNextPasteAndAfterRemovingTheTable() throws {
+        let (t, _) = try ready()
+        try t.pasteLeagueTable()
+        t.model.setLeagueFormatDraft(LeagueFormatDraft(promoted: 20, playOffs: 20, relegated: 20))
+        #expect(t.model.leagueFormatProblem != nil)
+        try t.pasteLeagueTable()
+        #expect(t.model.leagueFormatProblem == nil)
+        t.model.setLeagueFormatDraft(LeagueFormatDraft(promoted: 20, playOffs: 20, relegated: 20))
+        #expect(t.model.leagueFormatProblem != nil)
+        t.model.removeLeagueTable()
+        #expect(t.model.leagueFormatProblem == nil)
+    }
+
     @Test func aClubNoLongerInTheTableStopsTheReadingAndSaysSo() throws {
         let (t, ids) = try ready(opponents: ["Buxton"])
         try read(t)
+        _ = t.model.suggestions
+        #expect(t.model.adviceCache?.suggestions != nil)
         var settings = t.model.settings
         settings.clubName = "Banbury United"
         t.model.update(settings)
+        // Changing the club clears what was kept, so the suggestions are worked out again from the failed reading.
+        #expect(t.model.adviceCache?.suggestions == nil)
         let table = try #require(t.model.league.table)
         guard case .failed(let sentence) = t.model.leagueReading else {
             Issue.record("expected a failure, got \(t.model.leagueReading)")
