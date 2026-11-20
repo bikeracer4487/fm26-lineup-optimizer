@@ -44,4 +44,11 @@ import Testing
             try ClipboardText.rows(line + "\r\n" + String(line.dropLast(5)))
         }
     }
+
+    @Test func aNarrowPasteIsSplitWhenTheFloorIsLowered() throws {
+        #expect(try ClipboardText.rows("a\tb", minimumFields: 2) == [["a", "b"]])
+        #expect(throws: ImportError.notAnFMRTEGrid(reason: "first line has 2 fields, fewer than 20")) {
+            try ClipboardText.rows("a\tb")
+        }
+    }
 }

@@ -1,8 +1,8 @@
 #!/bin/bash
-# Capture an FMRTE grid copy (clipboard) plus FMRTE's player-grid column layouts as test fixtures.
+# Capture an FMRTE grid copy (clipboard) plus FMRTE's player and standings grid column layouts as test fixtures.
 #
 #   tools/capture_fmrte_paste.sh <name>     writes <name>.tsv and <name>.grids.json
-#   tools/capture_fmrte_paste.sh --list-grids   lists the player grids that would be saved; touches nothing
+#   tools/capture_fmrte_paste.sh --list-grids   lists the player and standings grids that would be saved; touches nothing
 #
 # Environment overrides:
 #   CAPTURE_DIR   output directory (default: LineupEngine/Tests/LineupEngineTests/Fixtures/captures in the repo)
@@ -11,14 +11,17 @@ set -euo pipefail
 
 CONFIG="${FMRTE_CONFIG:-$HOME/Library/Application Support/FMRTE27/config.json}"
 
-# Prints the player-grid items (those with a DisplayedName column) as JSON on stdout.
+# Prints the player-grid items (those with a DisplayedName column) and the standings-grid items (those with both a
+# TeamName and a Points column) as JSON on stdout.
 filtered_items() {
 python3 - "$CONFIG" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as f:
     config = json.load(f)
 items = config["ColumnsSettings"]["Items"]
-player = [i for i in items if any(c.get("Path") == "DisplayedName" for c in i.get("Columns", []))]
+def paths(i):
+    return [c.get("Path") for c in i.get("Columns", [])]
+player = [i for i in items if "DisplayedName" in paths(i) or ("TeamName" in paths(i) and "Points" in paths(i))]
 json.dump(player, sys.stdout)
 PY
 }

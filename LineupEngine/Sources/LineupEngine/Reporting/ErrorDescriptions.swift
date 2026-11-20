@@ -13,6 +13,7 @@ public enum ErrorDescriptions {
         case let e as DuplicatePlayerError: describe(e)
         case let e as PlanError: describe(e)
         case let e as OpponentReadingError: describe(e)
+        case let e as LeagueTableError: describe(e)
         default: "Unexpected error: \(error.localizedDescription)"
         }
     }
@@ -125,6 +126,47 @@ public enum ErrorDescriptions {
         case .tooFewPlayers(.own, let found):
             "Your own squads have only \(found) fit players who are not away on loan; eleven are needed."
         }
+    }
+
+    public static func describe(_ error: LeagueTableError) -> String {
+        switch error {
+        case .noStandingsGrid: "FMRTE's settings file has no league table layout."
+        case .noGridFits(let count):
+            "The pasted rows fit none of FMRTE's league table layouts: they have \(count) columns."
+        case .ambiguousGrid(let keys):
+            "More than one of FMRTE's league table layouts fits the paste: \(keys.sorted().joined(separator: ", "))."
+        case .missingColumns(let grid, let columns):
+            "FMRTE's league table layout \(grid) lacks: \(columns.map(columnName).joined(separator: ", "))."
+        case .invalidValue(let team, let column, let value):
+            "\(team)'s \(columnName(column)) is '\(value)', not a whole number."
+        case .tooFewTeams(let found):
+            "The paste has only \(found) team\(found == 1 ? "" : "s"); a league table needs at least two."
+        case .duplicateTeam(let name): "\(name) is in the table twice."
+        case .placesNotInOrder: "The places pasted are not 1 to the number of teams, each once."
+        case .resultsDoNotAddUp(let team, let played, let won, let drawn, let lost):
+            "\(team)'s \(won) wins, \(drawn) draws and \(lost) losses do not add up to \(played) matches played."
+        case .playedTooMany(let team, let played, let season):
+            "\(team) have played \(played) matches, but a season of this league holds \(season)."
+        case .noClubKnown: "The club is not known yet. Import a squad first."
+        case .clubNotInTable(let club, let teams):
+            "\(club) is not among the \(teams) teams pasted. Paste your own league's table, or correct the club's name in Settings."
+        }
+    }
+
+    public static func describe(_ warning: LeagueTableWarning) -> String {
+        switch warning {
+        case .pointsDoNotFit(let team, let points, let fromResults):
+            "\(team) have \(points) points where their results give \(fromResults); the table's points are used."
+        }
+    }
+
+    /// FMRTE's column path said in words: "GoalsAllowed" as "Goals allowed".
+    private static func columnName(_ path: String) -> String {
+        var words: [String] = []
+        for character in path {
+            if character.isUppercase || words.isEmpty { words.append(String(character)) } else { words[words.count - 1].append(character) }
+        }
+        return words.enumerated().map { $0.offset == 0 ? $0.element : $0.element.lowercased() }.joined(separator: " ")
     }
 
     public static func describe(_ error: PlanError) -> String {

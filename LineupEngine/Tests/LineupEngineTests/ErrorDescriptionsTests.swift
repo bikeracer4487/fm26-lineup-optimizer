@@ -297,4 +297,35 @@ import Testing
         #expect(ErrorDescriptions.describe(OpponentReadingError.tooFewPlayers(.own, found: 9))
                 == "Your own squads have only 9 fit players who are not away on loan; eleven are needed.")
     }
+
+    @Test func leagueTableErrorsAreSaidInWholeSentences() {
+        let cases: [(LeagueTableError, String)] = [
+            (.noStandingsGrid, "FMRTE's settings file has no league table layout."),
+            (.noGridFits(fieldCount: 106), "The pasted rows fit none of FMRTE's league table layouts: they have 106 columns."),
+            (.ambiguousGrid(keys: ["B", "A"]), "More than one of FMRTE's league table layouts fits the paste: A, B."),
+            (.missingColumns(grid: "CompetitionStandings", columns: ["GoalsAllowed", "Points"]),
+             "FMRTE's league table layout CompetitionStandings lacks: Goals allowed, Points."),
+            (.invalidValue(team: "Buxton", column: "Points", value: "x"), "Buxton's Points is 'x', not a whole number."),
+            (.invalidValue(team: "Buxton", column: "GamesPlayed", value: ""), "Buxton's Games played is '', not a whole number."),
+            (.tooFewTeams(found: 1), "The paste has only 1 team; a league table needs at least two."),
+            (.duplicateTeam("chester "), "chester  is in the table twice."),
+            (.placesNotInOrder, "The places pasted are not 1 to the number of teams, each once."),
+            (.resultsDoNotAddUp(team: "Chester", played: 43, won: 25, drawn: 12, lost: 5),
+             "Chester's 25 wins, 12 draws and 5 losses do not add up to 43 matches played."),
+            (.playedTooMany(team: "Chester", played: 47, season: 46),
+             "Chester have played 47 matches, but a season of this league holds 46."),
+            (.noClubKnown, "The club is not known yet. Import a squad first."),
+            (.clubNotInTable(club: "Oxford City", teams: 24),
+             "Oxford City is not among the 24 teams pasted. Paste your own league's table, or correct the club's name in Settings."),
+        ]
+        for (error, sentence) in cases {
+            #expect(ErrorDescriptions.describe(error) == sentence)
+            #expect(ErrorDescriptions.describe(error as Error) == sentence)
+        }
+    }
+
+    @Test func aLeagueTableWarningIsASentence() {
+        #expect(ErrorDescriptions.describe(LeagueTableWarning.pointsDoNotFit(team: "Marine", points: 32, fromResults: 35))
+                == "Marine have 32 points where their results give 35; the table's points are used.")
+    }
 }

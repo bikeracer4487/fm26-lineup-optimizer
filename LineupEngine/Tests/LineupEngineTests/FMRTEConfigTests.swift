@@ -43,4 +43,18 @@ import Testing
     @Test func aFileThatIsNotJSONCannotBeRead() {
         #expect(throws: ImportError.self) { try FMRTEConfig.wagePeriod(from: Data("not json".utf8)) }
     }
+
+    @Test func standingsGridsAreThoseWithATeamNameAndPoints() throws {
+        let grids = try FMRTEConfig.standingsGrids(from: Fixtures.leagueTableGrids)
+        #expect(grids.map(\.key) == ["CompetitionStandings"])
+        #expect(grids[0].columns.count == 9)
+        #expect(try FMRTEConfig.standingsGrids(from: Fixtures.data("captures/first-team.grids.json")).isEmpty)
+        let twin = Data(#"""
+        {"ColumnsSettings":{"Items":[
+         {"SettingsKey":"A","Columns":[{"Path":"TeamName"},{"Path":"Points"}]},
+         {"SettingsKey":"B","Columns":[{"Path":"TeamName"},{"Path":"Points"}]},
+         {"SettingsKey":"C","Columns":[{"Path":"TeamName"}]}]}}
+        """#.utf8)
+        #expect(try FMRTEConfig.standingsGrids(from: twin).map(\.key) == ["A"])
+    }
 }

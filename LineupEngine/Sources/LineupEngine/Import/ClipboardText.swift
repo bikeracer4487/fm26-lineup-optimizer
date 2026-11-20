@@ -3,10 +3,10 @@ import Foundation
 /// Splits FMRTE's clipboard text into rows of fields. The text has no header row.
 public enum ClipboardText {
     /// A paste with fewer fields than this cannot be a player grid.
-    static let minimumFieldCount = 20
+    public static let minimumFieldCount = 20
 
     /// Lines end in CRLF, LF or a lone CR. A line of only tabs and spaces is blank and dropped.
-    public static func rows(_ text: String) throws -> [[String]] {
+    public static func rows(_ text: String, minimumFields: Int = ClipboardText.minimumFieldCount) throws -> [[String]] {
         // Swift reads CRLF as one Character, so the three endings are three distinct separators.
         let lines = text
             .split(omittingEmptySubsequences: false, whereSeparator: { $0 == "\r\n" || $0 == "\n" || $0 == "\r" })
@@ -18,8 +18,8 @@ public enum ClipboardText {
         guard first.contains("\t") else {
             throw ImportError.notAnFMRTEGrid(reason: "first line has no tab separators")
         }
-        guard expected >= minimumFieldCount else {
-            throw ImportError.notAnFMRTEGrid(reason: "first line has \(expected) fields, fewer than \(minimumFieldCount)")
+        guard expected >= minimumFields else {
+            throw ImportError.notAnFMRTEGrid(reason: "first line has \(expected) fields, fewer than \(minimumFields)")
         }
 
         return try lines.enumerated().map { index, line in

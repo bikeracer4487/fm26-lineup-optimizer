@@ -19,6 +19,10 @@ public enum FMRTEConfig {
     /// Every grid whose columns include `DisplayedName`. Grids with identical column lists
     /// are returned once, under the first key. Unknown keys in the file are ignored.
     public static func playerGrids(from data: Data) throws -> [GridLayout] {
+        try grids(from: data) { $0.contains(playerNamePath) }
+    }
+
+    private static func grids(from data: Data, where keep: ([String]) -> Bool) throws -> [GridLayout] {
         let root = try object(from: data)
         guard let items = ((root as? [String: Any])?["ColumnsSettings"] as? [String: Any])?["Items"] as? [[String: Any]] else {
             throw ImportError.configUnreadable(reason: "ColumnsSettings.Items not found")
@@ -29,11 +33,20 @@ public enum FMRTEConfig {
             guard let key = item["SettingsKey"] as? String,
                   let columns = item["Columns"] as? [[String: Any]] else { continue }
             let paths = columns.compactMap { $0["Path"] as? String }
-            guard paths.contains(playerNamePath) else { continue }
+            guard keep(paths) else { continue }
             if grids.contains(where: { $0.columns == paths }) { continue }
             grids.append(GridLayout(key: key, columns: paths))
         }
         return grids
+    }
+
+    /// Paths that mark a grid as a standings grid: it has both.
+    static let standingsMarkerPaths = ["TeamName", "Points"]
+
+    /// Every grid whose columns include both `TeamName` and `Points`. Grids with identical column lists are returned
+    /// once, under the first key.
+    public static func standingsGrids(from data: Data) throws -> [GridLayout] {
+        try grids(from: data) { paths in standingsMarkerPaths.allSatisfy(paths.contains) }
     }
 
     /// The words FMRTE writes for its wage period, under the top-level entry `Wages`.

@@ -22,6 +22,10 @@ enum Fixtures {
         try Data(contentsOf: url(name))
     }
 
+    /// The owner's league table of 19 November 2026 (`captures/league-table.tsv`) and its grid layout.
+    static var leagueTable: String { get throws { try text("captures/league-table.tsv") } }
+    static var leagueTableGrids: Data { get throws { try data("captures/league-table.grids.json") } }
+
     /// FMRTE's settings file as `captures/<capture>.grids.json` holds it, with a top-level `Wages` entry of `wages`, as
     /// FMRTE writes beside its column layouts. The captures hold only the layouts.
     static func settings(_ capture: String, wages: Any) throws -> Data {

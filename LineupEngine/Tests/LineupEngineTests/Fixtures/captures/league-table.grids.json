@@ -1,0 +1,84 @@
+{
+ "ColumnsSettings": {
+  "Items": [
+   {
+    "SettingsKey": "CompetitionStandings",
+    "Sort": null,
+    "Columns": [
+     {
+      "Name": null,
+      "Path": "Position",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "TeamName",
+      "IsWritable": false,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GamesPlayed",
+      "IsWritable": true,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Wins",
+      "IsWritable": true,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Draws",
+      "IsWritable": true,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Loses",
+      "IsWritable": true,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalsScored",
+      "IsWritable": true,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "GoalsAllowed",
+      "IsWritable": true,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     },
+     {
+      "Name": null,
+      "Path": "Points",
+      "IsWritable": true,
+      "Converter": "None",
+      "StringFormat": "Auto",
+      "Width": null
+     }
+    ]
+   }
+  ]
+ }
+}
