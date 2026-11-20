@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: the league table
 
 Date: 19 November 2026
-Status: approved by the owner on 19 November 2026 ("Approved"), with the twelve calls listed under "Calls made in this design".
+Status: approved by the owner on 19 November 2026 ("Approved"), with the twelve calls listed under "Calls made in this design". Revised the same day in one place, marked "revised" below, which the owner accepted.
 
 ## Intent
 
@@ -15,7 +15,7 @@ So the owner pastes the league table and says once how the league works. The app
 2. The owner says once how many teams are promoted automatically, how many are in the play-offs and how many are relegated. The app works out how many play-off teams get a bye.
 3. A League screen shows the table with those lines drawn on it, the owner's place, points and matches left, and, for each line, in a sentence, where he stands against it.
 4. The league situation is worked out from the table, so the owner does not have to choose it. He can still choose it by hand, and his choice wins.
-5. A league match against a side within 6 points of him (3 with one match left) is suggested as more important, and the suggestion says why.
+5. A league match against a side within 6 points of him (3 with one match left) is suggested as more important in his last ten matches, and the suggestion says why.
 6. A league fixture's opponent is picked from the teams of the table, so fixtures and table teams match.
 7. Saved state from before this design opens with no notice and gives the same suggestions as before, until a table is pasted.
 
@@ -127,7 +127,7 @@ Both tests ignore that the other sides play each other, so a line can be called 
 
 The bye line counts for "In contention" at most: a bye is worth having, and less than a place. The ten matches are carried over from the old app's table, which gave its top value only in the last ten league matches. The one point for each match left is this tool's estimate, with no test behind it.
 
-**The sides he is battling.** Every other team whose points are within the margin of his, above or below. With the margin at 3 and one match left, a side 3 points away still counts. Nothing else is asked of them: not which line lies between, and not matches in hand (the owner's rule, kept as he gave it).
+**The sides he is battling (revised).** Every other team whose points are within the margin of his, above or below, once he has 10 matches or fewer left; before that, nobody. With the margin at 3 and one match left, a side 3 points away still counts. Nothing else is asked of them: not which line lies between, and not matches in hand (the owner's rule, kept as he gave it). The approved text counted them at any time. Writing the tests showed that at the start of a season every team is within 6 points of every other, so every league match would have taken the ×1.2 and been suggested High for the first weeks. The ten matches are the line that already gates "Title race or relegation fight". The owner accepted the revision on 19 November 2026 ("that's a good catch, we'll keep your recommendation").
 
 **On the owner's table** (pasted 19 November 2026; kept as a test fixture): Oxford City are 5th on 74 points with 3 matches left. Promotion is out of reach (Chester have 87; the most Oxford City can reach is 83). The bye line is close (Spalding, 3rd, are 3 ahead). The play-off line is close (Morecambe, 8th, are 6 behind). Relegation: safe. The situation is "Title race or relegation fight". The sides he is battling are Spalding, Hednesford, Buxton, Macclesfield and Morecambe.
 
@@ -233,7 +233,7 @@ The owner chose the approach, the margin, the byes rule and the three numbers. T
 7. A paste is refused when the owner's club is not in it.
 8. In a top division, 1 "promoted automatically" stands for the champion; continental places are not covered.
 9. The owner's table and FMRTE's standings layout are kept as a test fixture in this public repository.
-10. A side within the margin gets the ×1.2 whatever lies between the two clubs, including two mid-table sides with no line near.
+10. A side within the margin gets the ×1.2 whatever lies between the two clubs, including two mid-table sides with no line near, and (revised) only in the owner's last ten matches.
 11. A table speaks only for as many of the owner's coming league fixtures as it has matches left, and a table whose season is over changes no suggestion.
 12. "Remove table" exists, and keeps the three numbers.
 
