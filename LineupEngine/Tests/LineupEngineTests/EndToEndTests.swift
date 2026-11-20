@@ -706,4 +706,30 @@ import Testing
         #expect(fit.rSquared >= 0.6)
         #expect(abs(EngineParameters.fm27.ratingAbilityOffset.value - fit.a / fit.b) <= 10)
     }
+
+    @Test func theOwnersTableReachesTheSuggestion() throws {
+        let parameters = EngineParameters.fm27
+        let table = try LeagueTableImporter.read(clipboard: Fixtures.leagueTable, fmrteConfig: Fixtures.leagueTableGrids,
+                                                 ownClub: ownClubName, parameters: parameters)
+        let reading = try League.read(table: table, format: LeagueFormat(promoted: 1, playOffs: 6, relegated: 4),
+                                      club: ownClubName, parameters: parameters)
+        let today = Day(iso: "2026-11-20")!
+        let tactic = try PlannerFixture.tactic()
+        var fixture = Fixture(id: FixtureID("buxton"), date: today, opponent: "Buxton", importance: .medium, tactic: tactic)
+        fixture.competition = .league
+        fixture.opponentStrength = .similar
+        let pasted = Day(iso: "2026-11-19")!
+        let spoken = League.spokenFor(matchesLeft: reading.matchesLeft, pastedOn: pasted,
+                                      leagueFixtures: [(fixture.id, fixture.date, false)])
+        #expect(spoken == [fixture.id])
+        let context = LeagueContext(reading: reading, speaksFor: spoken)
+        let suggestion = try ImportanceAdvisor.suggest(for: fixture, among: [], confirmed: [], players: [],
+                                                       tiers: SquadTiers(first: [:], second: [:], ratings: [:]),
+                                                       situation: nil, league: context, parameters: parameters)
+        #expect(suggestion.importance == .high)
+        // The suggestion writes the base reason with the base value after it.
+        #expect(suggestion.reasons.first == "\(AdvisorText.leagueBaseReason(reading)): 100")
+        let buxton = try #require(reading.rivals.first { $0.name == "Buxton" })
+        #expect(suggestion.reasons.contains(AdvisorText.battlingReason(buxton, factor: 1.2)))
+    }
 }

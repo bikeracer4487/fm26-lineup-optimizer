@@ -328,4 +328,81 @@ import LineupEngine
         let reopenedReport = try #require(report(reopened))
         #expect(reopenedReport == (try engineReport(reopened)))
     }
+
+    /// The league table's whole life: pasted, its format entered, used by the suggestions, outlasted by the season,
+    /// pasted again and removed.
+    @Test func aSeasonsEndWithTheTable() throws {
+        let t = try ScoutingSetup.ready()
+        let model = t.model
+        t.input.tick = 0
+        t.input.uptime = 1_000
+        func day(_ offset: Int) -> Day { TestModel.today.adding(days: offset) }
+        func add(_ offset: Int, _ opponent: String, _ competition: Competition) throws -> FixtureID {
+            let id = model.addFixture(date: day(offset), opponent: opponent, importance: .medium)
+            var fixture = try #require(model.fixtures.first { $0.id == id })
+            fixture.competition = competition
+            model.update(fixture)
+            return id
+        }
+        let cup = try add(3, "Town", .cup)
+        let buxton = try add(7, "Buxton", .league)
+        let chester = try add(14, "Chester", .league)
+        let rovers = try add(21, "Rovers", .league)
+
+        try t.pasteLeagueTable()
+        model.setLeagueFormatDraft(LeagueFormatDraft(promoted: 1, playOffs: 6, relegated: 4))
+        guard case .read(let reading) = model.leagueReading else {
+            Issue.record("expected a reading, got \(model.leagueReading)")
+            return
+        }
+        #expect(reading.place == 5 && reading.matchesLeft == 3)
+        #expect(model.leagueSituationSelection == nil)
+        #expect(model.leagueSituationChoices.first?.title == "From the table (Title race or relegation fight)")
+        #expect(!model.leagueTableIsOutOfDate)
+
+        // The table decides every league match it speaks for; the cup is as before.
+        let base = "\(AdvisorText.leagueBaseReason(reading)): 100"
+        for id in [buxton, chester, rovers] {
+            #expect(model.suggestions[id]?.reasons.first == base)
+            #expect(model.suggestions[id]?.importance == .high)
+        }
+        #expect(model.suggestions[buxton]?.reasons.contains { $0.hasPrefix("Buxton are level on points") } == true)
+        #expect(model.suggestions[chester]?.reasons.contains { $0.hasPrefix("Chester are ") } == false)
+        #expect(model.suggestions[cup]?.reasons.first?.hasPrefix("League match") != true)
+
+        // "Use it" takes the suggestion and plans once.
+        let planned = model.timesPlanned
+        model.useSuggestion(for: buxton)
+        #expect(model.fixtures.first { $0.id == buxton }?.importance == .high)
+        #expect(model.timesPlanned == planned + 1)
+
+        // The season goes on: the cup, then the Buxton match are played.
+        var settings = model.settings
+        settings.currentDate = day(3)
+        model.update(settings)
+        model.confirm(cup)
+        settings.currentDate = day(7)
+        model.update(settings)
+        model.confirm(buxton)
+        #expect(model.history.contains { $0.lineup.fixture == buxton })
+        settings.currentDate = day(8)
+        model.update(settings)
+        #expect(model.leagueTableIsOutOfDate)
+        guard case .read = model.leagueReading else {
+            Issue.record("the old table should still be read, got \(model.leagueReading)")
+            return
+        }
+        #expect(model.suggestions[chester]?.reasons.first?.hasPrefix(AdvisorText.leagueBaseReason(reading)) == true)
+
+        // Pasting the table again brings it up to date.
+        try t.pasteLeagueTable()
+        #expect(!model.leagueTableIsOutOfDate)
+        #expect(model.league.pastedOn == day(8))
+
+        // Removing it puts every league match back on the base it had before.
+        model.removeLeagueTable()
+        #expect(model.leagueReading == .noTable)
+        #expect(model.suggestions[chester]?.reasons.first == "League match: 80")
+        #expect(model.suggestions[rovers]?.reasons.first == "League match: 80")
+    }
 }
