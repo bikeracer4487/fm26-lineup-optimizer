@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: the best five at each position, and hidden candidates
 
 Date: 22 November 2026
-Status: approved by the owner on 22 November 2026 ("Approved, proceed"), with the calls this design made listed to him beforehand. A reviewer read it as a builder the same day and had no question for him; the small points it raised were settled in the text as this design's calls. He chose how long a hidden player stays hidden (until he brings him back) and how the cut is made (the first of three, below). Everything marked "this design's call" is the builder's, and is his to change.
+Status: built on 22 November 2026 (plan: `docs/superpowers/plans/2026-11-22-fm27-scouting-best-five-and-hidden.md`), after the owner approved this text the same day ("Approved, proceed"), with the calls this design made listed to him beforehand. A reviewer read it as a builder the same day and had no question for him; the small points it raised were settled in the text as this design's calls. He chose how long a hidden player stays hidden (until he brings him back) and how the cut is made (the first of three, below). Everything marked "this design's call" is the builder's, and is his to change.
 
 This design changes the Candidates tab of the Scouting screen. Where it differs from `2026-11-18-fm27-scouting-design.md`, this one wins: that design's "read and forget" still holds for the pasted players, and no longer holds for the short list of players the owner has hidden.
 
@@ -124,7 +124,10 @@ This is the engine's change (`CandidatesReport.groups(orderedBy:)`), and `scout`
     RIGHT BACK
     …
 
-    ▸ The rest: 33 more players
+    THE REST
+    ▸ 33 more players
+
+    HIDDEN
     ▸ 3 hidden players
         Abdi Sharif                                               [Show again]
         Age 26 · DM/M C · CA 84 · PA 90 · Connah's Quay Nomads · Asking $0 · $2,972 a week
@@ -133,7 +136,9 @@ This is the engine's change (`CandidatesReport.groups(orderedBy:)`), and `scout`
 
 (The shape only; the names are from the captured search, and the numbers, the abilities among them, are not what the build will print.)
 
-On the captured search the 76 open rows become about 47 (counted by hand from the command line's output, every group cut to five; the plan records the build's own number, and no test is pinned to it). No group can pass five however many players are pasted.
+On the captured search, against the captured first team and U21s by the command line's output, the 76 open rows become 47, with five groups carrying a line. The build's own count, on the first team alone (the squad the app's tests use), is 65 open rows before and 48 now, in 13 groups of which three carry a line; no test is pinned to either. No group can pass five however many players are pasted.
+
+One thing was added while building: the hidden list stands under a heading of its own, "Hidden", since in the first picture its line sat under "The rest" and read as part of it.
 
 ## Where it lives
 

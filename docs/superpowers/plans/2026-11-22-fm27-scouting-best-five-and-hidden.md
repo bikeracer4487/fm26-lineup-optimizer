@@ -471,3 +471,114 @@ Expected: all pass, no warnings.
 - [ ] **Step 5: Run both suites once more** (the app's in the background) and confirm they pass with no warnings.
 
 - [ ] **Step 6: Commit** (`git add CLAUDE.md docs`), saying the notes now describe the tab as built.
+
+---
+
+## Added on 22 November 2026: two planner fixes
+
+The owner asked for these while Task 6 was under way, from another session's findings on why his plan started a fringe young player in a low cup match. They are not scouting; they are built here because this was the work in hand. **Spec:** `docs/superpowers/specs/2026-11-22-fm27-minutes-and-development-favours-design.md`.
+
+### Task 7: "Needs minutes" in a low fixture only for the elevens and favoured successors
+
+**Files:**
+- Modify: `LineupEngine/Sources/LineupEngine/Planner/ImportanceRules.swift` (`needsSharpness`)
+- Test: `LineupEngine/Tests/LineupEngineTests/ImportanceRulesTests.swift`
+
+**Interfaces:**
+- Produces: no new name. `needsSharpness` gives a `.low` fixture the gate a `.sharpness` fixture has: `context.tiers.slot(of: player.id) != nil`, or `isFavouredSuccessor` with sharpness under `sharpnessNeedFull`. The "Already sharp" mark-down stays a sharpness fixture's alone.
+
+- [ ] **Step 1: Write the failing tests**
+
+```swift
+@Test func aLowFixtureFavoursOnlyTheElevensWhoNeedMinutes() {
+    let p = Player.fixture(sharpness: 0.705)
+    #expect(abs((every(run(p, .low, tiers: tiers(p, tier: 1)), .needsSharpness)?.factor ?? 0) - 1.25) < 1e-9)
+    #expect(abs((every(run(p, .low, tiers: tiers(p, tier: 2)), .needsSharpness)?.factor ?? 0) - 1.25) < 1e-9)
+    #expect(every(run(p, .low), .needsSharpness) == nil)                       // in neither eleven: none
+    #expect(every(run(Player.fixture(sharpness: 0.46), .low), .needsSharpness) == nil)   // however unsharp
+}
+@Test func aFavouredSuccessorOutsideTheElevensStillNeedsMinutesInALowFixture() {
+    /* as `aSuccessorCanBeGotSharpAndIsNotMarkedDownForBeingSharp` builds one: ×1.25 at 70.5% in `.low`;
+       the same player with a band of `.possible` (no successor) gets none; a sharp successor gets none and is not marked down */
+}
+```
+
+Existing tests of the low fixture's favour hand the player a place in an eleven where they mean a regular.
+
+- [ ] **Step 2: Run and see them fail** — `cd LineupEngine && swift test --filter ImportanceRulesTests`; expected: the player in neither eleven is still favoured.
+- [ ] **Step 3: Implement** the gate, and bring the function's comment into line.
+- [ ] **Step 4: Run the whole engine suite**; fix tests that relied on a fringe player's favour, each with a line saying why its expectation moved.
+- [ ] **Step 5: Commit**, saying the rule was for unsharp regulars and was favouring players for never playing.
+
+### Task 8: The favour by age only for a player worth developing, and the notes
+
+**Files:**
+- Modify: `LineupEngine/Sources/LineupEngine/Planner/ImportanceRules.swift` (`developmentFloor`)
+- Test: `LineupEngine/Tests/LineupEngineTests/ImportanceRulesTests.swift`
+- Modify: `CLAUDE.md`, `docs/superpowers/plans/2026-11-14-fm27-young-players-development.md` (the fault this closes), this plan's closing sections
+
+**Interfaces:**
+- Consumes: `Removal.isWorthDeveloping(_ outlook: Outlook) -> Bool` (exists, internal to the engine).
+- Produces: no new name. `developmentFloor` asks `Removal.isWorthDeveloping(outlook)` where it asked `!outlook.isMarkedlyLower`. `successorSlots` is unchanged.
+
+- [ ] **Step 1: Write the failing test**
+
+```swift
+@Test func onlyAPlayerWorthDevelopingIsFavoured() {
+    let p = young(21)
+    for level in [ReachLevel.couldPassFirst, .couldMakeSecond] {
+        #expect(floorFactor(run(p, .low, outlooks: outlooks(p, level))) == 1.10, "\(level)")
+    }
+    #expect(floorFactor(run(p, .low, outlooks: outlooks(p, nil))) == 1.10)        // no level: first choice wherever he has a slot
+    for level in [ReachLevel.couldBeCover, .markedlyLower] {
+        #expect(floorFactor(run(p, .low, outlooks: outlooks(p, level))) == nil, "\(level)")
+    }
+}
+@Test func aFirstChoiceWhoseReachElsewhereIsOnlyCoverIsFavoured() {
+    /* as `aFirstChoiceWhoseOtherSlotIsMarkedlyLowerGetsTheFloor`, with the outlook's level `.couldBeCover` */
+}
+```
+
+`aMarkedlyLowerPlayerIsNotFavoured` loses its `.couldBeCover` case to the first of these.
+
+- [ ] **Step 2: Run and see it fail** — expected: the cover-level player is still favoured at 1.10.
+- [ ] **Step 3: Implement**, and bring the function's comment into line.
+- [ ] **Step 4: Run both whole suites** (the app's in the background); fix tests whose plans changed, each with a line saying why. Run the `plan` command from `CLAUDE.md` on the captured squad and note whether its lineups changed.
+- [ ] **Step 5: The notes.** `CLAUDE.md`: the Planning paragraph's sentence on who is favoured by age, a sentence on "Needs minutes", the entry in the list at the top, and the test counts. The young players plan: mark its fault closed. This plan's closing sections: what changed.
+- [ ] **Step 6: Commit.**
+
+---
+
+## What the build showed on the captured search
+
+The owner's captured search of 109 players, read with its own layouts.
+
+- Against the first team alone (the squad the app's tests use), for the sample 4-2-3-1: 13 groups outside the rest. Before this plan 65 rows were open; now 48 are, and three groups carry a line (12, 14 and 6 players, each showing five). 44 players are in the rest, closed as before.
+- Against the first team and the U21s, by the command line's output: 76 rows were open in 12 groups; with every group cut to five, 47 are, in 13 groups (the three who would start where there is no need are now under right back and left attacking midfield), and five groups carry a line.
+- On the sample squad the largest group is central attacking midfield, needing more depth, with 17 players: five shown and "12 more players". That group is what the `scouting-candidates-crowded-*` pictures draw.
+
+No test is pinned to these numbers.
+
+## What changed during the build
+
+- **A heading over the hidden list.** The plan had the line "3 hidden players" under the groups. In the first picture it sat straight under "The rest" and read as part of it, so the list has a part's title, "Hidden" (`ScoutingPresentation.hiddenHeading`), over its line.
+- **Two new test suites.** The hidden players' tests and the best-five tests are suites of their own (`ScoutingHiddenTests.swift`, `ScoutingBestFiveTests.swift`), not added to `ScoutingTests.swift` and `ScoutingPresentationTests.swift`: they stop the scripted clock, which otherwise moves a second at each reading, so that a double click can be told from two clicks.
+- **The row keeps its fields.** The plan allowed the row's club, loan, price, wage, age and positions to be dropped once the details line was stored whole. Existing tests read them, so they stay beside it.
+- **Core's heading test uses one slot.** The plan's test for the position-only heading used two slots with no need. In the tests' squad the second of them shares its position with a slot that has a need, so the test uses one slot no other shares; that a part's title is not repeated was already tested for every part.
+- **A hidden player is not judged**, as the design says, and the engine has a test for it: one who cannot be rated stops the others only while he is not hidden.
+
+## Limits and small faults left
+
+The design's limits, as built:
+
+- Two players with the same name and the same potential ability are hidden together, and shown again together.
+- A hidden player whose potential ability changes in the game, or whose name FMRTE writes differently beyond case, accents and spacing, shows again.
+- A hidden player can be shown again only while he is among the players pasted. One who is in no paste stays in the file and is shown nowhere.
+- A player a best five leaves out is not offered at another position he could answer, short of opening the line or his row.
+- A hidden player the owner later signs stays in the file, to no effect.
+
+Found while building:
+
+- The pictures draw buttons as an inactive window would, so the look of "Hide" and "Show again" in a live window is not checked, nor is where the list sits after a row is hidden, since a picture does not scroll.
+- "Order by" changes which five a group shows while its line is closed. Nothing on screen says the five changed.
+- The command line's `scout` prints every candidate and takes no hidden players.

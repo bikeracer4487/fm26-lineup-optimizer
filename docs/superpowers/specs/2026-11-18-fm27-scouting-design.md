@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: scouting needs and pasted candidates
 
 Date: 18 November 2026
-Status: approved by the owner on 18 November 2026 ("Approved"), with the calls this design made listed to him beforehand. A reviewer read it as a builder on 18 November 2026; the points it raised were settled in the text as this design's calls.
+Status: approved by the owner on 18 November 2026 ("Approved"), with the calls this design made listed to him beforehand. On 22 November 2026 the Candidates tab was changed by `2026-11-22-fm27-scouting-best-five-and-hidden-design.md` (the best five of each group, a group for each position in the two mixed parts, players the owner hides, which are saved, and the two abilities on each player's line); that design wins where the two differ. A reviewer read it as a builder on 18 November 2026; the points it raised were settled in the text as this design's calls.
 
 ## Intent
 
