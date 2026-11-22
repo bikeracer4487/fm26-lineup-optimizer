@@ -22,14 +22,17 @@ public struct PlanRequest: Sendable {
     /// same squads; neither development favour goes to them. Empty when the advice could not be worked out, and not
     /// read with the Development setting at 0.
     public var advisedToLeave: Set<PlayerID>
+    /// Each player's measured pair; a player with none is projected with the fixed figures.
+    public var rates: [PlayerID: JadednessRates]
     public var settings: PlanSettings
 
     public init(fixtures: [Fixture], players: [Player], ownClub: String?, asOf: Day, confirmed: [ConfirmedLineup],
                 played: [ConfirmedLineup] = [], retraining: [Retraining], marks: [PlayerID: SaleMark] = [:],
-                advisedToLeave: Set<PlayerID> = [], settings: PlanSettings) {
+                advisedToLeave: Set<PlayerID> = [], rates: [PlayerID: JadednessRates] = [:],
+                settings: PlanSettings) {
         self.fixtures = fixtures; self.players = players; self.ownClub = ownClub; self.asOf = asOf
         self.confirmed = confirmed; self.played = played; self.retraining = retraining; self.marks = marks
-        self.advisedToLeave = advisedToLeave; self.settings = settings
+        self.advisedToLeave = advisedToLeave; self.rates = rates; self.settings = settings
     }
 }
 
@@ -125,7 +128,7 @@ public struct Planner: Sendable {
         let known = Set(players.map(\.id))
         let (imported, anyEarlyMatch) = try afterEarlyMatches(
             request.played.filter { $0.date < request.asOf }, players: players, known: known, asOf: request.asOf,
-            intensity: settings.trainingIntensity)
+            intensity: settings.trainingIntensity, rates: request.rates)
         var fitness = imported
         var projectedTo = request.asOf
         var anyMatchSoFar = anyEarlyMatch
@@ -134,14 +137,14 @@ public struct Planner: Sendable {
         var planned: [PlannedFixture] = []
         for event in Self.events(fixtures, played: request.played, asOf: request.asOf) {
             fitness = try advance(fitness, players: players, days: projectedTo.days(to: event.date),
-                                  intensity: settings.trainingIntensity)
+                                  intensity: settings.trainingIntensity, rates: request.rates)
             projectedTo = event.date
             let index: Int
             switch event {
             case .played(let match):
                 let positionOf = Self.positions(in: match, known: known)
                 if !positionOf.isEmpty {
-                    fitness = try afterMatch(fitness, players: players, positionOf: positionOf)
+                    fitness = try afterMatch(fitness, players: players, positionOf: positionOf, rates: request.rates)
                     anyMatchSoFar = true
                 }
                 continue
@@ -182,7 +185,8 @@ public struct Planner: Sendable {
                 for assignment in assignments {
                     if let saving = try SavingPlayers.adjustment(
                         for: player, fitness: fitness[player.id]!, position: assignment.ipPosition, today: fixture,
-                        later: later, settings: settings, parameters: parameters) {
+                        later: later, rates: request.rates[player.id], settings: settings,
+                        parameters: parameters) {
                         slots[assignment.slot, default: []].append(saving)
                     }
                 }
@@ -212,7 +216,7 @@ public struct Planner: Sendable {
                 }
                 positionOf[pick.player] = assignment.ipPosition
             }
-            fitness = try afterMatch(fitness, players: players, positionOf: positionOf)
+            fitness = try afterMatch(fitness, players: players, positionOf: positionOf, rates: request.rates)
             anyMatchSoFar = true
         }
         return Plan(fixtures: planned)
@@ -257,7 +261,7 @@ public struct Planner: Sendable {
     /// starter takes the days since his previous such match, then the match; then the days from his last such match to
     /// `asOf`. Nobody else moves. Also whether any match moved anyone.
     private func afterEarlyMatches(_ matches: [ConfirmedLineup], players: [Player], known: Set<PlayerID>, asOf: Day,
-                                   intensity: TrainingIntensity) throws -> ([PlayerID: ProjectedFitness], Bool) {
+                                   intensity: TrainingIntensity, rates: [PlayerID: JadednessRates]) throws -> ([PlayerID: ProjectedFitness], Bool) {
         var fitness = Dictionary(uniqueKeysWithValues: players.map { ($0.id, ProjectedFitness($0)) })
         var lastMatch: [PlayerID: Day] = [:]
         for match in matches.sorted(by: { ($0.date, $0.fixture.raw) < ($1.date, $1.fixture.raw) }) {
@@ -267,17 +271,19 @@ public struct Planner: Sendable {
                 var current = fitness[player.id]!
                 if let since = lastMatch[player.id] {
                     current = try FitnessProjection.afterDays(since.days(to: match.date), current, player: player,
-                                                              intensity: intensity, parameters: parameters)
+                                                              intensity: intensity, rates: rates[player.id],
+                                                              parameters: parameters)
                 }
                 fitness[player.id] = try FitnessProjection.afterMatch(current, player: player, position: position,
-                                                                      parameters: parameters)
+                                                                      rates: rates[player.id], parameters: parameters)
                 lastMatch[player.id] = match.date
             }
         }
         for player in players {
             guard let since = lastMatch[player.id] else { continue }
             fitness[player.id] = try FitnessProjection.afterDays(since.days(to: asOf), fitness[player.id]!, player: player,
-                                                                 intensity: intensity, parameters: parameters)
+                                                                 intensity: intensity, rates: rates[player.id],
+                                                                 parameters: parameters)
         }
         return (fitness, !lastMatch.isEmpty)
     }
@@ -295,24 +301,24 @@ public struct Planner: Sendable {
 
     /// Everyone takes `days` nights without a match.
     private func advance(_ fitness: [PlayerID: ProjectedFitness], players: [Player], days: Int,
-                         intensity: TrainingIntensity) throws -> [PlayerID: ProjectedFitness] {
+                         intensity: TrainingIntensity, rates: [PlayerID: JadednessRates]) throws -> [PlayerID: ProjectedFitness] {
         guard days > 0 else { return fitness }
         var next = fitness
         for player in players {
             next[player.id] = try FitnessProjection.afterDays(days, fitness[player.id]!, player: player, intensity: intensity,
-                                                              parameters: parameters)
+                                                              rates: rates[player.id], parameters: parameters)
         }
         return next
     }
 
     /// Each player in `positionOf` takes a match at his position; everyone else is unchanged.
     private func afterMatch(_ fitness: [PlayerID: ProjectedFitness], players: [Player],
-                            positionOf: [PlayerID: Position]) throws -> [PlayerID: ProjectedFitness] {
+                            positionOf: [PlayerID: Position], rates: [PlayerID: JadednessRates]) throws -> [PlayerID: ProjectedFitness] {
         var next = fitness
         for player in players {
             guard let position = positionOf[player.id] else { continue }
             next[player.id] = try FitnessProjection.afterMatch(fitness[player.id]!, player: player, position: position,
-                                                               parameters: parameters)
+                                                               rates: rates[player.id], parameters: parameters)
         }
         return next
     }

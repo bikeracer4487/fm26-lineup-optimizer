@@ -697,4 +697,42 @@ import Testing
         let match = played("p", day: 0, [.ST_C: id(.ST_C)])
         #expect(throws: Never.self) { try planner.plan(request(fixtures, confirmed: [match], played: [match])) }
     }
+
+    // MARK: - Measured jadedness rates
+
+    func jaded(_ players: [Player], _ slots: [SlotID], to value: Int) -> [Player] {
+        let ids = Set(slots.map { id($0) })
+        return players.map { p in var p = p; if ids.contains(p.id) { p.jadedness = value }; return p }
+    }
+
+    let measured = JadednessRates(drift: MeasuredRate(-2, .own(intervals: 5)), gain: MeasuredRate(31, .own(intervals: 5)))
+
+    func jadednessPlan(rates: [PlayerID: JadednessRates]) throws -> Plan {
+        let players = jaded(squad, [.ST_C, .AM_C], to: 100)
+        let first = fixture("a", day: 0, overrides: [.ST_C: id(.ST_C), .AM_C: id(.AM_C)])
+        var r = request([first, fixture("b", day: 7)], players: players)
+        r.rates = rates
+        return try planner.plan(r)
+    }
+
+    @Test func aStartersJadednessBeforeTheNextFixtureUsesHisMeasuredRates() throws {
+        let plan = try jadednessPlan(rates: [id(.ST_C): measured])
+        #expect(plan.fixtures[1].fitness[id(.ST_C)]?.jadedness == Double(100 + 31 - 14))
+    }
+
+    @Test func aPlayerWithNoRatesIsProjectedWithTheFixedFigures() throws {
+        let plan = try jadednessPlan(rates: [id(.ST_C): measured])
+        let scale = parameters.trainingIntensityRecovery.value[PlanSettings.standard.trainingIntensity] ?? 1
+        let fixed = 100 + parameters.jadednessPerMatch.value - 7 * parameters.jadednessRecoveryPerDay.value * scale
+        #expect(plan.fixtures[1].fitness[id(.AM_C)]?.jadedness == fixed)
+        #expect(try jadednessPlan(rates: [:]).fixtures[1].fitness[id(.AM_C)]?.jadedness == fixed)
+    }
+
+    @Test func aMatchPlayedBeforeTheImportUsesHisMeasuredRates() throws {
+        let players = jaded(squad, [.ST_C], to: 100)
+        var r = request([fixture("a", day: 0)], players: players, played: [played("p", day: -3, [.ST_C: id(.ST_C)])])
+        r.rates = [id(.ST_C): measured]
+        let plan = try planner.plan(r)
+        #expect(plan.fixtures[0].fitness[id(.ST_C)]?.jadedness == Double(100 + 31 - 6))
+    }
 }

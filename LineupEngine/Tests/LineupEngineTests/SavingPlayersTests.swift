@@ -44,10 +44,11 @@ import Testing
     }
 
     func adjustment(_ player: Player, at slot: SlotID, today importance: Importance, _ later: [LaterFixture],
-                    settings: PlanSettings = .standard, parameters: EngineParameters? = nil) throws -> Adjustment? {
+                    rates: JadednessRates? = nil, settings: PlanSettings = .standard,
+                    parameters: EngineParameters? = nil) throws -> Adjustment? {
         try SavingPlayers.adjustment(for: player, fitness: ProjectedFitness(player), position: position(slot),
                                      today: fixture("today", importance, inDays: 0), later: later,
-                                     settings: settings, parameters: parameters ?? self.parameters)
+                                     rates: rates, settings: settings, parameters: parameters ?? self.parameters)
     }
 
     /// Worked by hand: his rating in his slot times the fall in the product of his fitness factors at a fixture
@@ -212,6 +213,22 @@ import Testing
         #expect(abs(medium.cost - hand.advantage * 1.5 / 0.8) < 1e-9)
         let high = try #require(try adjustment(p, at: .ST_C, today: .low, [later("h", .high, inDays: 1, tiers: wideTiers)]))
         #expect(abs(high.cost - hand.ratingTimesDrop * 3.75) < 1e-9)
+    }
+
+    @Test func measuredRatesChangeTheCostOfStartingToday() throws {
+        let wide = try PlannerFixture.squad(first: 16, second: 6)
+        let wideTiers = try Self.tiers(of: wide, tactic: tactic)
+        let p = player(.ST_C, in: wide) { $0.jadedness = 350 }
+        let hand = try byHand(p, at: .ST_C, days: 7, tiers: wideTiers)
+        let measured = JadednessRates(drift: MeasuredRate(-2, .own(intervals: 5)), gain: MeasuredRate(120, .own(intervals: 5)))
+        let fixtures = [later("m", .medium, inDays: 7, tiers: wideTiers)]
+        // Starting leaves him at 350 + 120 - 14 = 456, resting at 336: the start breaks the jaded rule, resting does not.
+        let with = try #require(try adjustment(p, at: .ST_C, today: .low, fixtures, rates: measured))
+        #expect(abs(with.cost - hand.advantage * 1.5 / 0.8) < 1e-9)
+        // With none, the fixed figures: he is at 350 + 60 - 140 after a start, nowhere near 400.
+        let without = try #require(try adjustment(p, at: .ST_C, today: .low, fixtures, rates: nil))
+        #expect(abs(without.cost - min(hand.advantage, hand.ratingTimesDrop) * 1.5 / 0.8) < 1e-9)
+        #expect(with.cost != without.cost)
     }
 
     @Test func theTrainingIntensityIsTheSettingsOne() throws {

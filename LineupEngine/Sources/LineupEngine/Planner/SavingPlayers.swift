@@ -27,8 +27,8 @@ public enum SavingPlayers {
     /// importance with no weight or a weight that is not a finite number above 0, are left out. Throws the
     /// projection's `RatingError` for a missing Stamina or Natural Fitness.
     public static func adjustment(for player: Player, fitness: ProjectedFitness, position: Position,
-                                  today: Fixture, later: [LaterFixture], settings: PlanSettings,
-                                  parameters: EngineParameters) throws -> Adjustment? {
+                                  today: Fixture, later: [LaterFixture], rates: JadednessRates? = nil,
+                                  settings: PlanSettings, parameters: EngineParameters) throws -> Adjustment? {
         let weights = parameters.importanceWeights.value
         guard settings.savingPlayers > 0, let todayWeight = usable(weights[today.importance]) else { return nil }
 
@@ -47,9 +47,9 @@ public enum SavingPlayers {
                   let advantage = item.tiers.advantage(of: player.id) else { continue }
 
             let intensity = settings.trainingIntensity
-            let rest = try FitnessProjection.afterDays(gap, fitness, player: player, intensity: intensity, parameters: parameters)
-            let played = try FitnessProjection.afterMatch(fitness, player: player, position: position, parameters: parameters)
-            let play = try FitnessProjection.afterDays(gap, played, player: player, intensity: intensity, parameters: parameters)
+            let rest = try FitnessProjection.afterDays(gap, fitness, player: player, intensity: intensity, rates: rates, parameters: parameters)
+            let played = try FitnessProjection.afterMatch(fitness, player: player, position: position, rates: rates, parameters: parameters)
+            let play = try FitnessProjection.afterDays(gap, played, player: player, intensity: intensity, rates: rates, parameters: parameters)
 
             let loss: Double
             if breaksRiskRule(play, of: player, importance: m.importance, parameters: parameters)
