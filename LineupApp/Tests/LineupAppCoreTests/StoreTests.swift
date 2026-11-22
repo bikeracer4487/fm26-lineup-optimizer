@@ -378,6 +378,35 @@ import LineupEngine
         }
     }
 
+    @Test func theScoutingFileIsOneOfTheFiles() {
+        #expect(StoreFile.allCases.contains(.scouting))
+        #expect(StoreFile.scouting.rawValue == "scouting")
+        #expect(!StoreFile.scouting.isNoticedWhenMissing)
+    }
+
+    @Test func aMissingScoutingFileIsNotNoticedBesideOthers() throws {
+        try withStore { store, _ in
+            try store.save(settings, to: .settings)
+            let loaded = store.load(.scouting, as: ScoutingState.self, otherwise: ScoutingState())
+            #expect(loaded.value == ScoutingState())
+            #expect(loaded.notice == nil)
+            #expect(loaded.replaceOnDisk)
+        }
+    }
+
+    @Test func anUnreadableScoutingFileIsKeptAsideWithANotice() throws {
+        try withStore { store, dir in
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data("{".utf8).write(to: dir.appendingPathComponent("scouting.json"))
+            let loaded = store.load(.scouting, as: ScoutingState.self, otherwise: ScoutingState())
+            #expect(loaded.value == ScoutingState())
+            #expect(try #require(loaded.notice).hasPrefix("Your hidden candidates could not be read as saved data"))
+            #expect(try #require(loaded.notice).contains("the list starts empty"))
+            #expect(loaded.replaceOnDisk)
+            expectKeptAside(dir, original: "scouting.json", kept: "scouting.unreadable-1.json")
+        }
+    }
+
     @Test func theFitnessFileIsOneOfTheFiles() {
         #expect(StoreFile.allCases.contains(.fitness))
         #expect(StoreFile.fitness.rawValue == "fitness")

@@ -2,6 +2,11 @@ import Foundation
 import LineupEngine
 
 extension AppModel {
+    /// "Hide" and "Show again" are ignored within this long of the end of the last of either: each takes a row away,
+    /// which moves the next row's button under the pointer, so a double-click would otherwise act on the next player
+    /// too. One clock for the two, apart from the Training screen's.
+    public static let scoutingActionInterval: TimeInterval = 0.5
+
     /// The needs for the tactic the Scouting screen shows (`scoutingTacticShown`), with the players counted as going
     /// worked out from the ready advice whatever tactic is shown: those on loan here, marked, or advised to leave by
     /// Player Removal. Worked out when first read after a replan and kept until the next.
@@ -74,6 +79,34 @@ extension AppModel {
         hold(nil)
     }
 
+    /// Hides the held player with this key: he leaves every group, for every tactic, until `showCandidateAgain`, and
+    /// is known again in a later paste by his name and potential ability. The hidden players' file is saved and the
+    /// candidates are left to be judged again; nothing plans and no other advice is worked out. Nothing happens for a
+    /// key no held player has, for a player already hidden, or within `scoutingActionInterval` of the last "Hide" or
+    /// "Show again". `chosen` is the tactic the screen shows, for which the candidates are judged again before the
+    /// interval starts.
+    public func hideCandidate(_ id: PlayerID, for chosen: UUID?) {
+        scoutingAction(for: chosen) {
+            guard let player = scoutingPaste?.players.first(where: { $0.id == id }),
+                  !Scouting.isHidden(player, among: scouting.hidden) else { return }
+            scouting.hidden.append(HiddenCandidate(player))
+            hiddenCandidatesChanged()
+        }
+    }
+
+    /// Undoes `hideCandidate` for the held player with this key: every saved entry that matches him is removed, so a
+    /// player saved twice comes back at once, and so does a second pasted row of the same player. Saves and judges as
+    /// `hideCandidate` does; nothing for a key no held player has, or within `scoutingActionInterval` of the last
+    /// "Hide" or "Show again".
+    public func showCandidateAgain(_ id: PlayerID, for chosen: UUID?) {
+        scoutingAction(for: chosen) {
+            guard let player = scoutingPaste?.players.first(where: { $0.id == id }),
+                  Scouting.isHidden(player, among: scouting.hidden) else { return }
+            scouting.hidden.removeAll { $0.matches(player) }
+            hiddenCandidatesChanged()
+        }
+    }
+
     /// Whether "Clear" has anything to clear: players are held, or a refusal is shown, which it dismisses.
     public var canClearCandidates: Bool { scoutingPaste != nil || scoutingPasteProblem != nil }
 
@@ -111,6 +144,24 @@ extension AppModel {
         adviceCache?.candidates = [:]
     }
 
+    /// Saves the hidden players and leaves the candidates to be judged again, for every tactic, when next read.
+    private func hiddenCandidatesChanged() {
+        save(.scouting)
+        adviceCache?.candidates = [:]
+    }
+
+    /// Runs `action` unless it arrives within `scoutingActionInterval` of the end of the last one that ran: the first
+    /// always runs. Once it has finished the candidates for `chosen` are judged again (they are otherwise judged when
+    /// the screen next reads them), then the clock is read again and that time recorded as the last action's end, so
+    /// the interval covers the judging.
+    private func scoutingAction(for chosen: UUID?, _ action: () -> Void) {
+        let start = environment.now()
+        if let last = lastScoutingAction, start - last < Self.scoutingActionInterval { return }
+        action()
+        _ = candidates(for: chosen)
+        lastScoutingAction = environment.now()
+    }
+
     private func workedOutScoutingNeeds(_ tactic: Tactic, advice: AdvisorsReport) -> ScoutingNeedsState {
         let problems = problems(of: tactic)
         guard problems.isEmpty else { return .failed(problems) }
@@ -130,8 +181,9 @@ extension AppModel {
     private func workedOutCandidates(_ paste: ScoutingPaste, tactic: Tactic, needs: ScoutingNeeds) -> CandidatesState {
         timesCandidatesJudged += 1
         do {
-            return .ready(try Scouting.candidates(pasted: paste.players, held: squad.book.allPlayers, ownClub: ownClub,
-                                                  tactic: tactic, needs: needs, catalog: catalog, profile: profile,
+            return .ready(try Scouting.candidates(pasted: paste.players, held: squad.book.allPlayers,
+                                                  hidden: scouting.hidden, ownClub: ownClub, tactic: tactic,
+                                                  needs: needs, catalog: catalog, profile: profile,
                                                   parameters: planParameters))
         } catch {
             return .failed([ErrorDescriptions.describe(error)])
