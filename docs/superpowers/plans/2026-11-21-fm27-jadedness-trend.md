@@ -42,6 +42,7 @@ A listed player's trend lines, in this order:
 3. `At that rate he passes 400 around Sun 7 Nov.`
 4. What a match off would do:
    - `Without a start he falls about 30 a week, and a start adds about 61, so a match off saves about 61.`
+   - `He holds steady without a start, and a start adds about 61, so a match off saves about 61.` (a drift below 0 within `steadyPerWeek`, inclusive; added after the whole-branch review)
    - `He rises about 16 a week without a start, so leaving him out of matches will not bring it down. Lighter training, or rest from training, will.`
    - `He holds steady without a start, so leaving him out of matches will not bring it down. Lighter training, or rest from training, will.`
    - followed, after a space, by where a rate is not his own: `(the first team's rate without a start; his own rate for a start)`, `(the first team's rate without a start; the club's rate for a start)`, `(his own rate without a start; the club's rate for a start)`, or, for the two "will not bring it down" forms given without a gain, `(the first team's rate without a start)`. Nothing when every rate named is his own.
@@ -62,7 +63,7 @@ At the foot, under the heading `What the game's messages mean`:
 
 Core's plain labels:
 
-- button `Measure again from today`; its question `Measure the trend again from today? Nothing is measured until a squad has been imported 4 more times.` with `Measure again` and `Cancel`
+- button `Measure again from today`; its question `Measure the trend again from today? Each squad then needs 4 imports from today on before anything is measured.` (corrected after the whole-branch review) with `Measure again` and `Cancel`
 - the Saving players explanation: `Higher rests more of your best players before a more important match soon after, and rests them before they are jaded. Off picks each match on its own.`
 
 ## Review Focus
@@ -84,7 +85,7 @@ The design left these to the builder or did not reach them. Each is built as wri
 3. The planner's reason has no full stop, as the saving reason beside it has none.
 4. A drift within 5 a week of nothing is written "holds steady without a start". A measured gain of 0 or below gives no "a match off saves" line and no cost in the plan.
 5. "At that rate he passes 400 around …" is given only within 120 days; the 120 is a field of `jadednessTrendRules` (`passDateWithinDays`), beside the 120 days readings are kept.
-6. "It needs 4 imports of his squad, and has 2" counts his used intervals plus one, so an import while he was injured or at −500 does not count.
+6. "It needs 4 imports of his squad, and has 2" counts his used intervals plus one, so an import while he was injured or at −500 does not count; with none used, 1 when he has a reading that can still count (on or after the day to measure from, on or before the day asked for, within the window), else 0 (corrected after the whole-branch review).
 7. A player needing a holiday keeps his holiday estimate even when his drift is 0 or above.
 8. A player's readings all count under the squad he is in now.
 9. The Saving players explanation reads "and rests them before they are jaded", to fit its sentence.
@@ -292,7 +293,8 @@ public struct FitnessTrends: Equatable, Sendable {
     public let players: [PlayerID: PlayerTrend]
     public let squadDrift: [Squad: SharedRate]
     public let clubGain: SharedRate?
-    /// `measureFrom` when it is later than the window's first day; else the earliest reading in the window; else nil.
+    /// `measureFrom` when it is later than the window's first day; else the earliest reading that is an end of a used
+    /// interval, of any player in a squad; else the earliest reading in the window; else nil (corrected after the whole-branch review).
     public let measuredFrom: Day?
     public static let none: FitnessTrends
     public var pairs: [PlayerID: JadednessRates] { get }
@@ -365,7 +367,7 @@ The tests, each with the assertions that pin it:
 | `readingsCountUnderTheSquadHeIsInNow` (Review Focus 1) | `a`, `b` in `.u18`; `squads` says `a` is now `.firstTeam` | `squadDrift[.u18] == nil`, `squadDrift[.firstTeam] == nil` (3 each), and `a.drift?.source == .own(intervals: 3)` |
 | `readingsOutOfDayOrderAreSorted` (Review Focus 4) | `["a": resting.reversed()]` | `==` the result for `resting` |
 | `afterASummerNothingIsMeasured` (Review Focus 5) | `["a": [r(0,100), r(7,86), r(70,-500), r(77,-500), r(84,-480)]]`, `asOf: 84` | `a.usedIntervals == 0`, `a.seen == nil`, `pairs.isEmpty`; `measuredFrom == start.adding(days: 70)` |
-| `measuredFromIsTheOwnersDayOrTheEarliestReadingInTheWindow` | `resting`, `asOf: 21`; then `from: 10`; then `asOf: 60` | `start`; `start.adding(days: 10)`; `start.adding(days: 21)` (the only reading within 42 days of day 60) |
+| `measuredFromIsTheOwnersDayOrTheEarliestEndOfAUsedInterval` (corrected after the whole-branch review) | `resting`, `asOf: 21`; then `from: 10`; then `asOf: 60` | `start`; `start.adding(days: 10)`; `start.adding(days: 14)` (the used interval ending on day 21, the only reading within 42 days of day 60, runs from day 14) |
 | `noReadingsGiveNone` | `[:]` | `== .none` |
 
 - [ ] **Step 2: Run to see them fail.** `cd LineupEngine && swift test --filter FitnessTrendTests`. Expected: does not compile.
@@ -426,7 +428,7 @@ extension AdvisorText {
     /// "Sat 14 Nov".
     public static func shortDay(_ day: Day) -> String
 }
-struct SavingAssessment { let adjustment: Adjustment; let named: FixtureID; let brokeRiskRule: Bool }
+struct SavingAssessment { let adjustment: Adjustment; let named: FixtureID; let brokeAt: Set<FixtureID> }  // (corrected after the whole-branch review); brokeRiskRule is brokeAt.contains(named)
 extension SavingPlayers {
     /// As `adjustment`, with the later fixture its reason names and whether that fixture's loss was a broken risk rule.
     static func assessment(for:fitness:position:today:later:rates:settings:parameters:) throws -> SavingAssessment?
@@ -445,20 +447,20 @@ public enum RestBeforeLine {
 The rule (§5), exactly:
 
 1. Nil when `settings.savingPlayers` is 0, `rates` is nil, today's importance has no usable weight, or today's fixture rejects him.
-2. Take `later` dated after today, in date then id order. Keep two jadedness figures, **starting** (`jadednessAfterMatch` of `jadedness`) and **resting** (`jadedness`), and walk the fixtures: move both on by the days since the previous date (`jadednessAfterDays`, with his rates); then, if the fixture rejects him, it is one he does not start either way: it cannot be M, and neither figure takes a match; otherwise, if the fixture's importance is not high and starting, rounded to a whole number, is above `jadedThreshold`, it is M and the walk stops; otherwise both take a match (`jadednessAfterMatch`) (corrected during the build: the first text let a fixture he is rejected for be M, and tested only the fixture before the rejection; the tests `aFixtureHeIsRejectedForCannotBeTheOneHeIsSavedFor` and `theFixtureAfterOneHeIsRejectedForCanBe` were added).
+2. Take `later` dated after today, in date then id order. Keep two jadedness figures, **starting** (`jadednessAfterMatch` of `jadedness`) and **resting** (`jadedness`), and walk the fixtures: move both on by the days since the previous date (`jadednessAfterDays`, with his rates); then, if the fixture rejects him, it is one he does not start either way: it cannot be M, and neither figure takes a match; otherwise, if the fixture's importance is not high, its weight is usable and above today's (corrected after the whole-branch review), and starting, rounded to a whole number, is above `jadedThreshold`, it is M and the walk stops; otherwise both take a match (`jadednessAfterMatch`) (corrected during the build: the first text let a fixture he is rejected for be M, and tested only the fixture before the rejection; the tests `aFixtureHeIsRejectedForCannotBeTheOneHeIsSavedFor` and `theFixtureAfterOneHeIsRejectedForCanBe` were added).
 3. Nil with no M; nil when resting, rounded, is also above the line before M.
 4. Nil unless he is in M's first eleven (`tiers.slot(of:)` gives tier 1) with an advantage above 0, and M's importance has a usable weight.
 5. The cost is advantage × weight(M) ÷ weight(today) × `settings.savingPlayers`, at most `savingCostCeiling`. Nil at 0.
-6. The adjustment is `Adjustment(kind: .restedBeforeLine, cost:, reason:)` with the reason in Exact copy: the threshold, his gain as a whole number after "+", M's opponent and `shortDay` of its date.
+6. The adjustment is `Adjustment(kind: .restedBeforeLine, cost:, reason:)` with the reason in Exact copy: the threshold, his gain as a whole number after "+", M's opponent and `shortDay` of its date. Nil when the gain rounds to 0 (corrected after the whole-branch review).
 
-In the planner, `RestBeforeLine.adjustment` is worked out once for each player and fixture, with `fitness[player.id]!.jadedness`. For each slot: when the saving rule's assessment there named the same fixture by a broken risk rule, only the larger of the two costs is added (the saving rule's on a tie); otherwise both are.
+In the planner, `RestBeforeLine.adjustment` is worked out once for each player and fixture, with `fitness[player.id]!.jadedness`. For each slot: when the saving rule's assessment there broke a risk rule at the rest rule's fixture, whichever fixture it named (corrected after the whole-branch review), only the larger of the two costs is added (the saving rule's on a tie); otherwise both are.
 
 - [ ] **Step 1: Write the failing tests** in `RestBeforeLineTests.swift`. The suite's setup is `SavingPlayersTests`'s (the `PlannerFixture` squad, its tiers, `today`, `fixture`, `later`, `player`). The striker "ST_C first" is the player; `falling` is drift −2 a day and gain 60; `advantage` is `tiers.advantage(of: PlannerFixture.id(.ST_C, "first"))!`.
 
 | Test | Given | Expect |
 |---|---|---|
 | `startingTodayWouldLeaveHimJadedForANamedFixture` | jadedness 330, `falling`; today low; later A medium in 7 days ("Buxton" in 14 is B, medium) | fixture B; cost `advantage * 1.5 / 0.8`; kind `.restedBeforeLine`; reason `"Rested before he passes 400: at about +60 a start, starting today would leave him jaded for Buxton on \(AdvisorText.shortDay(today.adding(days: 14)))"` |
-| `theCostIsWeightedByHowMuchEachFixtureMatters` | the same with today medium | cost `advantage * 1.5 / 1.5`: starting him costs more in the low fixture, so that is where the plan rests him |
+| `theCostIsWeightedByHowMuchEachFixtureMatters` | the same with today low and with today sharpness (corrected after the whole-branch review): today medium now gives nil | cost `advantage * 1.5 / 0.8` and `advantage * 1.5 / 0.1`: starting him costs more in the lesser fixture, so that is where the plan rests him |
 | `noCostWhenAMatchOffDoesNotSaveHim` | jadedness 380, drift +3, gain 20, one later medium in 7 days | nil (resting he is at 401) |
 | `noCostWhenTheFixtureHeWouldMissIsHighImportance` | jadedness 380, `falling`, one later high in 7 days | nil |
 | `noCostWhenHeNeverPassesTheLine` | jadedness 100, `falling` | nil |
@@ -475,7 +477,7 @@ In `PlannerScenarioTests.swift` (follow the suite's existing way of building a r
   - `aPlayerIsRestedInTheLesserFixtureBeforeHePassesTheLine`: fixtures low (today), medium (+7), medium (+14); the striker at 330 with `falling` in `request.rates`. He is not in the first lineup, his omission there is `.heldBack` naming `.restedBeforeLine`, and he starts the other two.
   - `withSavingPlayersOffHeStartsTwoAndMissesTheThirdJaded`: the same request with `savingPlayers: 0`: he starts the first two, and is left out of the third as jaded (422).
   - `theOwnersChoiceStillStartsHim`: the first request with an override for him at his slot in the low fixture: he starts it.
-  - `whenBothRulesNameTheSameFixtureOnlyOneCostIsKept`: today low, one later medium in 7 days, jadedness 350 and gain 120: he is left out, and his omission's kinds are `[.savedForLater]`. With the later fixture low (the saving rule is silent, since it does not weigh more) and Saving players at 2, they are `[.restedBeforeLine]`.
+  - `whenBothRulesNameTheSameFixtureOnlyOneCostIsKept`: today low, one later medium in 7 days, jadedness 350 and gain 120: he is left out, and his omission's kinds are `[.savedForLater]`. With the first scenario's shape (low today, medium in 7 and 14 days, at 330) the saving rule breaks no risk rule, both costs are kept and the kinds are `[.savedForLater, .restedBeforeLine]` (corrected after the whole-branch review): the first text's low later fixture can no longer be M. `whenTheSavingRuleBrokeARiskRuleAtTheRestRulesFixtureButNamedAnotherOnlyOneCostIsKept` was added: medium in 7 days and high in 10, the saving rule naming the high one, kinds `[.savedForLater]`.
 
 In `LeagueTextTests.swift`: `AdvisorText.shortDay(Day(year: 2026, month: 11, day: 14)!) == "Sat 14 Nov"`, and the existing pasted-day test still passes.
 
@@ -506,8 +508,8 @@ In `LeagueTextTests.swift`: `AdvisorText.shortDay(Day(year: 2026, month: 11, day
 public struct RestTrend: Equatable, Sendable {
     public let squad: Squad
     public let seen: SeenTrend?
-    /// The imports that count towards his trend so far (his used intervals + 1; 1 with a reading and none used; 0
-    /// with no reading), and how many a trend needs (`fewestOwnIntervals + 1`).
+    /// The imports that count towards his trend so far (his used intervals + 1 when he has any; else 1 with a reading
+    /// that can still count, `PlayerTrend.hasCountedReading`; else 0) (corrected after the whole-branch review), and how many a trend needs (`fewestOwnIntervals + 1`).
     public let imports: Int, importsNeeded: Int
     /// The day he passes `jadedThreshold` at his trend as seen; nil unless rising, at or under the line, and within
     /// `passDateWithinDays`.
@@ -548,7 +550,7 @@ Rules in `trendLines(of:)`, in the order of Exact copy:
 1. No `seen`: line 1, with `importsNeeded` and `imports`.
 2. `seen`: rising above `steadyPerWeek`, falling below its negative, else steady; weeks are `seen.days ÷ 7` to the nearest whole number, at least 1.
 3. `passesOn`: line 3.
-4. With `seen`, at least one start in it, both rates and a gain above 0: the "match off saves" line when his drift is below 0; else a "will not bring it down" line ("holds steady" when his drift × 7 is under `steadyPerWeek`). The bracket names each rate that is not his own, the drift's first.
+4. With `seen`, at least one start in it, both rates and a gain above 0: the "match off saves" line when his drift is below 0 (in its "holds steady" form when the weekly drift is within `steadyPerWeek`, (corrected after the whole-branch review)); else a "will not bring it down" line ("holds steady" when his drift × 7 is under `steadyPerWeek`). The bracket names each rate that is not his own, the drift's first.
 5. Rising and no start in `seen`: line 5.
 6. `restWillNotClear` and no "will not bring it down" line given at 4: that line, with the drift's bracket only.
 
@@ -629,7 +631,8 @@ public struct FitnessState: Equatable, Codable, Sendable {
     public var measureFrom: Day?
     public init()
     /// Takes a reading of each player on `day`, which replaces one of the same day and keeps its fixtures; then drops,
-    /// for every player, readings more than `keptDays` before `day`, and players left with none.
+    /// for every player, readings more than `keptDays` before `day`, and players left with none. A player recorded
+    /// loses his readings dated after `day` first (corrected after the whole-branch review).
     mutating func record(_ players: [Player], on day: Day, including fixtures: [FixtureID], keptDays: Int)
 }
 extension AppModel {
@@ -656,7 +659,7 @@ Rules:
   - `aSecondImportTheSameDayReplacesTheReadingAndKeepsBothSetsOfFixtures`: record with `["a"]`, then with `["b"]` and a changed jadedness: one reading, the new jadedness, `includes == [FixtureID("a"), FixtureID("b")]`.
   - `readingsOlderThanTheDaysKeptAreDropped`: a reading 121 days before goes, one 120 days before stays, and a player left with none is removed, whether or not he is among the players recorded (Review Focus 2).
   - `aPlayerImportedInTwoSquadsOnOneDayHasOneReading` (Review Focus 1).
-  - `readingsStayInDayOrderWhenTheDateIsMovedBack` (Review Focus 4): record on day 10 then day 3: `[3, 10]`.
+  - `aRecordOnAnEarlierDayDropsTheLaterReading` (Review Focus 4): record on day 10 then day 3: `[3]` (corrected after the whole-branch review); the first text kept both, `[3, 10]`.
   - `theStateRoundTripsThroughJSON`, and JSON with no `measureFrom` decodes.
 
 - [ ] **Step 2: Write the failing model tests** in `AppModelFitnessTests.swift`, on `TestModel`:
@@ -697,7 +700,7 @@ Rules:
 ```swift
 // RestRow gains:
 public let trendLines: [String]        // AdvisorText.trendLines, as written
-public let trendNoteText: String?      // "(this tool's estimate)" when there are trend lines
+public let trendNoteText: String?      // "(this tool's estimate)" when a measured line is shown, not after "not measured yet" alone (corrected after the whole-branch review)
 // spokenText says the trend lines after the reasons.
 
 public struct RestSquadLine: Identifiable, Equatable, Sendable { public let id: Int; public let text: String; public let caution: String? }
@@ -728,7 +731,7 @@ Layout, within the visual direction (`docs/superpowers/specs/2026-11-13-fm27-app
 
 - [ ] **Step 1: Write the failing Core tests.** In `RestPresentationTests.swift` (the helper's `RestAdvice` gains a `trend`):
   - `aRowCarriesTheEnginesTrendLinesAsWritten`: `row.trendLines == AdvisorText.trendLines(of: given, parameters: .fm27)`, `trendNoteText == "(this tool's estimate)"`, and `spokenText` contains each line.
-  - `anUnmeasuredRowSaysHowManyImportsItHas`: a row whose trend has no `seen` has the one line "His trend is not measured yet: it needs 4 imports of his squad, and has 2."
+  - `anUnmeasuredRowSaysHowManyImportsItHas`: a row whose trend has no `seen` has the one line "His trend is not measured yet: it needs 4 imports of his squad, and has 2.", and no note (corrected after the whole-branch review).
   - `theHeaderHasALineForEachMeasuredSquadAndTheClub`, with the caution only on a squad whose drift is 0 or above, in squad order.
   - `measureAgainIsOfferedOnceAReadingIsKept`, and not before.
   - `theQuestionSaysHowManyImports`: `measureAgainQuestion(imports: 4)` is the sentence in Exact copy.
@@ -783,7 +786,7 @@ Run on 22 November 2026 with the commands of `CLAUDE.md`, on the engine as it wa
 ## What changed during the build
 
 1. **A player with no drift of his own still takes the club's gain** when the club has one, though he has no measured pair either way (design §2: "his own, else the club's, else none"). Task 3's table expected no gain for a U18 with no drift; it was corrected in place.
-2. **`FitnessTrends.measuredFrom` follows one rule** whether or not readings are kept: the day to measure from when it is later than the window's first day, else the earliest reading in the window, else none.
+2. **`FitnessTrends.measuredFrom` follows one rule** whether or not readings are kept: the day to measure from when it is later than the window's first day, else the earliest reading in the window, else none. (Changed again after the whole-branch review: see below.)
 3. **A fixture the owner has rejected the player for cannot be the fixture resting him saves him for.** The first rule let it be M, so a player could be rested for a match he would not play; the walk now skips it, and two tests were added. Task 5's text was corrected in place.
 4. **Rest's estimate of days until condition reaches the floor takes the player's measured pair**, since his jadedness moves with it and slows condition above 0.
 5. **With a measured drift below 0, a count of more than 120 days to clear is not given** (`passDateWithinDays`); the existing "Clear in more days than the estimate covers" is shown. A drift just under 0 had given a count of years.
@@ -793,6 +796,26 @@ Run on 22 November 2026 with the commands of `CLAUDE.md`, on the engine as it wa
 9. **At launch, when the fitness file can be neither read nor moved aside, no first reading is taken**, so the file is never written over (Task 8).
 10. **The pictures are registered in `LineupApp`'s `main.swift`**, where every variant is, not in `ScreenPictures.swift` as the plan said; two pictures were added, `rest-trend-tall-*` and `rest-trend-small-*`, because the default window shows only the first rows (Task 9). Task 9's text was corrected in place.
 11. **Commits by an implementer on another model carry that model's Co-Authored-By line.**
+
+### After the whole-branch review
+
+The whole-branch review of 22 November 2026 found these, and one fix round made them. Each has its tests; the task texts above were corrected in place where they gave the old rule.
+
+1. **The rest-before-the-line rule rests a player only for a later fixture that weighs more than today's**, as the saving rule asks (design §5, revised). With equal weights he misses one match of the same worth either way, so a match off buys nothing; with today heavier, a tired first choice could be left out of a high fixture for a medium one. A later fixture that does not outweigh today's is walked as before but cannot be M. Four tests in `RestBeforeLineTests`; `theCostIsWeightedByHowMuchEachFixtureMatters` now compares a low and a sharpness fixture today, and the second half of `whenBothRulesNameTheSameFixtureOnlyOneCostIsKept` shows the rest rule acting beside the saving rule in the first scenario's shape, since its low/low case could no longer fire. The owner should know the cost if this is wrong: in a run of equal-weight matches the rule rests nobody, and he plays until he is over 400 and misses one then, with Rest warning weeks ahead.
+2. **Only the larger of the two costs is kept whenever the saving rule broke a risk rule at the rest rule's fixture**, whichever fixture its reason names (`SavingAssessment.brokeAt`). Before, the merge needed the saving rule to name that fixture, so M's whole advantage could be counted twice. The saving rule's cost is then always at least the rest rule's. One planner scenario.
+3. **A gain that rounds to 0 charges nothing**, so the reason never says "+0". One test.
+4. **The saving reason writes its date by `AdvisorText.shortDay`**: "Kept fresher for Wealdstone on Sat 21 Nov", beside the rest reason's form. Three engine tests changed their expected date and nothing else.
+5. **"Trend measured from" is never later than a squad line's "since"**: with no day to measure from in force it is the earliest reading at an end of a used interval, else the earliest reading in the window.
+6. **A drift below 0 within the steady band writes "He holds steady without a start, and a start adds about 61, so a match off saves about 61."** (design §6, revised; added to Exact copy). Not in the copy the owner approved, so his to check.
+7. **"Has N" counts only readings that can still count**: his used intervals + 1 when he has any, else 1 with a reading on or after the day to measure from, on or before the day asked for and within the window, else 0 (`PlayerTrend.hasCountedReading`). After "Measure again from today" a player with only older readings has 0.
+8. **The Rest test that could not fail** (`trendsForOtherPlayersChangeNothing`, keyed to a player not in the squad) is now `aTrendTheAdviceDoesNotFollowChangesOnlyHisTrend`, keyed to the player who needs a holiday: his level, days, reasons and basis stay, and every other player's advice is unchanged.
+9. **No estimate note follows "His trend is not measured yet" alone**; it stays whenever a measured line is shown, and the spoken text follows. Three Core tests changed with it (the spoken row, the unmeasured row, and the evidence test, now on a measured trend), and one was added.
+10. **The confirmation reads "Measure the trend again from today? Each squad then needs 4 imports from today on before anything is measured."** (design §7, revised): "4 more times" was false when a squad had been imported that day.
+11. **A reading recorded on a day drops the recorded players' readings dated after it** (design §7, revised): after the owner reloads an earlier save, readings from the abandoned timeline would otherwise form intervals with the new ones once the date passed them. Other players' readings stay. `readingsStayInDayOrderWhenTheDateIsMovedBack` is now `aRecordOnAnEarlierDayDropsTheLaterReading`, expecting `[3]`. If the owner only moved the app's date back by mistake and imports, that squad's later readings are lost.
+12. **Launch after an unreadable `fitness.json` is tested**: one notice, the file kept aside, a first reading of each held squad; and, with a file that can be neither read nor moved aside, no first reading and the file not written over.
+13. **The sample that rests a player before the line was changed**: Dejan Tetek is raised to 100, not 330. At 330, starting the first match alone took him past 400 before the second, a Medium match, so the saving rule broke the jaded rule there while naming the High match after it, and under fix 2 only its cost was kept. At 100 he passes the line only after starting the three matches after the first, so the rest rule alone names Opponent E, a Medium match, which outweighs the Low first. `match-restdue-*` was drawn again and shows "Rested before he passes 400: at about +89 a start, starting today would leave him jaded for Opponent E on Sat 28 Nov"; `rest-unmeasured-*` shows no note under "His trend is not measured yet".
+
+After the fixes the engine suite has 1,551 tests and the app suite 943, both passing with no warnings.
 
 The pictures were checked in `LineupApp/.build/pictures-trend`: `rest-trend-*` (a falling squad), `rest-trend-rising-*` (a squad rising without starts, with the caution), `rest-trend-tall-*` and `rest-trend-small-*`, `rest-unmeasured-*` and `match-restdue-*`.
 
@@ -814,16 +837,21 @@ The limits this plan names:
 - **A player's readings all count under the squad he is in now**, so a player moved between squads brings his old readings into his new squad's drift.
 - **The first reading taken at launch is dated the squad's last import**, which is the only day the app knows for it.
 
-Small faults found in review and left:
+Small faults found in review and left (those fixed after the whole-branch review are taken off this list and recorded under "After the whole-branch review"):
 
-- The saving rule and the rest-before-the-line rule can both count the loss at one fixture when the saving rule broke a risk rule there but named a heavier fixture.
-- A drift just under 0 writes "Without a start he falls about 0 a week"; a drift below 0 inside the steady band says "falls about 2 a week" where the squad line would say "holds steady".
-- The planner's reason can say "+0" for a measured gain under 0.5.
-- "Trend measured from" (the earliest reading in the 42 days) can be up to 14 days later than a squad line's "since".
-- The saving reason writes its date as 2026-11-21 beside the new reason's "Tue 17 Nov" on Match Selection.
-- A row's spoken text says "this tool's estimate" twice, and the note also follows "His trend is not measured yet".
+- A row's spoken text says "this tool's estimate" twice when both its advice and its trend lines carry it.
 - The sample readings for the command line cover the first team only, so U21 rows say "has 0".
 - The "Measure again from today" question and the button's look are not checked in the running app: the pictures draw buttons as an inactive window would.
+
+Found by the whole-branch review and left:
+
+- **A high-importance fixture more than one match ahead is protected by neither rule.** A jaded player still plays a high match, at the jaded factor, and neither rule charges for the starts that take him there.
+- **The planner's reason does not say whose rate it used**, so a new signing can be rested on the squad's and the club's figures with nothing in the reason to say so.
+- **Rest can say leaving him out "will not bring it down" while Match Selection says "Rested before he passes 400".** Both are true: the match off buys one named fixture, not a fall.
+- **Readings are dated by the app's date**, so an import made without moving the date mis-sizes an interval or replaces that day's reading; one import with the date set months ahead drops the earlier readings.
+- **An import made on match day after the match but before the lineup is confirmed** puts the start in the next interval.
+- **"Measure again from today" cannot be undone in the app.**
+- **A player's pass date is counted from the latest import of any squad**, not his own squad's.
 
 ## Left to the owner
 
