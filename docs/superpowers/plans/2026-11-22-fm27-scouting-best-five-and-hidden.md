@@ -583,6 +583,13 @@ The owner asked for this during the build: the app's suite had come to take abou
 - **What was tried and dropped.** A release build with testing enabled ran the tests no faster (39 seconds) and rebuilt slowly: 142 seconds clean and 87 after a change to one test. Leaving the test target unoptimized and compiled file by file in release fixed the rebuild but failed from a clean build folder.
 - **Left.** The unoptimized run (`swift test`) is unchanged and is still the one with assertions; it should be run once before work is called finished. Running the suites as several processes at once was not tried, and neither was the engine's own suite, which takes about a minute.
 
+## What the whole-branch review found
+
+One reviewer read the whole range once the building was done.
+
+- **Fixed: only the first hide after a paste reached the screen.** The judged candidates are kept in a cache that is not observed, and the hidden players were read only when it was empty. A hide fills the cache again itself, so the screen's next read was a kept one that never touched the hidden players; from then on the screen was not told of a hide or a show-again, and a second hidden player would have stayed on screen though saved as hidden. The candidates now read the hidden players before returning anything kept. A test reads them as a view does and expects to be told of a first hide, a second and a show-again; it failed on all three before. This rests on that test: it has not been seen in the running app.
+- **Left as they are**, each small: a click that does nothing (a key no held player has) still starts the half second in which the next click is ignored; the test of hiding a player no longer held calls "Show again" inside that half second, so that path's own check is not exercised; a refused paste closes the opened "more players" lines though the players held are kept; and a candidate's row stores its details line beside the fields it was built from.
+
 ## Limits and small faults left
 
 The design's limits, as built:
