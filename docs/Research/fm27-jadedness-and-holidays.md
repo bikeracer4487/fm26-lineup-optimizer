@@ -32,7 +32,7 @@ Researched 21 November 2026, eleven days after release. Labels: (a) official SI,
 | 4 | The game resets jadedness to −500 over the summer break | 1,587 of 59,301 players at exactly −500 early in the season | (b) | https://github.com/tozmoz/FMLibreEditor/pull/48 (1 Nov 2026) |
 | 4 | Sharpness lost on a day without training | 0.5% a day, except the day after a match | (b) | ZaZ, post 1, https://fm-arena.com/threads/training-schedules.60/ (10 Nov 2026) |
 | 5 | A full rest day after a match ("super-rest") is still used in FM27 | No FM27 numbers posted | (b) opinion from a tester | ZaZ, post 43, same thread, page 3 (15 Nov 2026) |
-| 5 | Full rest days skip the training injury roll | Injury risk 13.8% → 4.0% with near-identical development | (b), second-hand: an AI-written summary of jamiebolden's test; the test itself not found | https://fm-arena.com/threads/fm27-playbook-27-1-0-what-the-tests-say-wins-matches-ai-analysis.221/ (18 Nov 2026) |
+| 5 | Full rest days skip the training injury roll | Injury risk 13.8% → 4.0% with near-identical development | (b), second-hand: an unnamed tester's comment (5,888 runs of a 36-day test), shown as a picture in jamiebolden's slides; it is not jamiebolden's own test. See `fm27-training-intensity-by-condition.md` | https://github.com/jamiebolden/fm-scoring `docs/Harvestgreen training.pdf`, page 13 (Nov 2026) |
 | 5 | Normal and Double intensity lowered match-day condition with no clear gain | No figures | (b), no data shown | nyutso, post 10, Match Lab thread (11 Nov 2026) |
 | 5 | Training schedule barely changes development; double intensity adds a little | Every schedule within ±0.2 of pure rest in match value; double +1.7 CA a year | (c), FM24 | FM24-Companion `docs/findings/training.md` |
 
