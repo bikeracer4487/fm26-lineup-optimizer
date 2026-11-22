@@ -676,11 +676,13 @@ public enum SampleData {
     /// The name of the player `modelWithPlayerRestedBeforeLine` rests before he passes the jaded line.
     public static let restedBeforeLineName = "Dejan Tetek"
 
-    /// The falling sample with Dejan Tetek's jadedness raised to 330, his readings with it: at the start a match adds
-    /// that his readings measure, starting the first fixture would take him past 400 for the second, a Medium fixture,
-    /// and a match off would not, so the plan rests him from the first with the planner's reason.
+    /// The falling sample with Dejan Tetek's jadedness raised to 100, his readings with it: at the start a match adds
+    /// that his readings measure, starting the first fixture, a Low one, and the three after it would take him past 400
+    /// for the fifth, a Medium fixture, which outweighs the first, and a match off in the first would not, so the plan
+    /// rests him from the first with the planner's reason. Starting the first alone leaves him under 400 at every later
+    /// fixture, so the saving rule breaks no risk rule and its cost does not take the place of this one.
     @MainActor public static func modelWithPlayerRestedBeforeLine(repositoryRoot: URL) throws -> AppModel {
-        let raisedTo = 330
+        let raisedTo = 100
         let model = try modelWithSampleReadings(repositoryRoot: repositoryRoot, edit: { player in
             if player.name == restedBeforeLineName { player.jadedness = raisedTo }
         })

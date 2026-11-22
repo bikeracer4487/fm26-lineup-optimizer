@@ -101,7 +101,7 @@ import Testing
         let row = try #require(RestPresentation.rows([given], squads: [PlayerID(key: "p"): .u21], parameters: .fm27).first)
         #expect(row.spokenText == "Rest, Caleb Moir, U21s, Jadedness 450 against a limit of 400, under 19, "
                 + "Condition 72%, Starts in a row 3, Clear in about 3 days, One reason, His trend is not measured yet: "
-                + "it needs 4 imports of his squad, and has 0., this tool's estimate, this tool's estimate")
+                + "it needs 4 imports of his squad, and has 0., this tool's estimate")
     }
 
     // MARK: Trends
@@ -129,11 +129,26 @@ import Testing
         let row = try #require(RestPresentation.rows([advice("p", name: "P", trend: unmeasured(imports: 2))], squads: [:],
                                                      parameters: .fm27).first)
         #expect(row.trendLines == ["His trend is not measured yet: it needs 4 imports of his squad, and has 2."])
+        // Nothing is estimated, so no note follows the line.
+        #expect(row.trendNoteText == nil)
+        #expect(!row.spokenText.contains("this tool's estimate, this tool's estimate"))
+    }
+
+    @Test func aMeasuredLineUnderAnUnmeasuredTrendKeepsTheNote() throws {
+        // No trend as seen, but the squad's drift says rest from matches will not bring him down: that is estimated.
+        let trend = RestTrend(squad: .firstTeam, seen: nil, imports: 2, importsNeeded: 4, passesOn: nil,
+                              drift: MeasuredRate(16.0 / 7, .squad(.firstTeam)), gain: nil, restWillNotClear: true,
+                              basis: .derived)
+        let row = try #require(RestPresentation.rows([advice("p", name: "P", days: nil, trend: trend)], squads: [:],
+                                                     parameters: .fm27).first)
+        #expect(row.trendLines.count == 2)
         #expect(row.trendNoteText == "(this tool's estimate)")
+        #expect(row.spokenText.hasSuffix("(the first team's rate without a start), this tool's estimate, this tool's estimate"))
     }
 
     @Test func theTrendsNoteIsTheEnginesForItsEvidence() throws {
-        let trend = RestTrend(squad: .firstTeam, seen: nil, imports: 1, importsNeeded: 4, passesOn: nil, drift: nil,
+        let trend = RestTrend(squad: .firstTeam, seen: SeenTrend(perWeek: -20, days: 35, starts: 3, readings: 6),
+                              imports: 6, importsNeeded: 4, passesOn: nil, drift: nil,
                               gain: nil, restWillNotClear: false, basis: .fm27Measured)
         let row = try #require(RestPresentation.rows([advice("p", name: "P", trend: trend)], squads: [:],
                                                      parameters: .fm27).first)
@@ -213,7 +228,8 @@ import Testing
 
     @Test func theQuestionSaysHowManyImports() throws {
         #expect(RestPresentation.measureAgainQuestion(imports: 4)
-                == "Measure the trend again from today? Nothing is measured until a squad has been imported 4 more times.")
+                == "Measure the trend again from today? Each squad then needs 4 imports from today on before anything is "
+                    + "measured.")
         #expect(RestPresentation.measureAgainTitle == "Measure again from today")
         #expect(RestPresentation.measureAgainConfirm == "Measure again")
         #expect(RestPresentation.cancelTitle == "Cancel")

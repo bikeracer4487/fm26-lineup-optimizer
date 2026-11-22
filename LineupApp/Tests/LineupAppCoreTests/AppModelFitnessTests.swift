@@ -158,6 +158,61 @@ import LineupEngine
         #expect(t.reopened().fitness == reopened.fitness)
     }
 
+    @Test func anImportAfterTheDateIsMovedBackDropsThatSquadsLaterReadings() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        try t.importU21()
+        let week = today.adding(days: 7)
+        moveDate(t.model, to: week)
+        try t.importFirstTeam()
+        try t.importU21()
+        // The game reloaded to an earlier save: the date is moved back and only the first team imported again.
+        let back = today.adding(days: 3)
+        moveDate(t.model, to: back)
+        try t.importFirstTeam()
+        let firstTeam = ids(t.model, .firstTeam), youngsters = ids(t.model, .u21)
+        #expect(!firstTeam.isEmpty && !youngsters.isEmpty)
+        for id in firstTeam { #expect(t.model.fitness.readings[id]?.map(\.day) == [today, back]) }
+        for id in youngsters { #expect(t.model.fitness.readings[id]?.map(\.day) == [today, week]) }
+        #expect(t.reopened().fitness == t.model.fitness)
+    }
+
+    @Test func anUnreadableFitnessFileGivesANoticeIsKeptAsideAndAFirstReadingIsTaken() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let week = today.adding(days: 7)
+        moveDate(t.model, to: week)
+        try t.importU21()
+        try Data("{".utf8).write(to: t.directory.appendingPathComponent("fitness.json"))
+        let reopened = t.reopened()
+        #expect(reopened.notices.count == 1)
+        #expect(reopened.notices.first?.text.contains("fitness.unreadable-1.json") == true)
+        #expect(try Data(contentsOf: t.directory.appendingPathComponent("fitness.unreadable-1.json")) == Data("{".utf8))
+        // A first reading of each squad held, on the day it was last imported.
+        let firstTeam = reopened.squad.book.current[.firstTeam] ?? []
+        let youngsters = reopened.squad.book.current[.u21] ?? []
+        #expect(!firstTeam.isEmpty && !youngsters.isEmpty)
+        for player in firstTeam { #expect(reopened.fitness.readings[player.id]?.map(\.day) == [today]) }
+        for player in youngsters { #expect(reopened.fitness.readings[player.id]?.map(\.day) == [week]) }
+        // Saved in its place, so the next start has nothing to report.
+        let again = t.reopened()
+        #expect(again.notices.isEmpty)
+        #expect(again.fitness == reopened.fitness)
+    }
+
+    @Test func aFitnessFileThatCanBeNeitherReadNorMovedAsideTakesNoFirstReadingAndIsNotWrittenOver() throws {
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let file = t.directory.appendingPathComponent("fitness.json")
+        try Data("{".utf8).write(to: file)
+        struct Refused: Error {}
+        let store = Store(directory: t.directory, move: { _, _ in throw Refused() }, copy: { _, _ in throw Refused() })
+        let model = AppModel(store: store, environment: t.input.environment)
+        #expect(model.fitness.readings.isEmpty)
+        #expect(model.notices.count == 1)
+        #expect(try Data(contentsOf: file) == Data("{".utf8))
+    }
+
     @Test func aStateWithReadingsTakesNoFirstReadingAtLaunch() throws {
         let t = try TestModel()
         try t.importFirstTeam()

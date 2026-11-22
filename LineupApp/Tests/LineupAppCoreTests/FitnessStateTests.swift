@@ -89,12 +89,33 @@ import LineupEngine
         #expect(once.readings[alice]?.count == 1)
     }
 
-    @Test func readingsStayInDayOrderWhenTheDateIsMovedBack() {
+    @Test func aRecordOnAnEarlierDayDropsTheLaterReading() {
         var state = FitnessState()
         let tenth = Day(year: 2026, month: 11, day: 10)!, third = Day(year: 2026, month: 11, day: 3)!
         state.record([player(alice, jadedness: 10)], on: tenth, including: [], keptDays: kept)
         state.record([player(alice, jadedness: 3)], on: third, including: [], keptDays: kept)
-        #expect(state.readings[alice]?.map(\.day) == [third, tenth])
+        #expect(state.readings[alice]?.map(\.day) == [third])
+    }
+
+    @Test func aRecordDropsThatPlayersReadingsFromAnAbandonedTimelineAndNoOneElses() throws {
+        var state = FitnessState()
+        let on = { (n: Int) in Day(year: 2026, month: 11, day: n)! }
+        for n in [3, 10, 17] {
+            state.record([player(alice, jadedness: n), player(bob, jadedness: 100 + n)], on: on(n), including: [],
+                         keptDays: kept)
+        }
+        // The date moved back to the 5th and only Alice's squad imported: her readings after it are from a timeline
+        // the game no longer has.
+        state.record([player(alice, jadedness: 5)], on: on(5), including: [], keptDays: kept)
+        #expect(try #require(state.readings[alice]).map(\.day) == [on(3), on(5)])
+        #expect(try #require(state.readings[alice]).map(\.jadedness) == [3, 5])
+        // Bob was not recorded: his later readings stay.
+        #expect(try #require(state.readings[bob]).map(\.day) == [on(3), on(10), on(17)])
+        // A reading on the day itself is still replaced, keeping both sets of fixtures.
+        state.record([player(alice, jadedness: 50)], on: on(5), including: [FixtureID("a")], keptDays: kept)
+        state.record([player(alice, jadedness: 55)], on: on(5), including: [FixtureID("b")], keptDays: kept)
+        #expect(try #require(state.readings[alice]).map(\.jadedness) == [3, 55])
+        #expect(state.readings[alice]?.last?.includes == [FixtureID("a"), FixtureID("b")])
     }
 
     @Test func theStateRoundTripsThroughJSON() throws {

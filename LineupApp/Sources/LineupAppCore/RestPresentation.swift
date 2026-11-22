@@ -28,7 +28,8 @@ public struct RestRow: Identifiable, Equatable, Sendable {
     /// when he passes the line, what a match off would do.
     public let trendLines: [String]
     /// The trend's evidence note in brackets, shown after its lines, so a measured rate is never read as a fact:
-    /// "(this tool's estimate)"; nil when there are no trend lines.
+    /// "(this tool's estimate)"; nil when no measured line is shown, as when his only line says his trend is not
+    /// measured yet.
     public let trendNoteText: String?
 
     /// The row as said to assistive technology, in the order the screen shows it: his figures, his reasons, what the
@@ -61,7 +62,9 @@ public struct RestRow: Identifiable, Equatable, Sendable {
         noteText = spokenNote.map { "(\($0))" }
         self.planText = planText
         trendLines = AdvisorText.trendLines(of: advice, parameters: parameters)
-        spokenTrendNote = trendLines.isEmpty ? nil : AdvisorText.note(for: advice.trend.basis)
+        // With no trend as seen the first line says so and estimates nothing; any line after it is a measured one.
+        let measuredLines = trendLines.count - (advice.trend.seen == nil ? 1 : 0)
+        spokenTrendNote = measuredLines > 0 ? AdvisorText.note(for: advice.trend.basis) : nil
         trendNoteText = spokenTrendNote.map { "(\($0))" }
     }
 }
@@ -101,9 +104,11 @@ public enum RestPresentation {
     /// The engine's heading over what the game's fitness messages mean.
     public static let gameMessagesHeading = AdvisorText.gameMessagesHeading
 
-    /// The question "Measure again from today" asks first, since nothing is measured until `imports` more imports.
+    /// The question "Measure again from today" asks first, since nothing is measured until each squad has `imports`
+    /// imports from today on (an import made today counts as one).
     public static func measureAgainQuestion(imports: Int) -> String {
-        "Measure the trend again from today? Nothing is measured until a squad has been imported \(imports) more times."
+        "Measure the trend again from today? Each squad then needs \(imports) imports from today on before anything is "
+            + "measured."
     }
 
     /// What the game's fitness messages mean, in the engine's words, each with its evidence.
