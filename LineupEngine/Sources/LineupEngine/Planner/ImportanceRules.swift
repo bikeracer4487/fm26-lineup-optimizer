@@ -163,29 +163,32 @@ public enum ImportanceRules {
         return (starts, factor)
     }
 
-    /// In a sharpness fixture only the elevens are favoured or marked down. A successor this fixture favours counts as in
-    /// them for the favour, so he can be got sharp, and not for the mark-down of a player who is already sharp.
+    /// The favour is for a regular who has lost his sharpness, so in a low or a sharpness fixture it goes only to a player
+    /// in the first or second eleven for the fixture's tactic: one who is unsharp because he never plays is not favoured
+    /// for it. A successor this fixture favours counts as in them for the favour, so he can be got sharp. Only a
+    /// sharpness fixture marks down a player in the elevens who is already sharp, and not such a successor. (Until
+    /// 22 November 2026 a low fixture favoured every unsharp player, and at 46% sharpness a fringe player was worth more
+    /// unsharp than sharp.)
     private static func needsSharpness(_ player: Player, _ context: RuleContext, _ parameters: EngineParameters,
                                        isFavouredSuccessor: Bool) -> [Adjustment] {
         let full = parameters.sharpnessNeedFull.value
         let need = min(max((full - player.sharpness) / (full - parameters.sharpnessNeedMost.value), 0), 1)
-        let strength: Double
+        // A sharpness fixture is there to build sharpness: a larger favour, and a mark-down for the sharp.
+        let buildsSharpness: Bool
         switch context.importance {
-        case .high, .medium:
-            return []
-        case .low:
-            strength = parameters.sharpnessNeedStrengthLow.value
-        case .sharpness:
-            let inElevens = context.tiers.slot(of: player.id) != nil
-            guard inElevens || (isFavouredSuccessor && player.sharpness < full) else { return [] }
-            if player.sharpness >= full {
-                let factor = parameters.fullySharpFactor.value
-                guard factor != 1 else { return [] }
-                return [Adjustment(kind: .needsSharpness, factor: factor,
-                                   reason: "Already sharp: others need the minutes more (×\(Display.twoDecimals(factor)))")]
-            }
-            strength = parameters.sharpnessNeedStrengthBuild.value
+        case .high, .medium: return []
+        case .low: buildsSharpness = false
+        case .sharpness: buildsSharpness = true
         }
+        let inElevens = context.tiers.slot(of: player.id) != nil
+        guard inElevens || (isFavouredSuccessor && player.sharpness < full) else { return [] }
+        if buildsSharpness, player.sharpness >= full {
+            let factor = parameters.fullySharpFactor.value
+            guard factor != 1 else { return [] }
+            return [Adjustment(kind: .needsSharpness, factor: factor,
+                               reason: "Already sharp: others need the minutes more (×\(Display.twoDecimals(factor)))")]
+        }
+        let strength = buildsSharpness ? parameters.sharpnessNeedStrengthBuild.value : parameters.sharpnessNeedStrengthLow.value
         let factor = 1 + strength * need
         guard factor != 1 else { return [] }
         return [Adjustment(kind: .needsSharpness, factor: factor,

@@ -160,14 +160,49 @@ import Testing
     // MARK: Needs sharpness
 
     @Test func anUnsharpPlayerIsFavouredInALesserFixture() {
-        let p = Player.fixture(sharpness: 0.705)
-        let a = every(run(p, .low), .needsSharpness)
+        // A regular: in the first eleven, as the rule asks since 22 November 2026.
+        func need(_ sharpness: Double) -> Adjustment? {
+            let p = Player.fixture(sharpness: sharpness)
+            return every(run(p, .low, tiers: tiers(p, tier: 1)), .needsSharpness)
+        }
+        let a = need(0.705)
         #expect(abs((a?.factor ?? 0) - 1.25) < 1e-9)
         #expect(a?.reason == "Needs minutes: sharpness 70% (×1.25)")
-        #expect(abs((every(run(Player.fixture(sharpness: 0.5), .low), .needsSharpness)?.factor ?? 0) - 1.50) < 1e-9)
-        #expect(abs((every(run(Player.fixture(sharpness: 0.2), .low), .needsSharpness)?.factor ?? 0) - 1.50) < 1e-9)
-        #expect(every(run(Player.fixture(sharpness: 0.91), .low), .needsSharpness) == nil)
-        #expect(every(run(Player.fixture(sharpness: 0.62), .low), .needsSharpness)?.reason == "Needs minutes: sharpness 62% (×1.35)")
+        #expect(abs((need(0.5)?.factor ?? 0) - 1.50) < 1e-9)
+        #expect(abs((need(0.2)?.factor ?? 0) - 1.50) < 1e-9)
+        #expect(need(0.91) == nil)
+        #expect(need(0.62)?.reason == "Needs minutes: sharpness 62% (×1.35)")
+    }
+
+    /// The favour is for an unsharp regular. A player who is unsharp because he never plays is in neither eleven and
+    /// gets none, however unsharp he is.
+    @Test func aLowFixtureFavoursOnlyTheElevensWhoNeedMinutes() {
+        let p = Player.fixture(sharpness: 0.705)
+        #expect(abs((every(run(p, .low, tiers: tiers(p, tier: 1)), .needsSharpness)?.factor ?? 0) - 1.25) < 1e-9)
+        #expect(abs((every(run(p, .low, tiers: tiers(p, tier: 2)), .needsSharpness)?.factor ?? 0) - 1.25) < 1e-9)
+        #expect(every(run(p, .low), .needsSharpness) == nil)
+        #expect(every(run(Player.fixture(sharpness: 0.46), .low), .needsSharpness) == nil)
+        // Another player's place in the elevens is not his.
+        let other = Player.fixture(name: "Somebody Else", sharpness: 0.95)
+        #expect(every(run(p, .low, tiers: tiers(other, tier: 1)), .needsSharpness) == nil)
+    }
+
+    /// As in a sharpness fixture, a successor the fixture favours counts as in the elevens for the favour.
+    @Test func aFavouredSuccessorOutsideTheElevensStillNeedsMinutesInALowFixture() {
+        let unsharp = Player.fixture(age: 19, attributes: [.professionalism: 15], currentAbility: 100, potentialAbility: 130,
+                                     sharpness: 0.705)
+        let need = every(run(unsharp, .low, outlooks: outlooks(unsharp, .couldPassFirst, slots: [at(.D_L, .onCourse)])),
+                         .needsSharpness)
+        #expect(abs((need?.factor ?? 0) - 1.25) < 1e-9)
+        #expect(need?.reason == "Needs minutes: sharpness 70% (×1.25)")
+        // No successor and in neither eleven: nothing.
+        #expect(every(run(unsharp, .low, outlooks: outlooks(unsharp, .couldMakeSecond, slots: [at(.D_L, .possible)])),
+                      .needsSharpness) == nil)
+        // A sharp successor needs no minutes, and a low fixture marks nobody down for being sharp.
+        let sharp = Player.fixture(age: 19, attributes: [.professionalism: 15], currentAbility: 100, potentialAbility: 130,
+                                   sharpness: 0.95)
+        #expect(every(run(sharp, .low, outlooks: outlooks(sharp, .couldPassFirst, slots: [at(.D_L, .onCourse)])),
+                      .needsSharpness) == nil)
     }
 
     @Test func needForSharpnessIsIgnoredAtHighAndMedium() {
@@ -988,9 +1023,10 @@ import Testing
         let p = Player.fixture(age: 20, familiarity: [.defenderLeft: 12], currentAbility: 100, potentialAbility: 130,
                                sharpness: 0.6, club: "Elsewhere FC")
         // Three starts, not four, so the monthly stop leaves the floor in. The planner hands a loanee no outlook; this
-        // one is handed in only to see every kind in its place.
-        let r = run(p, .low, history: starts(p, count: 3), retraining: retrain(p, .defenderLeft), stability: 1,
-                    outlooks: outlooks(p))
+        // one is handed in only to see every kind in its place. He is in the first eleven, so that needing minutes
+        // counts for him.
+        let r = run(p, .low, history: starts(p, count: 3), tiers: tiers(p, tier: 1), retraining: retrain(p, .defenderLeft),
+                    stability: 1, outlooks: outlooks(p))
         #expect(r.everySlot.map(\.kind) == [.loanedIn, .consecutiveStarts, .needsSharpness])
         #expect(r.bySlot[.D_L]?.map(\.kind) == [.development, .retraining, .stability])
         #expect(r.bySlot[.ST_C]?.map(\.kind) == [.development])
