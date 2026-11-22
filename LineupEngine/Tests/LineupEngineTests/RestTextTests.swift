@@ -128,6 +128,22 @@ extension RestTrend {
                 == [base, saves + " (the U21s' rate without a start; the club's rate for a start)"])
     }
 
+    @Test func aFallingDriftWithinTheSteadyBandHoldsSteadyAndAMatchOffStillSaves() {
+        let base = "Falling about 45 a week over the last 5 weeks, in which he started 6 matches (from 6 readings)."
+        let steadySaves = "He holds steady without a start, and a start adds about 61, so a match off saves about 61."
+        // −5 a week, the band's edge included.
+        #expect(lines(trend(seen: seen(-45), drift: MeasuredRate(-5.0 / 7, own), gain: MeasuredRate(61, own)))
+                == [base, steadySaves])
+        #expect(lines(trend(seen: seen(-45), drift: MeasuredRate(-3.0 / 7, .squad(.firstTeam)), gain: MeasuredRate(61, own)))
+                == [base, steadySaves + " (the first team's rate without a start; his own rate for a start)"])
+        #expect(lines(trend(seen: seen(-45), drift: MeasuredRate(-0.1, own), gain: MeasuredRate(61, .club)))
+                == [base, steadySaves + " (his own rate without a start; the club's rate for a start)"])
+        // Just past the band, he falls.
+        #expect(lines(trend(seen: seen(-45), drift: MeasuredRate(-5.1 / 7, own), gain: MeasuredRate(61, own))).last
+                == "Without a start he falls about 5 a week, and a start adds about 61, so a match off saves about 61.")
+        #expect(lines(trend(seen: seen(-45), drift: MeasuredRate(-30.0 / 7, own), gain: MeasuredRate(61, own))).last == saves)
+    }
+
     @Test func aRisingDriftWillNotBeBroughtDownByMatchesOff() {
         let base = "Rising about 45 a week over the last 5 weeks, in which he started 6 matches (from 6 readings)."
         #expect(lines(trend(seen: seen(45), drift: MeasuredRate(16.0 / 7, own), gain: MeasuredRate(61, own)))

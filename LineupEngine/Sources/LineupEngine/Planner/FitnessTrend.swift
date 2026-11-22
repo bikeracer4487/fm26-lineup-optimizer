@@ -15,9 +15,14 @@ public struct PlayerTrend: Equatable, Sendable {
     /// The drift and the gain he takes; either may be missing.
     public let drift: MeasuredRate?, gain: MeasuredRate?
     public let usedIntervals: Int
+    /// Whether he has a reading that can still count towards his trend: on or after the measure-from day when one is
+    /// set, on or before the day the rates are asked for, and within the window.
+    public let hasCountedReading: Bool
 
-    public init(seen: SeenTrend?, drift: MeasuredRate?, gain: MeasuredRate?, usedIntervals: Int) {
+    public init(seen: SeenTrend?, drift: MeasuredRate?, gain: MeasuredRate?, usedIntervals: Int,
+                hasCountedReading: Bool) {
         self.seen = seen; self.drift = drift; self.gain = gain; self.usedIntervals = usedIntervals
+        self.hasCountedReading = hasCountedReading
     }
 
     /// Both rates, or nil.
@@ -45,7 +50,8 @@ public struct FitnessTrends: Equatable, Sendable {
     public let players: [PlayerID: PlayerTrend]
     public let squadDrift: [Squad: SharedRate]
     public let clubGain: SharedRate?
-    /// `measureFrom` when it is later than the window's first day; else the earliest reading in the window; else nil.
+    /// `measureFrom` when it is later than the window's first day; else the earliest reading that is an end of a used
+    /// interval, of any player in a squad; else the earliest reading in the window; else nil.
     public let measuredFrom: Day?
 
     public init(players: [PlayerID: PlayerTrend], squadDrift: [Squad: SharedRate], clubGain: SharedRate?,
@@ -95,11 +101,13 @@ public enum FitnessTrend {
         // One pass: every player's readings in day order and his used intervals with their starts.
         var intervalsByPlayer: [PlayerID: [Interval]] = [:]
         var earliestInWindow: Day?
+        var counted: Set<PlayerID> = []
         for player in keys {
             guard let squad = squads[player] else { continue }
             let own = inDayOrder(readings[player] ?? [])
             for reading in own where reading.day <= asOf && reading.day >= windowStart {
                 earliestInWindow = min(earliestInWindow ?? reading.day, reading.day)
+                if measureFrom.map({ reading.day >= $0 }) ?? true { counted.insert(player) }
             }
             var startsAt = Array(repeating: 0, count: own.count)
             for (fixture, date) in starts[player] ?? [:] {
@@ -175,14 +183,17 @@ public enum FitnessTrend {
             players[player] = PlayerTrend(
                 seen: seen(used, rules: rules), drift: drift[player],
                 gain: ownGain[player] ?? clubGain.map { MeasuredRate($0.value, .club) },
-                usedIntervals: used.count)
+                usedIntervals: used.count, hasCountedReading: counted.contains(player))
         }
 
+        // The earliest end of a used interval is never later than a squad's line's "since", which is the earliest end
+        // of the intervals behind it.
+        let earliestEnd = keys.flatMap { intervalsByPlayer[$0] ?? [] }.map(\.earlier).min()
         let measuredFrom: Day?
         if let measureFrom, measureFrom > windowStart {
             measuredFrom = measureFrom
         } else {
-            measuredFrom = earliestInWindow
+            measuredFrom = earliestEnd ?? earliestInWindow
         }
         return FitnessTrends(players: players, squadDrift: squadDrift, clubGain: clubGain, measuredFrom: measuredFrom)
     }

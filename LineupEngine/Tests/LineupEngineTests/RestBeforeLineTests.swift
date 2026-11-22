@@ -66,10 +66,52 @@ import Testing
 
     @Test func theCostIsWeightedByHowMuchEachFixtureMatters() throws {
         let low = try #require(rest(player(.ST_C), jadedness: 330, today: .low, twoMedium(), rates: falling))
-        let medium = try #require(rest(player(.ST_C), jadedness: 330, today: .medium, twoMedium(), rates: falling))
-        #expect(abs(medium.adjustment.cost - advantage * 1.5 / 1.5) < 1e-9)
-        // Starting him costs more in the low fixture, so that is where the plan rests him.
-        #expect(low.adjustment.cost > medium.adjustment.cost)
+        let sharpness = try #require(rest(player(.ST_C), jadedness: 330, today: .sharpness, twoMedium(), rates: falling))
+        #expect(abs(low.adjustment.cost - advantage * 1.5 / 0.8) < 1e-9)
+        // The advantage weighted by 1.5 ÷ 0.1 is still far below the cap.
+        #expect(abs(sharpness.adjustment.cost - advantage * 1.5 / 0.1) < 1e-9)
+        // Starting him costs more in the lesser fixture, so that is where the plan rests him.
+        #expect(sharpness.adjustment.cost > low.adjustment.cost)
+    }
+
+    // MARK: The later fixture must outweigh today's
+
+    @Test func aLaterFixtureThatOutweighsTodaysCanBeTheOneHeIsRestedFor() throws {
+        // Today low, Buxton medium: the cost as before.
+        let due = try #require(rest(player(.ST_C), jadedness: 330, today: .low, twoMedium(), rates: falling))
+        #expect(due.fixture == FixtureID("b"))
+        #expect(abs(due.adjustment.cost - advantage * 1.5 / 0.8) < 1e-9)
+    }
+
+    @Test func aLaterFixtureOfTheSameWeightAsTodaysCannotBe() {
+        // Today medium, Buxton medium: a match off now misses one of the same worth, and buys nothing.
+        #expect(rest(player(.ST_C), jadedness: 330, today: .medium, twoMedium(), rates: falling) == nil)
+    }
+
+    @Test func aLaterFixtureLighterThanTodaysCannotBe() {
+        // Today high, Buxton medium: a high fixture is not given up for a lesser one.
+        #expect(rest(player(.ST_C), jadedness: 330, today: .high, twoMedium(), rates: falling) == nil)
+    }
+
+    @Test func theWalkGoesOnPastAFixtureThatDoesNotOutweighTodays() throws {
+        // Falls 4 a day, a start adds 60. Starting: 430, 402 before the low fixture, 462 after it, 434 before Buxton.
+        // Resting: 370, 342, 402 after the low fixture, 374 before Buxton. Over the line before the low fixture, which
+        // does not outweigh today's, so he starts it in both; Buxton, medium, is the one he is rested for.
+        let fixtures = [later("a", .low, inDays: 7), later("b", .medium, inDays: 14, opponent: "Buxton")]
+        let due = try #require(rest(player(.ST_C), jadedness: 370, today: .low, fixtures, rates: rates(drift: -4, gain: 60)))
+        #expect(due.fixture == FixtureID("b"))
+        #expect(abs(due.adjustment.cost - advantage * 1.5 / 0.8) < 1e-9)
+        #expect(due.adjustment.reason.hasSuffix("jaded for Buxton on \(AdvisorText.shortDay(today.adding(days: 14)))"))
+    }
+
+    @Test func noCostWhenTheGainRoundsToNothing() throws {
+        // Steady, a start adding 0.4: starting is at 400.8 before the fixture, 401 rounded, and resting at 400.4. A
+        // reason saying "+0" would make no sense, so nothing is charged.
+        let fixtures = [later("a", .medium, inDays: 7)]
+        #expect(rest(player(.ST_C), jadedness: 400.4, fixtures, rates: rates(drift: 0, gain: 0.4)) == nil)
+        // At 0.6 the gain rounds to 1: starting at 401, resting at 400.4.
+        let due = try #require(rest(player(.ST_C), jadedness: 400.4, fixtures, rates: rates(drift: 0, gain: 0.6)))
+        #expect(due.adjustment.reason.hasPrefix("Rested before he passes 400: at about +1 a start"))
     }
 
     @Test func noCostWhenAMatchOffDoesNotSaveHim() {

@@ -16,9 +16,12 @@ struct SavingAssessment: Equatable, Sendable {
     let adjustment: Adjustment
     /// The fixture the reason names: the largest contributor to the cost.
     let named: FixtureID
-    /// Whether that fixture's loss was the whole advantage because starting today would break a risk rule there
-    /// that resting would not.
-    let brokeRiskRule: Bool
+    /// The later fixtures where starting today would break a risk rule that resting would not, so that the loss there
+    /// was his whole advantage.
+    let brokeAt: Set<FixtureID>
+
+    /// Whether the named fixture's loss was the whole advantage because starting today would break a risk rule there.
+    var brokeRiskRule: Bool { brokeAt.contains(named) }
 }
 
 /// Puts a cost on starting a player today when a more important fixture is coming soon after.
@@ -53,7 +56,8 @@ public enum SavingPlayers {
         // Date then id, so the sum runs in the same order whatever order the fixtures came in.
         let ordered = later.sorted { ($0.fixture.date, $0.fixture.id.raw) < ($1.fixture.date, $1.fixture.id.raw) }
         var total = 0.0
-        var largest: (fixture: Fixture, loss: Double, contribution: Double, broke: Bool)?
+        var largest: (fixture: Fixture, loss: Double, contribution: Double)?
+        var brokeAt: Set<FixtureID> = []
         for item in ordered {
             let m = item.fixture
             let gap = today.date.days(to: m.date)
@@ -80,12 +84,13 @@ public enum SavingPlayers {
             }
             // A cover who rates higher in the slot makes the advantage, and so the loss, 0 or less: no cost.
             guard loss > 0 else { continue }
+            if broke { brokeAt.insert(m.id) }
 
             let contribution = loss * weight / todayWeight
             total += contribution
             // Strictly greater, so on a tie the earlier fixture is named.
             if largest.map({ contribution > $0.contribution }) ?? true {
-                largest = (m, loss, contribution, broke)
+                largest = (m, loss, contribution)
             }
         }
 
@@ -95,8 +100,8 @@ public enum SavingPlayers {
         let figure = String(format: "%.1f", largest.loss)
         let adjustment = Adjustment(
             kind: .savedForLater, cost: cost,
-            reason: "Kept fresher for \(largest.fixture.opponent) on \(largest.fixture.date.iso): starting today would cost about \(figure) there")
-        return SavingAssessment(adjustment: adjustment, named: largest.fixture.id, brokeRiskRule: largest.broke)
+            reason: "Kept fresher for \(largest.fixture.opponent) on \(AdvisorText.shortDay(largest.fixture.date)): starting today would cost about \(figure) there")
+        return SavingAssessment(adjustment: adjustment, named: largest.fixture.id, brokeAt: brokeAt)
     }
 
     /// The weight when it is a finite number above 0; nil otherwise.

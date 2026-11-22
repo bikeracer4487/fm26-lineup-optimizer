@@ -100,7 +100,7 @@ import Testing
         let perWeek = Double(400 - fresh.jadedness) / 6
         let trends = FitnessTrends(
             players: [fresh.id: PlayerTrend(seen: SeenTrend(perWeek: perWeek, days: 35, starts: 3, readings: 6),
-                                            drift: nil, gain: nil, usedIntervals: 5)],
+                                            drift: nil, gain: nil, usedIntervals: 5, hasCountedReading: true)],
             squadDrift: [.firstTeam: SharedRate(value: 2, readings: 30, since: asOf.adding(days: -40))],
             clubGain: SharedRate(value: 31, readings: 14, since: asOf.adding(days: -40)),
             measuredFrom: asOf.adding(days: -40))

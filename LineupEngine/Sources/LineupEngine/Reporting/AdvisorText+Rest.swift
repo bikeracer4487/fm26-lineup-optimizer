@@ -62,9 +62,11 @@ extension AdvisorText {
         var lighterTrainingGiven = false
         if let seen = trend.seen, seen.starts >= 1, let drift = trend.drift, let gain = trend.gain, gain.value > 0 {
             if drift.value < 0 {
-                lines.append("Without a start he falls about \(whole(drift.value * 7)) a week, and a start adds about "
-                             + "\(whole(gain.value)), so a match off saves about \(whole(gain.value))."
-                             + rateBracket(drift: drift, gain: gain))
+                // Within the steady band, inclusive as everywhere, he holds steady; a start still adds.
+                let movement = abs(drift.value * 7) <= steady ? "He holds steady without a start"
+                    : "Without a start he falls about \(whole(drift.value * 7)) a week"
+                lines.append("\(movement), and a start adds about \(whole(gain.value)), so a match off saves about "
+                             + "\(whole(gain.value))." + rateBracket(drift: drift, gain: gain))
             } else {
                 lines.append(notBroughtDown(drift, steady: steady) + rateBracket(drift: drift, gain: gain))
                 lighterTrainingGiven = true

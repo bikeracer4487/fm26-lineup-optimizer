@@ -190,9 +190,11 @@ public struct Planner: Sendable {
                         for: player, fitness: fitness[player.id]!, position: assignment.ipPosition, today: fixture,
                         later: later, rates: request.rates[player.id], settings: settings,
                         parameters: parameters)
-                    // Both rules can name the same later fixture for the same jaded start: then only the larger cost
-                    // counts, the saving rule's on a tie.
-                    if let saving, let restDue, saving.named == restDue.fixture, saving.brokeRiskRule {
+                    // When the saving rule broke a risk rule at the rest rule's fixture, both count its whole advantage
+                    // there: then only the larger cost counts, the saving rule's on a tie. The saving rule's cost is then
+                    // always at least the rest rule's, since it holds that fixture's whole weighted advantage and more;
+                    // the rest rule's branch is there for the design's wording.
+                    if let saving, let restDue, saving.brokeAt.contains(restDue.fixture) {
                         let larger = restDue.adjustment.cost > saving.adjustment.cost ? restDue.adjustment : saving.adjustment
                         slots[assignment.slot, default: []].append(larger)
                         continue

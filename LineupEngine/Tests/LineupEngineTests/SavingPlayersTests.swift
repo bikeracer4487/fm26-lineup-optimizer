@@ -140,7 +140,7 @@ import Testing
                         later("barnet", .high, inDays: 5, opponent: "Barnet")]
         let a = try #require(try adjustment(p, at: .ST_C, today: .low, fixtures))
         #expect(abs(a.cost - far.ratingTimesDrop * 3.75) < 1e-9)
-        #expect(a.reason == "Kept fresher for Barnet on \(today.adding(days: 5).iso): "
+        #expect(a.reason == "Kept fresher for Barnet on \(AdvisorText.shortDay(today.adding(days: 5))): "
             + "starting today would cost about \(oneDecimal(far.ratingTimesDrop)) there")
     }
 
@@ -331,7 +331,7 @@ import Testing
         let near = try byHand(p, at: .ST_C, days: 2)
         let far = try byHand(p, at: .ST_C, days: 5)
         try #require(near.ratingTimesDrop < near.advantage && far.ratingTimesDrop < far.advantage)
-        #expect(a.reason == "Kept fresher for Wealdstone on \(today.adding(days: 2).iso): "
+        #expect(a.reason == "Kept fresher for Wealdstone on \(AdvisorText.shortDay(today.adding(days: 2))): "
             + "starting today would cost about \(oneDecimal(near.ratingTimesDrop)) there")
         #expect(abs(a.cost - (near.ratingTimesDrop * 3.75 + far.ratingTimesDrop * 1.5 / 0.8)) < 1e-9)
     }

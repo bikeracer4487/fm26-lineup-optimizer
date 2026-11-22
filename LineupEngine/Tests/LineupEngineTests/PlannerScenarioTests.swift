@@ -96,7 +96,7 @@ import Testing
         let heldBack = on.fixtures[1].lineup.omissions.filter { $0.cause == .heldBack([.savedForLater]) }
         try #require(!heldBack.isEmpty)
         for omission in heldBack {
-            #expect(omission.reason.hasPrefix("Left out: Kept fresher for Wealdstone on \(day0.adding(days: 5).iso)"))
+            #expect(omission.reason.hasPrefix("Left out: Kept fresher for Wealdstone on \(AdvisorText.shortDay(day0.adding(days: 5)))"))
         }
     }
 
@@ -668,12 +668,51 @@ import Testing
         #expect(!starters(both.fixtures[0]).contains(id(.ST_C)))
         let kept = try #require(both.fixtures[0].lineup.omissions.first { $0.player == id(.ST_C) })
         #expect(kept.cause == .heldBack([.savedForLater]))
-        // With the later match low the saving rule is silent, since it does not weigh more.
-        let lowLater = try plan([fixture("l", .low, day: 0), fixture("l2", .low, day: 7)], players,
-                                settings: PlanSettings(savingPlayers: 2), rates: rates)
-        #expect(!starters(lowLater.fixtures[0]).contains(id(.ST_C)))
-        let rested = try #require(lowLater.fixtures[0].lineup.omissions.first { $0.player == id(.ST_C) })
-        #expect(rested.cause == .heldBack([.restedBeforeLine]))
+        // Where the saving rule breaks no risk rule, both costs are kept and the rest rule's acts: low today, medium in
+        // 7 days and in 14. Starting today leaves him at 362 before Buxton with no later start, so the saving rule's
+        // risk branch is silent; starting the first medium match as well takes him past the line before Buxton.
+        let striker = changing(try PlannerFixture.squad(first: 14, second: 12), .ST_C) { $0.jadedness = 330 }
+        let him = try #require(striker.first { $0.id == id(.ST_C) })
+        let laterTiers = try tiers(striker)
+        let position = try #require(assignments.first { $0.slot == .ST_C }).ipPosition
+        let saving = try #require(try SavingPlayers.assessment(
+            for: him, fitness: ProjectedFitness(him), position: position,
+            today: fixture("l", .low, day: 0),
+            later: [LaterFixture(fixture: fixture("m1", .medium, day: 7), tiers: laterTiers),
+                    LaterFixture(fixture: fixture("m2", .medium, day: 14, opponent: "Buxton"), tiers: laterTiers)],
+            rates: falling(), settings: .standard, parameters: parameters))
+        #expect(saving.brokeAt.isEmpty)
+        let result = try beforeTheLine()
+        let rested = try #require(result.fixtures[0].lineup.omissions.first { $0.player == id(.ST_C) })
+        #expect(rested.cause == .heldBack([.savedForLater, .restedBeforeLine]))
+    }
+
+    @Test func whenTheSavingRuleBrokeARiskRuleAtTheRestRulesFixtureButNamedAnotherOnlyOneCostIsKept() throws {
+        let players = changing(try PlannerFixture.squad(first: 14, second: 12), .ST_C) { $0.jadedness = 350 }
+        let rates = [id(.ST_C): falling(gain: 120)]
+        let fixtures = [fixture("l", .low, day: 0), fixture("m", .medium, day: 7), fixture("x", .high, day: 10)]
+        // Starting today leaves him at 456 before the medium match and resting at 336: both rules count its whole
+        // advantage. The high match three days later weighs more, so the saving rule names it, not the medium one.
+        let laterTiers = try tiers(players)
+        let him = try #require(players.first { $0.id == id(.ST_C) })
+        let position = try #require(assignments.first { $0.slot == .ST_C }).ipPosition
+        let saving = try #require(try SavingPlayers.assessment(
+            for: him, fitness: ProjectedFitness(him), position: position,
+            today: fixtures[0], later: fixtures.dropFirst().map { LaterFixture(fixture: $0, tiers: laterTiers) },
+            rates: rates[id(.ST_C)], settings: .standard, parameters: parameters))
+        #expect(saving.named == FixtureID("x"))
+        #expect(saving.brokeAt.contains(FixtureID("m")))
+        let restDue = try #require(RestBeforeLine.adjustment(
+            for: him, jadedness: 350, today: fixtures[0],
+            later: fixtures.dropFirst().map { LaterFixture(fixture: $0, tiers: laterTiers) },
+            rates: rates[id(.ST_C)], settings: .standard, parameters: parameters))
+        #expect(restDue.fixture == FixtureID("m"))
+
+        let result = try plan(fixtures, players, rates: rates)
+        #expect(!starters(result.fixtures[0]).contains(id(.ST_C)))
+        let omission = try #require(result.fixtures[0].lineup.omissions.first { $0.player == id(.ST_C) })
+        #expect(omission.cause == .heldBack([.savedForLater]))
+        #expect(!omission.reason.contains("Rested before he passes"))
     }
 
     // MARK: - Retraining

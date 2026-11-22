@@ -193,11 +193,28 @@ import Testing
         #expect(trends.measuredFrom == start.adding(days: 70))
     }
 
-    @Test func measuredFromIsTheOwnersDayOrTheEarliestReadingInTheWindow() {
+    @Test func measuredFromIsTheOwnersDayOrTheEarliestEndOfAUsedInterval() {
         #expect(rates(["a": resting]).measuredFrom == start)
         #expect(rates(["a": resting], from: 10).measuredFrom == start.adding(days: 10))
-        // The only reading within 42 days of day 60.
-        #expect(rates(["a": resting], asOf: 60).measuredFrom == start.adding(days: 21))
+        // Within 42 days of day 60 only the reading of day 21, but the interval it ends runs from day 14, and a squad's
+        // line says "since" its earliest end.
+        #expect(rates(["a": resting], asOf: 60).measuredFrom == start.adding(days: 14))
+        // The same with a squad's drift: the day is never later than its "since".
+        let squad = rates(["a": resting, "b": resting], asOf: 60)
+        #expect(squad.measuredFrom == start.adding(days: 14))
+        // With no used interval, the earliest reading in the window: see `afterASummerNothingIsMeasured`.
+    }
+
+    @Test func aReadingThatCanStillCountIsTold() throws {
+        // Readings on days 0 to 21 and the owner's day after all of them: none can count.
+        #expect(rates(["a": resting], asOf: 30, from: 25).players[id("a")]?.hasCountedReading == false)
+        // A reading on the day itself counts.
+        #expect(rates(["a": resting], asOf: 30, from: 21).players[id("a")]?.hasCountedReading == true)
+        // No owner's day: any reading in the window, up to the day asked for.
+        #expect(rates(["a": resting]).players[id("a")]?.hasCountedReading == true)
+        #expect(rates(["a": [r(0, 100)]], asOf: 43).players[id("a")]?.hasCountedReading == false)
+        #expect(rates(["a": [r(0, 100)]], asOf: 42).players[id("a")]?.hasCountedReading == true)
+        #expect(rates(["a": [r(5, 100)]], asOf: 4).players[id("a")]?.hasCountedReading == false)
     }
 
     @Test func noReadingsGiveNone() {

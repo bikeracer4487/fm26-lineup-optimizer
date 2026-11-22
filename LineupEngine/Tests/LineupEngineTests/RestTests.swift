@@ -441,7 +441,8 @@ import Testing
     /// Trends for one player, built by hand.
     func trends(_ player: Player, seen: SeenTrend? = nil, drift: MeasuredRate? = nil, gain: MeasuredRate? = nil,
                 used: Int = 0, squadDrift: [Squad: SharedRate] = [:]) -> FitnessTrends {
-        FitnessTrends(players: [player.id: PlayerTrend(seen: seen, drift: drift, gain: gain, usedIntervals: used)],
+        FitnessTrends(players: [player.id: PlayerTrend(seen: seen, drift: drift, gain: gain, usedIntervals: used,
+                                                       hasCountedReading: true)],
                       squadDrift: squadDrift, clubGain: nil, measuredFrom: nil)
     }
 
@@ -661,12 +662,59 @@ import Testing
         #expect(try one(p, trends: trends(p, drift: pair.drift, used: 2), parameters: flatRecovery)?.days == without)
     }
 
-    @Test func trendsForOtherPlayersChangeNothing() throws {
-        let other = Player.fixture(name: "Other", jadedness: 0)
-        let measured = trends(other, seen: rising(35), drift: MeasuredRate(5, .own(intervals: 3)),
+    @Test func aTrendTheAdviceDoesNotFollowChangesOnlyHisTrend() throws {
+        // A player who needs a holiday keeps his holiday estimate whatever his trend, and the other players are not his.
+        let holiday = try #require(mixedSquad.players.first { $0.name == "Holiday" })
+        let measured = trends(holiday, seen: rising(35), drift: MeasuredRate(5, .own(intervals: 3)),
                               gain: MeasuredRate(60, .own(intervals: 3)), used: 5)
         let before = try advice(mixedSquad.players, history: mixedSquad.history)
         let after = try advice(mixedSquad.players, history: mixedSquad.history, trends: measured)
-        #expect(after == before)
+        try #require(after.count == before.count)
+        for (now, then) in zip(after, before) {
+            #expect(now.player == then.player)
+            #expect(now.level == then.level)
+            #expect(now.days == then.days)
+            #expect(now.reasons == then.reasons)
+            #expect(now.basis == then.basis)
+            if now.player == holiday.id {
+                #expect(now.trend.seen == rising(35))
+                #expect(now.trend != then.trend)
+            } else {
+                #expect(now == then)
+            }
+        }
+        #expect(after.first?.player == holiday.id && after.first?.level == .holiday && after.first?.days != nil)
+    }
+
+    // MARK: The imports that count
+
+    /// What `FitnessTrend.rates` makes of `player`'s readings on the days given, counted back from `asOf`, with the
+    /// owner's measure-from day `from` days back.
+    func measured(_ player: Player, readingsDaysBack: [Int], from: Int?) -> FitnessTrends {
+        let readings = readingsDaysBack.map {
+            FitnessReading(day: asOf.adding(days: -$0), jadedness: 450, condition: 1, sharpness: 1, isInjured: false,
+                           includes: [])
+        }
+        return FitnessTrend.rates(readings: [player.id: readings], confirmed: [], squads: [player.id: player.squad],
+                                  asOf: asOf, measureFrom: from.map { asOf.adding(days: -$0) }, parameters: parameters)
+    }
+
+    @Test func aReadingBeforeTheMeasureFromDayIsNotCounted() throws {
+        let p = Player.fixture(jadedness: 450)
+        // His only reading is before the day the owner said to measure from.
+        let none = try #require(try one(p, trends: measured(p, readingsDaysBack: [10], from: 5)))
+        #expect(none.trend.imports == 0)
+        #expect(AdvisorText.trendLines(of: none, parameters: parameters).first
+                == "His trend is not measured yet: it needs 4 imports of his squad, and has 0.")
+        // One reading on or after it counts as one import; the interval from before it does not.
+        let one = try #require(try self.one(p, trends: measured(p, readingsDaysBack: [10, 3], from: 5)))
+        #expect(one.trend.imports == 1)
+        #expect(AdvisorText.trendLines(of: one, parameters: parameters).first
+                == "His trend is not measured yet: it needs 4 imports of his squad, and has 1.")
+        // A reading on the day itself counts.
+        let onTheDay = try #require(try self.one(p, trends: measured(p, readingsDaysBack: [5], from: 5)))
+        #expect(onTheDay.trend.imports == 1)
+        // With no measure-from day his reading counts.
+        #expect(try self.one(p, trends: measured(p, readingsDaysBack: [10], from: nil))?.trend.imports == 1)
     }
 }

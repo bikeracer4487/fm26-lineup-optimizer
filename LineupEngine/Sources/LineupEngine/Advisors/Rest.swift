@@ -28,8 +28,9 @@ public struct RestAdvice: Equatable, Sendable {
 public struct RestTrend: Equatable, Sendable {
     public let squad: Squad
     public let seen: SeenTrend?
-    /// The imports that count towards his trend so far (his used intervals + 1; 1 with a reading and none used; 0
-    /// with no reading), and how many a trend needs (`fewestOwnIntervals + 1`).
+    /// The imports that count towards his trend so far (his used intervals + 1 when he has any; else 1 with a reading
+    /// that can still count, on or after the measure-from day in force, on or before the advice day and within the
+    /// window; else 0), and how many a trend needs (`fewestOwnIntervals + 1`).
     public let imports: Int, importsNeeded: Int
     /// The day he passes `jadedThreshold` at his trend as seen; nil unless rising, at or under the line, and within
     /// `passDateWithinDays`.
@@ -189,10 +190,12 @@ public enum Rest {
             }
         }
 
+        // Only readings that can still count: a reading before the measure-from day, or out of the window, is none.
         let used = trend?.usedIntervals ?? 0
+        let imports = used > 0 ? used + 1 : (trend?.hasCountedReading == true ? 1 : 0)
         let restTrend = RestTrend(
             squad: player.squad, seen: trend?.seen,
-            imports: trend == nil ? 0 : used + 1, importsNeeded: trendRules.fewestOwnIntervals + 1,
+            imports: imports, importsNeeded: trendRules.fewestOwnIntervals + 1,
             passesOn: daysToPass.flatMap { $0 <= trendRules.passDateWithinDays ? asOf.adding(days: $0) : nil },
             drift: trend?.drift, gain: trend?.gain, restWillNotClear: restWillNotClear,
             basis: parameters.jadednessTrendRules.evidence)
