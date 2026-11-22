@@ -197,7 +197,10 @@ public enum ImportanceRules {
 
     /// The floor every developing prospect gets in a low or sharpness fixture, at each slot his outlook says he can play:
     /// aged `developingUpToAge` or under, with potential at least `prospectHeadroom` times his ability and an outlook
-    /// that is not markedly lower. Its size is what a match is worth to his growth at his age (`developmentFactors`, or
+    /// Player Removal calls worth developing (`Removal.isWorthDeveloping`: first choice at a slot he can play, a reach
+    /// that could pass the first choice or make the second eleven, or no level), so the plan favours nobody the advice
+    /// would not develop. (Until 22 November 2026 only a markedly lower outlook was left out, and a player whose reach
+    /// was cover at best was favoured.) Its size is what a match is worth to his growth at his age (`developmentFactors`, or
     /// `developmentFactorLowProfessionalism` for a young teenager with low Professionalism), scaled by the Development
     /// setting. He has none once he has had his matches for the month (`hasHadHisMatches`), nor when he is advised to
     /// leave (`RuleContext.advisedToLeave`).
@@ -211,7 +214,7 @@ public enum ImportanceRules {
         guard context.development > 0, !context.advisedToLeave.contains(player.id),
               player.age <= parameters.developingUpToAge.value,
               Double(player.potentialAbility) + 1e-9 >= parameters.prospectHeadroom.value * Double(player.currentAbility),
-              let outlook = context.outlooks[player.id], !outlook.isMarkedlyLower,
+              let outlook = context.outlooks[player.id], Removal.isWorthDeveloping(outlook),
               !hasHadHisMatches(player, context, parameters)
         else { return [] }
         let base: Double

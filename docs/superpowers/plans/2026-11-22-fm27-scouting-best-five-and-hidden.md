@@ -567,6 +567,13 @@ No test is pinned to these numbers.
 - **Core's heading test uses one slot.** The plan's test for the position-only heading used two slots with no need. In the tests' squad the second of them shares its position with a slot that has a need, so the test uses one slot no other shares; that a part's title is not repeated was already tested for every part.
 - **A hidden player is not judged**, as the design says, and the engine has a test for it: one who cannot be rated stops the others only while he is not hidden.
 
+## The two planner fixes (Tasks 7 and 8)
+
+- **What they did on the captured squad.** The `plan` command's output for the sample fixtures is the same line for line before and after: its low and sharpness fixtures carry 30 lines of the two favours, and every player who has one is in the elevens and worth developing. The engine's and the app's suites needed no expectation about a planned lineup changed.
+- **Tests that moved.** Two existing tests of the rules handed their player a place in the first eleven, since they meant a regular (`anUnsharpPlayerIsFavouredInALesserFixture`, `adjustmentsComeBackInKindOrder`), and the test of a markedly lower player lost its cover-level case to the new test of who is worth developing.
+- **Calls made beyond the request**, each the owner's to change: a successor the fixture favours still gets "Needs minutes" in a low fixture when he is in neither eleven, as in a sharpness fixture; and the successor's own favour is unchanged, since a successor is close to or on course to pass a first choice and so is worth developing already.
+- **Limits.** A regular who is third choice at his slot, or a player back from a long injury who has dropped out of both elevens, gets no "Needs minutes" in a low fixture; the owner can still choose him. The line for "markedly lower" is where it was, and the engine still has no floor on ability.
+
 ## Limits and small faults left
 
 The design's limits, as built:

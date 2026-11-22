@@ -344,14 +344,39 @@ import Testing
         #expect(floorFactor(run(older, .low, outlooks: outlooks(older))) == 1.07)
     }
 
+    /// The favour goes to a player Player Removal calls worth developing, and to nobody else: one whose reach is cover
+    /// at best is not favoured, as one markedly lower never was.
+    @Test func onlyAPlayerWorthDevelopingIsFavoured() {
+        let p = young(21)
+        for level in [ReachLevel.couldPassFirst, .couldMakeSecond] {
+            #expect(floorFactor(run(p, .low, outlooks: outlooks(p, level))) == 1.10, "\(level)")
+            #expect(Removal.isWorthDeveloping(outlook(p, level)), "\(level)")
+        }
+        // No level: first choice wherever he has a slot.
+        #expect(floorFactor(run(p, .low, outlooks: outlooks(p, nil))) == 1.10)
+        for level in [ReachLevel.couldBeCover, .markedlyLower] {
+            #expect(floorFactor(run(p, .low, outlooks: outlooks(p, level))) == nil, "\(level)")
+            #expect(floorFactor(run(p, .sharpness, outlooks: outlooks(p, level))) == nil, "\(level)")
+            #expect(!Removal.isWorthDeveloping(outlook(p, level)), "\(level)")
+        }
+    }
+
+    /// A first choice is worth developing whatever his level at his other slots, cover among them.
+    @Test func aFirstChoiceWhoseReachElsewhereIsOnlyCoverIsFavoured() {
+        let p = young(20)
+        let cover = SlotOutlook(slot: .ST_C, rating: 90, reachRating: 96, isFirstChoice: false, firstChoice: smith(),
+                                secondChoice: nil, band: .notExpected, pointsNeeded: 20, level: .couldBeCover)
+        let first = outlooks(p, .couldBeCover, slots: [at(.D_L, nil, isFirstChoice: true), cover])
+        #expect(floorFactor(run(p, .low, outlooks: first)) == 1.07)
+        // First choice nowhere, the same outlook gets none.
+        let nowhere = outlooks(p, .couldBeCover, slots: [at(.D_L, .possible), cover])
+        #expect(floorFactor(run(p, .low, outlooks: nowhere)) == nil)
+    }
+
     @Test func aMarkedlyLowerPlayerIsNotFavoured() {
         let p = young(21)
         #expect(floorFactor(run(p, .low, outlooks: outlooks(p, .markedlyLower))) == nil)
-        // Every other level, and an outlook with no level (first choice wherever he has a slot), is favoured.
-        for level in [ReachLevel.couldPassFirst, .couldMakeSecond, .couldBeCover] {
-            #expect(floorFactor(run(p, .low, outlooks: outlooks(p, level))) == 1.10, "\(level)")
-        }
-        #expect(floorFactor(run(p, .low, outlooks: outlooks(p, nil))) == 1.10)
+        #expect(floorFactor(run(p, .low, outlooks: outlooks(p, .couldMakeSecond))) == 1.10)
         // With no outlook there is nothing to go on: an ability of 0 gives none, and so does leaving him out.
         #expect(floorFactor(run(p, .low)) == nil)
         let unrated = Player.fixture(age: 19, currentAbility: 0, potentialAbility: 0)
