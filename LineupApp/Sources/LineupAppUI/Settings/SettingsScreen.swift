@@ -74,9 +74,7 @@ public struct SettingsScreen: View {
     }
 
     private var savingPlayers: some View {
-        SettingRow("Saving players for bigger fixtures",
-                   "Higher rests more of your best players before a more important match soon after. "
-                   + "Off picks each match on its own.") {
+        SettingRow("Saving players for bigger fixtures", AppSettings.savingPlayersExplanation) {
             CommittingSlider(label: "Saving players for bigger fixtures", value: setting(\.savingPlayers), range: 0...2,
                              step: 0.1, low: "Off", high: "2",
                              readout: AppSettings.savingPlayersText)

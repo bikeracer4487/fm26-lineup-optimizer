@@ -611,6 +611,13 @@ public enum Theme {
         public static let nameLines = 2
         /// Brings the sentence saying when he is clear down to the figures, under their labels.
         public static let clearTopPadding: CGFloat = TypeSize.small + Spacing.xs + Spacing.xxs
+        /// Brings a player's trend lines in line with his reasons' sentences, past the reasons' sign.
+        public static let trendIndent: CGFloat = Match.signDiameter + Spacing.m - Spacing.xxs
+        /// The trend lines, the squads' lines and the foot note are no wider than this, so they read as sentences on a
+        /// wide window.
+        public static let trendLinesWidth: CGFloat = 760
+        /// The space above the foot note.
+        public static let footGap: CGFloat = 28
     }
 
     // MARK: Training

@@ -62,6 +62,12 @@ import LineupEngine
         #expect(settings.conditionFloor == 0.7)
     }
 
+    @Test func savingPlayersSaysItRestsPlayersBeforeTheyAreJaded() {
+        #expect(AppSettings.savingPlayersExplanation
+            == "Higher rests more of your best players before a more important match soon after, and rests them "
+            + "before they are jaded. Off picks each match on its own.")
+    }
+
     @Test func savingPlayersMovesInTenthsAndZeroIsOff() {
         var settings = AppSettings(currentDate: today)
         settings.savingPlayers = 0.30000000000000004

@@ -2,14 +2,8 @@ import Foundation
 import LineupEngine
 
 extension Squad {
-    /// The squad's name on screen.
-    public var displayName: String {
-        switch self {
-        case .firstTeam: "First team"
-        case .u21: "U21s"
-        case .u18: "U18s"
-        }
-    }
+    /// The squad's name on screen: the engine's, so it is written in one place.
+    public var displayName: String { AdvisorText.name(self) }
 
     /// The squad in the middle of a sentence: "the first team", "the U21s".
     public var inSentence: String {

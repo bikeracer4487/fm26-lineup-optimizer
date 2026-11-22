@@ -46,6 +46,10 @@ extension AppSettings {
         set { plan.savingPlayers = (newValue * 10).rounded() / 10 }
     }
 
+    /// The line under Saving players for bigger fixtures.
+    public static let savingPlayersExplanation = "Higher rests more of your best players before a more important "
+        + "match soon after, and rests them before they are jaded. Off picks each match on its own."
+
     /// "Off" for 0, else the weight to one decimal place.
     public static func savingPlayersText(_ value: Double) -> String {
         value == 0 ? "Off" : String(format: "%.1f", value)

@@ -2,10 +2,12 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// Who needs a holiday, a rest or watching: a line saying what the screen is for, then a block for each player the
-/// engine lists, most urgent first, separated by faint rules, scrolling down.
+/// Who needs a holiday, a rest or watching: a line saying what the screen is for, then what the readings show of each
+/// squad and the club with the day the trend is measured from, then a block for each player the engine lists, most
+/// urgent first, separated by faint rules, and what the game's tiredness messages mean at the foot, scrolling down.
 public struct RestScreen: View {
     let model: AppModel
+    @State private var measuringAgain = false
 
     public init(model: AppModel) {
         self.model = model
@@ -13,13 +15,21 @@ public struct RestScreen: View {
 
     public var body: some View {
         AdviceGate(screen: .rest, state: model.adviceState, importLine: model.adviceImportLine) { report in
-            RestList(rows: model.restRows(report))
+            RestList(rows: model.restRows(report), header: model.restTrendHeader(report),
+                     gameMessages: model.restGameMessages) { measuringAgain = true }
+        }
+        .alert(model.restMeasureAgainQuestion, isPresented: $measuringAgain) {
+            Button(RestPresentation.measureAgainConfirm) { model.measureTrendAgain() }
+            Button(RestPresentation.cancelTitle, role: .cancel) {}
         }
     }
 }
 
 private struct RestList: View {
     let rows: [RestRow]
+    let header: RestTrendHeader
+    let gameMessages: [String]
+    let measureAgain: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
@@ -27,20 +37,90 @@ private struct RestList: View {
                 .font(Theme.Typeface.text(Theme.TypeSize.body))
                 .foregroundStyle(Theme.Colour.mutedInk)
                 .fixedSize(horizontal: false, vertical: true)
-            if let empty = RestPresentation.emptyText(rows) {
-                EmptyState(empty)
-            } else {
-                ScrollView(.vertical) {
-                    LazyVStack(alignment: .leading, spacing: 0) {
+            ScrollView(.vertical) {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    RestTrendLines(header: header, measureAgain: measureAgain)
+                        .padding(.bottom, Theme.Spacing.l)
+                    if let empty = RestPresentation.emptyText(rows) {
+                        EmptyState(empty)
+                    } else {
                         FaintRule()
                         ForEach(rows) { row in
                             RestBlock(row: row)
                             FaintRule()
                         }
                     }
+                    GameMessages(lines: gameMessages)
+                        .padding(.top, Theme.Rest.footGap)
                 }
             }
         }
+    }
+}
+
+/// Each measured squad's line with its caution under it, the club's line, then the day the trend is measured from in
+/// muted ink with "Measure again from today" beside it. Nothing when nothing is measured and no reading is kept.
+private struct RestTrendLines: View {
+    let header: RestTrendHeader
+    let measureAgain: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            ForEach(header.squadLines) { line in
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text(line.text)
+                        .font(Theme.Typeface.text())
+                        .foregroundStyle(Theme.Colour.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let caution = line.caution {
+                        CautionLine(caution)
+                    }
+                }
+            }
+            if let club = header.clubLine {
+                Text(club)
+                    .font(Theme.Typeface.text())
+                    .foregroundStyle(Theme.Colour.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if header.showsMeasuredLine {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.l) {
+                    if let measured = header.measuredFromText {
+                        Text(measured)
+                            .font(Theme.Typeface.text())
+                            .foregroundStyle(Theme.Colour.mutedInk)
+                    }
+                    if header.offersMeasureAgain {
+                        Button(RestPresentation.measureAgainTitle, action: measureAgain)
+                            .buttonStyle(.secondary)
+                            .fixedSize()
+                    }
+                }
+                .padding(.top, Theme.Spacing.xs)
+            }
+        }
+        .frame(maxWidth: Theme.Rest.trendLinesWidth, alignment: .leading)
+    }
+}
+
+/// What the game's tiredness messages mean: the engine's heading and lines, small and muted.
+private struct GameMessages: View {
+    let lines: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Text(RestPresentation.gameMessagesHeading)
+                .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .bold))
+            // Keyed by place, so two identical lines are both shown.
+            ForEach(Array(lines.enumerated()), id: \.offset) { line in
+                Text(line.element)
+                    .font(Theme.Typeface.text(Theme.TypeSize.small))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .foregroundStyle(Theme.Colour.mutedInk)
+        .frame(maxWidth: Theme.Rest.trendLinesWidth, alignment: .leading)
+        .padding(.bottom, Theme.Spacing.l)
     }
 }
 
@@ -68,6 +148,7 @@ private struct RestBlock: View {
                 if let plan = row.planText {
                     CautionLine(plan, alignsWithReasons: true)
                 }
+                trend
             }
             .foregroundStyle(Theme.Colour.ink)
             .padding(.leading, nameIndent)
@@ -76,6 +157,27 @@ private struct RestBlock: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(row.spokenText)
+    }
+
+    /// His trend lines, in line with the reasons' sentences, in muted ink, with the trend's evidence note after them.
+    @ViewBuilder private var trend: some View {
+        if !row.trendLines.isEmpty {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                ForEach(Array(row.trendLines.enumerated()), id: \.offset) { line in
+                    Text(line.element)
+                        .font(Theme.Typeface.text())
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let note = row.trendNoteText {
+                    Text(note)
+                        .font(Theme.Typeface.text(Theme.TypeSize.small))
+                }
+            }
+            .foregroundStyle(Theme.Colour.mutedInk)
+            .frame(maxWidth: Theme.Rest.trendLinesWidth, alignment: .leading)
+            .padding(.leading, Theme.Rest.trendIndent)
+            .padding(.top, Theme.Spacing.xs)
+        }
     }
 
     /// Where the name starts: past the stamp's room.

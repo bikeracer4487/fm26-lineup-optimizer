@@ -78,7 +78,15 @@
 //                                              sample list ("rest-tall-…"), and with two players' jadedness
 //                                              raised so a holiday and a rest over the limit show
 //                                              ("rest-levels-…"), that also in the smallest window
-//                                              ("rest-levels-small-…").
+//                                              ("rest-levels-small-…"). With six weeks of sample readings it
+//                                              is drawn with the first team's drift falling ("rest-trend-…",
+//                                              also in the smallest window, "rest-trend-small-…", and tall
+//                                              enough for the regulars and the foot, "rest-trend-tall-…"), with it
+//                                              rising and its caution ("rest-trend-rising-…"), and with two
+//                                              readings of each player, so nothing is measured yet
+//                                              ("rest-unmeasured-…"). Match Selection is drawn, taller, with a
+//                                              player the plan rests from the first fixture before he passes
+//                                              the jaded line ("match-restdue-…").
 //                                              The Training screen ("training-…") is drawn on the sample
 //                                              before its retraining is accepted, so its recommendations
 //                                              show, and so tall enough for all four parts
@@ -233,6 +241,7 @@ enum SampleState {
     case arrowsRead, harmfulArrow, noInfluence, regrouping, spentGroup, endedGroup, youngPlayers
     case candidates, refusedCandidates
     case league, leagueNoFormat, leagueRefused, leagueStale, leagueByHand
+    case fallingTrends, risingTrends, beforeTrends, restedBeforeLine
 }
 
 /// The sample model from the repository at `root`, or the reason it could not be built.
@@ -285,6 +294,10 @@ enum SampleState {
         case .youngPlayers: return try SampleData.modelWithYoungPlayers(repositoryRoot: url)
         case .candidates: return try SampleData.modelWithCandidates(repositoryRoot: url)
         case .refusedCandidates: return try SampleData.modelWithRefusedCandidates(repositoryRoot: url)
+        case .fallingTrends: return try SampleData.modelWithFallingTrends(repositoryRoot: url)
+        case .risingTrends: return try SampleData.modelWithRisingTrends(repositoryRoot: url)
+        case .beforeTrends: return try SampleData.modelBeforeTrends(repositoryRoot: url)
+        case .restedBeforeLine: return try SampleData.modelWithPlayerRestedBeforeLine(repositoryRoot: url)
         }
     } catch {
         fail("\(error)")
@@ -332,6 +345,10 @@ let narrowWindow = CGSize(width: 800, height: 700)
     }
     try ScreenPictures.write(model: sample, to: directory, size: size, variant: "gameplan", screens: [.matchSelection],
                              matchStart: MatchStart(fixture: strong.id))
+    // A player rested from the first fixture before he passes the jaded line, in a taller window so the left-out list
+    // with the planner's reason shows below the detail.
+    try ScreenPictures.write(model: sampleModel(root, .restedBeforeLine), to: directory, size: tall, variant: "restdue",
+                             screens: [.matchSelection])
     // Three of the first eleven banned: left out of the first fixture, with the button that says their bans are not
     // for it; then after pressing it, on the first fixture, where they are picked, and on the second, where they are
     // left out.
@@ -494,6 +511,18 @@ let narrowWindow = CGSize(width: 800, height: 700)
     let jaded = sampleModel(root, .jadedPlayers)
     try ScreenPictures.write(model: jaded, to: directory, size: size, variant: "levels", screens: [.rest])
     try ScreenPictures.write(model: jaded, to: directory, size: Theme.Layout.minimumWindow, variant: "levels-small",
+                             screens: [.rest])
+    // The trends measured from six weeks of readings, falling and rising; and with two readings each, measuring nothing.
+    let falling = sampleModel(root, .fallingTrends)
+    try ScreenPictures.write(model: falling, to: directory, size: size, variant: "trend", screens: [.rest])
+    try ScreenPictures.write(model: falling, to: directory, size: Theme.Layout.minimumWindow, variant: "trend-small",
+                             screens: [.rest])
+    // Tall enough to reach the regulars whose trends are measured, and the foot note under them.
+    try ScreenPictures.write(model: falling, to: directory, size: CGSize(width: size.width, height: size.height * 3),
+                             variant: "trend-tall", screens: [.rest])
+    try ScreenPictures.write(model: sampleModel(root, .risingTrends), to: directory, size: size, variant: "trend-rising",
+                             screens: [.rest])
+    try ScreenPictures.write(model: sampleModel(root, .beforeTrends), to: directory, size: size, variant: "unmeasured",
                              screens: [.rest])
 }
 

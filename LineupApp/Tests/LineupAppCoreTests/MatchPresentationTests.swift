@@ -191,6 +191,30 @@ import LineupEngine
         #expect(rows.map(\.reason) == ["Left out: injured", "Left out: Has started the last 2 matches in quick succession (×0.90)"])
     }
 
+    /// The planner's reason for resting a player before he passes the jaded line reaches Match Selection as the saving
+    /// reason does: on a pick, marked as lowering his value, and on an omission, as written.
+    @Test func theRestedBeforeTheLineReasonIsShownAsWrittenWhereTheSavingReasonIs() {
+        let saving = "Kept fresher for Opponent C on Sat 21 Nov (cost 4.0)"
+        let rested = "Rested before he passes 400: at about +31 a start, starting today would leave him jaded for "
+            + "Buxton on Sat 14 Nov"
+        let adjustments = [Adjustment(kind: .savedForLater, cost: 4, reason: saving),
+                           Adjustment(kind: .restedBeforeLine, cost: 6, reason: rested)]
+        let reasons = ["Rating 106.9: …"] + adjustments.map(\.reason)
+        let marked = MarkedReason.marks(reasons: reasons, fitness: FitnessFactors(condition: 1, sharpness: 1, jadedness: 1),
+                                        adjustments: adjustments)
+        #expect(marked.map(\.text) == reasons)
+        #expect(marked.map(\.direction) == [.unchanged, .lowered, .lowered])
+
+        let rows = LeftOutRow.rows([
+            Omission(player: PlayerID(key: "a"), name: "Dejan Tetek", slot: .DM_R, cause: .heldBack([.savedForLater]),
+                     reason: "Left out: " + saving),
+            Omission(player: PlayerID(key: "b"), name: "Evan Humphries", slot: .D_L, cause: .heldBack([.restedBeforeLine]),
+                     reason: "Left out: " + rested),
+        ])
+        #expect(rows.map(\.reason) == ["Left out: " + saving, "Left out: " + rested])
+        #expect(rows[1].spokenText == "Evan Humphries, D L: Left out: " + rested)
+    }
+
     @Test func thosePlayersYouLeftOutAreListedByName() {
         let rows = RejectedRow.rows([PlayerID(key: "z"), PlayerID(key: "a"), PlayerID(key: "gone")],
                                     names: [PlayerID(key: "z"): "Aaron Zed", PlayerID(key: "a"): "Bob Able"])

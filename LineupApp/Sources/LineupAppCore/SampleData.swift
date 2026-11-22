@@ -599,6 +599,156 @@ public enum SampleData {
         return model
     }
 
+    // MARK: Jadedness trends
+
+    /// The sample model with six weeks of the engine's sample readings for the first team (the command line's,
+    /// `plans/sample-fitness-readings.json`) and the confirmed lineups they go with, so the first team's drift, the
+    /// club's gain and each regular's trend are measured: non-starters fall, and Dejan Tetek rises fast enough to be
+    /// watched. The U21s keep the one reading their import took. Each player's latest reading is the paste.
+    @MainActor public static func modelWithFallingTrends(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithSampleReadings(repositoryRoot: repositoryRoot)
+        guard case .ready(let report) = model.adviceState else {
+            throw SampleDataError(description: "The sample with readings has no advice: \(model.adviceState)")
+        }
+        guard let drift = report.trends.squadDrift[.firstTeam], drift.value < 0, report.trends.clubGain != nil,
+              report.rest.contains(where: { $0.trend.seen != nil }) else {
+            throw SampleDataError(description: "The sample readings measure no falling drift, club's gain or player's trend.")
+        }
+        return model
+    }
+
+    /// The falling sample with every first-team reading before the last lowered by 3 for each day before it, so a
+    /// player who does not start rises and the Rest screen cautions that leaving him out cannot bring it down; and with
+    /// Ludwig Francillette's jadedness raised to 460, his readings with it, so a player over the line is told that only
+    /// lighter training will. Each player's latest reading is still the jadedness the squad holds for him.
+    @MainActor public static func modelWithRisingTrends(repositoryRoot: URL) throws -> AppModel {
+        let raisedName = "Ludwig Francillette", raisedTo = 460, risePerDay = 3
+        let model = try modelWithSampleReadings(repositoryRoot: repositoryRoot) { readings in
+            guard let last = readings.last else { return readings }
+            return readings.map { reading in
+                var reading = reading
+                reading.jadedness -= risePerDay * reading.day.days(to: last.day)
+                return reading
+            }
+        } edit: { player in
+            if player.name == raisedName { player.jadedness = raisedTo }
+        }
+        guard case .ready(let report) = model.adviceState else {
+            throw SampleDataError(description: "The rising sample has no advice: \(model.adviceState)")
+        }
+        guard let drift = report.trends.squadDrift[.firstTeam], drift.value * 7 > model.planParameters.jadednessTrendRules.value.steadyPerWeek,
+              report.rest.contains(where: { $0.name == raisedName && $0.trend.restWillNotClear }) else {
+            throw SampleDataError(description: "The rising sample measures no rising drift, or \(raisedName) is not told "
+                                  + "that rest from matches will not bring him down.")
+        }
+        return model
+    }
+
+    /// The sample model with two readings of every player, five days apart, the later the one each import took: each
+    /// listed player's trend is not measured yet, and no squad's drift or the club's gain is.
+    @MainActor public static func modelBeforeTrends(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        let earlier = date.adding(days: -5)
+        var fitness = model.fitness
+        for player in model.squad.book.allPlayers {
+            guard let last = fitness.readings[player.id]?.last, last.day == date else {
+                throw SampleDataError(description: "The sample has no reading of \(player.name) from its import.")
+            }
+            // Ten higher five days before: still above the floor for anyone the import read above it.
+            fitness.readings[player.id] = [
+                FitnessReading(day: earlier, jadedness: last.jadedness + 10, condition: last.condition,
+                               sharpness: last.sharpness, isInjured: last.isInjured, includes: []),
+                last,
+            ]
+        }
+        model.fitness = fitness
+        model.save(.fitness)
+        model.replan()
+        guard case .ready(let report) = model.adviceState, !report.rest.isEmpty,
+              report.trends.squadDrift.isEmpty, report.trends.clubGain == nil,
+              report.rest.allSatisfy({ $0.trend.seen == nil && $0.trend.imports == 2 }) else {
+            throw SampleDataError(description: "The sample before trends does not list players with two imports each and "
+                                  + "nothing measured: \(model.adviceState)")
+        }
+        return model
+    }
+
+    /// The name of the player `modelWithPlayerRestedBeforeLine` rests before he passes the jaded line.
+    public static let restedBeforeLineName = "Dejan Tetek"
+
+    /// The falling sample with Dejan Tetek's jadedness raised to 330, his readings with it: at the start a match adds
+    /// that his readings measure, starting the first fixture would take him past 400 for the second, a Medium fixture,
+    /// and a match off would not, so the plan rests him from the first with the planner's reason.
+    @MainActor public static func modelWithPlayerRestedBeforeLine(repositoryRoot: URL) throws -> AppModel {
+        let raisedTo = 330
+        let model = try modelWithSampleReadings(repositoryRoot: repositoryRoot, edit: { player in
+            if player.name == restedBeforeLineName { player.jadedness = raisedTo }
+        })
+        guard case .planned(let lineup, _)? = model.nextToPlay?.body,
+              let rested = lineup.omissions.first(where: { $0.name == restedBeforeLineName }),
+              rested.reason.contains("Rested before he passes \(model.planParameters.jadedThreshold.value)") else {
+            throw SampleDataError(description: "The plan does not rest \(restedBeforeLineName) from its next match before "
+                                  + "he passes the line.")
+        }
+        return model
+    }
+
+    /// The sample model with the engine's sample readings of the first team and the confirmed lineups they were taken
+    /// around (`plans/sample-history-with-readings.json`), each player's readings changed by `readings`, and each
+    /// player changed by `edit` first, as an import of the changed squads would. A player whose jadedness `edit`
+    /// changed has all his readings moved by the same amount, so his latest is still the jadedness the squad holds for
+    /// him and his rates are unchanged. Throws when a latest reading is not from the sample's import day.
+    @MainActor private static func modelWithSampleReadings(
+        repositoryRoot: URL, readings change: ([FitnessReading]) -> [FitnessReading] = { $0 },
+        edit changePlayer: ((inout Player) -> Void)? = nil
+    ) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        let decoder = JSONDecoder()
+        let sample: [String: [FitnessReading]]
+        let lineups: [ConfirmedLineup]
+        do {
+            sample = try decoder.decode([String: [FitnessReading]].self,
+                                        from: fixture("plans/sample-fitness-readings.json", under: repositoryRoot))
+            lineups = try decoder.decode([ConfirmedLineup].self,
+                                         from: fixture("plans/sample-history-with-readings.json", under: repositoryRoot))
+        } catch let error as DecodingError {
+            throw SampleDataError(description: "The sample readings are not valid: \(ErrorDescriptions.describe(error))")
+        }
+        guard let tacticName = model.history.first?.tacticName else {
+            throw SampleDataError(description: "The sample model has no confirmed lineup.")
+        }
+        if let changePlayer { edit(model, changePlayer) }
+
+        let names = Dictionary(model.players.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        model.history = lineups.map { lineup in
+            ConfirmedRecord(lineup: lineup, names: names.filter { id, _ in lineup.starters.values.contains(id) },
+                            tacticName: tacticName)
+        }
+        model.save(.history)
+
+        var fitness = model.fitness
+        let firstTeam = model.squad.book.current[.firstTeam] ?? []
+        for player in firstTeam {
+            guard let own = sample[player.id.key] else {
+                throw SampleDataError(description: "The sample readings have none of \(player.name).")
+            }
+            let changed = change(own)
+            guard let last = changed.last, last.day == date else {
+                throw SampleDataError(description: "\(player.name)'s latest sample reading is not from the sample's import.")
+            }
+            let moved = player.jadedness - last.jadedness
+            fitness.readings[player.id] = changed.map { reading in
+                var reading = reading
+                reading.jadedness += moved
+                return reading
+            }
+        }
+        model.fitness = fitness
+        model.save(.fitness)
+        model.replan()
+        return model
+    }
+
     /// The sample model before any retraining is accepted, so its recommendations show: the sample's accepted
     /// retraining fills the thin slot it was recommended for, which then gets no more recommendations.
     @MainActor public static func modelBeforeRetraining(repositoryRoot: URL) throws -> AppModel {
