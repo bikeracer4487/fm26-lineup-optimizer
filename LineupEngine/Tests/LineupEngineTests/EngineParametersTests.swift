@@ -34,15 +34,15 @@ import Testing
 
     @Test func fitnessStepsAndFloorCiteTheFilesTheyCameFrom() {
         let p = EngineParameters.fm27
-        #expect(p.jadednessSteps.source.contains("scoring_parameters.py"))
-        #expect(p.jadednessSteps.source.contains("JADEDNESS_THRESHOLDS") && p.jadednessSteps.source.contains("JADEDNESS_MULTIPLIERS"))
+        #expect(p.jadednessSteps.source.contains("fm27-jadedness-and-holidays.md") && p.jadednessSteps.source.contains("JADEDNESS_MULTIPLIERS"))
         #expect(p.jadednessAbove.source.contains("scoring_parameters.py") && p.jadednessAbove.source.contains("JADEDNESS_MULTIPLIERS"))
         #expect(p.conditionFloor.source.contains("fm_match_ready_selector.py"))
         #expect(p.conditionFloor.source.contains("docs/Research/physical-condition-claude.md"))
         for source in [p.jadednessSteps.source, p.jadednessAbove.source, p.conditionFloor.source] {
             #expect(!source.contains("rating_calculator.py"), "\(source)")
         }
-        #expect([p.jadednessSteps.evidence, p.jadednessAbove.evidence, p.conditionFloor.evidence].allSatisfy { $0 == .carriedOverFM26 })
+        #expect(p.jadednessSteps.evidence == .derived)
+        #expect([p.jadednessAbove.evidence, p.conditionFloor.evidence].allSatisfy { $0 == .carriedOverFM26 })
     }
 
     @Test func familiarityStepsAreDescendingAndLabelled() {

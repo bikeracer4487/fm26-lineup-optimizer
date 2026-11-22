@@ -775,9 +775,11 @@ public struct EngineParameters: Sendable {
                 .derived,
                 source: "\(fitnessSource); anchors 75% and 50% from FM27 Match Lab (0.37 and 1.00 points per game)"),
             jadednessSteps: Parameter(
-                [JadednessStep(upTo: 200, factor: 1.00), JadednessStep(upTo: 400, factor: 0.90), JadednessStep(upTo: 700, factor: 0.70)],
-                .carriedOverFM26,
-                source: "scoring_parameters.py JADEDNESS_THRESHOLDS and JADEDNESS_MULTIPLIERS: fresh to 200 ×1.00, fit to 400 ×0.90, tired to 700 ×0.70"),
+                [JadednessStep(upTo: 400, factor: 1.00), JadednessStep(upTo: 700, factor: 0.70)],
+                .derived,
+                source: "No test in any version shows a cost under 400, and in FM24 a whole eleven held at 400 lost 2.4 points a season "
+                    + "(docs/Research/fm27-jadedness-and-holidays.md), so ×1.00 up to 400 is this design's call of 21 November 2026; "
+                    + "×0.70 up to 700 is carried over from scoring_parameters.py JADEDNESS_MULTIPLIERS"),
             jadednessAbove: Parameter(
                 0.40, .carriedOverFM26,
                 source: "scoring_parameters.py JADEDNESS_MULTIPLIERS: jaded (701 and above) ×0.40"),

@@ -129,7 +129,7 @@ import Testing
     }
 
     @Test func everyFactorBelowFullIsExplainedInOrder() throws {
-        let lineup = try selector.select(request(changing("Striker", in: squad()) {
+        let lineup = try selectorWithAMarkDownFrom200().select(request(changing("Striker", in: squad()) {
             $0.condition = 0.90; $0.sharpness = 0.75; $0.jadedness = 300
         }))
         let st = try #require(pick(lineup, .ST_C))
@@ -193,7 +193,7 @@ import Testing
     @Test func jadednessAloneCostsAStart() throws {
         let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
         // Jadedness 300 is a factor of 0.90, below the rival's 0.95, and under the 400 threshold.
-        let lineup = try selector.select(request(changing("Striker", in: squad(rival)) { $0.jadedness = 300 }))
+        let lineup = try selectorWithAMarkDownFrom200().select(request(changing("Striker", in: squad(rival)) { $0.jadedness = 300 }))
         #expect(pick(lineup, .ST_C)?.player == id("Rival Striker"))
         let omission = try #require(lineup.omissions.first)
         #expect(omission.reason.hasPrefix("Left out: jadedness 300 lowers him from"))
@@ -202,7 +202,7 @@ import Testing
     @Test func jadednessAgainstAWeakerRivalDoesNotCostAStart() throws {
         let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 10])
         // Jadedness 300 (0.90) still beats a rival at familiarity 10 (0.80).
-        let lineup = try selector.select(request(changing("Striker", in: squad(rival)) { $0.jadedness = 300 }))
+        let lineup = try selectorWithAMarkDownFrom200().select(request(changing("Striker", in: squad(rival)) { $0.jadedness = 300 }))
         let st = try #require(pick(lineup, .ST_C))
         #expect(st.player == id("Striker"))
         #expect(st.fitness.jadedness == 0.90)
@@ -215,6 +215,19 @@ import Testing
         var parameters = EngineParameters.fm27
         change(&parameters)
         return LineupSelector(catalog: try RoleCatalog.fm27(), profile: try RatingProfile.carriedOver(), parameters: parameters)
+    }
+
+    /// A selector with the steps from before 21 November 2026 (×0.90 from 201 to 400), for tests that need a jadedness
+    /// factor under 1 on a player who can still be picked.
+    func selectorWithAMarkDownFrom200() throws -> LineupSelector {
+        try selector { $0.jadednessSteps = EngineParameters.withAMarkDownFrom200.jadednessSteps }
+    }
+
+    @Test func aPlayerAt300IsPickedWithNoJadednessReason() throws {
+        let players = changing("Striker", in: squad()) { $0.jadedness = 300 }
+        let st = try #require(pick(try selector.select(request(players)), .ST_C))
+        #expect(st.fitness.jadedness == 1.0)
+        #expect(st.reasons.count == 1)
     }
 
     @Test func aRaisedConditionFloorKeepsOutAPlayerTheDefaultLetsStart() throws {
@@ -818,6 +831,7 @@ import Testing
         let rival = Player.fixture(name: "Rival Striker", familiarity: [.striker: 17])
         var players = changing("Striker", in: squad(rival)) { $0.condition = 0.86 }
         players = changing("Playmaker", in: players) { $0.sharpness = 0.75; $0.jadedness = 300 }
+        let selector = try selectorWithAMarkDownFrom200()
         let base = request(players)
         let lineup = try selector.select(base)
         for pick in lineup.picks {
@@ -913,6 +927,7 @@ import Testing
     }
 
     @Test func projectedFitnessIsLabelledAsProjected() throws {
+        let selector = try selectorWithAMarkDownFrom200()
         let players = changing("Striker", in: squad()) { $0.condition = 0.90; $0.sharpness = 0.75; $0.jadedness = 300 }
         let projected = try #require(pick(try selector.select(adjusted(request(players), projected: true)), .ST_C))
         #expect(Array(projected.reasons.dropFirst())

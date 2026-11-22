@@ -1,6 +1,18 @@
 import Testing
 @testable import LineupEngine
 
+extension EngineParameters {
+    /// The jadedness steps before 21 November 2026 (×0.90 from 201 to 400), for tests that need a factor under 1 on a player
+    /// who can still be picked: above 400 a player is left out of every match that is not high importance.
+    static var withAMarkDownFrom200: EngineParameters {
+        var parameters = EngineParameters.fm27
+        parameters.jadednessSteps = Parameter(
+            [JadednessStep(upTo: 200, factor: 1.00), JadednessStep(upTo: 400, factor: 0.90), JadednessStep(upTo: 700, factor: 0.70)],
+            .derived, source: "test: the steps from before 21 November 2026")
+        return parameters
+    }
+}
+
 @Suite struct FitnessModelTests {
     private let tolerance = 0.0001
 
@@ -16,7 +28,7 @@ import Testing
         #expect(abs(factors.sharpness - expected) < tolerance)
     }
 
-    @Test(arguments: [(-500, 1.0), (200, 1.0), (201, 0.9), (400, 0.9), (401, 0.7), (700, 0.7), (701, 0.4), (1000, 0.4)])
+    @Test(arguments: [(-500, 1.0), (200, 1.0), (201, 1.0), (400, 1.0), (401, 0.7), (700, 0.7), (701, 0.4), (1000, 0.4)])
     func jadednessFactor(_ jadedness: Int, _ expected: Double) {
         let factors = FitnessModel.factors(condition: 1, sharpness: 1, jadedness: jadedness, parameters: .fm27)
         #expect(abs(factors.jadedness - expected) < tolerance)
@@ -31,14 +43,21 @@ import Testing
         #expect(abs(low.sharpness - 0.70) < tolerance)
     }
 
+    @Test func aPlayerAt300IsRatedTheSameAsAt100() {
+        let at = { FitnessModel.factors(condition: 1, sharpness: 1, jadedness: $0, parameters: .fm27).jadedness }
+        #expect(at(100) == 1 && at(300) == 1 && at(400) == 1)
+        #expect(at(401) == 0.70 && at(700) == 0.70 && at(701) == 0.40)
+    }
+
     @Test func aFullyFitPlayerHasProductOne() {
         let factors = FitnessModel.factors(condition: 1, sharpness: 1, jadedness: 0, parameters: .fm27)
         #expect(abs(factors.product - 1.0) < tolerance)
     }
 
     @Test func theProductMultipliesTheThreeFactors() {
-        let factors = FitnessModel.factors(condition: 0.90, sharpness: 0.75, jadedness: 300, parameters: .fm27)
-        #expect(abs(factors.product - 0.94 * 0.92 * 0.90) < tolerance)
+        // 450 is above 400, where the factor is 0.70; 300 now costs nothing.
+        let factors = FitnessModel.factors(condition: 0.90, sharpness: 0.75, jadedness: 450, parameters: .fm27)
+        #expect(abs(factors.product - 0.94 * 0.92 * 0.70) < tolerance)
     }
 
     @Test func fm27ParametersHaveNoProblems() {

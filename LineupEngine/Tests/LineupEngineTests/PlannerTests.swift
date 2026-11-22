@@ -301,6 +301,7 @@ import Testing
         // 7 rest days from 401 at 20 a day is 261; a fractional rate would give a fraction.
         var params = EngineParameters.fm27
         params.jadednessRecoveryPerDay = Parameter(20.4, .derived, source: "test")
+        params.jadednessSteps = EngineParameters.withAMarkDownFrom200.jadednessSteps  // a factor under 1 at 258
         let custom = Planner(catalog: try RoleCatalog.fm27(), profile: try RatingProfile.standard(), parameters: params)
         let players = changing(.AM_C, in: try PlannerFixture.squad(first: 14, second: 6)) { $0.jadedness = 401 }
         let plan = try custom.plan(request([fixture("a", day: 7)], players: players))
