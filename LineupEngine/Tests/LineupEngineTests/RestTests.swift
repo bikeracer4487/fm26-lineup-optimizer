@@ -6,13 +6,15 @@ import Testing
     let parameters = EngineParameters.fm27
 
     func advice(_ players: [Player], history: [ConfirmedLineup] = [], ownClub: String? = "Oxford City",
-                intensity: TrainingIntensity = .medium, parameters: EngineParameters? = nil) throws -> [RestAdvice] {
+                intensity: TrainingIntensity = .medium, trends: FitnessTrends = .none,
+                parameters: EngineParameters? = nil) throws -> [RestAdvice] {
         try Rest.advice(players: players, ownClub: ownClub, history: StartHistory(history), asOf: asOf,
-                        intensity: intensity, parameters: parameters ?? self.parameters)
+                        intensity: intensity, trends: trends, parameters: parameters ?? self.parameters)
     }
 
-    func one(_ player: Player, history: [ConfirmedLineup] = [], parameters: EngineParameters? = nil) throws -> RestAdvice? {
-        let found = try advice([player], history: history, parameters: parameters)
+    func one(_ player: Player, history: [ConfirmedLineup] = [], trends: FitnessTrends = .none,
+             parameters: EngineParameters? = nil) throws -> RestAdvice? {
+        let found = try advice([player], history: history, trends: trends, parameters: parameters)
         #expect(found.count <= 1)
         return found.first
     }
@@ -432,5 +434,210 @@ import Testing
         let forward = try advice(mixedSquad.players, history: mixedSquad.history)
         let backward = try advice(mixedSquad.players.reversed(), history: mixedSquad.history.reversed())
         #expect(forward == backward)
+    }
+
+    // MARK: His trend
+
+    /// Trends for one player, built by hand.
+    func trends(_ player: Player, seen: SeenTrend? = nil, drift: MeasuredRate? = nil, gain: MeasuredRate? = nil,
+                used: Int = 0, squadDrift: [Squad: SharedRate] = [:]) -> FitnessTrends {
+        FitnessTrends(players: [player.id: PlayerTrend(seen: seen, drift: drift, gain: gain, usedIntervals: used)],
+                      squadDrift: squadDrift, clubGain: nil, measuredFrom: nil)
+    }
+
+    func rising(_ perWeek: Double, starts: Int = 3) -> SeenTrend {
+        SeenTrend(perWeek: perWeek, days: 35, starts: starts, readings: 6)
+    }
+
+    @Test func aPlayerOnCourseToPassTheLineWithinSixWeeksIsWatched() throws {
+        // (400 − 190) ÷ (35 ÷ 7) = 42 days.
+        let p = Player.fixture(jadedness: 190)
+        let a = try #require(try one(p, trends: trends(p, seen: rising(35), used: 5)))
+        #expect(a.level == .watch)
+        #expect(a.trend.passesOn == asOf.adding(days: 42))
+        #expect(a.reasons.isEmpty)
+        #expect(a.basis == .derived)
+        #expect(a.days == nil)
+        #expect(a.trend.seen == rising(35))
+        // The basis takes in the line's evidence as well as the trend rules'.
+        var q = parameters
+        q.jadednessTrendRules = Parameter(q.jadednessTrendRules.value, .fm27Measured, source: "test")
+        #expect(try one(p, trends: trends(p, seen: rising(35), used: 5), parameters: q)?.basis
+                == parameters.jadedThreshold.evidence)
+        // With nothing measured he is not listed.
+        #expect(try one(p) == nil)
+    }
+
+    @Test func atFortyThreeDaysHeIsNotListed() throws {
+        let p = Player.fixture(jadedness: 185)
+        #expect(try one(p, trends: trends(p, seen: rising(35), used: 5)) == nil)
+    }
+
+    @Test func aSquadsRateAloneListsNobody() throws {
+        let p = Player.fixture(jadedness: 190)
+        let squad = SharedRate(value: 10, readings: 20, since: asOf.adding(days: -30))
+        #expect(try one(p, trends: trends(p, drift: MeasuredRate(10, .squad(.firstTeam)), used: 2,
+                                          squadDrift: [.firstTeam: squad])) == nil)
+        // Nor the club's gain with it.
+        #expect(try one(p, trends: trends(p, drift: MeasuredRate(10, .squad(.firstTeam)), gain: MeasuredRate(60, .club),
+                                          used: 2)) == nil)
+    }
+
+    @Test func aFallingTrendListsNobody() throws {
+        let p = Player.fixture(jadedness: 300)
+        #expect(try one(p, trends: trends(p, seen: rising(-20), used: 5)) == nil)
+        // A steady one neither: 5 a week is within the band.
+        #expect(try one(p, trends: trends(p, seen: rising(5), used: 5)) == nil)
+        let a = try #require(try one(p, trends: trends(p, seen: rising(35), used: 5)))
+        #expect(a.level == .watch)
+        // (400 − 300) ÷ 5 = 20 days.
+        #expect(a.trend.passesOn == asOf.adding(days: 20))
+    }
+
+    @Test func aPlayerAboveTheLineIsNotOnCourseButKeepsHisLevel() throws {
+        // Over the line, rising: listed at rest as before, with no date to pass a line he has passed.
+        let p = Player.fixture(jadedness: 450)
+        let a = try #require(try one(p, trends: trends(p, seen: rising(35), used: 5)))
+        #expect(a.level == .rest)
+        #expect(a.trend.passesOn == nil)
+        #expect(a.reasons == ["Jadedness 450 is above his limit of 400: rest him from training and matches"])
+    }
+
+    @Test func thePassDateIsGivenOnlyWithinItsDays() throws {
+        // Aged 32, limit 300 (watch line 240): listed for being close, whatever his trend.
+        let near = Player.fixture(age: 32, jadedness: 250)
+        // (400 − 250) ÷ (6 ÷ 7) = 175 days: beyond 120.
+        let far = try #require(try one(near, trends: trends(near, seen: rising(6), used: 5)))
+        #expect(far.trend.passesOn == nil)
+        #expect(far.reasons == ["Jadedness 250 is close to his limit of 300"])
+        // (400 − 250) ÷ (10 ÷ 7) = 105 days, rounded up from 105.
+        let within = try #require(try one(near, trends: trends(near, seen: rising(10), used: 5)))
+        #expect(within.trend.passesOn == asOf.adding(days: 105))
+        // A day count that is not whole is rounded up: 150 ÷ (8 ÷ 7) = 131.25, beyond; 150 ÷ (9 ÷ 7) = 116.7, 117.
+        #expect(try one(near, trends: trends(near, seen: rising(9), used: 5))?.trend.passesOn == asOf.adding(days: 117))
+        var q = parameters
+        var rules = q.jadednessTrendRules.value
+        rules.passDateWithinDays = 116
+        q.jadednessTrendRules = Parameter(rules, .derived, source: "test")
+        #expect(try one(near, trends: trends(near, seen: rising(9), used: 5), parameters: q)?.trend.passesOn == nil)
+    }
+
+    @Test func aListedPlayerCarriesHisTrend() throws {
+        let p = Player.fixture(name: "Young", squad: .u21, jadedness: 450)
+        let drift = MeasuredRate(-10, .squad(.u21)), gain = MeasuredRate(55, .club)
+        let a = try #require(try one(p, trends: trends(p, seen: rising(-14), drift: drift, gain: gain, used: 4)))
+        #expect(a.trend == RestTrend(squad: .u21, seen: rising(-14), imports: 5, importsNeeded: 4, passesOn: nil,
+                                     drift: drift, gain: gain, restWillNotClear: false, basis: .derived))
+        // A reading and no used interval counts as one import.
+        let b = try #require(try one(p, trends: trends(p, used: 0)))
+        #expect(b.trend.imports == 1)
+        #expect(b.trend.seen == nil)
+    }
+
+    @Test func aListedPlayerWithNoReadingsHasNoImports() throws {
+        let a = try #require(try one(Player.fixture(jadedness: 450)))
+        #expect(a.trend.imports == 0)
+        #expect(a.trend.importsNeeded == 4)
+        #expect(a.trend.seen == nil && a.trend.drift == nil && a.trend.gain == nil && a.trend.passesOn == nil)
+        #expect(!a.trend.restWillNotClear)
+        #expect(a.trend.basis == parameters.jadednessTrendRules.evidence)
+        #expect(a.trend.squad == .firstTeam)
+    }
+
+    @Test func daysUntilClearUseTheDriftHeTakes() throws {
+        // Jadedness 450, limit 400, watch line 320: 130 ÷ 10 = 13 days.
+        let p = Player.fixture(jadedness: 450)
+        let a = try #require(try one(p, trends: trends(p, drift: MeasuredRate(-10, .squad(.firstTeam)), used: 2)))
+        #expect(a.days == 13)
+        #expect(!a.trend.restWillNotClear)
+        #expect(a.basis == .derived)
+        // With nothing measured: 130 ÷ 20, rounded up, as before.
+        #expect(try one(p)?.days == 7)
+        // His own drift counts the same.
+        #expect(try one(p, trends: trends(p, drift: MeasuredRate(-26, .own(intervals: 3)), used: 4))?.days == 5)
+    }
+
+    @Test func theDriftsEvidenceJoinsTheBasisOfTheDays() throws {
+        // Every label FM27 measured but the trend rules': the days rest on them, so the basis is theirs.
+        let p = Player.fixture(jadedness: 450)
+        var q = relabelled(["restWatchShare", "jadednessRecoveryPerDay"], .fm27Measured)
+        q.jadedThreshold = Parameter(q.jadedThreshold.value, .fm27Measured, source: "test")
+        q.jadednessTrendRules = Parameter(q.jadednessTrendRules.value, .carriedOverFM26, source: "test")
+        let measured = try #require(try one(p, trends: trends(p, drift: MeasuredRate(-10, .squad(.firstTeam)), used: 2),
+                                            parameters: q))
+        #expect(measured.basis == .carriedOverFM26)
+        #expect(try one(p, parameters: q)?.basis == .fm27Measured)
+    }
+
+    @Test func noDaysWhenRestFromMatchesWillNotClearIt() throws {
+        let p = Player.fixture(jadedness: 450)
+        let a = try #require(try one(p, trends: trends(p, drift: MeasuredRate(2, .squad(.firstTeam)), used: 2)))
+        #expect(a.days == nil)
+        #expect(a.trend.restWillNotClear)
+        #expect(AdvisorText.clear(in: a) == nil)
+        #expect(a.level == .rest)
+        // A drift of exactly 0 will not clear it either.
+        let zero = try #require(try one(p, trends: trends(p, drift: MeasuredRate(0, .own(intervals: 3)), used: 4)))
+        #expect(zero.days == nil && zero.trend.restWillNotClear)
+        // Above the lineup's line with a higher limit of his own, the same.
+        let h = hardy(jadedness: 450)
+        let over = try #require(try one(h, trends: trends(h, drift: MeasuredRate(2, .squad(.firstTeam)), used: 2)))
+        #expect(over.level == .rest && over.days == nil && over.trend.restWillNotClear)
+    }
+
+    @Test func restWillNotClearOnlyForAPlayerOverALine() throws {
+        // Watched for being close, with a rising drift: there is nothing to clear.
+        let p = Player.fixture(jadedness: 350)
+        let a = try #require(try one(p, trends: trends(p, drift: MeasuredRate(2, .squad(.firstTeam)), used: 2)))
+        #expect(a.level == .watch && !a.trend.restWillNotClear)
+        // Rested for low condition alone, the same.
+        let low = Player.fixture(condition: 0.6, jadedness: 0)
+        let b = try #require(try one(low, trends: trends(low, drift: MeasuredRate(2, .squad(.firstTeam)), used: 2)))
+        #expect(b.level == .rest && !b.trend.restWillNotClear && b.days != nil)
+    }
+
+    @Test func aPlayerNeedingAHolidayKeepsTheHolidayEstimate() throws {
+        let p = Player.fixture(jadedness: 650)
+        let before = try #require(try one(p))
+        let a = try #require(try one(p, trends: trends(p, drift: MeasuredRate(2, .squad(.firstTeam)), used: 2)))
+        #expect(a.level == .holiday)
+        #expect(a.days == before.days)
+        #expect(a.days != nil)
+        #expect(!a.trend.restWillNotClear)
+        #expect(a.basis == before.basis)
+    }
+
+    @Test func conditionDaysMoveJadednessByHisMeasuredPair() throws {
+        // Condition below the floor at jadedness 390, under his limit: rest days bring condition back more slowly while
+        // jadedness is above 0, and his pair takes it up where the fixed figures bring it down.
+        let p = Player.fixture(condition: 0.75 - 8 * 0.015625, jadedness: 390)
+        let pair = JadednessRates(drift: MeasuredRate(60, .own(intervals: 3)), gain: MeasuredRate(60, .own(intervals: 3)))
+        func expected(_ rates: JadednessRates?) throws -> Int {
+            var fitness = ProjectedFitness(p)
+            var days = 0
+            while fitness.condition < flatRecovery.conditionFloor.value {
+                fitness = try FitnessProjection.afterDays(1, fitness, player: p, intensity: .medium, rates: rates,
+                                                          parameters: flatRecovery)
+                days += 1
+            }
+            return days
+        }
+        let withPair = try expected(pair), without = try expected(nil)
+        #expect(withPair > without)
+        let measured = trends(p, seen: rising(10), drift: pair.drift, gain: pair.gain, used: 5)
+        let a = try #require(try one(p, trends: measured, parameters: flatRecovery))
+        #expect(a.level == .rest && a.days == withPair)
+        #expect(try one(p, parameters: flatRecovery)?.days == without)
+        // A drift with no gain is no pair: the fixed figures, as before.
+        #expect(try one(p, trends: trends(p, drift: pair.drift, used: 2), parameters: flatRecovery)?.days == without)
+    }
+
+    @Test func trendsForOtherPlayersChangeNothing() throws {
+        let other = Player.fixture(name: "Other", jadedness: 0)
+        let measured = trends(other, seen: rising(35), drift: MeasuredRate(5, .own(intervals: 3)),
+                              gain: MeasuredRate(60, .own(intervals: 3)), used: 5)
+        let before = try advice(mixedSquad.players, history: mixedSquad.history)
+        let after = try advice(mixedSquad.players, history: mixedSquad.history, trends: measured)
+        #expect(after == before)
     }
 }

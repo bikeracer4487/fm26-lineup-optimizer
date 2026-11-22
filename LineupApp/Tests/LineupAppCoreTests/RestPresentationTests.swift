@@ -11,7 +11,9 @@ import Testing
                         basis: Evidence = .derived) -> RestAdvice {
         RestAdvice(player: PlayerID(key: key), name: name, level: level, jadedness: jadedness, limit: limit,
                    limitNotes: notes, condition: condition, consecutiveStarts: starts, days: days, reasons: reasons,
-                   basis: basis)
+                   basis: basis,
+                   trend: RestTrend(squad: .firstTeam, seen: nil, imports: 0, importsNeeded: 4, passesOn: nil, drift: nil,
+                                    gain: nil, restWillNotClear: false, basis: .derived))
     }
 
     // MARK: Stamps

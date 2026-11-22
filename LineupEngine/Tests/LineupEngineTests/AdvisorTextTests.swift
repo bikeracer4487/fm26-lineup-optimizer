@@ -65,7 +65,7 @@ import Testing
 
     func rest(_ level: RestLevel, days: Int?) -> RestAdvice {
         RestAdvice(player: PlayerID(key: "p"), name: "P", level: level, jadedness: 500, limit: 400, limitNotes: [],
-                   condition: 0.9, consecutiveStarts: 3, days: days, reasons: [], basis: .derived)
+                   condition: 0.9, consecutiveStarts: 3, days: days, reasons: [], basis: .derived, trend: .unmeasured)
     }
 
     @Test func clearIn() {
@@ -78,7 +78,8 @@ import Testing
 
     func rest(jadedness: Int, limit: Int, notes: [String] = []) -> RestAdvice {
         RestAdvice(player: PlayerID(key: "p"), name: "P", level: .rest, jadedness: jadedness, limit: limit,
-                   limitNotes: notes, condition: 0.9, consecutiveStarts: 0, days: nil, reasons: [], basis: .derived)
+                   limitNotes: notes, condition: 0.9, consecutiveStarts: 0, days: nil, reasons: [], basis: .derived,
+                   trend: .unmeasured)
     }
 
     @Test func jadednessAgainstHisLimit() {

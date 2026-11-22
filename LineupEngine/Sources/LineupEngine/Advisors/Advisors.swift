@@ -13,9 +13,12 @@ public struct AdvisorsRequest: Sendable {
     public var intensity: TrainingIntensity
     public var accepted: [Retraining]
     public var rejected: Set<RetrainingChoice>
+    /// What the readings kept at each import show, for Rest; `.none` when nothing is measured.
+    public var trends: FitnessTrends
 
     public init(primary: Tactic, tactics: [Tactic], players: [Player], ownClub: String?, history: StartHistory,
-                asOf: Day, intensity: TrainingIntensity, accepted: [Retraining], rejected: Set<RetrainingChoice>) {
+                asOf: Day, intensity: TrainingIntensity, accepted: [Retraining], rejected: Set<RetrainingChoice>,
+                trends: FitnessTrends = .none) {
         self.primary = primary
         self.tactics = tactics
         self.players = players
@@ -25,6 +28,7 @@ public struct AdvisorsRequest: Sendable {
         self.intensity = intensity
         self.accepted = accepted
         self.rejected = rejected
+        self.trends = trends
     }
 }
 
@@ -36,6 +40,8 @@ public struct AdvisorsReport: Equatable, Sendable {
     public let removal: RemovalReport
     /// Never recommends a player in `removal.advisedToLeave`.
     public let training: TrainingReport
+    /// The trends the request was handed, for the Rest screen's squad lines.
+    public let trends: FitnessTrends
 }
 
 public enum Advisors {
@@ -63,7 +69,7 @@ public enum Advisors {
 
         let primary = try solve(request.primary)
         let rest = try Rest.advice(players: players, ownClub: ownClub, history: request.history, asOf: request.asOf,
-                                   intensity: request.intensity, parameters: parameters)
+                                   intensity: request.intensity, trends: request.trends, parameters: parameters)
         let removal = try Removal.report(players: players, ownClub: ownClub, money: money, history: request.history,
                                          asOf: request.asOf, retraining: request.accepted,
                                          assignments: try request.primary.assignments(catalog: catalog),
@@ -79,6 +85,6 @@ public enum Advisors {
         }
 
         return AdvisorsReport(elevens: primary.elevens, depth: primary.depth, rest: rest, removal: removal,
-                              training: training)
+                              training: training, trends: request.trends)
     }
 }

@@ -259,23 +259,14 @@ public enum ErrorDescriptions {
     /// "The first team's wages are in $ and the U21s' are in £.": every squad given, first team first.
     private static func currenciesSentence(_ symbols: [Squad: String]) -> String {
         let held = Squad.allCases.compactMap { squad in symbols[squad].map { (squad: squad, symbol: $0) } }
-        var parts = held.map { "\(possessive($0.squad)) are in \($0.symbol)" }
+        var parts = held.map { "\(AdvisorText.possessive($0.squad)) are in \($0.symbol)" }
         // The first part starts the sentence and says what is in each currency.
         if let first = held.first {
-            let owner = possessive(first.squad)
+            let owner = AdvisorText.possessive(first.squad)
             parts[0] = owner.prefix(1).uppercased() + owner.dropFirst() + " wages are in \(first.symbol)"
         }
         guard let last = parts.popLast() else { return "" }
         return (parts.isEmpty ? last : parts.joined(separator: ", ") + " and " + last) + "."
-    }
-
-    /// The squad as the owner of its wages: "the first team's", "the U21s'".
-    private static func possessive(_ squad: Squad) -> String {
-        switch squad {
-        case .firstTeam: "the first team's"
-        case .u21: "the U21s'"
-        case .u18: "the U18s'"
-        }
     }
 
     private static func phaseName(_ phase: Phase) -> String { phase == .inPossession ? "in-possession" : "out-of-possession" }

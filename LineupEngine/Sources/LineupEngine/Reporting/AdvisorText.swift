@@ -228,10 +228,12 @@ public enum AdvisorText {
         }
     }
 
-    /// "Clear in about 3 days"; nil for watch, which has nothing to clear.
+    /// "Clear in about 3 days"; nil for watch, which has nothing to clear, and when rest from matches will not clear
+    /// it (his trend lines say so).
     public static func clear(in advice: RestAdvice) -> String? {
         switch advice.level {
         case .holiday, .rest:
+            if advice.trend.restWillNotClear { return nil }
             guard let days = advice.days else { return "Clear in more days than the estimate covers" }
             return "Clear in about \(days) \(days == 1 ? "day" : "days")"
         case .watch:

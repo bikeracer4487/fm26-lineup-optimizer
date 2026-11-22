@@ -60,10 +60,11 @@ import Testing
     }
 
     func request(_ players: [Player], tactics: [Tactic]? = nil, history: [ConfirmedLineup] = [],
-                 accepted: [Retraining] = [], rejected: Set<RetrainingChoice> = []) -> AdvisorsRequest {
+                 accepted: [Retraining] = [], rejected: Set<RetrainingChoice> = [],
+                 trends: FitnessTrends = .none) -> AdvisorsRequest {
         AdvisorsRequest(primary: tactic, tactics: tactics ?? [tactic], players: players, ownClub: ownClub,
                         history: StartHistory(history), asOf: asOf, intensity: .medium, accepted: accepted,
-                        rejected: rejected)
+                        rejected: rejected, trends: trends)
     }
 
     func report(_ request: AdvisorsRequest, money: MoneyStyle = .weeklyPounds,
@@ -79,7 +80,7 @@ import Testing
         let depth = try Depth.report(tactic: r.primary, players: r.players, ownClub: r.ownClub, catalog: catalog,
                                      profile: profile, parameters: parameters)
         let rest = try Rest.advice(players: r.players, ownClub: r.ownClub, history: r.history, asOf: r.asOf,
-                                   intensity: r.intensity, parameters: parameters)
+                                   intensity: r.intensity, trends: r.trends, parameters: parameters)
         let removal = try Removal.report(tactic: r.primary, players: r.players, ownClub: r.ownClub, money: money,
                                          history: r.history, asOf: r.asOf, retraining: r.accepted,
                                          catalog: catalog, profile: profile, parameters: parameters)
@@ -88,7 +89,30 @@ import Testing
         let training = try Training.report(tactics: tactics, players: r.players, ownClub: r.ownClub, accepted: r.accepted,
                                            rejected: r.rejected, leaving: removal.advisedToLeave, catalog: catalog,
                                            profile: profile, parameters: parameters)
-        return AdvisorsReport(elevens: elevens, depth: depth, rest: rest, removal: removal, training: training)
+        return AdvisorsReport(elevens: elevens, depth: depth, rest: rest, removal: removal, training: training,
+                              trends: r.trends)
+    }
+
+    @Test func theReportCarriesTheTrendsItWasHanded() throws {
+        let squad = try busySquad()
+        let fresh = try #require(squad.first { $0.jadedness <= 0 && !$0.isInjured })
+        // Rising fast enough to pass the line in exactly six weeks, so Rest lists him.
+        let perWeek = Double(400 - fresh.jadedness) / 6
+        let trends = FitnessTrends(
+            players: [fresh.id: PlayerTrend(seen: SeenTrend(perWeek: perWeek, days: 35, starts: 3, readings: 6),
+                                            drift: nil, gain: nil, usedIntervals: 5)],
+            squadDrift: [.firstTeam: SharedRate(value: 2, readings: 30, since: asOf.adding(days: -40))],
+            clubGain: SharedRate(value: 31, readings: 14, since: asOf.adding(days: -40)),
+            measuredFrom: asOf.adding(days: -40))
+        let r = request(squad, trends: trends)
+        let together = try report(r)
+        #expect(together.trends == trends)
+        #expect(together.rest.contains { $0.player == fresh.id && $0.level == .watch })
+        #expect(together == (try Self.oneByOne(r, catalog: catalog, profile: profile, parameters: .fm27)))
+        // A request with none reports none, and lists him no more.
+        let without = try report(request(squad))
+        #expect(without.trends == .none)
+        #expect(!without.rest.contains { $0.player == fresh.id })
     }
 
     @Test func theReportEqualsTheAdvisorsCalledOneByOne() throws {
