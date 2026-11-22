@@ -111,6 +111,22 @@ import Testing
         #expect(rest(p, jadedness: 330, twoMedium(rejectedFromA: [PlannerFixture.id(.D_L, "first")]), rates: falling) != nil)
     }
 
+    @Test func aFixtureHeIsRejectedForCannotBeTheOneHeIsSavedFor() {
+        let p = player(.ST_C)
+        // Starting leaves him at 426 before A, but he will not play A: nothing to save him for.
+        #expect(rest(p, jadedness: 380, [later("a", .medium, inDays: 7, rejected: [p.id])], rates: falling) == nil)
+    }
+
+    @Test func theFixtureAfterOneHeIsRejectedForCanBe() throws {
+        let p = player(.ST_C)
+        // He takes no match at A: starting is 426 before A and 412 before Buxton, resting 366 and 352.
+        let fixtures = [later("a", .medium, inDays: 7, rejected: [p.id]), later("b", .medium, inDays: 14, opponent: "Buxton")]
+        let due = try #require(rest(p, jadedness: 380, fixtures, rates: falling))
+        #expect(due.fixture == FixtureID("b"))
+        #expect(abs(due.adjustment.cost - advantage * 1.5 / 0.8) < 1e-9)
+        #expect(due.adjustment.reason.hasSuffix("jaded for Buxton on \(AdvisorText.shortDay(today.adding(days: 14)))"))
+    }
+
     @Test func noCostWhenTodaysFixtureRejectsHim() {
         let p = player(.ST_C)
         let rejected = RestBeforeLine.adjustment(
