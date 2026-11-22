@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: each player's jadedness trend, measured from the imports
 
 Date: 21 November 2026
-Status: written for the owner's approval; not built. A reviewer read it as a builder on 21 November 2026, and its five questions are answered in the text (how a match is tied to a reading, when a rate counts as measured, the mixed cases on the Rest screen, the rest rule without measured rates, the jadedness steps). He chose the approach (the third of three, below) on 21 November 2026. Everything marked "this design's call" is the builder's, and is his to change.
+Status: built, by `docs/superpowers/plans/2026-11-21-fm27-jadedness-trend.md`, on 21 and 22 November 2026. Four passages were changed during the build and are marked "revised" (sections 5, 6 and 7). It was written for the owner's approval, and a reviewer read it as a builder on 21 November 2026, and its five questions are answered in the text (how a match is tied to a reading, when a rate counts as measured, the mixed cases on the Rest screen, the rest rule without measured rates, the jadedness steps). He chose the approach (the third of three, below) on 21 November 2026. Everything marked "this design's call" is the builder's, and is his to change.
 
 Research: `docs/Research/fm27-jadedness-and-holidays.md` and `docs/Research/fm27-training-intensity-by-condition.md`, both of 21 November 2026.
 
@@ -130,7 +130,7 @@ It applies only to a player with a measured pair. With the fixed figures, which 
 
 For such a player considered for a fixture F, with his projected jadedness before F:
 
-1. Take the fixtures after F that the planner hands the saving rule. Project his jadedness before each, twice: **starting** F and every later one, and **resting** F and starting every later one. A fixture the owner has rejected him for is one he does not start, in both.
+1. Take the fixtures after F that the planner hands the saving rule. Project his jadedness before each, twice: **starting** F and every later one, and **resting** F and starting every later one. A fixture the owner has rejected him for is one he does not start, in both. *Revised during the build: such a fixture also cannot be M below, since being jaded for a match he will not play costs him nothing; the walk skips it. The first text would have named it.*
 2. Find M: the first later fixture, of importance other than high, before which the starting projection is above `jadedThreshold`. With none, no cost.
 3. If the resting projection is also above the line before M, no cost: a match off now does not save him. (Rest says so; section 6.)
 4. If he is not in M's first eleven, or has no advantage there over the second-eleven player, no cost.
@@ -153,6 +153,7 @@ The reason is the engine's: "Rested before he passes 400: at about +31 a start, 
 
 - His trend as seen: "Rising about 45 a week over the last 5 weeks, in which he started 6 matches (from 6 readings)." ("Falling about …", or "Holding steady over the last 5 weeks, …" within 5 a week either way; "in which he did not start a match" with none.)
 - "At that rate he passes 400 around Sun 7 Nov." Only when rising, and only within 120 days.
+- *Revised during the build:* a measured gain of 0 or below gives no "a match off saves" line (a start that does not raise jadedness has nothing for a match off to save), and no cost in the plan.
 - What a match off would do, only when he started a match in those weeks and has a measured pair:
   - with a drift below 0: "Without a start he falls about 30 a week, and a start adds about 61, so a match off saves about 61.";
   - with a drift of 0 or above: "He rises about 16 a week without a start, so leaving him out of matches will not bring it down. Lighter training, or rest from training, will."
@@ -160,9 +161,9 @@ The reason is the engine's: "Rested before he passes 400: at about +31 a start, 
 - When he is rising and did not start in those weeks: "He has not started a match for you in that time: the rise is from training and any matches for another side."
 - With no trend as seen: "His trend is not measured yet: it needs 4 imports of his squad, and has 2."
 
-**Days until clear.** For a player over his limit the estimate uses the drift he takes (his own or his squad's) when he has one and it is below 0. When it is 0 or above there is no estimate, and the "will not bring it down" sentence is given in its place whether or not he started. With no drift the carried-over rate is used, as now. The holiday estimate keeps its carried-over rate.
+**Days until clear.** For a player over his limit the estimate uses the drift he takes (his own or his squad's) when he has one and it is below 0. *Revised during the build: when that count is more than 120 days (`passDateWithinDays`; a drift just under 0 gave a count of years) no clear estimate is given, and the existing "Clear in more days than the estimate covers" is shown. The estimate of days until condition reaches the floor is projected with his measured pair.* When it is 0 or above there is no estimate, and the "will not bring it down" sentence is given in its place whether or not he started. With no drift the carried-over rate is used, as now. The holiday estimate keeps its carried-over rate.
 
-**Each squad, above the rows**, when its drift is measured: "First team: a player who does not start rises about 16 a week (from 38 readings since Tue 24 Aug; this tool's estimate)." ("falls about", "holds steady".) When the club's gain is measured, one line for the club after the squads: "A start adds about 31." When a squad's drift is 0 or above, a caution under its line: "At this training load, leaving players out of matches cannot bring jadedness down."
+**Each squad, above the rows**, when its drift is measured: "First team: a player who does not start rises about 16 a week (from 38 readings since Tue 24 Aug; this tool's estimate)." ("falls about", "holds steady".) When the club's gain is measured, one line for the club after the squads: "A start adds about 31." *Revised during the build: the line says what it rests on, as every other trend line does: "A start adds about 31 (from 14 readings; this tool's estimate)."* When a squad's drift is 0 or above, a caution under its line: "At this training load, leaving players out of matches cannot bring jadedness down."
 
 **What the game's messages mean**, a note at the foot of the screen, each line with its evidence:
 
@@ -174,7 +175,7 @@ The existing reasons and levels are unchanged.
 
 ## 7. The app
 
-**Kept.** A new file through `Store`, `fitness.json` (`StoreFile.fitness`, `FitnessState`): the readings for each player, and the day to measure from, absent until the owner sets it. Its absence is no notice. Saved state from before this design opens with no notice and no readings.
+**Kept.** A new file through `Store`, `fitness.json` (`StoreFile.fitness`, `FitnessState`): the readings for each player, and the day to measure from, absent until the owner sets it. Its absence is no notice. Saved state from before this design opens with no notice and no readings. *Revised during the build: at the first launch with no fitness file, a reading is taken from each squad held, dated that squad's last import, so the squads then need three more imports, not four; when the file exists and can be neither read nor moved aside, none is taken, so it is never written over.*
 
 **At an import** the app records a reading for each player of the imported squad, on the game's date, before the import clears `awaitingImport`. It then plans again, as an import does now.
 
@@ -188,7 +189,7 @@ The existing reasons and levels are unchanged.
 
 **Command line.** `plan` and `advise` take `--fitness-readings <file>`, a JSON object from a player's key to his readings, described at the top of `main.swift`. Without it the fixed figures are used and no trend is printed. `advise` prints the squad lines and the trend lines in its Rest part.
 
-**Pictures**, in `.build/pictures-trend`: the Rest screen with trends falling (`rest-trend-*`), with a squad whose drift is above 0 and the caution (`rest-trend-rising-*`), with nothing measured yet (`rest-unmeasured-*`), and Match Selection with a player rested before the line (`match-restdue-*`). The sample data needs readings to draw them.
+**Pictures**, in `.build/pictures-trend`: the Rest screen with trends falling (`rest-trend-*`), with a squad whose drift is above 0 and the caution (`rest-trend-rising-*`), with nothing measured yet (`rest-unmeasured-*`), and Match Selection with a player rested before the line (`match-restdue-*`). The sample data needs readings to draw them. *Revised during the build: two pictures were added, `rest-trend-tall-*` and `rest-trend-small-*`, since the default window shows only the first rows.*
 
 ## 8. Parameters
 

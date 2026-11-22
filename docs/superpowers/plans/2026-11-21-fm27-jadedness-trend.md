@@ -353,7 +353,7 @@ The tests, each with the assertions that pin it:
 | `twoIntervalsAreNotEnoughForHisOwnRateOrHisTrend` | `["a": Array(resting.prefix(3))]` | `a.drift == nil`, `a.seen == nil`, `usedIntervals == 2` |
 | `aSquadsDriftNeedsFiveIntervalsOnThreeDays` | `["a": resting, "b": resting]` | `squadDrift[.firstTeam] == SharedRate(value: -2, readings: 8, since: start)`. With `b` cut to its first two readings (4 intervals): nil. With `a` and `b` each `[r(0,100), r(7,86), r(14,72)]` and `c` `[r(7,86), r(14,72)]` (5 intervals ending on 2 days): nil |
 | `aStarterTakesHisSquadsDriftAndHisOwnGain` | `["a": resting, "b": resting, "q": starting]`, `matches("q")` | `q.drift == MeasuredRate(-2, .squad(.firstTeam))`; `q.gain == MeasuredRate(31, .own(intervals: 3))`; `q.pair != nil`; `q.seen == SeenTrend(perWeek: 17, days: 21, starts: 3, readings: 4)`; `clubGain == nil` (3 intervals) |
-| `theClubsGainNeedsFiveIntervalsOnThreeDays` | as above plus `"q2": starting`, `matches("q", "q2")` | `clubGain == SharedRate(value: 31, readings: 8, since: start)`. Then add `"y"` with readings `[r(14, 0), r(21, 15)]` and `matches("q", "q2", "y")`: in `.u18` (no drift for the U18s) `y.gain == nil` and `y.pair == nil`; in `.firstTeam` `y.drift == MeasuredRate(-2, .squad(.firstTeam))`, `y.gain == MeasuredRate(31, .club)` (the median of six at 31 and his one at 29) and `clubGain?.readings == 10` |
+| `theClubsGainNeedsFiveIntervalsOnThreeDays` | as above plus `"q2": starting`, `matches("q", "q2")` | `clubGain == SharedRate(value: 31, readings: 8, since: start)`. Then add `"y"` with readings `[r(14, 0), r(21, 15)]` and `matches("q", "q2", "y")`: in `.u18` (no drift for the U18s) `y.drift == nil`, `y.gain == MeasuredRate(31, .club)` (he takes the club's gain even with no drift of his own: design §2, "his own, else the club's, else none") and `y.pair == nil` (corrected during the build: the first text expected `y.gain == nil`); in `.firstTeam` `y.drift == MeasuredRate(-2, .squad(.firstTeam))`, `y.gain == MeasuredRate(31, .club)` (the median of six at 31 and his one at 29) and `clubGain?.readings == 10` |
 | `aDriftWithNoGainAndAGainWithNoDriftAreNoPair` | `["a": resting]`; and `["q": starting]` with `matches("q")` | `a.pair == nil`; `q.drift == nil`, `q.gain == nil`, `q.pair == nil`, and `pairs.isEmpty` in both |
 | `anIntervalIsKeptOrLeftOutByEachRule` | `["x": resting]`, changed as said, reading `x.usedIntervals` | as given: 3. `asOf: 63` (the last reading exactly 42 days back): 1; `asOf: 64`: 0. `from: 7`: 2; `from: 8`: 1. Readings `[r(0,100), r(14,72), r(21,58)]`: 2; `[r(0,100), r(15,70), r(21,58)]`: 1. `r(7, 86, injured: true)` in place of the second: 1. `r(7, -500)` in place of the second: 1. `asOf: 20` (the last reading is after the day asked for): 2 |
 | `aMatchOnAnImportDayCountsByWhatTheReadingIncludes` | `a`, `b` `resting`; `q` reads `[r(0,100), r(7,117, includes: ["m7"]), r(14,134), r(21,151)]`; lineups naming `q`: `m7` on day 7, `m10` on day 10, `m17` on day 17 | each interval has one start: `q.gain == MeasuredRate(31, .own(intervals: 3))`, `squadDrift[.firstTeam]?.readings == 8`. With `includes` removed, `m7` belongs to the day-14 reading: `q`'s first interval is a rest interval (`squadDrift[.firstTeam]?.readings == 10`), `q.gain == nil` (two start intervals), and `q.seen?.starts == 3` still |
@@ -445,7 +445,7 @@ public enum RestBeforeLine {
 The rule (§5), exactly:
 
 1. Nil when `settings.savingPlayers` is 0, `rates` is nil, today's importance has no usable weight, or today's fixture rejects him.
-2. Take `later` dated after today, in date then id order. Keep two jadedness figures, **starting** (`jadednessAfterMatch` of `jadedness`) and **resting** (`jadedness`), and walk the fixtures: move both on by the days since the previous date (`jadednessAfterDays`, with his rates); then, if the fixture's importance is not high and starting, rounded to a whole number, is above `jadedThreshold`, it is M and the walk stops; otherwise, unless the fixture rejects him, both take a match (`jadednessAfterMatch`).
+2. Take `later` dated after today, in date then id order. Keep two jadedness figures, **starting** (`jadednessAfterMatch` of `jadedness`) and **resting** (`jadedness`), and walk the fixtures: move both on by the days since the previous date (`jadednessAfterDays`, with his rates); then, if the fixture rejects him, it is one he does not start either way: it cannot be M, and neither figure takes a match; otherwise, if the fixture's importance is not high and starting, rounded to a whole number, is above `jadedThreshold`, it is M and the walk stops; otherwise both take a match (`jadednessAfterMatch`) (corrected during the build: the first text let a fixture he is rejected for be M, and tested only the fixture before the rejection; the tests `aFixtureHeIsRejectedForCannotBeTheOneHeIsSavedFor` and `theFixtureAfterOneHeIsRejectedForCanBe` were added).
 3. Nil with no M; nil when resting, rounded, is also above the line before M.
 4. Nil unless he is in M's first eleven (`tiers.slot(of:)` gives tier 1) with an advantage above 0, and M's importance has a usable weight.
 5. The cost is advantage × weight(M) ÷ weight(today) × `settings.savingPlayers`, at most `savingCostCeiling`. Nil at 0.
@@ -589,7 +589,7 @@ Rules in `trendLines(of:)`, in the order of Exact copy:
 - Consumes: `FitnessTrend.rates`, `PlanRequest.rates`, `AdvisorsRequest.trends`, the `AdvisorText` functions of Task 6.
 - Produces: `--fitness-readings <file>` on `plan` and `advise`: a JSON object from a player's key to an array of readings, each `{"day": "YYYY-MM-DD", "jadedness": 120, "condition": 0.92, "sharpness": 0.9, "isInjured": false, "includes": ["<fixture id>"]}` (the `Codable` form of `FitnessReading`). The rates are worked out with `--history`'s lineups, each player's squad from the pastes, `--as-of` as the day and no measure-from day. Without the option the fixed figures are used and no trend is printed. A file that cannot be read or decoded stops the command with a sentence naming the file.
 
-- [ ] **Step 1: Build the fixture.** Readings for the captured first team and U21s, keyed as the pastes key them, on four days a week apart ending on 2026-11-13, written by hand so that with `sample-history.json` the first team's drift, the club's gain and at least one player's own gain are measured, the first team's drift is below 0 and one regular starter is rising towards 400 inside six weeks. The figures are invented for the captured names; no real save's values.
+- [ ] **Step 1: Build the fixture.** Readings for the captured first team and U21s, keyed as the pastes key them, on four days a week apart ending on 2026-11-13, written by hand so that, measured against `sample-history-with-readings.json` (a longer history than `sample-history.json`, whose two lineups cannot measure a trend; corrected during the build, which also dropped the acceptance below that the plan's output differs with the option), the first team's drift, the club's gain and at least one player's own gain are measured, the first team's drift is below 0 and one regular starter is rising towards 400 inside six weeks. The figures are invented for the captured names; no real save's values.
 
 - [ ] **Step 2: Add the option, its usage text and the printing.** `advise`'s Rest part prints the squad lines (each caution under its line), the club line, the measured-from line, then under each player's reasons his trend lines; and the game-messages heading and lines at its end. `plan` hands `rates` to the request.
 
@@ -598,7 +598,7 @@ Rules in `trendLines(of:)`, in the order of Exact copy:
 Run the `advise` command from `CLAUDE.md` with `--fitness-readings Tests/LineupEngineTests/Fixtures/plans/sample-fitness-readings.json`.
 Expected: under `=== Rest ===` a line starting `First team: a player who does not start falls about`, a line starting `A start adds about`, a player with `Rising about` and `At that rate he passes 400 around`, and the three game-message lines. Run it without the option: none of those lines but the three game messages, and the rest of the output as before.
 
-Run the `plan` command with and without the option. Expected: both succeed; with it, at least one player's projected jadedness in a later fixture differs.
+Run the `plan` command with and without the option. Expected: both succeed; with it, at least one player's projected jadedness in a later fixture differs. (Corrected during the build: this acceptance was dropped. `plan` prints no projected jadedness, and on the captured squad no measured rate reaches 400 inside five fixtures, so it picks the same lineups with and without the option; one printed value differs, by 0.1.)
 
 - [ ] **Step 4: Add the option to `CLAUDE.md`'s `plan` and `advise` paragraphs** in two sentences, and run `cd LineupEngine && swift test` (PASS, clean build).
 
@@ -687,7 +687,7 @@ Rules:
 - Modify: `LineupApp/Sources/LineupAppCore/SquadPresentation.swift:6-12` (`displayName` returns `AdvisorText.name`)
 - Modify: `LineupApp/Sources/LineupAppCore/SettingsPresentation.swift`, `LineupApp/Sources/LineupAppUI/Settings/SettingsScreen.swift:76-83`
 - Modify: `LineupApp/Sources/LineupAppUI/Advice/RestScreen.swift`, `LineupApp/Sources/LineupAppUI/Theme.swift` (any new measure)
-- Modify: `LineupApp/Sources/LineupAppCore/SampleData.swift`, `LineupApp/Sources/LineupAppUI/ScreenPictures.swift`
+- Modify: `LineupApp/Sources/LineupAppCore/SampleData.swift`, `LineupApp/Sources/LineupApp/main.swift` (corrected during the build: the first text named `ScreenPictures.swift`; every picture variant is registered in `main.swift`)
 - Test: `LineupApp/Tests/LineupAppCoreTests/RestPresentationTests.swift`, `SettingsPresentationTests.swift`, `MatchPresentationTests.swift`
 
 **Interfaces:**
@@ -742,7 +742,7 @@ Layout, within the visual direction (`docs/superpowers/specs/2026-11-13-fm27-app
 
 - [ ] **Step 4: Run the filters** (PASS).
 
-- [ ] **Step 5: Add the sample models and the pictures** `rest-trend-*`, `rest-trend-rising-*`, `rest-unmeasured-*` and `match-restdue-*` to `ScreenPictures`, then draw them:
+- [ ] **Step 5: Add the sample models and the pictures** `rest-trend-*`, `rest-trend-rising-*`, `rest-unmeasured-*` and `match-restdue-*` to the picture variants in `LineupApp`'s `main.swift` (corrected during the build: the first text said `ScreenPictures`), then draw them:
 
 Run: `cd LineupApp && swift run -q LineupApp --sample-data .. --pictures .build/pictures-trend`
 Expected: the eight new PNGs (light and dark) among the rest. Open each with the Read tool and check: every sentence is whole and unclipped at the default and the smallest window; the squad lines, the caution and the button read in that order; a row's trend lines are plainly under that row; the foot note is legible; `match-restdue-*` shows the rested reason under the player left out. Also look again at `rest-*`, `settings-*` and `match-*` for anything this moved. Fix what is wrong and draw again.
@@ -771,3 +771,64 @@ Expected: the eight new PNGs (light and dark) among the rest. Open each with the
 - [ ] **Step 5: Commit** (`Record the jadedness trend in the project notes, with what it changed on the captured squad and the limits left`)
 
 The install (`tools/build_app.sh`), the first imports on the owner's save and the reading of the Rest screen against the game are left to the owner.
+
+## What the commands showed on the captured squad
+
+Run on 22 November 2026 with the commands of `CLAUDE.md`, on the engine as it was before this build (commit `7583598`) and as it is now.
+
+- **Tasks 1 and 2 alone change no lineup on the captured squad.** `plan`'s output is identical before and after, and `advise`'s differs only by the new heading "What the game's messages mean" and its three lines at the end of the Rest part. Every captured player's jadedness is below 0, so the two changes that could move a lineup on their own, no ×0.90 between 200 and 400 and slower condition recovery above jadedness 0, have nobody to act on. Nobody is picked now who was not.
+- **With `--fitness-readings Tests/LineupEngineTests/Fixtures/plans/sample-fitness-readings.json` and `--history Tests/LineupEngineTests/Fixtures/plans/sample-history-with-readings.json`** (`--as-of 2026-11-13`), `advise`'s Rest part adds the squad line "First team: a player who does not start falls about 7 a week (from 72 readings since Tue 6 Oct; this tool's estimate).", the club's "A start adds about 40 (from 98 readings; this tool's estimate).", "Trend measured from Tue 6 Oct.", and under Evan Humphries "Rising about 35 a week over the last 5 weeks, in which he started 6 matches (from 7 readings)." and "At that rate he passes 400 around Wed 3 Mar.", and under Dejan Tetek "Rising about 97 a week over the last 3 weeks, in which he started 4 matches (from 5 readings).", "At that rate he passes 400 around Wed 23 Dec." and "Without a start he falls about 7 a week, and a start adds about 89, so a match off saves about 89. (the first team's rate without a start; his own rate for a start)".
+- **`plan` picks the same lineups with and without the option.** From about −150 on the captured paste, no measured rate takes anyone to 400 inside five fixtures, and `plan` prints no projected jadedness; the one difference in its printed table is Dejan Tetek's value in the first fixture, 125.3 without the option and 125.2 with it (so "identical", as the build's notes had it, was not quite so). The readings are invented for the captured names and agree with the paste of 13 November; they hold no real save's values. Whether the trend moves a real lineup is for the owner's own save.
+
+## What changed during the build
+
+1. **A player with no drift of his own still takes the club's gain** when the club has one, though he has no measured pair either way (design §2: "his own, else the club's, else none"). Task 3's table expected no gain for a U18 with no drift; it was corrected in place.
+2. **`FitnessTrends.measuredFrom` follows one rule** whether or not readings are kept: the day to measure from when it is later than the window's first day, else the earliest reading in the window, else none.
+3. **A fixture the owner has rejected the player for cannot be the fixture resting him saves him for.** The first rule let it be M, so a player could be rested for a match he would not play; the walk now skips it, and two tests were added. Task 5's text was corrected in place.
+4. **Rest's estimate of days until condition reaches the floor takes the player's measured pair**, since his jadedness moves with it and slows condition above 0.
+5. **With a measured drift below 0, a count of more than 120 days to clear is not given** (`passDateWithinDays`); the existing "Clear in more days than the estimate covers" is shown. A drift just under 0 had given a count of years.
+6. **Task 6 repaired the app's Rest test helper** so the app kept building between tasks.
+7. **The command line's sample needed its own longer history**, `sample-history-with-readings.json`, since `sample-history.json` has two lineups and cannot measure a trend; its readings agree with the captured paste of 13 November, so the on-course sample is one an import could produce. The acceptance that `plan`'s output differs with the option was dropped (see above). Task 7's text was corrected in place.
+8. **One existing Rest test changed beyond its figures** (Task 1): `whenBothApplyTheLargerCounts` had its starting condition changed as well as its pinned days, because recovery is slower above jadedness 0. **Eight tests that pinned ×0.90** (Task 2) now run on a test-only parameter set with the old steps (`EngineParameters.withAMarkDownFrom200`) or moved to 450 and ×0.70.
+9. **At launch, when the fitness file can be neither read nor moved aside, no first reading is taken**, so the file is never written over (Task 8).
+10. **The pictures are registered in `LineupApp`'s `main.swift`**, where every variant is, not in `ScreenPictures.swift` as the plan said; two pictures were added, `rest-trend-tall-*` and `rest-trend-small-*`, because the default window shows only the first rows (Task 9). Task 9's text was corrected in place.
+11. **Commits by an implementer on another model carry that model's Co-Authored-By line.**
+
+The pictures were checked in `LineupApp/.build/pictures-trend`: `rest-trend-*` (a falling squad), `rest-trend-rising-*` (a squad rising without starts, with the caution), `rest-trend-tall-*` and `rest-trend-small-*`, `rest-unmeasured-*` and `match-restdue-*`.
+
+## Limits left
+
+The design's seven limits, as they turned out:
+
+- **Nothing is measured until a squad has been imported four times** (three more after the first reading taken at launch from the squads held). Until then the plan uses the fixed figures, which the owner's save shows are wrong in direction, and rests nobody before the line.
+- **A regular starter has no rest intervals, so his drift is his squad's.** What a match off would save him is partly the squad's figure, and the line says so in brackets.
+- **A change of training shows slowly** unless the owner presses "Measure again from today".
+- **A match played and never confirmed, a holiday and a lay-off each spoil one interval.** The median sets aside a few, not many.
+- **Jadedness is taken to move at the same rate at every level.** Whether it clears faster from higher up is untested.
+- **The 400 line was read off five prime-age players.** Whether the game's status comes earlier for teenagers or players over 30 is untested.
+- **Substitutes are still not planned for.**
+
+The limits this plan names:
+
+- **The listing on course reads `jadedThreshold`, not the player's own limit.** A player whose own limit is lower is listed by the other rules as he nears it.
+- **A player's readings all count under the squad he is in now**, so a player moved between squads brings his old readings into his new squad's drift.
+- **The first reading taken at launch is dated the squad's last import**, which is the only day the app knows for it.
+
+Small faults found in review and left:
+
+- The saving rule and the rest-before-the-line rule can both count the loss at one fixture when the saving rule broke a risk rule there but named a heavier fixture.
+- A drift just under 0 writes "Without a start he falls about 0 a week"; a drift below 0 inside the steady band says "falls about 2 a week" where the squad line would say "holds steady".
+- The planner's reason can say "+0" for a measured gain under 0.5.
+- "Trend measured from" (the earliest reading in the 42 days) can be up to 14 days later than a squad line's "since".
+- The saving reason writes its date as 2026-11-21 beside the new reason's "Tue 17 Nov" on Match Selection.
+- A row's spoken text says "this tool's estimate" twice, and the note also follows "His trend is not measured yet".
+- The sample readings for the command line cover the first team only, so U21 rows say "has 0".
+- The "Measure again from today" question and the button's look are not checked in the running app: the pictures draw buttons as an inactive window would.
+
+## Left to the owner
+
+- Install with `tools/build_app.sh` from the repository root. It closes the open copy of the app and replaces it. It was not run in this build.
+- Import each squad as usual. The app takes a first reading from the squads it holds at the first launch and a reading at every import after; the Rest screen's squad lines, the club's line and "Trend measured from" appear once a squad has enough of them. Check them against what the game shows: whether the first team's drift and the gain for a start are about what the weeks of readings suggest.
+- Read the Rest screen against the game: each listed player's trend lines, the date he is said to pass 400, "a match off saves", and "will not bring it down" for a player whose drift is above 0. Say where the tool and the game disagree.
+- Look at "Measure again from today" and its question in the running app, since the pictures cannot show how the button and the dialog look. Press it after a change of training in the game.
+- Look at Match Selection for a plan that rests a player before the line, once the readings give a pair: "Rested before he passes 400: …" under the player left out.
