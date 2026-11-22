@@ -408,6 +408,39 @@ public enum FitnessModel {
         }
         found += GamePlanAdvisor.problems(in: parameters.gamePlanRules.value)
         found += League.problems(in: parameters.leagueStandingRules.value)
+        found += jadednessProblems(in: parameters)
+        return found
+    }
+
+    private static func jadednessProblems(in parameters: EngineParameters) -> [String] {
+        var found: [String] = []
+        let rules = parameters.jadednessTrendRules.value
+        for (name, count) in [("fewestOwnIntervals", rules.fewestOwnIntervals), ("fewestSharedIntervals", rules.fewestSharedIntervals),
+                              ("fewestSharedDays", rules.fewestSharedDays)] where count < 1 {
+            found.append("jadednessTrendRules \(name) is \(count), not 1 or more")
+        }
+        for (name, days) in [("windowDays", rules.windowDays), ("longestGapDays", rules.longestGapDays),
+                             ("onCourseDays", rules.onCourseDays), ("keptDays", rules.keptDays),
+                             ("passDateWithinDays", rules.passDateWithinDays)] where days < 1 {
+            found.append("jadednessTrendRules \(name) is \(days), not 1 or more")
+        }
+        if !(rules.steadyPerWeek.isFinite && rules.steadyPerWeek >= 0) {
+            found.append("jadednessTrendRules steadyPerWeek is \(rules.steadyPerWeek), not a finite number of 0 or more")
+        }
+        let curve = parameters.conditionRecoveryByJadedness.value.sorted { $0.x < $1.x }
+        if curve.isEmpty {
+            found.append("conditionRecoveryByJadedness has no points")
+        }
+        if zip(curve, curve.dropFirst()).contains(where: { $0.1.factor > $0.0.factor }) {
+            found.append("conditionRecoveryByJadedness rises with jadedness; condition cannot come back faster when more jaded")
+        }
+        if curve.contains(where: { !(0...1).contains($0.factor) }) {
+            found.append("conditionRecoveryByJadedness has a factor outside 0 to 1")
+        }
+        let ceiling = parameters.jadednessCeiling.value
+        if !(ceiling > parameters.jadednessFloor.value) {
+            found.append("jadednessCeiling (\(ceiling)) is not above jadednessFloor (\(parameters.jadednessFloor.value))")
+        }
         return found
     }
 }

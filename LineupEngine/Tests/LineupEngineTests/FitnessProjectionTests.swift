@@ -135,4 +135,39 @@ import Testing
             try FitnessProjection.afterDays(1, fitness(), player: player, intensity: .medium, parameters: p)
         }
     }
+
+    let rates = JadednessRates(drift: MeasuredRate(-4, .squad(.firstTeam)), gain: MeasuredRate(31, .own(intervals: 3)))
+    func rising(_ perDay: Double) -> JadednessRates {
+        JadednessRates(drift: MeasuredRate(perDay, .own(intervals: 3)), gain: MeasuredRate(60, .club))
+    }
+
+    @Test func aStartAddsHisMeasuredGainInPlaceOfTheFixedFigure() throws {
+        let player = Player.fixture()
+        #expect(try FitnessProjection.afterMatch(fitness(1, 1, 100), player: player, position: .striker, rates: rates, parameters: p).jadedness == 131)
+        #expect(try FitnessProjection.afterMatch(fitness(1, 1, 100), player: player, position: .striker, parameters: p).jadedness == 160)
+    }
+
+    @Test func aDayAddsHisMeasuredDriftWhicheverWayItPoints() throws {
+        let player = Player.fixture()
+        func after(_ r: JadednessRates?, _ i: TrainingIntensity) throws -> Double {
+            try FitnessProjection.afterDays(3, fitness(1, 1, 100), player: player, intensity: i, rates: r, parameters: p).jadedness
+        }
+        #expect(try after(rates, .high) == 88)
+        #expect(try after(rates, .low) == 88)
+        #expect(try after(rising(2.5), .medium) == 107.5)
+        #expect(try after(nil, .high) == 52)
+    }
+
+    @Test func jadednessStaysBetweenTheFloorAndTheCeiling() throws {
+        #expect(FitnessProjection.jadednessAfterDays(2, -495, intensity: .medium, rates: rates, parameters: p) == -500)
+        #expect(FitnessProjection.jadednessAfterMatch(980, rates: rising(0), parameters: p) == 1_000)
+        #expect(FitnessProjection.jadednessAfterDays(2, 990, intensity: .medium, rates: rising(30), parameters: p) == 1_000)
+    }
+
+    @Test(arguments: [(-500.0, 1.0), (0.0, 1.0), (250.0, 0.916), (500.0, 0.832), (1_000.0, 0.574)])
+    func conditionComesBackMoreSlowlyAboveJadednessZero(jadedness: Double, factor: Double) throws {
+        // Natural Fitness 10 at medium recovers 0.0813 from 80% in a day.
+        let after = try rest(1, fitness(0.80, 1, jadedness))
+        #expect(abs(after.condition - (0.80 + 0.0813 * factor)) < 1e-9)
+    }
 }

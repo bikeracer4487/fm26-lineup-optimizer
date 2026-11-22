@@ -907,4 +907,19 @@ import Testing
         #expect(problems(.nan).count == 1)
         #expect(problems(0).isEmpty)
     }
+
+    @Test func theJadednessParametersAreListedWithEvidenceAndSource() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        #expect(listed["jadednessTrendRules"]?.evidence == .derived)
+        #expect(EngineParameters.fm27.jadednessTrendRules.value
+                == JadednessTrendRules(windowDays: 42, longestGapDays: 14, fewestOwnIntervals: 3, fewestSharedIntervals: 5,
+                                       fewestSharedDays: 3, onCourseDays: 42, steadyPerWeek: 5, keptDays: 120,
+                                       passDateWithinDays: 120))
+        #expect(listed["conditionRecoveryByJadedness"]?.evidence == .derived)
+        #expect(listed["conditionRecoveryByJadedness"]?.source.contains("Fishi") == true)
+        #expect(EngineParameters.fm27.conditionRecoveryByJadedness.value.map { [$0.x, $0.factor] }
+                == [[-500, 1], [0, 1], [500, 0.832], [1_000, 0.574]])
+        #expect(listed["jadednessCeiling"]?.evidence == .fm27Observation)
+        #expect(EngineParameters.fm27.jadednessCeiling.value == 1_000)
+    }
 }

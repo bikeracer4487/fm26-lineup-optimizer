@@ -182,4 +182,61 @@ import Testing
         #expect(FitnessModel.problems(in: q) == ["leagueStandingRules marginPointsLastMatch is 7, over marginPoints (6)"])
         #expect(FitnessModel.problems(in: .fm27).isEmpty)
     }
+
+    @Test(arguments: ["fewestOwnIntervals", "fewestSharedIntervals", "fewestSharedDays"])
+    func aCountOfZeroInTheTrendRulesIsReported(name: String) {
+        var q = EngineParameters.fm27
+        var r = q.jadednessTrendRules.value
+        switch name {
+        case "fewestOwnIntervals": r.fewestOwnIntervals = 0
+        case "fewestSharedIntervals": r.fewestSharedIntervals = 0
+        default: r.fewestSharedDays = 0
+        }
+        q.jadednessTrendRules = Parameter(r, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["jadednessTrendRules \(name) is 0, not 1 or more"])
+    }
+
+    @Test(arguments: ["windowDays", "longestGapDays", "onCourseDays", "keptDays", "passDateWithinDays"])
+    func aDayCountOfZeroInTheTrendRulesIsReported(name: String) {
+        var q = EngineParameters.fm27
+        var r = q.jadednessTrendRules.value
+        switch name {
+        case "windowDays": r.windowDays = 0
+        case "longestGapDays": r.longestGapDays = 0
+        case "onCourseDays": r.onCourseDays = 0
+        case "keptDays": r.keptDays = 0
+        default: r.passDateWithinDays = 0
+        }
+        q.jadednessTrendRules = Parameter(r, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["jadednessTrendRules \(name) is 0, not 1 or more"])
+    }
+
+    @Test func aNegativeSteadyFigureIsReported() {
+        var q = EngineParameters.fm27
+        var r = q.jadednessTrendRules.value
+        r.steadyPerWeek = -1
+        q.jadednessTrendRules = Parameter(r, .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["jadednessTrendRules steadyPerWeek is -1.0, not a finite number of 0 or more"])
+    }
+
+    @Test func theRecoveryCurveByJadednessIsChecked() {
+        var q = EngineParameters.fm27
+        q.conditionRecoveryByJadedness = Parameter([], .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["conditionRecoveryByJadedness has no points"])
+        q.conditionRecoveryByJadedness = Parameter(
+            [CurvePoint(x: 0, factor: 0.5), CurvePoint(x: 500, factor: 0.8)], .derived, source: "test")
+        let rising = FitnessModel.problems(in: q)
+        #expect(rising.count == 1)
+        #expect(rising.first?.contains("conditionRecoveryByJadedness rises with jadedness") == true)
+        q.conditionRecoveryByJadedness = Parameter(
+            [CurvePoint(x: 0, factor: 1.5), CurvePoint(x: 500, factor: 0.8)], .derived, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["conditionRecoveryByJadedness has a factor outside 0 to 1"])
+    }
+
+    @Test func aCeilingNotAboveTheFloorIsReported() {
+        var q = EngineParameters.fm27
+        q.jadednessCeiling = Parameter(-500, .fm27Observation, source: "test")
+        #expect(FitnessModel.problems(in: q) == ["jadednessCeiling (-500.0) is not above jadednessFloor (-500.0)"])
+        #expect(FitnessModel.problems(in: .fm27).isEmpty)
+    }
 }

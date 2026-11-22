@@ -731,6 +731,12 @@ public struct EngineParameters: Sendable {
     public var gamePlanRules: Parameter<GamePlanRules>
     /// The margin, reach and points rules behind where the club stands in the league table.
     public var leagueStandingRules: Parameter<LeagueStandingRules>
+    /// The numbers behind measuring each player's jadedness trend from the imports.
+    public var jadednessTrendRules: Parameter<JadednessTrendRules>
+    /// Multiplies each day's condition recovery, by the player's jadedness (x is a jadedness).
+    public var conditionRecoveryByJadedness: Parameter<[CurvePoint]>
+    /// Jadedness does not rise above this.
+    public var jadednessCeiling: Parameter<Double>
 
     private static let pythonSource = "rating_calculator.py (branch customizable-tactics)"
     private static let fitnessSource = "docs/Research/fm27-condition-fatigue-sharpness.md"
@@ -1215,7 +1221,25 @@ public struct EngineParameters: Sendable {
                     + "no test behind them. The last ten matches are carried over from the old app's table "
                     + "(scoring_parameters.py, where 100 was given only in the last ten league matches), and are used both "
                     + "for the top situation and, by the owner's later rule, for the sides he is battling. Three points for "
-                    + "a win and one for a draw are the game's rule"))
+                    + "a win and one for a draw are the game's rule"),
+            jadednessTrendRules: Parameter(
+                JadednessTrendRules(windowDays: 42, longestGapDays: 14, fewestOwnIntervals: 3, fewestSharedIntervals: 5,
+                                    fewestSharedDays: 3, onCourseDays: 42, steadyPerWeek: 5, keptDays: 120,
+                                    passDateWithinDays: 120),
+                .derived,
+                source: "every number is this design's choice of 21 November 2026 with no test behind it: windowDays (the "
+                    + "weeks a trend is read over), longestGapDays (the longest interval between imports used), "
+                    + "fewestOwnIntervals (for a rate of his own), fewestSharedIntervals and fewestSharedDays (for a "
+                    + "squad's rate to speak for him), onCourseDays (the weeks shown), steadyPerWeek (the drift counted "
+                    + "as steady), keptDays (how long readings are kept) and passDateWithinDays (how far ahead a date is given)"),
+            conditionRecoveryByJadedness: Parameter(
+                [CurvePoint(x: -500, factor: 1), CurvePoint(x: 0, factor: 1), CurvePoint(x: 500, factor: 0.832),
+                 CurvePoint(x: 1_000, factor: 0.574)],
+                .derived,
+                source: "Fishi, fm-arena, 13 November 2026, in docs/Research/fm27-jadedness-and-holidays.md: from 7,500 over "
+                    + "the same rest a player reached 9,574 at -500 and at 0, 9,225 at 500 and 8,690 at 1,000; the anchors "
+                    + "are FM27 measured, applying them day by day is this design's"),
+            jadednessCeiling: Parameter(1_000, .fm27Observation, source: "the editor's range (\(fitnessSource))"))
     }()
 
     private static let removalSource = "ui/api/api_player_removal.py (branch customizable-tactics)"

@@ -211,9 +211,10 @@ import Testing
     }
 
     @Test func whenBothApplyTheLargerCounts() throws {
-        // Jadedness 340 over a limit of 300 needs (340 − 240) / 20 = 5 days; condition needs 14.
-        let p = Player.fixture(age: 32, condition: 0.75 - 14 * 0.015625, jadedness: 340)
-        #expect(try one(p, parameters: flatRecovery)?.days == 14)
+        // Jadedness 340 over a limit of 300 needs (340 − 240) / 20 = 5 days; condition needs 10 at the full rate, and 11
+        // while jadedness above 0 slows its return (the factor is 0.886 at 340, rising to 1 as jadedness falls).
+        let p = Player.fixture(age: 32, condition: 0.75 - 10 * 0.015625, jadedness: 340)
+        #expect(try one(p, parameters: flatRecovery)?.days == 11)
         // Jadedness 480 needs (480 − 240) / 20 = 12; condition needs 1.
         let q = Player.fixture(age: 32, condition: 0.75 - 0.015625, jadedness: 480)
         #expect(try one(q, parameters: flatRecovery)?.days == 12)
