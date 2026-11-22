@@ -176,6 +176,8 @@ import LineupEngine
                 #expect(row.partTitle == (first ? AdvisorText.name(group.part) : nil))
                 if let slot = group.slot, let answer = group.answer {
                     #expect(row.heading == AdvisorText.groupHeading(slot: slot, answer: answer))
+                } else if let slot = group.slot {
+                    #expect(row.heading == AdvisorText.groupHeading(slot: slot))
                 } else {
                     #expect(row.heading == nil)
                 }
@@ -185,6 +187,30 @@ import LineupEngine
             #expect(sheet.groups.compactMap(\.partTitle).count == Set(groups.map(\.part)).count)
             #expect(sheet.groups.contains { $0.partTitle == nil }, "a part with a second group, whose title is not repeated")
         }
+    }
+
+    /// A group at a slot with no need is headed by the position alone.
+    @Test func aGroupThatAnswersNoNeedIsHeadedByItsPositionAlone() throws {
+        let t = try ScoutingSetup.ready()
+        let assignments = try #require(t.model.primaryTactic).tactic.assignments(catalog: t.model.catalog)
+        // A slot with no need whose positions no other slot shares, so a player made to play it plays nowhere else.
+        let assignment = try #require(try ScoutingSetup.needs(t.model).fine.lazy.compactMap { slot in
+            assignments.first { $0.slot == slot }
+        }.first { mine in
+            !assignments.contains { other in
+                other.slot != mine.slot && !Set([other.ipPosition, other.oopPosition]).isDisjoint(with: [mine.ipPosition, mine.oopPosition])
+            }
+        })
+        var player = try #require(try pasted().players.first)
+        player.familiarity = player.familiarity.mapValues { _ in 1 }
+        player.familiarity[assignment.ipPosition] = 20
+        player.familiarity[assignment.oopPosition] = 20
+        player.attributes = player.attributes.mapValues { _ in 20 }
+        let report = try judged([player], in: t.model)
+        #expect(report.candidates.map(\.part) == [.wouldStartElsewhere])
+        let sheet = ScoutingPresentation.candidatesSheet(report, order: .today, pasted: 1, money: .weeklyPounds)
+        #expect(sheet.groups.map(\.heading) == [AdvisorText.groupHeading(slot: assignment.slot)])
+        #expect(sheet.groups.map(\.partTitle) == [AdvisorText.name(CandidatePart.wouldStartElsewhere)])
     }
 
     @Test func namesakesGetARowEach() throws {

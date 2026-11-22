@@ -261,6 +261,11 @@ import Testing
         #expect(AdvisorText.groupHeading(slot: .GK, answer: .moreDepth) == "Goalkeeper · needs more depth")
     }
 
+    @Test func aGroupHeadingWithNoNeedIsThePositionAlone() {
+        #expect(AdvisorText.groupHeading(slot: .D_R) == "Right back")
+        #expect(AdvisorText.groupHeading(slot: .GK) == "Goalkeeper")
+    }
+
     @Test func todayLinesNameTheMarginAndTheFirstChoice() {
         #expect(AdvisorText.todayLines(candidateSlot(margin: 0.06))
                 == ["Would start: rates 6.0% above Evan Humphries, your first choice at left back."])

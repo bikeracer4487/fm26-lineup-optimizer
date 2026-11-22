@@ -156,6 +156,9 @@ extension AdvisorText {
         return "\(capitalised(PositionText.plain(slot))) · \(need)"
     }
 
+    /// "Right back": the heading of a group at a slot with no need, in the parts that answer none.
+    public static func groupHeading(slot: SlotID) -> String { capitalised(PositionText.plain(slot)) }
+
     /// How he would stand at the slot today, then whether he is solid there and whether the slot would stay weak.
     public static func todayLines(_ slot: CandidateSlot) -> [String] {
         let position = PositionText.plain(slot.slot)

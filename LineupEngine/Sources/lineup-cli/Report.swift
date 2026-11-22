@@ -198,8 +198,9 @@ enum Report {
         if let left = AdvisorText.leftOutAlreadyYours(report.leftOut) { out.append(left) }
         for group in report.groups(orderedBy: .today) {
             var heading = AdvisorText.name(group.part)
-            if let slot = group.slot, let answer = group.answer {
-                heading += " - " + AdvisorText.groupHeading(slot: slot, answer: answer)
+            if let slot = group.slot {
+                heading += " - " + (group.answer.map { AdvisorText.groupHeading(slot: slot, answer: $0) }
+                                    ?? AdvisorText.groupHeading(slot: slot))
             }
             out += ["", heading]
             for candidate in group.candidates {

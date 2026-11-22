@@ -242,8 +242,10 @@ public struct Candidate: Equatable, Sendable, Identifiable {
 
 public struct CandidateGroup: Equatable, Sendable {
     public let part: CandidatePart
-    /// nil for `wouldStartElsewhere`, `couldPassElsewhere` and `rest`, which are one group each.
+    /// The slot the group's players are listed under; nil for `rest`, which is one group.
     public let slot: SlotID?
+    /// The need they answer there; nil for `wouldStartElsewhere` and `couldPassElsewhere`, which are a group for each
+    /// slot and answer none, and for `rest`.
     public let answer: NeedAnswer?
     public let candidates: [Candidate]
 }
@@ -260,10 +262,13 @@ public struct CandidatesReport: Equatable, Sendable {
     public let basis: Evidence?
     let betterPlayerSlots: [SlotID]
     let moreDepthSlots: [SlotID]
+    /// The tactic's slots in its own order.
+    let slotOrder: [SlotID]
 
     /// The groups in order, without empty ones: those answering a need today (the better-player slots in their order,
-    /// then the depth slots in theirs), those who could answer one later, would start where there is no need, could
-    /// pass a first choice where there is no need, and the rest.
+    /// then the depth slots in theirs), those who could answer one later, those who would start where there is no need
+    /// (a group for each slot, in the tactic's order), those who could pass a first choice where there is no need (the
+    /// same), and the rest, which is one group.
     public func groups(orderedBy order: CandidateOrder) -> [CandidateGroup] {
         func members(_ part: CandidatePart, _ slot: SlotID?, _ answer: NeedAnswer?) -> [Candidate] {
             candidates.filter {
@@ -280,8 +285,8 @@ public struct CandidatesReport: Equatable, Sendable {
         for slot in betterPlayerSlots { add(.answersToday, slot, .betterPlayerToday) }
         for slot in moreDepthSlots { add(.answersToday, slot, .moreDepth) }
         for slot in betterPlayerSlots { add(.answersLater, slot, .betterPlayerLater) }
-        add(.wouldStartElsewhere, nil, nil)
-        add(.couldPassElsewhere, nil, nil)
+        for slot in slotOrder { add(.wouldStartElsewhere, slot, nil) }
+        for slot in slotOrder { add(.couldPassElsewhere, slot, nil) }
         add(.rest, nil, nil)
         return found
     }
@@ -396,7 +401,8 @@ extension Scouting {
         }
         return CandidatesReport(candidates: found, leftOut: leftOut, hidden: hiddenPlayers,
                                 basis: Evidence.weakest(found.map(\.basis)),
-                                betterPlayerSlots: betterSlots, moreDepthSlots: depthSlots)
+                                betterPlayerSlots: betterSlots, moreDepthSlots: depthSlots,
+                                slotOrder: assignments.map(\.slot))
     }
 
     /// His headline slot, the need it answers and his part: the first of a slot where he answers a better-player need

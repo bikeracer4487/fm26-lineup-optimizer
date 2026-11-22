@@ -226,7 +226,7 @@ import Testing
                       c("depth", .D_R, 12), c("better b", .D_L, 14), c("better a", .D_L, 15)]
         let groups = try report(pasted, players: players).groups(orderedBy: .today)
         #expect(groups.map(\.part) == [.answersToday, .answersToday, .answersLater, .wouldStartElsewhere, .rest])
-        #expect(groups.map(\.slot) == [.D_L, .D_R, .D_L, nil, nil])
+        #expect(groups.map(\.slot) == [.D_L, .D_R, .D_L, .AM_C, nil])        // would start elsewhere is by slot; the rest is not
         #expect(groups.map(\.answer) == [.betterPlayerToday, .moreDepth, .betterPlayerLater, nil, nil])
         #expect(groups[0].candidates.map(\.player.name) == ["better a", "better b"])
         #expect(groups.flatMap(\.candidates).count == 6)
@@ -470,6 +470,48 @@ import Testing
         #expect(try report([mine], players: players).basis == nil)
         let r = try report([candidate(.D_L, level: 14), pasted("young", .AM_C, 12, age: 19, potential: 150)], players: players)
         #expect(r.basis == Evidence.weakest(r.candidates.map(\.basis)) && r.basis == .derived)
+    }
+
+    // MARK: A group for each position in the two mixed parts
+
+    /// Two slots with neither need in the fixture squad, in the tactic's order.
+    func twoFineSlots(_ players: [Player]) throws -> (SlotID, SlotID) {
+        let fine = try needs(players).fine
+        try #require(fine.count >= 2)
+        return (fine[0], fine[1])
+    }
+    @Test func wouldStartElsewhereIsOneGroupForEachSlotInTheTacticsOrder() throws {
+        let players = try PlannerFixture.squad()
+        let (early, late) = try twoFineSlots(players)
+        // Pasted with the later slot first: the groups follow the tactic's order, not the paste's.
+        let list = [pasted("late", late, 16, age: 28), pasted("early", early, 16, age: 28), pasted("late too", late, 15, age: 28)]
+        let r = try report(list, players: players)
+        #expect(r.candidates.allSatisfy { $0.part == .wouldStartElsewhere })
+        for order in CandidateOrder.allCases {
+            let groups = r.groups(orderedBy: order).filter { $0.part == .wouldStartElsewhere }
+            #expect(groups.map(\.slot) == [early, late])
+            #expect(groups.allSatisfy { $0.answer == nil })
+            #expect(groups.map { $0.candidates.map(\.player.name) } == [["early"], ["late", "late too"]])
+        }
+    }
+    @Test func couldPassElsewhereIsOneGroupForEachSlotToo() throws {
+        let players = try PlannerFixture.squad()
+        let (early, late) = try twoFineSlots(players)
+        let list = [pasted("late", late, 12, age: 19, potential: 190), pasted("early", early, 12, age: 19, potential: 190)]
+        let r = try report(list, players: players)
+        #expect(r.candidates.allSatisfy { $0.part == .couldPassElsewhere })
+        let groups = r.groups(orderedBy: .today)
+        #expect(groups.map(\.part) == [.couldPassElsewhere, .couldPassElsewhere])
+        #expect(groups.map(\.slot) == [early, late] && groups.allSatisfy { $0.answer == nil })
+        #expect(groups.map { $0.candidates.map(\.player.name) } == [["early"], ["late"]])
+    }
+    @Test func theRestStaysOneGroupWithNoSlot() throws {
+        let players = try PlannerFixture.squad()
+        let (early, late) = try twoFineSlots(players)
+        let list = [pasted("late", late, 4, age: 28), pasted("early", early, 4, age: 28)]
+        let groups = try report(list, players: players).groups(orderedBy: .today)
+        #expect(groups.map(\.part) == [.rest])
+        #expect(groups[0].slot == nil && groups[0].answer == nil && groups[0].candidates.count == 2)
     }
 
     // MARK: Hidden players

@@ -113,12 +113,12 @@ public struct ScoutingRowLines: Equatable, Sendable {
     public let otherSlots: [ScoutingOtherSlot]
 }
 
-/// One group of candidates: those answering one need at one slot, or one of the two parts that are a group each.
+/// One group of candidates: those listed under one slot of a part (answering one need there, or none), or the rest.
 public struct CandidateGroupRows: Identifiable, Equatable, Sendable {
     public let id: String
     /// The part's name when this group is the first of its part; nil otherwise.
     public let partTitle: String?
-    /// "Left back · needs a better player"; nil for a part that is one group.
+    /// "Left back · needs a better player", or "Right back" in a part that answers no need; nil for the rest.
     public let heading: String?
     /// The last part, "The rest": it starts closed behind a line saying how many are in it, and its rows show only
     /// their first line today and their cautions until opened.
@@ -201,8 +201,9 @@ public enum ScoutingPresentation {
         var partsSeen: Set<CandidatePart> = []
         let groups = report.groups(orderedBy: order).map { group -> CandidateGroupRows in
             let isFirstOfPart = partsSeen.insert(group.part).inserted
-            let heading = group.slot.flatMap { slot in
-                group.answer.map { AdvisorText.groupHeading(slot: slot, answer: $0) }
+            // A slot with the need it answers, or the slot alone in the parts that answer none.
+            let heading = group.slot.map { slot in
+                group.answer.map { AdvisorText.groupHeading(slot: slot, answer: $0) } ?? AdvisorText.groupHeading(slot: slot)
             }
             let id = [group.part.rawValue, group.slot?.rawValue, group.answer?.rawValue].compactMap { $0 }
                 .joined(separator: "-")
