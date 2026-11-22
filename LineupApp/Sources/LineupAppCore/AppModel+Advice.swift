@@ -62,7 +62,8 @@ extension AppModel {
         let request = AdvisorsRequest(
             primary: primary.tactic, tactics: tactics.map(\.tactic).filter { unusableSentence($0) == nil },
             players: players, ownClub: ownClub, history: StartHistory(history.map(\.lineup)), asOf: asOf,
-            intensity: settings.plan.trainingIntensity, accepted: retrainingForPlan, rejected: training.rejected)
+            intensity: settings.plan.trainingIntensity, accepted: retrainingForPlan, rejected: training.rejected,
+            trends: fitnessTrends)
         do {
             return .ready(try Advisors.report(request, money: squad.book.moneyStyle, catalog: catalog, profile: profile,
                                               parameters: planParameters))

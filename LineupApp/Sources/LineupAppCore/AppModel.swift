@@ -100,6 +100,10 @@ public struct AppEnvironment: Sendable {
     public internal(set) var leagueFormatDraft: LeagueFormatDraft
     /// Why the format typed was not saved, in the engine's sentence. Not saved.
     public internal(set) var leagueFormatProblem: String?
+    /// A fitness reading of every player at each import, and the day to measure from. Changed by every import
+    /// (`recordFitness(after:on:)`) and by `measureTrendAgain()`, which save it; the rates are worked out from it each time
+    /// the plan or the advice is (`fitnessTrends`).
+    public internal(set) var fitness: FitnessState
     /// For a marked player in no squad, the squads imported since he was last seen. His mark goes only once every squad
     /// held has been imported without him: squads are imported one at a time, so a player moved between two is in
     /// neither for a moment. Not saved: after a restart the count starts again, which only keeps a mark longer.
@@ -173,6 +177,7 @@ public struct AppEnvironment: Sendable {
         let marks = store.load(.marks, as: [PlayerID: SaleMark].self, otherwise: [:])
         let mentoring = store.load(.mentoring, as: MentoringState.self, otherwise: MentoringState())
         let league = store.load(.league, as: LeagueState.self, otherwise: LeagueState())
+        let fitness = store.load(.fitness, as: FitnessState.self, otherwise: FitnessState())
         self.settings = settings.value
         self.tactics = tactics.value
         self.fixtures = fixtures.value.sorted(by: Self.dateOrder)
@@ -182,6 +187,7 @@ public struct AppEnvironment: Sendable {
         self.marks = marks.value
         self.mentoring = mentoring.value
         self.league = league.value
+        self.fitness = fitness.value
         self.leagueFormatDraft = LeagueFormatDraft(league.value.format)
         // A draft is kept only for a saved tactic it differs from. When the tactics file could not be read and was left
         // where it is, its tactics are still on disk, so every draft is kept for them.
@@ -192,7 +198,7 @@ public struct AppEnvironment: Sendable {
             : drafts.value.filter { saved[$0.id] != nil && saved[$0.id] != $0.tactic }
         self.tacticDrafts = Dictionary(kept.map { ($0.id, TacticDraft($0.tactic)) }, uniquingKeysWith: { first, _ in first })
         self.notices = [settings.notice, tactics.notice, fixtures.notice, history.notice, squad.notice, drafts.notice,
-                        training.notice, marks.notice, mentoring.notice, league.notice]
+                        training.notice, marks.notice, mentoring.notice, league.notice, fitness.notice]
             .compactMap { $0 }.map(Notice.init(text:))
         self.lastImport = nil
         self.planState = .needsSquad
@@ -203,13 +209,18 @@ public struct AppEnvironment: Sendable {
                                             (.squad, squad.replaceOnDisk),
                                             (.drafts, drafts.replaceOnDisk || kept.count != drafts.value.count),
                                             (.training, training.replaceOnDisk), (.marks, marks.replaceOnDisk), (.mentoring, mentoring.replaceOnDisk),
-                                            (.league, league.replaceOnDisk)]
+                                            (.league, league.replaceOnDisk), (.fitness, fitness.replaceOnDisk)]
         for (file, replace) in replaced where replace { save(file) }
         // A state saved before personality was read at each import has no reading: start from the squads held.
         if self.mentoring.readings.isEmpty {
             for (squad, day) in self.squad.importedOn.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
                 recordPersonality(after: squad, on: day)
             }
+        }
+        // A state saved before fitness was read at each import has no reading: start from the squads held. Not when the
+        // file could be neither read nor moved aside, which is never written over.
+        if self.fitness.readings.isEmpty && !store.isLeftUnread(.fitness) {
+            recordFirstFitness()
         }
         replan()
     }
@@ -243,6 +254,7 @@ public struct AppEnvironment: Sendable {
             case .marks: try store.save(marks, to: .marks)
             case .mentoring: try store.save(mentoring, to: .mentoring)
             case .league: try store.save(league, to: .league)
+            case .fitness: try store.save(fitness, to: .fitness)
             }
             return true
         } catch {

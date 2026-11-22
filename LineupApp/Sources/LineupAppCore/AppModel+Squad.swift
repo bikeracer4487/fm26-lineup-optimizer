@@ -41,6 +41,8 @@ extension AppModel {
         state.importedOn[target] = date
         squad = state
         save(.squad)
+        // Read before the marks below are cleared: the reading includes the confirmed matches still awaiting this squad.
+        recordFitness(after: target, on: date)
         // The new figures include every match played before the import, for this squad's players.
         if history.contains(where: { $0.awaitingImport.contains(target) }) {
             for index in history.indices { history[index].awaitingImport.remove(target) }

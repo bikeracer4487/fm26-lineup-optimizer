@@ -169,7 +169,7 @@ import LineupEngine
             primary: primary.tactic, tactics: model.tactics.map(\.tactic), players: model.squad.book.allPlayers,
             ownClub: model.ownClub, history: StartHistory(model.history.map(\.lineup)), asOf: try #require(model.planStartDay),
             intensity: model.settings.plan.trainingIntensity, accepted: model.training.accepted,
-            rejected: model.training.rejected)
+            rejected: model.training.rejected, trends: model.fitnessTrends)
         return try Advisors.report(request, money: model.squad.book.moneyStyle, catalog: model.catalog,
                                    profile: model.profile, parameters: model.planParameters)
     }

@@ -378,6 +378,51 @@ import LineupEngine
         }
     }
 
+    @Test func theFitnessFileIsOneOfTheFiles() {
+        #expect(StoreFile.allCases.contains(.fitness))
+        #expect(StoreFile.fitness.rawValue == "fitness")
+        #expect(!StoreFile.fitness.isNoticedWhenMissing)
+    }
+
+    @Test func aMissingFitnessFileIsNotNoticedBesideOthers() throws {
+        try withStore { store, _ in
+            try store.save(settings, to: .settings)
+            let loaded = store.load(.fitness, as: FitnessState.self, otherwise: FitnessState())
+            #expect(loaded.value == FitnessState())
+            #expect(loaded.notice == nil)
+            #expect(loaded.replaceOnDisk)
+        }
+    }
+
+    @Test func anUnreadableFitnessFileIsKeptAsideWithANotice() throws {
+        try withStore { store, dir in
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data("{".utf8).write(to: dir.appendingPathComponent("fitness.json"))
+            let loaded = store.load(.fitness, as: FitnessState.self, otherwise: FitnessState())
+            #expect(loaded.value == FitnessState())
+            #expect(try #require(loaded.notice).hasPrefix("Your fitness readings could not be read as saved data"))
+            #expect(try #require(loaded.notice).contains("the readings start empty"))
+            #expect(loaded.replaceOnDisk)
+            expectKeptAside(dir, original: "fitness.json", kept: "fitness.unreadable-1.json")
+        }
+    }
+
+    @Test func fitnessReadingsRoundTripAsAJSONObjectByPlayer() throws {
+        try withStore { store, dir in
+            var state = FitnessState()
+            state.readings = [alice: [FitnessReading(day: day, jadedness: 120, condition: 0.9, sharpness: 0.8,
+                                                     isInjured: false, includes: [FixtureID("f1")])]]
+            state.measureFrom = day
+            try store.save(state, to: .fitness)
+            #expect(store.load(.fitness, as: FitnessState.self, otherwise: FitnessState()).value == state)
+            let object = try JSONSerialization.jsonObject(
+                with: Data(contentsOf: dir.appendingPathComponent("fitness.json"))) as! [String: Any]
+            let value = try #require(object["value"] as? [String: Any])
+            #expect(value["readings"] is [String: Any])
+            #expect((value["readings"] as? [String: Any])?["fmrte:1"] != nil)
+        }
+    }
+
     @Test func aMissingMarksFileIsNotNoticedBesideOthers() throws {
         // A missing marks file means nobody is marked, as for every app saved before the file existed.
         try withStore { store, _ in
