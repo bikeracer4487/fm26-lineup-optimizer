@@ -7,7 +7,8 @@ import Foundation
 public struct Adjustment: Equatable, Sendable {
     /// Why the value changed. The case order is the order adjustments are applied, listed and named.
     public enum Kind: String, CaseIterable, Sendable {
-        case loanedIn, consecutiveStarts, needsSharpness, development, successor, shopWindow, retraining, stability, savedForLater
+        case loanedIn, consecutiveStarts, needsSharpness, development, successor, shopWindow, retraining, stability,
+            savedForLater, restedBeforeLine
     }
 
     public let kind: Kind

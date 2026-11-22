@@ -182,13 +182,23 @@ public struct Planner: Sendable {
             for player in onTheDay {
                 let rules = ImportanceRules.adjustments(for: player, context: context, parameters: parameters)
                 var slots = rules.bySlot
+                let restDue = RestBeforeLine.adjustment(
+                    for: player, jadedness: fitness[player.id]!.jadedness, today: fixture, later: later,
+                    rates: request.rates[player.id], settings: settings, parameters: parameters)
                 for assignment in assignments {
-                    if let saving = try SavingPlayers.adjustment(
+                    let saving = try SavingPlayers.assessment(
                         for: player, fitness: fitness[player.id]!, position: assignment.ipPosition, today: fixture,
                         later: later, rates: request.rates[player.id], settings: settings,
-                        parameters: parameters) {
-                        slots[assignment.slot, default: []].append(saving)
+                        parameters: parameters)
+                    // Both rules can name the same later fixture for the same jaded start: then only the larger cost
+                    // counts, the saving rule's on a tie.
+                    if let saving, let restDue, saving.named == restDue.fixture, saving.brokeRiskRule {
+                        let larger = restDue.adjustment.cost > saving.adjustment.cost ? restDue.adjustment : saving.adjustment
+                        slots[assignment.slot, default: []].append(larger)
+                        continue
                     }
+                    if let saving { slots[assignment.slot, default: []].append(saving.adjustment) }
+                    if let restDue { slots[assignment.slot, default: []].append(restDue.adjustment) }
                 }
                 if !rules.everySlot.isEmpty { everySlot[player.id] = rules.everySlot }
                 if slots.values.contains(where: { !$0.isEmpty }) { bySlot[player.id] = slots }

@@ -3,6 +3,16 @@ import Foundation
 /// The words the advisors' screens and reports use for levels, actions, verdicts and the sentences built from their
 /// numbers, written once here.
 public enum AdvisorText {
+    /// "Sat 14 Nov".
+    public static func shortDay(_ day: Day) -> String {
+        let weekdays = ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"]
+        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        let sinceEpoch = Day(iso: "1970-01-01")!.days(to: day)
+        let weekday = weekdays[((sinceEpoch % 7) + 7) % 7]
+        let parts = day.iso.split(separator: "-").compactMap { Int($0) }
+        return "\(weekday) \(parts[2]) \(months[parts[1] - 1])"
+    }
+
     public static func name(_ level: RestLevel) -> String {
         switch level {
         case .holiday: "Holiday"

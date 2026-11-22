@@ -222,6 +222,11 @@ import Testing
         #expect(AdvisorText.tablePastedLine(on: Day(iso: "2026-11-19")!) == "Table pasted on Thu 19 Nov.")
     }
 
+    @Test func aDayIsWrittenShort() {
+        #expect(AdvisorText.shortDay(Day(year: 2026, month: 11, day: 14)!) == "Sat 14 Nov")
+        #expect(AdvisorText.shortDay(Day(year: 2027, month: 1, day: 3)!) == "Sun 3 Jan")
+    }
+
     @Test func theFixedSentences() {
         #expect(AdvisorText.tableOutOfDate == "A league match has been played since; paste the table again.")
         #expect(AdvisorText.tableStopsLine(matchesLeft: 3, beyond: 2)

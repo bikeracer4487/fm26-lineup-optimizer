@@ -64,12 +64,7 @@ extension AdvisorText {
 
     /// "Table pasted on Sat 18 Apr."
     public static func tablePastedLine(on day: Day) -> String {
-        let weekdays = ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"]
-        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-        let sinceEpoch = Day(iso: "1970-01-01")!.days(to: day)
-        let weekday = weekdays[((sinceEpoch % 7) + 7) % 7]
-        let parts = day.iso.split(separator: "-").compactMap { Int($0) }
-        return "Table pasted on \(weekday) \(parts[2]) \(months[parts[1] - 1])."
+        "Table pasted on \(shortDay(day))."
     }
 
     public static let tableOutOfDate = "A league match has been played since; paste the table again."

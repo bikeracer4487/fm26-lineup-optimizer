@@ -11,6 +11,16 @@ public struct LaterFixture: Sendable {
     }
 }
 
+/// The saving rule's cost at one slot, with the later fixture its reason names.
+struct SavingAssessment: Equatable, Sendable {
+    let adjustment: Adjustment
+    /// The fixture the reason names: the largest contributor to the cost.
+    let named: FixtureID
+    /// Whether that fixture's loss was the whole advantage because starting today would break a risk rule there
+    /// that resting would not.
+    let brokeRiskRule: Bool
+}
+
 /// Puts a cost on starting a player today when a more important fixture is coming soon after.
 ///
 /// For each later fixture that weighs more than today, and only where he is in that fixture's first eleven,
@@ -29,13 +39,21 @@ public enum SavingPlayers {
     public static func adjustment(for player: Player, fitness: ProjectedFitness, position: Position,
                                   today: Fixture, later: [LaterFixture], rates: JadednessRates? = nil,
                                   settings: PlanSettings, parameters: EngineParameters) throws -> Adjustment? {
+        try assessment(for: player, fitness: fitness, position: position, today: today, later: later, rates: rates,
+                       settings: settings, parameters: parameters)?.adjustment
+    }
+
+    /// As `adjustment`, with the later fixture its reason names and whether that fixture's loss was a broken risk rule.
+    static func assessment(for player: Player, fitness: ProjectedFitness, position: Position,
+                           today: Fixture, later: [LaterFixture], rates: JadednessRates? = nil,
+                           settings: PlanSettings, parameters: EngineParameters) throws -> SavingAssessment? {
         let weights = parameters.importanceWeights.value
         guard settings.savingPlayers > 0, let todayWeight = usable(weights[today.importance]) else { return nil }
 
         // Date then id, so the sum runs in the same order whatever order the fixtures came in.
         let ordered = later.sorted { ($0.fixture.date, $0.fixture.id.raw) < ($1.fixture.date, $1.fixture.id.raw) }
         var total = 0.0
-        var largest: (fixture: Fixture, loss: Double, contribution: Double)?
+        var largest: (fixture: Fixture, loss: Double, contribution: Double, broke: Bool)?
         for item in ordered {
             let m = item.fixture
             let gap = today.date.days(to: m.date)
@@ -52,8 +70,9 @@ public enum SavingPlayers {
             let play = try FitnessProjection.afterDays(gap, played, player: player, intensity: intensity, rates: rates, parameters: parameters)
 
             let loss: Double
-            if breaksRiskRule(play, of: player, importance: m.importance, parameters: parameters)
-                && !breaksRiskRule(rest, of: player, importance: m.importance, parameters: parameters) {
+            let broke = breaksRiskRule(play, of: player, importance: m.importance, parameters: parameters)
+                && !breaksRiskRule(rest, of: player, importance: m.importance, parameters: parameters)
+            if broke {
                 loss = advantage
             } else {
                 let drop = max(0, product(rest, parameters: parameters) - product(play, parameters: parameters))
@@ -66,7 +85,7 @@ public enum SavingPlayers {
             total += contribution
             // Strictly greater, so on a tie the earlier fixture is named.
             if largest.map({ contribution > $0.contribution }) ?? true {
-                largest = (m, loss, contribution)
+                largest = (m, loss, contribution, broke)
             }
         }
 
@@ -74,13 +93,14 @@ public enum SavingPlayers {
         let cost = min(settings.savingPlayers * total, parameters.savingCostCeiling.value)
         guard cost > 0, let largest else { return nil }
         let figure = String(format: "%.1f", largest.loss)
-        return Adjustment(
+        let adjustment = Adjustment(
             kind: .savedForLater, cost: cost,
             reason: "Kept fresher for \(largest.fixture.opponent) on \(largest.fixture.date.iso): starting today would cost about \(figure) there")
+        return SavingAssessment(adjustment: adjustment, named: largest.fixture.id, brokeRiskRule: largest.broke)
     }
 
     /// The weight when it is a finite number above 0; nil otherwise.
-    private static func usable(_ weight: Double?) -> Double? {
+    static func usable(_ weight: Double?) -> Double? {
         guard let weight, weight.isFinite, weight > 0 else { return nil }
         return weight
     }

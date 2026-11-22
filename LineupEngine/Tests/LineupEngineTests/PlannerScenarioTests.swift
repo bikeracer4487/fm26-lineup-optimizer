@@ -23,10 +23,10 @@ import Testing
 
     func plan(_ fixtures: [Fixture], _ players: [Player], retraining: [Retraining] = [],
               settings: PlanSettings = .standard, marks: [PlayerID: SaleMark] = [:],
-              advisedToLeave: Set<PlayerID> = []) throws -> Plan {
+              advisedToLeave: Set<PlayerID> = [], rates: [PlayerID: JadednessRates] = [:]) throws -> Plan {
         try planner.plan(PlanRequest(fixtures: fixtures, players: players, ownClub: "Oxford City", asOf: day0,
                                      confirmed: [], retraining: retraining, marks: marks, advisedToLeave: advisedToLeave,
-                                     settings: settings))
+                                     rates: rates, settings: settings))
     }
 
     func id(_ slot: SlotID, _ tier: String = "first") -> PlayerID { PlannerFixture.id(slot, tier) }
@@ -603,6 +603,77 @@ import Testing
         let result = try plan([fixture("l", .low, day: 0)], players, settings: PlanSettings(savingPlayers: 0),
                               marks: [marked.id: .toLoanOut])
         #expect(pick(result.fixtures[0], .ST_C)?.player == id(.ST_C))
+    }
+
+    // MARK: - Resting before the line
+
+    /// Falls 2 a day without a start, and a start adds `gain`.
+    func falling(gain: Double = 60) -> JadednessRates {
+        JadednessRates(drift: MeasuredRate(-2, .own(intervals: 5)), gain: MeasuredRate(gain, .own(intervals: 5)))
+    }
+
+    /// Low today, medium in 7 days and in 14; the first-choice striker at 330, falling 2 a day, a start adding 60.
+    func beforeTheLine(settings: PlanSettings = .standard, overrides: [SlotID: PlayerID] = [:]) throws -> Plan {
+        let players = changing(try PlannerFixture.squad(first: 14, second: 12), .ST_C) { $0.jadedness = 330 }
+        var low = fixture("l", .low, day: 0)
+        low.overrides = overrides
+        return try plan([low, fixture("m1", .medium, day: 7), fixture("m2", .medium, day: 14, opponent: "Buxton")],
+                        players, settings: settings, rates: [id(.ST_C): falling()])
+    }
+
+    @Test func aPlayerIsRestedInTheLesserFixtureBeforeHePassesTheLine() throws {
+        let result = try beforeTheLine()
+        #expect(!starters(result.fixtures[0]).contains(id(.ST_C)))
+        let omission = try #require(result.fixtures[0].lineup.omissions.first { $0.player == id(.ST_C) })
+        // The saving rule costs him a little too, for the slower recovery, but not enough on its own to rest him.
+        #expect(omission.cause == .heldBack([.savedForLater, .restedBeforeLine]))
+        let players = changing(try PlannerFixture.squad(first: 14, second: 12), .ST_C) { $0.jadedness = 330 }
+        let striker = try #require(players.first { $0.id == id(.ST_C) })
+        let laterTiers = try tiers(players)
+        let position = try #require(assignments.first { $0.slot == .ST_C }).ipPosition
+        let advantage = try #require(laterTiers.advantage(of: id(.ST_C)))
+        let saving = try #require(try SavingPlayers.adjustment(
+            for: striker, fitness: ProjectedFitness(striker), position: position, today: fixture("l", .low, day: 0),
+            later: [LaterFixture(fixture: fixture("m1", .medium, day: 7), tiers: laterTiers),
+                    LaterFixture(fixture: fixture("m2", .medium, day: 14, opponent: "Buxton"), tiers: laterTiers)],
+            rates: falling(), settings: .standard, parameters: parameters))
+        #expect(saving.cost < advantage, "advantage \(advantage), saving \(saving.cost)")
+        #expect(omission.reason.contains("Rested before he passes 400: at about +60 a start, starting today would leave him "
+            + "jaded for Buxton on \(AdvisorText.shortDay(day0.adding(days: 14)))"))
+        // Rested, he is at 316 before the first medium match and 362 before the second: he starts both.
+        #expect(pick(result.fixtures[1], .ST_C)?.player == id(.ST_C))
+        #expect(pick(result.fixtures[2], .ST_C)?.player == id(.ST_C))
+    }
+
+    @Test func withSavingPlayersOffHeStartsTwoAndMissesTheThirdJaded() throws {
+        let result = try beforeTheLine(settings: PlanSettings(savingPlayers: 0))
+        #expect(pick(result.fixtures[0], .ST_C)?.player == id(.ST_C))
+        #expect(pick(result.fixtures[1], .ST_C)?.player == id(.ST_C))
+        #expect(!starters(result.fixtures[2]).contains(id(.ST_C)))
+        let omission = try #require(result.fixtures[2].lineup.omissions.first { $0.player == id(.ST_C) })
+        #expect(omission.cause == .excluded(.jaded(422)))
+    }
+
+    @Test func theOwnersChoiceStillStartsHim() throws {
+        let result = try beforeTheLine(overrides: [.ST_C: id(.ST_C)])
+        #expect(pick(result.fixtures[0], .ST_C)?.player == id(.ST_C))
+    }
+
+    @Test func whenBothRulesNameTheSameFixtureOnlyOneCostIsKept() throws {
+        let players = changing(try PlannerFixture.squad(first: 14, second: 12), .ST_C) { $0.jadedness = 350 }
+        let rates = [id(.ST_C): falling(gain: 120)]
+        // Starting leaves him at 456 before the medium match, resting at 336: both rules name it, and the saving rule's
+        // cost, the whole advantage weighted alike, is kept on the tie.
+        let both = try plan([fixture("l", .low, day: 0), fixture("m", .medium, day: 7)], players, rates: rates)
+        #expect(!starters(both.fixtures[0]).contains(id(.ST_C)))
+        let kept = try #require(both.fixtures[0].lineup.omissions.first { $0.player == id(.ST_C) })
+        #expect(kept.cause == .heldBack([.savedForLater]))
+        // With the later match low the saving rule is silent, since it does not weigh more.
+        let lowLater = try plan([fixture("l", .low, day: 0), fixture("l2", .low, day: 7)], players,
+                                settings: PlanSettings(savingPlayers: 2), rates: rates)
+        #expect(!starters(lowLater.fixtures[0]).contains(id(.ST_C)))
+        let rested = try #require(lowLater.fixtures[0].lineup.omissions.first { $0.player == id(.ST_C) })
+        #expect(rested.cause == .heldBack([.restedBeforeLine]))
     }
 
     // MARK: - Retraining
