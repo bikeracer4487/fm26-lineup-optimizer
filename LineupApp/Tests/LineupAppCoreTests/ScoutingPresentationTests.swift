@@ -21,7 +21,8 @@ import LineupEngine
                                        parameters: model.planParameters)
     }
 
-    private func rows(_ sheet: CandidatesSheet) -> [ScoutingCandidateRow] { sheet.groups.flatMap(\.rows) }
+    /// Every candidate's row, those behind a group's line among them.
+    private func rows(_ sheet: CandidatesSheet) -> [ScoutingCandidateRow] { sheet.groups.flatMap { $0.rows + $0.moreRows } }
 
     // MARK: Needs
 
@@ -181,7 +182,7 @@ import LineupEngine
                 } else {
                     #expect(row.heading == nil)
                 }
-                #expect(row.rows.map(\.id) == group.candidates.map(\.id))
+                #expect((row.rows + row.moreRows).map(\.id) == group.candidates.map(\.id))
             }
             #expect(Set(sheet.groups.map(\.id)).count == sheet.groups.count)
             #expect(sheet.groups.compactMap(\.partTitle).count == Set(groups.map(\.part)).count)
@@ -323,13 +324,17 @@ import LineupEngine
         let sheet = ScoutingPresentation.candidatesSheet(report, order: .today, pasted: players.count, money: .weeklyPounds)
         let full = try #require(rows(sheet).first { $0.id == players[index].id })
         let price = try #require(full.askingPrice)
-        #expect(full.detailsText == ["Age \(full.age)", full.positions, "Banbury United", "On loan at Barnet", price,
+        let ability = "CA \(players[index].currentAbility) · PA \(players[index].potentialAbility)"
+        #expect(full.detailsText == ["Age \(full.age)", full.positions, ability, "Banbury United", "On loan at Barnet", price,
                                      full.wage].joined(separator: " · "))
 
         try ScoutingSetup.paste(t, paste: try Captures.u21TeamGrid, grids: try Captures.u21TeamGridGrids)
         let bare = try #require(t.model.candidatesSheet(try ScoutingSetup.report(t.model), order: .today))
         let plain = try #require(rows(bare).first { $0.club == nil && $0.onLoan == nil })
-        #expect(plain.detailsText == "Age \(plain.age) · \(plain.positions) · \(plain.wage)")
+        let bareAbility = try #require(t.model.scoutingPaste?.players.first { $0.id == plain.id }.map {
+            ScoutingPresentation.abilityText(current: $0.currentAbility, potential: $0.potentialAbility)
+        })
+        #expect(plain.detailsText == "Age \(plain.age) · \(plain.positions) · \(bareAbility) · \(plain.wage)")
     }
 
     @Test func anInjuredCandidateIsStampedAndNoOtherIs() throws {
@@ -362,15 +367,15 @@ import LineupEngine
         #expect(others.opens(inRest: true))
         // In the rest, a second line today or a line for later opens a row with no other slots.
         let alone = ScoutingCandidateRow(id: nowhere.id, name: nowhere.name, age: 20, positions: "D L", club: nil, onLoan: nil,
-                                         askingPrice: nil, wage: "£500 a week", isInjured: false,
+                                         askingPrice: nil, wage: "£500 a week", detailsText: "", isInjured: false,
                                          todayLines: ["Below cover."], laterLines: [], cautions: [], otherSlots: [])
         #expect(!alone.opens(inRest: true))
         for more in [ScoutingCandidateRow(id: alone.id, name: alone.name, age: 20, positions: "D L", club: nil, onLoan: nil,
-                                          askingPrice: nil, wage: alone.wage, isInjured: false,
+                                          askingPrice: nil, wage: alone.wage, detailsText: "", isInjured: false,
                                           todayLines: ["Below cover.", "Not yet solid there."], laterLines: [],
                                           cautions: [], otherSlots: []),
                      ScoutingCandidateRow(id: alone.id, name: alone.name, age: 20, positions: "D L", club: nil, onLoan: nil,
-                                          askingPrice: nil, wage: alone.wage, isInjured: false,
+                                          askingPrice: nil, wage: alone.wage, detailsText: "", isInjured: false,
                                           todayLines: ["Below cover."], laterLines: ["Judged as he is today."],
                                           cautions: [], otherSlots: [])] {
             #expect(!more.opens(inRest: false))
@@ -380,7 +385,7 @@ import LineupEngine
 
     @Test func aClosedRowInTheRestShowsOnlyItsFirstLineTodayAndOtherSlotsShowWhenOpen() {
         let row = ScoutingCandidateRow(id: PlayerID(key: "fmrte:1"), name: "Kofi Mensah", age: 20, positions: "D L",
-                                       club: nil, onLoan: nil, askingPrice: nil, wage: "£500 a week", isInjured: false,
+                                       club: nil, onLoan: nil, askingPrice: nil, wage: "£500 a week", detailsText: "", isInjured: false,
                                        todayLines: ["Would start.", "Not yet solid there."],
                                        laterLines: ["Could pass the first choice."], cautions: ["Controversy 18"],
                                        otherSlots: [ScoutingOtherSlot(slot: .D_R, lines: ["Below cover.",

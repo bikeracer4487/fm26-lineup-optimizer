@@ -59,6 +59,10 @@ public struct ScoutingCandidateRow: Identifiable, Equatable, Sendable {
     public let askingPrice: String?
     /// In the paste's currency and FMRTE's period: "£500 a week".
     public let wage: String
+    /// What the paste says of him, on one line under his name (`ScoutingPresentation.details`): "Age 19 · D/WB L ·
+    /// CA 112 · PA 140 · Banbury United · On loan at Barnet · Asking £25,250 · £500 a week", leaving out what the paste
+    /// did not carry.
+    public let detailsText: String
     public let isInjured: Bool
     /// How he would stand at his headline slot today; the engine's sentence that he can play no slot when he has none.
     public let todayLines: [String]
@@ -67,13 +71,6 @@ public struct ScoutingCandidateRow: Identifiable, Equatable, Sendable {
     public let cautions: [String]
     /// Each other slot he can play, in the tactic's order, with its lines.
     public let otherSlots: [ScoutingOtherSlot]
-
-    /// What the paste says of him, on one line under his name: "Age 19 · D/WB L · Banbury United · On loan at Barnet ·
-    /// Asking £25,250 · £500 a week", leaving out what the paste did not carry.
-    public var detailsText: String {
-        ([ScoutingPresentation.ageText(age), positions] + [club, onLoan, askingPrice].compactMap { $0 } + [wage])
-            .joined(separator: " · ")
-    }
 
     /// Stamped beside his name: injured, which changes nothing else.
     public var stamps: [StatusStamp] { isInjured ? [ElevensPresentation.injuredStamp] : [] }
@@ -123,9 +120,15 @@ public struct CandidateGroupRows: Identifiable, Equatable, Sendable {
     /// The last part, "The rest": it starts closed behind a line saying how many are in it, and its rows show only
     /// their first line today and their cautions until opened.
     public let isRest: Bool
+    /// The rows the group always shows: its first `ScoutingPresentation.shownInGroup` in the engine's order for the
+    /// order chosen; for the rest, every row.
     public let rows: [ScoutingCandidateRow]
+    /// The rows after those, in the same order, shown while the group's line is open; none for the rest.
+    public let moreRows: [ScoutingCandidateRow]
     /// The line the group is closed behind, "6 more players", for the rest; nil for a group that is never closed.
     public let closedLine: String?
+    /// The line under the group's rows that opens `moreRows`, "12 more players"; nil when there are none.
+    public var moreLine: String? { moreRows.isEmpty ? nil : ScoutingPresentation.restLine(moreRows.count) }
 
     /// Whether the group's rows show: always, except for the rest part while it is closed.
     public func showsRows(restOpen: Bool) -> Bool { !isRest || restOpen }
@@ -139,17 +142,41 @@ public struct CandidatesSheet: Equatable, Sendable {
     public let leftOutLine: String?
     /// In the engine's order, without empty groups.
     public let groups: [CandidateGroupRows]
+    /// The pasted players the owner has hidden, in paste order.
+    public let hidden: [ScoutingHiddenRow]
     /// How well backed the candidates shown are, once for them all; nil for FM27 evidence or none shown.
     public let evidenceNote: String?
 
-    /// Every candidate's row, so every row can be opened at once.
-    public var rowIDs: Set<PlayerID> { Set(groups.flatMap(\.rows).map(\.id)) }
+    /// The line the hidden players are closed behind, "3 hidden players"; nil when none is hidden.
+    public var hiddenLine: String? { hidden.isEmpty ? nil : ScoutingPresentation.hiddenLine(hidden.count) }
+
+    /// Every candidate's row, those behind a group's line among them, so every row can be opened at once.
+    public var rowIDs: Set<PlayerID> { Set(groups.flatMap { $0.rows + $0.moreRows }.map(\.id)) }
+
+    /// The groups with a line to open, so every line can be opened at once.
+    public var groupIDs: Set<String> { Set(groups.filter { $0.moreLine != nil }.map(\.id)) }
+}
+
+/// One hidden player, as the hidden list shows him: his name and what the paste says of him. Nothing of his judgement,
+/// since a hidden player is not judged.
+public struct ScoutingHiddenRow: Identifiable, Equatable, Sendable {
+    /// His key as pasted.
+    public let id: PlayerID
+    public let name: String
+    /// As a candidate's row has it (`ScoutingPresentation.details`).
+    public let detailsText: String
 }
 
 /// What the Scouting screen shows, in the engine's words; Core holds only the labels.
 public enum ScoutingPresentation {
     public static let pasteButton = "Paste players"
     public static let clearButton = "Clear"
+    /// On a candidate's row, and on a hidden player's.
+    public static let hideButton = "Hide"
+    public static let showAgainButton = "Show again"
+    /// How many players a group shows before the line the others are behind. A rule about what the tab lists, not about
+    /// how a player is judged: the engine's order decides who the five are.
+    public static let shownInGroup = 5
     public static let nothingPasted = "Copy the rows of a search or a shortlist in FMRTE, then paste them here."
     public static let fineHeading = "Fine"
     public static let betterPlayersHeading = AdvisorText.betterPlayersHeading
@@ -174,6 +201,22 @@ public enum ScoutingPresentation {
 
     /// "6 more players", "1 more player".
     public static func restLine(_ count: Int) -> String { "\(count) more \(count == 1 ? "player" : "players")" }
+
+    /// "3 hidden players", "1 hidden player".
+    public static func hiddenLine(_ count: Int) -> String { "\(count) hidden \(count == 1 ? "player" : "players")" }
+
+    /// "CA 78 · PA 82": his current and potential ability as pasted, in the owner's words for them.
+    public static func abilityText(current: Int, potential: Int) -> String { "CA \(current) · PA \(potential)" }
+
+    /// What the paste says of a player, on one line: his age, positions and two abilities, then his club, where he is
+    /// on loan and his asking price when the paste carried them, then his wage, in the paste's currency and period.
+    public static func details(of player: Player, money: MoneyStyle) -> String {
+        let carried = [AdvisorText.club(of: player), player.loanedTo.map(AdvisorText.onLoan(at:)),
+                       player.askingPrice.map { AdvisorText.askingPrice($0, money) }].compactMap { $0 }
+        return ([ageText(player.age), player.positionsText,
+                 abilityText(current: player.currentAbility, potential: player.potentialAbility)]
+                + carried + [Display.wage(perWeek: player.wagePerWeek, money)]).joined(separator: " · ")
+    }
 
     /// What a click on the rest part's line does.
     public static func restHelp(_ isOpen: Bool) -> String { isOpen ? "Hide them" : "Show them" }
@@ -212,13 +255,20 @@ public enum ScoutingPresentation {
             case .answersToday, .answersLater, .wouldStartElsewhere, .couldPassElsewhere: isRest = false
             case .rest: isRest = true
             }
+            let rows = group.candidates.map { row($0, money: money) }
+            // The rest is closed behind its own line and whole when opened; every other group shows its best few.
+            let shown = isRest ? rows.count : shownInGroup
             return CandidateGroupRows(id: id, partTitle: isFirstOfPart ? AdvisorText.name(group.part) : nil,
-                                      heading: heading, isRest: isRest, rows: group.candidates.map { row($0, money: money) },
-                                      closedLine: isRest ? restLine(group.candidates.count) : nil)
+                                      heading: heading, isRest: isRest, rows: Array(rows.prefix(shown)),
+                                      moreRows: Array(rows.dropFirst(shown)),
+                                      closedLine: isRest ? restLine(rows.count) : nil)
+        }
+        let hidden = report.hidden.map {
+            ScoutingHiddenRow(id: $0.id, name: $0.name, detailsText: details(of: $0, money: money))
         }
         return CandidatesSheet(readLine: AdvisorText.playersRead(pasted),
                                leftOutLine: AdvisorText.leftOutAlreadyYours(report.leftOut), groups: groups,
-                               evidenceNote: report.basis.flatMap(AdvisorText.note(for:)))
+                               hidden: hidden, evidenceNote: report.basis.flatMap(AdvisorText.note(for:)))
     }
 
     static func row(_ candidate: LineupEngine.Candidate, money: MoneyStyle) -> ScoutingCandidateRow {
@@ -228,7 +278,8 @@ public enum ScoutingPresentation {
             id: candidate.id, name: player.name, age: player.age, positions: player.positionsText,
             club: AdvisorText.club(of: player), onLoan: player.loanedTo.map(AdvisorText.onLoan(at:)),
             askingPrice: player.askingPrice.map { AdvisorText.askingPrice($0, money) },
-            wage: Display.wage(perWeek: player.wagePerWeek, money), isInjured: player.isInjured,
+            wage: Display.wage(perWeek: player.wagePerWeek, money), detailsText: details(of: player, money: money),
+            isInjured: player.isInjured,
             todayLines: headline.map(AdvisorText.todayLines) ?? [AdvisorText.playsNoSlot],
             laterLines: AdvisorText.laterLines(candidate),
             cautions: candidate.cautions.map(AdvisorText.caution),

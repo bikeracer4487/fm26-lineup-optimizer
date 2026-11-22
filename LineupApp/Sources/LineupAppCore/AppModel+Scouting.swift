@@ -117,6 +117,13 @@ extension AppModel {
         return candidatesSheet(report, order: .today)?.rowIDs ?? []
     }
 
+    /// Every group with a "more players" line for the tactic the Scouting screen shows, so all can be opened at once;
+    /// none while no candidates are judged. The groups with a line are the same in either order.
+    public func allCandidateGroupIDs(for chosen: UUID?) -> Set<String> {
+        guard case .ready(let report) = candidates(for: chosen) else { return [] }
+        return candidatesSheet(report, order: .today)?.groupIDs ?? []
+    }
+
     /// The tactic the Scouting screen shows for the owner's choice: that tactic while it is saved, else the primary.
     public func scoutingTacticShown(_ chosen: UUID?) -> UUID? {
         elevensTacticShown(chosen)

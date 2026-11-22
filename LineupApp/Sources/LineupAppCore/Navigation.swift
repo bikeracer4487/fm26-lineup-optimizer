@@ -65,16 +65,31 @@ public enum MentoringEditing: Identifiable, Equatable, Sendable {
     public var mentoringSquad: Squad = .firstTeam
     public var mentoringEditing: MentoringEditing?
     /// The Scouting screen's tab, its tactic (nil: the primary), the order of its candidates, the candidates' rows
-    /// opened to show their other slots, and whether the rest part is open.
+    /// opened to show their other slots, whether the rest part is open, the groups whose "more players" line is open
+    /// (by the group's id, so a change of order or tactic leaves a group's line as it was), and whether the hidden
+    /// players' list is open. All closed at every launch.
     public var scoutingView: ScoutingView = .needs
     public var scoutingTacticID: UUID?
     public var scoutingOrder: CandidateOrder = .today
     public var scoutingOpen: Set<PlayerID> = []
     public var scoutingRestOpen = false
+    public var scoutingMoreOpen: Set<String> = []
+    public var scoutingHiddenOpen = false
 
     /// Opens the candidate's row, or closes it when open.
     public func toggleScoutingRow(_ id: PlayerID) {
         if scoutingOpen.contains(id) { scoutingOpen.remove(id) } else { scoutingOpen.insert(id) }
+    }
+
+    /// Opens the group's "more players" line, or closes it when open.
+    public func toggleScoutingMore(_ id: String) {
+        if scoutingMoreOpen.contains(id) { scoutingMoreOpen.remove(id) } else { scoutingMoreOpen.insert(id) }
+    }
+
+    /// Closes every group's "more players" line, as a new paste and "Clear" do: the groups are then other players'.
+    /// The hidden players' list is left as it is.
+    public func closeScoutingLines() {
+        scoutingMoreOpen = []
     }
 
     public init(screen: Screen? = .squad, matchFixture: FixtureID? = nil, matchSelection: PickSelection? = nil,

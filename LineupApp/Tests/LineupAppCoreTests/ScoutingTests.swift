@@ -128,7 +128,7 @@ import LineupEngine
         let report = try ScoutingSetup.report(t.model)
         #expect(report.candidates.count == 109 && report.leftOut.isEmpty)
         let sheet = try #require(t.model.candidatesSheet(report, order: .today))
-        let rows = sheet.groups.flatMap(\.rows)
+        let rows = sheet.groups.flatMap { $0.rows + $0.moreRows }
         #expect(rows.count == 109)
         #expect(rows.filter { $0.club == "Free agent" }.count == 15)
         #expect(rows.first { $0.name == "Brad Walker" }?.club == "Darlington, out of contract")
