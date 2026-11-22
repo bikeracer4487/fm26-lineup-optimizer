@@ -14,10 +14,12 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
                          [--first-team <paste.tsv>] [--u21 <paste.tsv>] [--u18 <paste.tsv>] [--own-club <name>]
                          [--history <confirmed.json>] [--intensity low|medium|high] [--stability <0...1>]
                          [--saving <0...10>] [--horizon <n>] [--development <0...1>] [--profile fm27|carried-over]
+                         [--fitness-readings <readings.json>]
        lineup-cli advise --grids <fmrte config or grids snapshot> --tactic <tactic.json> --as-of <YYYY-MM-DD>
                          [--first-team <paste.tsv>] [--u21 <paste.tsv>] [--u18 <paste.tsv>] [--own-club <name>]
                          [--history <confirmed.json>] [--fixtures <fixtures.json>] [--intensity low|medium|high]
                          [--profile fm27|carried-over] [--standings <standings.json>]
+                         [--fitness-readings <readings.json>]
                          [--league-situation title-race|in-contention|mid-table|nothing-to-play-for]
                          [--league-table <paste.tsv> --league-format <promoted>,<play-offs>,<relegated>]
        lineup-cli scout  everything advise takes, and --candidates <paste.tsv>, which is required: a paste of players
@@ -61,6 +63,10 @@ usage: lineup-cli select --grids <fmrte config or grids snapshot> --tactic <tact
        opponentStrength. --history is a JSON array of confirmed lineups:
        {"fixture", "date", "starters": {"<slot>": "<player key>"}}. Dates are YYYY-MM-DD. A player's key is "fmrte:<Id>"
        when the paste has FMRTE's Id column, otherwise his name in lower case.
+       --fitness-readings is a JSON object from a player's key to an array of his readings, each {"day", "jadedness",
+       "condition", "sharpness", "isInjured", "includes": [<fixture id>]} (includes is required, [] for none). With it, plan
+       and advise measure each player's jadedness trend from the readings and --history's lineups, as of --as-of, and use
+       it; advise prints the trend in its Rest part. Without it the fixed figures are used and no trend is printed.
        Unless given, training intensity is medium, stability 0.5, saving players 1 (0 turns it off), horizon 5 and
        development 1 (how much of the favour to young players in lesser fixtures applies; 0 turns it off).
 """
@@ -85,6 +91,7 @@ struct Options {
     var fixtures: String?
     var history: String?
     var standings: String?
+    var fitnessReadings: String?
     var candidates: String?
     var leagueSituation: LeagueSituation?
     var leagueTable: String?
@@ -110,8 +117,8 @@ func parse(_ arguments: [String]) throws -> Options {
     let shared = ["--grids", "--tactic", "--own-club", "--profile"]
     let allowed = switch command {
     case .select: shared + ["--importance"]
-    case .plan: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--stability", "--saving", "--horizon", "--development"]
-    case .advise: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--standings", "--league-situation", "--league-table", "--league-format"]
+    case .plan: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--stability", "--saving", "--horizon", "--development", "--fitness-readings"]
+    case .advise: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--standings", "--league-situation", "--league-table", "--league-format", "--fitness-readings"]
     case .scout: shared + ["--fixtures", "--history", "--as-of", "--intensity", "--standings", "--league-situation", "--candidates"]
     }
     let name = command.rawValue
@@ -139,6 +146,7 @@ func parse(_ arguments: [String]) throws -> Options {
         case "--fixtures": options.fixtures = value
         case "--history": options.history = value
         case "--standings": options.standings = value
+        case "--fitness-readings": options.fitnessReadings = value
         case "--candidates": options.candidates = value
         case "--league-situation":
             switch value {
@@ -261,6 +269,20 @@ let standings = options.standings.map { path in
     decode([String: PlayerDynamics].self, read(path), file: path, what: "standings")
 }
 
+let fitnessReadings = options.fitnessReadings.map { path in
+    decode([String: [FitnessReading]].self, read(path), file: path, what: "fitness readings")
+}
+
+/// The trend the readings show as of `--as-of`, each player's squad being the one he is in now; nothing measured with no
+/// readings, or when the fitness parameters are not valid (the plan or the advice reports those itself).
+func measuredTrends(_ players: [Player], parameters: EngineParameters) -> FitnessTrends {
+    guard let fitnessReadings, FitnessModel.problems(in: parameters).isEmpty else { return .none }
+    return FitnessTrend.rates(
+        readings: Dictionary(fitnessReadings.map { (PlayerID(key: $0.key), $0.value) }, uniquingKeysWith: { first, _ in first }),
+        confirmed: history, squads: Dictionary(players.map { ($0.id, $0.squad) }, uniquingKeysWith: { first, _ in first }),
+        asOf: options.asOf!, measureFrom: nil, parameters: parameters)
+}
+
 var output = ""
 do {
     var book = SquadBook()
@@ -317,9 +339,10 @@ do {
                     + "development favours: \(ErrorDescriptions.describe(error))\n").utf8))
             }
         }
+        let trends = measuredTrends(book.allPlayers, parameters: parameters)
         let plan = try Planner(catalog: catalog, profile: profile, parameters: parameters).plan(PlanRequest(
             fixtures: fixtures, players: book.allPlayers, ownClub: ownClub, asOf: options.asOf!, confirmed: history,
-            retraining: [], advisedToLeave: leaving, settings: options.settings))
+            retraining: [], advisedToLeave: leaving, rates: trends.pairs, settings: options.settings))
         output = Report.render(header, plan: plan, fixtures: fixtures, history: history, asOf: options.asOf!,
                                profile: profile, parameters: parameters, settings: options.settings)
 
@@ -330,7 +353,8 @@ do {
         let players = book.allPlayers
         let advisors = try Advisors.report(AdvisorsRequest(
             primary: tactic, tactics: [tactic], players: players, ownClub: ownClub, history: StartHistory(history),
-            asOf: options.asOf!, intensity: options.settings.trainingIntensity, accepted: [], rejected: []),
+            asOf: options.asOf!, intensity: options.settings.trainingIntensity, accepted: [], rejected: [],
+            trends: measuredTrends(players, parameters: parameters)),
             // Money is shown as the squads given wrote it; of several, the last one given decides the period.
             money: book.moneyStyle, catalog: catalog, profile: profile, parameters: parameters)
         // The squad that stays: the command line takes no marks, so only loans in and Player Removal's advice count.
@@ -382,7 +406,8 @@ do {
             }
             output = Report.render(header, advice: Report.Advice(
                 asOf: options.asOf!, profile: profile, intensity: options.settings.trainingIntensity, history: history,
-                elevens: advisors.elevens, depth: advisors.depth, rest: advisors.rest, training: advisors.training,
+                elevens: advisors.elevens, depth: advisors.depth, rest: advisors.rest,
+                trends: fitnessReadings == nil ? nil : advisors.trends, training: advisors.training,
                 removal: advisors.removal, scouting: scouting, league: leagueLines, suggestions: suggestions, mentoring: mentoring),
                 parameters: parameters)
         } else {

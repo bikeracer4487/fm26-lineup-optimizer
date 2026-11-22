@@ -86,6 +86,8 @@ enum Report {
         let elevens: ElevensReport
         let depth: DepthReport
         let rest: [RestAdvice]
+        /// The trends measured from saved readings; nil when none were given, so no trend is printed.
+        let trends: FitnessTrends?
         let training: TrainingReport
         let removal: RemovalReport
         let scouting: ScoutingNeeds
@@ -128,7 +130,7 @@ enum Report {
                       unfilled: advice.elevens.unfilledSecond, squadOf: squadOf)
         out += depth(advice.depth, parameters: parameters)
         out += scouting(advice.scouting, parameters: parameters)
-        out += rest(advice.rest)
+        out += rest(advice.rest, trends: advice.trends, parameters: parameters)
         out += training(advice.training)
         out += removal(advice.removal)
         if !advice.league.isEmpty { out += ["", "=== League ==="] + advice.league.map { "  " + $0 } }
@@ -240,8 +242,16 @@ enum Report {
         return "\(option.name) \(fixed(option.rating, 1))" + (marks.isEmpty ? "" : " (\(marks.joined(separator: "; ")))")
     }
 
-    private static func rest(_ advice: [RestAdvice]) -> [String] {
+    private static func rest(_ advice: [RestAdvice], trends: FitnessTrends?, parameters: EngineParameters) -> [String] {
         var out = ["", "=== Rest ==="]
+        if let trends {
+            for line in AdvisorText.squadTrendLines(trends, parameters: parameters) {
+                out.append("  \(line.text)")
+                if let caution = line.caution { out.append("    ! \(caution)") }
+            }
+            if let line = AdvisorText.clubGainLine(trends) { out.append("  \(line)") }
+            if let line = AdvisorText.trendMeasuredFrom(trends) { out.append("  \(line)") }
+        }
         if advice.isEmpty { out.append("  nobody") }
         for one in advice {
             let limit = "limit \(one.limit)" + (one.limitNotes.isEmpty ? "" : " (\(one.limitNotes.joined(separator: ", ")))")
@@ -249,7 +259,13 @@ enum Report {
             out.append("  \(pad(AdvisorText.name(one.level).uppercased(), 8)) \(pad(one.name, 22)) jadedness \(one.jadedness), \(limit), "
                        + "condition \(Display.percent(one.condition)), \(one.consecutiveStarts) in a row\(days)\(mark(one.basis))")
             for reason in one.reasons { out.append("        - \(reason)") }
+            if trends != nil {
+                for line in AdvisorText.trendLines(of: one, parameters: parameters) { out.append("        - \(line)") }
+            }
         }
+        out.append("")
+        out.append(AdvisorText.gameMessagesHeading)
+        for line in AdvisorText.gameMessages(parameters: parameters) { out.append("  \(line)") }
         return out
     }
 

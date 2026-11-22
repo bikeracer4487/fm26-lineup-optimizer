@@ -1,0 +1,1262 @@
+{
+ "alfie potter": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 60,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 91,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 82,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 113,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 104,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 137,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 130,
+   "sharpness": 0.85
+  }
+ ],
+ "canice carroll": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 132,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 167,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 162,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 197,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 192,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 229,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 226,
+   "sharpness": 0.85
+  }
+ ],
+ "darnell johnson": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 87,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 122,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 157,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 192,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 227,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 264,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 301,
+   "sharpness": 0.85
+  }
+ ],
+ "deago nelson": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 204,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 238,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 232,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 266,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 260,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 296,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 292,
+   "sharpness": 0.85
+  }
+ ],
+ "dejan tetek": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 150,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 182,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 214,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 246,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 278,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 312,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 346,
+   "sharpness": 0.85
+  }
+ ],
+ "dillon de silva": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 150,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 181,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 172,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 203,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 194,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 227,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 220,
+   "sharpness": 0.85
+  }
+ ],
+ "ellis brown": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 186,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 179,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 212,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 205,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 238,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 233,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 268,
+   "sharpness": 0.85
+  }
+ ],
+ "evan humphries": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 195,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 226,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 257,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 288,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 319,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 352,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 385,
+   "sharpness": 0.85
+  }
+ ],
+ "ewan clark": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 159,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 153,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 187,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 181,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 215,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 211,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 247,
+   "sharpness": 0.85
+  }
+ ],
+ "fernando forestieri": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 69,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 63,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 57,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 51,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 45,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 41,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 37,
+   "sharpness": 0.85
+  }
+ ],
+ "jonny maxted": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 78,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 110,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 142,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 174,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 206,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 240,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 274,
+   "sharpness": 0.85
+  }
+ ],
+ "josh ashby": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 123,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 115,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 147,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 139,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 171,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 165,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 199,
+   "sharpness": 0.85
+  }
+ ],
+ "keegan bloom": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 213,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 205,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 237,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 229,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 261,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 255,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 289,
+   "sharpness": 0.85
+  }
+ ],
+ "ludwig francillette": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 96,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 129,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 162,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 195,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 228,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 263,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 298,
+   "sharpness": 0.85
+  }
+ ],
+ "matty taylor": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 105,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 96,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 127,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 118,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 149,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 142,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 175,
+   "sharpness": 0.85
+  }
+ ],
+ "scott pollock": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 141,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 134,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 167,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 160,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 193,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 188,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 223,
+   "sharpness": 0.85
+  }
+ ],
+ "tyrone marsh": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 114,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 148,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 142,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 176,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 170,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 206,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 202,
+   "sharpness": 0.85
+  }
+ ],
+ "zac mceachran": [
+  {
+   "condition": 0.9,
+   "day": "2026-10-06",
+   "includes": [],
+   "isInjured": false,
+   "jadedness": 177,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-13",
+   "includes": [
+    "2026-10-09-played"
+   ],
+   "isInjured": false,
+   "jadedness": 212,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-20",
+   "includes": [
+    "2026-10-16-played"
+   ],
+   "isInjured": false,
+   "jadedness": 207,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-10-27",
+   "includes": [
+    "2026-10-23-played"
+   ],
+   "isInjured": false,
+   "jadedness": 242,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-03",
+   "includes": [
+    "2026-10-30-played"
+   ],
+   "isInjured": false,
+   "jadedness": 237,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-08",
+   "includes": [
+    "2026-11-07-played"
+   ],
+   "isInjured": false,
+   "jadedness": 274,
+   "sharpness": 0.85
+  },
+  {
+   "condition": 0.9,
+   "day": "2026-11-13",
+   "includes": [
+    "2026-11-10-played"
+   ],
+   "isInjured": false,
+   "jadedness": 271,
+   "sharpness": 0.85
+  }
+ ]
+}
