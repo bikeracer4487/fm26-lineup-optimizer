@@ -574,6 +574,15 @@ No test is pinned to these numbers.
 - **Calls made beyond the request**, each the owner's to change: a successor the fixture favours still gets "Needs minutes" in a low fixture when he is in neither eleven, as in a sharpness fixture; and the successor's own favour is unchanged, since a successor is close to or on course to pass a first choice and so is worth developing already.
 - **Limits.** A regular who is third choice at his slot, or a player back from a long injury who has dropped out of both elevens, gets no "Needs minutes" in a low fixture; the owner can still choose him. The line for "markedly lower" is where it was, and the engine still has no floor on ability.
 
+## The app's tests made quicker
+
+The owner asked for this during the build: the app's suite had come to take about eight minutes, so every change waited on it.
+
+- **Where the time went.** Most of the app's tests plan. A plan of the sample squad takes 0.90 seconds in an unoptimized build of the engine and 0.08 optimized, and every suite runs on the main actor, so the 973 tests run one at a time: 470 seconds.
+- **What was added.** `tools/test_app.sh` runs the same tests from the debug configuration with the optimizer on (`-Xswiftc -O`), in a build folder of its own (`LineupApp/.build/tests`). The whole suite takes 40 seconds, a clean build for it 42, and a rebuild after a change to one file 3 to 6. No test and no manifest was changed.
+- **What was tried and dropped.** A release build with testing enabled ran the tests no faster (39 seconds) and rebuilt slowly: 142 seconds clean and 87 after a change to one test. Leaving the test target unoptimized and compiled file by file in release fixed the rebuild but failed from a clean build folder.
+- **Left.** The unoptimized run (`swift test`) is unchanged and is still the one with assertions; it should be run once before work is called finished. Running the suites as several processes at once was not tried, and neither was the engine's own suite, which takes about a minute.
+
 ## Limits and small faults left
 
 The design's limits, as built:

@@ -128,9 +128,13 @@ Earlier matches (`EarlierMatches.swift` in Core) are those Fixtures and Match Se
 
 Build and test it with:
 
-    cd LineupApp && swift build && swift test
+    cd LineupApp && swift build
+    tools/test_app.sh                           # from the repository root: every test, in about 40 seconds
+    tools/test_app.sh --filter ScoutingTests    # one suite or test
 
-The tests take seven minutes or more (943 tests on 22 November 2026 took about seven and a half minutes (460 seconds); 898 on 20 November took between seven and twenty), longer than a foreground command is given, so run the whole suite in the background: each plan of the sample data takes most of a second in a debug build, and many tests plan.
+`tools/test_app.sh` runs the app's tests from an optimized build (the debug configuration with `-Xswiftc -O`, kept in `LineupApp/.build/tests`, apart from the unoptimized build and from the release build `tools/build_app.sh` installs, so none makes another build again). It was added on 22 November 2026 because the suite had come to take about eight minutes: most tests plan, a plan of the sample squad takes about 0.9 seconds in an unoptimized build of the engine and under 0.1 optimized, and every suite runs on the main actor, so the tests run one at a time. The same 973 tests took 470 seconds unoptimized and 40 from the script; a clean build for it took 42 seconds, and a rebuild after a change to one file 3 to 6. It passes any other argument to `swift test`. Use it while working.
+
+`cd LineupApp && swift test` still works and is the unoptimized run, with the assertions an optimized build leaves out. It takes about eight minutes (973 tests took 470 seconds on 22 November 2026), longer than a foreground command is given, so run it in the background, and run it once before work is called finished. A release build of the tests was tried and dropped: it ran them no faster and took over a minute to rebuild after a change to one test. Running the suites as several processes at once was not tried.
 
 Run it:
 
