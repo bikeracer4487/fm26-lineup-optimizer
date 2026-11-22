@@ -164,6 +164,41 @@ import LineupEngine
         #expect(ScoutingPresentation.abilityText(current: 78, potential: 82) == "CA 78 · PA 82")
     }
 
+    // MARK: The samples the pictures are drawn from, and what VoiceOver says
+
+    @Test func theCrowdedSampleHoldsOneGroupOverFive() throws {
+        let model = try SampleData.modelWithCrowdedGroup(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let report = try ScoutingSetup.report(model)
+        let sheet = try #require(model.candidatesSheet(report, order: .today))
+        #expect(sheet.groups.count == 1)
+        let group = try #require(sheet.groups.first)
+        #expect(!group.isRest && group.rows.count == 5)
+        #expect(group.moreRows.count >= 2)                                               // "more players", in the plural
+        #expect(group.moreLine == ScoutingPresentation.restLine(group.moreRows.count))
+        #expect(sheet.hidden.isEmpty)
+        #expect(model.allCandidateGroupIDs(for: nil) == [group.id])
+    }
+
+    @Test func theHiddenSampleHasTwoPlayersHiddenAndTheOthersShown() throws {
+        let model = try SampleData.modelWithHiddenCandidates(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        let report = try ScoutingSetup.report(model)
+        let sheet = try #require(model.candidatesSheet(report, order: .today))
+        #expect(sheet.hidden.count == 2 && sheet.hiddenLine == "2 hidden players")
+        #expect(sheet.rowIDs.count == 4)
+        #expect(report.leftOut == [SampleData.candidateAlreadyHeldName])                 // still left out as the club's own
+        // The group whose order the Today and Later pictures turn round is left whole.
+        #expect(!sheet.hidden.contains { [SampleData.candidateWhoStartsName, SampleData.candidateOlderStarterName].contains($0.name) })
+    }
+
+    @Test func voiceOverNamesThePlayerAButtonActsOn() {
+        #expect(ScoutingPresentation.hideLabel("Brad Walker") == "Hide Brad Walker")
+        #expect(ScoutingPresentation.showAgainLabel("Brad Walker") == "Show Brad Walker again")
+        #expect(ScoutingPresentation.hideButton == "Hide" && ScoutingPresentation.showAgainButton == "Show again")
+        #expect(ScoutingPresentation.hiddenHeading == "Hidden")
+    }
+
     // MARK: Which lines are open
 
     @Test func theOpenLinesAreKeptByGroupAndClosedTogether() {

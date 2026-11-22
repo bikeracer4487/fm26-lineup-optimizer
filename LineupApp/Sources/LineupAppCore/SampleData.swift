@@ -524,6 +524,62 @@ public enum SampleData {
         return model
     }
 
+    /// The sample model holding one crowded group: of the owner's captured search of 109 players, read with its own
+    /// layouts and FMRTE set to wages by the month as it was that day, only the players of the largest group outside
+    /// the rest for the primary tactic in the Today order (the earliest on a tie). So the Candidates tab shows a group's
+    /// best five and the line the others are behind. It fails when that group has fewer than seven players, since the
+    /// line is then not "more players".
+    @MainActor public static func modelWithCrowdedGroup(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        let result: ImportResult
+        do {
+            guard var layouts = try JSONSerialization.jsonObject(
+                with: try fixture("captures/scouting-search.grids.json", under: repositoryRoot)) as? [String: Any] else {
+                throw SampleDataError(description: "The captured search's layouts are not a JSON object.")
+            }
+            layouts["Wages"] = "Monthly"
+            let text = String(decoding: try fixture("captures/scouting-search.tsv", under: repositoryRoot), as: UTF8.self)
+            result = try Importer.importPlayers(clipboard: text, fmrteConfig: try JSONSerialization.data(withJSONObject: layouts),
+                                                squad: .firstTeam)
+        } catch let error as SampleDataError {
+            throw error
+        } catch {
+            throw SampleDataError(description: "The captured search could not be read: \(ErrorDescriptions.describe(error))")
+        }
+        model.hold(ScoutingPaste(players: result.players, money: result.money))
+        guard case .ready(let report) = model.candidates(for: nil) else {
+            throw SampleDataError(description: "The captured search could not be judged on the sample squad.")
+        }
+        var largest: CandidateGroup?
+        for group in report.groups(orderedBy: .today) where group.part != .rest {
+            if group.candidates.count > (largest?.candidates.count ?? 0) { largest = group }
+        }
+        guard let largest, largest.candidates.count >= 7 else {
+            throw SampleDataError(description: "The captured search has no group of seven players or more on the sample squad.")
+        }
+        model.hold(ScoutingPaste(players: largest.candidates.map(\.player), money: result.money))
+        return model
+    }
+
+    /// The sample model holding the sample candidates with two of them hidden: the first two as pasted who are not one
+    /// of the two starters, whose group the Today and Later pictures turn round. So the Candidates tab shows the line
+    /// the hidden players are behind, and the list when it is opened.
+    @MainActor public static func modelWithHiddenCandidates(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithCandidates(repositoryRoot: repositoryRoot)
+        guard case .ready(let report) = model.candidates(for: nil) else {
+            throw SampleDataError(description: "The sample candidates could not be judged.")
+        }
+        let starters = [candidateWhoStartsName, candidateOlderStarterName]
+        // The scripted clock moves a second at each reading, so neither is taken for a double click.
+        for candidate in report.candidates.filter({ !starters.contains($0.player.name) }).prefix(2) {
+            model.hideCandidate(candidate.id, for: nil)
+        }
+        guard model.scouting.hidden.count == 2 else {
+            throw SampleDataError(description: "Two sample candidates were not hidden.")
+        }
+        return model
+    }
+
     /// The sample candidates, as a paste of them is held.
     static func sampleCandidates(repositoryRoot: URL) throws -> ScoutingPaste {
         var text = String(decoding: try fixture("captures/u21.tsv", under: repositoryRoot), as: UTF8.self)

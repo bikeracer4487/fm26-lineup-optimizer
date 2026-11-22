@@ -3,8 +3,10 @@ import LineupEngine
 import SwiftUI
 
 /// The Candidates tab: "Paste players" and "Clear", the Today and Later control, what the paste read and left out, and
-/// why a paste was refused; then the candidates part by part, each group under its heading, the rest closed behind a
-/// line saying how many are in it, and how far to trust it all. With nothing pasted, the sentence saying how to paste.
+/// why a paste was refused; then the candidates part by part, each group under its heading with its best few rows and
+/// a line that opens the others, the rest closed behind a line saying how many are in it; then the players the owner
+/// has hidden, closed behind a line of their own, and how far to trust it all. Every candidate's row has "Hide", and
+/// every hidden player "Show again". With nothing pasted, the sentence saying how to paste.
 struct ScoutingCandidatesTab: View {
     let model: AppModel
     @Bindable var navigation: Navigation
@@ -35,7 +37,8 @@ struct ScoutingCandidatesTab: View {
                             }
                         }
                     }
-                    CandidateGroups(sheet: sheet, navigation: navigation)
+                    CandidateGroups(sheet: sheet, model: model, navigation: navigation)
+                    HiddenCandidates(sheet: sheet, model: model, navigation: navigation)
                     if let note = sheet.evidenceNote {
                         ScoutingMutedLine(text: note, size: Theme.TypeSize.small)
                     }
@@ -48,10 +51,17 @@ struct ScoutingCandidatesTab: View {
     private func pasteRow(ordered: Bool) -> some View {
         WrappingRow(alignment: .center, spacing: Theme.Spacing.xl, pushesTrailing: false) {
             HStack(alignment: .center, spacing: Theme.Spacing.m) {
-                Button(ScoutingPresentation.pasteButton) { model.pasteCandidates() }
+                // The groups are then other players', so their opened lines close.
+                Button(ScoutingPresentation.pasteButton) {
+                    model.pasteCandidates()
+                    navigation.closeScoutingLines()
+                }
                     .buttonStyle(.main)
                     .fixedSize()
-                Button(ScoutingPresentation.clearButton) { model.clearCandidates() }
+                Button(ScoutingPresentation.clearButton) {
+                    model.clearCandidates()
+                    navigation.closeScoutingLines()
+                }
                     .buttonStyle(.secondary)
                     .fixedSize()
                     .disabled(!model.canClearCandidates)
@@ -80,9 +90,11 @@ struct ScoutingCandidatesTab: View {
     }
 }
 
-/// The groups in the engine's order: a part's title over its first group, each group's heading, then its candidates.
+/// The groups in the engine's order: a part's title over its first group, each group's heading, then its candidates,
+/// and under them the line that opens the group's others.
 private struct CandidateGroups: View {
     let sheet: CandidatesSheet
+    let model: AppModel
     @Bindable var navigation: Navigation
 
     var body: some View {
@@ -102,20 +114,99 @@ private struct CandidateGroups: View {
                         }
                     }
                     if group.showsRows(restOpen: navigation.scoutingRestOpen) {
-                        // Lazy, so a paste of several hundred rows lays out only those on screen.
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(group.rows) { row in
-                                FaintRule()
-                                ScoutingCandidateRowView(row: row, inRest: group.isRest,
-                                                 isOpen: navigation.scoutingOpen.contains(row.id)) {
-                                    navigation.toggleScoutingRow(row.id)
-                                }
-                            }
+                        rows(group.rows, inRest: group.isRest)
+                    }
+                    if let line = group.moreLine {
+                        let isOpen = navigation.scoutingMoreOpen.contains(group.id)
+                        RestToggle(line: line, isOpen: isOpen) {
+                            navigation.toggleScoutingMore(group.id)
+                        }
+                        if isOpen {
+                            rows(group.moreRows, inRest: group.isRest)
                         }
                     }
                 }
             }
         }
+    }
+
+    /// Lazy, so a paste of several hundred rows lays out only those on screen.
+    private func rows(_ rows: [ScoutingCandidateRow], inRest: Bool) -> some View {
+        LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(rows) { row in
+                FaintRule()
+                ScoutingCandidateRowView(row: row, inRest: inRest, isOpen: navigation.scoutingOpen.contains(row.id)) {
+                    navigation.toggleScoutingRow(row.id)
+                } hide: {
+                    model.hideCandidate(row.id, for: navigation.scoutingTacticID)
+                }
+            }
+        }
+    }
+}
+
+/// The players the owner has hidden, under a heading of their own and closed behind a line saying how many: each by
+/// name over what the paste says of him, with "Show again". Nothing at all when nobody pasted is hidden.
+private struct HiddenCandidates: View {
+    let sheet: CandidatesSheet
+    let model: AppModel
+    @Bindable var navigation: Navigation
+
+    var body: some View {
+        if let line = sheet.hiddenLine {
+            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                // Titled as a part is, so the list does not read as part of the rest above it.
+                BoardHeading(ScoutingPresentation.hiddenHeading, size: Theme.TypeSize.boardTitle)
+                    .padding(.top, Theme.Spacing.s)
+                RestToggle(line: line, isOpen: navigation.scoutingHiddenOpen) {
+                    navigation.scoutingHiddenOpen.toggle()
+                }
+                if navigation.scoutingHiddenOpen {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(sheet.hidden) { row in
+                            FaintRule()
+                            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
+                                CandidateIdentity(name: row.name, stamps: [], detailsText: row.detailsText)
+                                    .accessibilityElement(children: .combine)
+                                Button(ScoutingPresentation.showAgainButton) {
+                                    model.showCandidateAgain(row.id, for: navigation.scoutingTacticID)
+                                }
+                                .buttonStyle(.secondary)
+                                .fixedSize()
+                                .accessibilityLabel(ScoutingPresentation.showAgainLabel(row.name))
+                            }
+                            .padding(.leading, Theme.Scouting.disclosureColumn)
+                            .padding(.vertical, Theme.Spacing.m)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A pasted player's name with any stamp, over what the paste says of him.
+private struct CandidateIdentity: View {
+    let name: String
+    let stamps: [StatusStamp]
+    let detailsText: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
+                Text(name)
+                    .font(Theme.Typeface.display(Theme.TypeSize.noteHeading, weight: .bold))
+                    .foregroundStyle(Theme.Colour.ink)
+                    .lineLimit(Theme.Scouting.nameLines)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(stamps, id: \.self) { StampView(stamp: $0).fixedSize() }
+            }
+            Text(detailsText)
+                .font(Theme.Typeface.text(Theme.TypeSize.small))
+                .foregroundStyle(Theme.Colour.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -154,29 +245,37 @@ private struct Disclosure: View {
     }
 }
 
-/// One candidate: his name with any stamp, what the paste says of him, then his lines and his cautions by label, and,
-/// while open, each other slot's lines together. A click on his name opens the row, when he has more to show.
+/// One candidate: his name with any stamp, what the paste says of him, and "Hide" at the trailing end; then his lines
+/// and his cautions by label, and, while open, each other slot's lines together. A click on his name opens the row,
+/// when he has more to show; "Hide" stands beside that button, never inside it.
 private struct ScoutingCandidateRowView: View {
     let row: ScoutingCandidateRow
     let inRest: Bool
     let isOpen: Bool
     let toggle: () -> Void
+    let hide: () -> Void
 
     var body: some View {
         let opens = row.opens(inRest: inRest)
         let lines = row.linesShown(inRest: inRest, isOpen: isOpen)
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            if opens {
-                Button(action: toggle) {
-                    identity(opens: true)
-                        .contentShape(Rectangle())
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
+                if opens {
+                    Button(action: toggle) {
+                        identity(opens: true)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(ScoutingPresentation.rowHelp(isOpen))
+                    .accessibilityValue(RemovalPresentation.openText(isOpen))
+                    .accessibilityAddTraits(.isButton)
+                } else {
+                    identity(opens: false)
                 }
-                .buttonStyle(.plain)
-                .help(ScoutingPresentation.rowHelp(isOpen))
-                .accessibilityValue(RemovalPresentation.openText(isOpen))
-                .accessibilityAddTraits(.isButton)
-            } else {
-                identity(opens: false)
+                Button(ScoutingPresentation.hideButton, action: hide)
+                    .buttonStyle(.secondary)
+                    .fixedSize()
+                    .accessibilityLabel(ScoutingPresentation.hideLabel(row.name))
             }
             VStack(alignment: .leading, spacing: Theme.Spacing.s) {
                 LabelledLines(label: ScoutingPresentation.todayLabel, lines: lines.today)
@@ -217,21 +316,7 @@ private struct ScoutingCandidateRowView: View {
                 Disclosure(isOpen: isOpen)
                     .hidden()
             }
-            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
-                    Text(row.name)
-                        .font(Theme.Typeface.display(Theme.TypeSize.noteHeading, weight: .bold))
-                        .foregroundStyle(Theme.Colour.ink)
-                        .lineLimit(Theme.Scouting.nameLines)
-                        .fixedSize(horizontal: false, vertical: true)
-                    ForEach(row.stamps, id: \.self) { StampView(stamp: $0).fixedSize() }
-                }
-                Text(row.detailsText)
-                    .font(Theme.Typeface.text(Theme.TypeSize.small))
-                    .foregroundStyle(Theme.Colour.mutedInk)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            CandidateIdentity(name: row.name, stamps: row.stamps, detailsText: row.detailsText)
         }
         .accessibilityElement(children: .combine)
     }

@@ -2,15 +2,22 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// Where the Scouting screen starts: which tab, the order of the candidates, and whether every candidate's row and the
-/// rest part are open. The app starts with the defaults; the pictures choose.
+/// Where the Scouting screen starts: which tab, the order of the candidates, whether every candidate's row and the
+/// rest part are open (`allOpen`, which opens the two below as well), and whether every group's "more players" line
+/// and the hidden players' list are. The app starts with the defaults; the pictures choose.
 public struct ScoutingStart: Sendable {
     public var view: ScoutingView
     public var order: CandidateOrder
     public var allOpen: Bool
+    /// Every group's "more players" line open.
+    public var moreOpen: Bool
+    /// The hidden players' list open.
+    public var hiddenOpen: Bool
 
-    public init(view: ScoutingView = .needs, order: CandidateOrder = .today, allOpen: Bool = false) {
+    public init(view: ScoutingView = .needs, order: CandidateOrder = .today, allOpen: Bool = false,
+                moreOpen: Bool = false, hiddenOpen: Bool = false) {
         self.view = view; self.order = order; self.allOpen = allOpen
+        self.moreOpen = moreOpen; self.hiddenOpen = hiddenOpen
     }
 }
 

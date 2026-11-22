@@ -174,6 +174,8 @@ public enum ScoutingPresentation {
     /// On a candidate's row, and on a hidden player's.
     public static let hideButton = "Hide"
     public static let showAgainButton = "Show again"
+    /// Over the line the hidden players are closed behind, so they do not read as part of the rest above them.
+    public static let hiddenHeading = "Hidden"
     /// How many players a group shows before the line the others are behind. A rule about what the tab lists, not about
     /// how a player is judged: the engine's order decides who the five are.
     public static let shownInGroup = 5
@@ -201,6 +203,12 @@ public enum ScoutingPresentation {
 
     /// "6 more players", "1 more player".
     public static func restLine(_ count: Int) -> String { "\(count) more \(count == 1 ? "player" : "players")" }
+
+    /// What VoiceOver says for a row's "Hide", so the button names the player it acts on: "Hide Brad Walker".
+    public static func hideLabel(_ name: String) -> String { "Hide \(name)" }
+
+    /// What VoiceOver says for a hidden player's "Show again": "Show Brad Walker again".
+    public static func showAgainLabel(_ name: String) -> String { "Show \(name) again" }
 
     /// "3 hidden players", "1 hidden player".
     public static func hiddenLine(_ count: Int) -> String { "\(count) hidden \(count == 1 ? "player" : "players")" }

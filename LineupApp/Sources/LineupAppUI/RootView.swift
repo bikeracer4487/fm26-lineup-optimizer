@@ -33,8 +33,8 @@ public struct RootView: View {
     ///   - fixturesStart: the fixture whose suggestion's reasons the Fixtures screen opens with shown.
     ///   - trainingStart: the tab, the Mentoring tab's squad and what it has open for editing, the Training screen
     ///     opens with.
-    ///   - scoutingStart: the tab and the order the Scouting screen opens with, and whether every candidate's row and
-    ///     the rest part are open.
+    ///   - scoutingStart: the tab and the order the Scouting screen opens with, and whether every candidate's row, the
+    ///     rest part, every group's "more players" line and the hidden players' list are open.
     public init(model: AppModel, showing screen: Screen = .squad, tacticSlot: TacticSlot? = nil,
                 matchStart: MatchStart = MatchStart(), elevensStart: ElevensStart = ElevensStart(),
                 removalStart: RemovalStart = RemovalStart(), fixturesStart: FixturesStart = FixturesStart(),
@@ -63,6 +63,12 @@ public struct RootView: View {
         if scoutingStart.allOpen {
             navigation.scoutingOpen = model.allCandidateRowIDs(for: nil)
             navigation.scoutingRestOpen = true
+        }
+        if scoutingStart.allOpen || scoutingStart.moreOpen {
+            navigation.scoutingMoreOpen = model.allCandidateGroupIDs(for: nil)
+        }
+        if scoutingStart.allOpen || scoutingStart.hiddenOpen {
+            navigation.scoutingHiddenOpen = true
         }
         _navigation = State(initialValue: navigation)
     }

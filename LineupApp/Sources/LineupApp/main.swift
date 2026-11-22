@@ -155,7 +155,14 @@
 //                                              the rest open ("scouting-candidates-open-…"), in the smallest
 //                                              window ("scouting-candidates-small-…"), and after the sample's own
 //                                              U21s were pasted over them and refused
-//                                              ("scouting-candidates-refused-…").
+//                                              ("scouting-candidates-refused-…"); holding one group of the
+//                                              owner's captured search, over five, so its best five and the
+//                                              line the others are behind show
+//                                              ("scouting-candidates-crowded-…"), and with that line open
+//                                              ("scouting-candidates-crowded-open-…"); and holding the sample
+//                                              candidates with two hidden, the line they are behind closed
+//                                              ("scouting-candidates-hidden-…") and open
+//                                              ("scouting-candidates-hidden-open-…").
 //                                              The League screen ("league-…") is drawn with the owner's table and
 //                                              format, empty ("league-empty-…"), with the table and no format
 //                                              ("league-noformat-…"), after a squad was pasted over the table and
@@ -239,7 +246,7 @@ enum SampleState {
     case differingSuggestion
     case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
     case arrowsRead, harmfulArrow, noInfluence, regrouping, spentGroup, endedGroup, youngPlayers
-    case candidates, refusedCandidates
+    case candidates, refusedCandidates, crowdedCandidates, hiddenCandidates
     case league, leagueNoFormat, leagueRefused, leagueStale, leagueByHand
     case fallingTrends, risingTrends, beforeTrends, restedBeforeLine
 }
@@ -294,6 +301,8 @@ enum SampleState {
         case .youngPlayers: return try SampleData.modelWithYoungPlayers(repositoryRoot: url)
         case .candidates: return try SampleData.modelWithCandidates(repositoryRoot: url)
         case .refusedCandidates: return try SampleData.modelWithRefusedCandidates(repositoryRoot: url)
+        case .crowdedCandidates: return try SampleData.modelWithCrowdedGroup(repositoryRoot: url)
+        case .hiddenCandidates: return try SampleData.modelWithHiddenCandidates(repositoryRoot: url)
         case .fallingTrends: return try SampleData.modelWithFallingTrends(repositoryRoot: url)
         case .risingTrends: return try SampleData.modelWithRisingTrends(repositoryRoot: url)
         case .beforeTrends: return try SampleData.modelBeforeTrends(repositoryRoot: url)
@@ -668,6 +677,20 @@ let narrowWindow = CGSize(width: 800, height: 700)
                              scoutingStart: candidates)
     try ScreenPictures.write(model: sampleModel(root, .refusedCandidates), to: directory, size: size,
                              variant: "candidates-refused", screens: [.scouting], scoutingStart: candidates)
+    // One group of the owner's captured search, over five: its best five and the line the others are behind, then the
+    // same with the line open, tall enough for them all.
+    let crowded = sampleModel(root, .crowdedCandidates)
+    try ScreenPictures.write(model: crowded, to: directory, size: tall, variant: "candidates-crowded",
+                             screens: [.scouting], scoutingStart: candidates)
+    try ScreenPictures.write(model: crowded, to: directory, size: CGSize(width: size.width, height: size.height * 5),
+                             variant: "candidates-crowded-open", screens: [.scouting],
+                             scoutingStart: ScoutingStart(view: .candidates, moreOpen: true))
+    // Two of the sample candidates hidden: the line they are behind, then the list.
+    let hidden = sampleModel(root, .hiddenCandidates)
+    try ScreenPictures.write(model: hidden, to: directory, size: tall, variant: "candidates-hidden",
+                             screens: [.scouting], scoutingStart: candidates)
+    try ScreenPictures.write(model: hidden, to: directory, size: tall, variant: "candidates-hidden-open",
+                             screens: [.scouting], scoutingStart: ScoutingStart(view: .candidates, hiddenOpen: true))
     try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size, variant: "notready",
                              screens: [.scouting])
 }
