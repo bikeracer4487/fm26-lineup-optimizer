@@ -169,8 +169,9 @@ import Testing
 
     // MARK: Where a candidate could reach, and the list
 
-    func report(_ pasted: [Player], players: [Player], going: [Going] = []) throws -> CandidatesReport {
-        try Scouting.candidates(pasted: pasted, held: players, ownClub: "Oxford City", tactic: tactic,
+    func report(_ pasted: [Player], hidden: [HiddenCandidate] = [], players: [Player],
+                going: [Going] = []) throws -> CandidatesReport {
+        try Scouting.candidates(pasted: pasted, held: players, hidden: hidden, ownClub: "Oxford City", tactic: tactic,
                                        needs: needs(players, going: going), catalog: catalog, profile: profile,
                                        parameters: .fm27)
     }
@@ -469,5 +470,61 @@ import Testing
         #expect(try report([mine], players: players).basis == nil)
         let r = try report([candidate(.D_L, level: 14), pasted("young", .AM_C, 12, age: 19, potential: 150)], players: players)
         #expect(r.basis == Evidence.weakest(r.candidates.map(\.basis)) && r.basis == .derived)
+    }
+
+    // MARK: Hidden players
+
+    @Test func aHiddenPlayerIsLeftOutAndReturnedApart() throws {
+        let players = try PlannerFixture.squad()
+        let a = candidate(.D_L, level: 15) { $0.name = "Abdi Sharif"; $0.id = PlayerID(key: "abdi sharif"); $0.potentialAbility = 120 }
+        let b = candidate(.D_L, level: 15) { $0.name = "Brad Walker"; $0.id = PlayerID(key: "brad walker"); $0.potentialAbility = 120 }
+        let r = try report([a, b], hidden: [HiddenCandidate(a)], players: players)
+        #expect(r.candidates.map(\.player.name) == ["Brad Walker"])
+        #expect(r.hidden == [a])
+        #expect(r.groups(orderedBy: .today).flatMap(\.candidates).map(\.player.name) == ["Brad Walker"])
+    }
+    @Test func withNobodyHiddenTheReportIsAsBefore() throws {
+        let players = try PlannerFixture.squad()
+        let a = candidate(.D_L, level: 15)
+        let r = try report([a], hidden: [], players: players)
+        #expect(r.candidates.count == 1 && r.hidden.isEmpty)
+        // Hiding somebody else changes nothing for him.
+        let other = try report([a], hidden: [HiddenCandidate(name: "Somebody Else", potentialAbility: a.potentialAbility)],
+                               players: players)
+        #expect(other.candidates == r.candidates && other.hidden.isEmpty)
+    }
+    @Test func aHiddenPlayerIsKnownByNameAsNormalisedAndPotentialAbilityOnly() {
+        let p = candidate(.D_L, level: 15) { $0.name = "Abdi Sharif"; $0.potentialAbility = 120; $0.age = 26 }
+        #expect(HiddenCandidate(name: "abdi  SHARIF", potentialAbility: 120).matches(p))   // as PlayerID.normalise compares
+        #expect(!HiddenCandidate(name: "Abdi Sharif", potentialAbility: 121).matches(p))   // a namesake
+        #expect(!HiddenCandidate(name: "Abdi Sharifi", potentialAbility: 120).matches(p))
+        var older = p; older.age = 27
+        #expect(HiddenCandidate(p).matches(older))                                          // a birthday changes nothing
+        #expect(HiddenCandidate(p) == HiddenCandidate(name: "Abdi Sharif", potentialAbility: 120))   // the name as pasted
+        #expect(Scouting.isHidden(p, among: [HiddenCandidate(p)]) && !Scouting.isHidden(p, among: []))
+    }
+    @Test func aHeldPlayerWhoIsAlsoHiddenIsLeftOutAsHeld() throws {
+        let players = try PlannerFixture.squad()
+        let own = try #require(players.first)
+        let r = try report([own], hidden: [HiddenCandidate(own)], players: players)
+        #expect(r.leftOut == [own.name] && r.hidden.isEmpty)
+    }
+    @Test func hiddenPlayersDoNotCountTowardsTheEvidence() throws {
+        let players = try PlannerFixture.squad()
+        let a = candidate(.D_L, level: 15)
+        let r = try report([a], hidden: [HiddenCandidate(a)], players: players)
+        #expect(r.candidates.isEmpty && r.basis == nil && r.hidden.count == 1)
+    }
+    /// A hidden player is not judged: one who could not be rated stops nothing while he is hidden.
+    @Test func aHiddenPlayerIsNotJudged() throws {
+        let players = try PlannerFixture.squad()
+        let broken = candidate(.D_L, level: 15) { $0.attributes[.consistency] = nil }
+        #expect(throws: (any Error).self) { try report([broken], players: players) }
+        #expect(try report([broken], hidden: [HiddenCandidate(broken)], players: players).hidden == [broken])
+    }
+    @Test func aHiddenCandidateRoundTripsAsJSONAndNeedsBothKeys() throws {
+        let h = HiddenCandidate(name: "Abdi Sharif", potentialAbility: 120)
+        #expect(try JSONDecoder().decode(HiddenCandidate.self, from: JSONEncoder().encode(h)) == h)
+        #expect(throws: DecodingError.self) { try JSONDecoder().decode(HiddenCandidate.self, from: Data(#"{"name":"A"}"#.utf8)) }
     }
 }

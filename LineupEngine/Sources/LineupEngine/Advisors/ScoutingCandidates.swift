@@ -71,7 +71,33 @@ public struct CandidateCaution: Equatable, Sendable {
     public let value: Int
 }
 
+/// A pasted player the owner has hidden, as he is known again in a later paste: his name as pasted and his potential
+/// ability. The search grid has no id, and his age changes at his birthday, so neither is used. Every key is required
+/// when one is read.
+public struct HiddenCandidate: Codable, Hashable, Sendable {
+    public let name: String
+    public let potentialAbility: Int
+
+    public init(name: String, potentialAbility: Int) {
+        self.name = name; self.potentialAbility = potentialAbility
+    }
+
+    public init(_ player: Player) {
+        self.init(name: player.name, potentialAbility: player.potentialAbility)
+    }
+
+    /// The same normalised name and the same potential ability. Two namesakes with one potential ability both match.
+    public func matches(_ player: Player) -> Bool {
+        potentialAbility == player.potentialAbility && PlayerID.normalise(name) == PlayerID.normalise(player.name)
+    }
+}
+
 extension Scouting {
+
+    /// Whether a pasted player is one the owner has hidden: some entry of `hidden` matches him.
+    public static func isHidden(_ pasted: Player, among hidden: [HiddenCandidate]) -> Bool {
+        hidden.contains { $0.matches(pasted) }
+    }
 
     /// Whether a pasted player is one the owner holds: both keys are FMRTE ids and equal; or his club or the club he
     /// is loaned to is `ownClub`; or a held player has the same normalised name, age and potential ability.
@@ -227,6 +253,9 @@ public struct CandidatesReport: Equatable, Sendable {
     public let candidates: [Candidate]
     /// The names of the pasted players already held, in paste order.
     public let leftOut: [String]
+    /// The pasted players left out as hidden by the owner, as pasted and in paste order. A player already held is in
+    /// `leftOut` and not here. They are not judged and are in no group.
+    public let hidden: [Player]
     /// The weakest evidence among the candidates; nil when there are none.
     public let basis: Evidence?
     let betterPlayerSlots: [SlotID]
@@ -295,9 +324,11 @@ public struct CandidatesReport: Equatable, Sendable {
 }
 
 extension Scouting {
+    /// The pasted players judged, without those already held and those the owner has hidden (`hidden`: nobody by
+    /// default, the state before players could be hidden), who are returned apart and not judged.
     /// Throws what `slotsToday`, `cautions` and `Reach.estimate` throw.
-    public static func candidates(pasted: [Player], held: [Player], ownClub: String?, tactic: Tactic,
-                                  needs: ScoutingNeeds, catalog: RoleCatalog, profile: RatingProfile,
+    public static func candidates(pasted: [Player], held: [Player], hidden: [HiddenCandidate] = [], ownClub: String?,
+                                  tactic: Tactic, needs: ScoutingNeeds, catalog: RoleCatalog, profile: RatingProfile,
                                   parameters: EngineParameters) throws -> CandidatesReport {
         let goingIDs = Set(needs.going.map(\.player))
         let staying = held.filter { !goingIDs.contains($0.id) }
@@ -308,8 +339,10 @@ extension Scouting {
 
         var found: [Candidate] = []
         var leftOut: [String] = []
+        var hiddenPlayers: [Player] = []
         for player in pasted {
             if isHeld(player, among: held, ownClub: ownClub) { leftOut.append(player.name); continue }
+            if isHidden(player, among: hidden) { hiddenPlayers.append(player); continue }
             var slots = try slotsToday(for: player, tactic: tactic, needs: needs, squad: staying, ownClub: ownClub,
                                        catalog: catalog, profile: profile, parameters: parameters)
             var estimate: ReachEstimate?
@@ -361,7 +394,8 @@ extension Scouting {
                 outlook: outlook, isAgeNamed: player.age >= parameters.firstChoiceAgeNamedFrom.value,
                 cautions: try cautions(for: player, parameters: parameters), basis: Evidence.weakest(evidence)!))
         }
-        return CandidatesReport(candidates: found, leftOut: leftOut, basis: Evidence.weakest(found.map(\.basis)),
+        return CandidatesReport(candidates: found, leftOut: leftOut, hidden: hiddenPlayers,
+                                basis: Evidence.weakest(found.map(\.basis)),
                                 betterPlayerSlots: betterSlots, moreDepthSlots: depthSlots)
     }
 
