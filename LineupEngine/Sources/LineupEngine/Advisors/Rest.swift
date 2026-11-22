@@ -145,7 +145,10 @@ public enum Rest {
                 let line = min(watchLine, Double(lineupLine))
                 let perDay = needsHoliday ? parameters.holidayJadednessRecoveryPerDay.value
                                           : fallingDrift ?? parameters.jadednessRecoveryPerDay.value
-                jadednessDays = daysDown(from: jadedness, to: line, perDay: perDay)
+                let count = daysDown(from: jadedness, to: line, perDay: perDay)
+                // A drift just under 0 would give a count of years: beyond `passDateWithinDays` it gives no estimate.
+                let measuredBeyond = !needsHoliday && fallingDrift != nil && count > trendRules.passDateWithinDays
+                jadednessDays = measuredBeyond ? nil : count
             }
             var conditionDays: Int?
             if lowCondition {

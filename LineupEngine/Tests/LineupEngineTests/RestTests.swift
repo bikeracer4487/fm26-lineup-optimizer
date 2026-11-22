@@ -569,6 +569,35 @@ import Testing
         #expect(try one(p, parameters: q)?.basis == .fm27Measured)
     }
 
+    @Test func aMeasuredDriftGivesDaysOnlyWithinTheDaysAheadADateIsGiven() throws {
+        // Jadedness 450, limit 400, watch line 320: 130 to fall.
+        let p = Player.fixture(jadedness: 450)
+        func withDrift(_ perDay: Double) throws -> RestAdvice {
+            try #require(try one(p, trends: trends(p, drift: MeasuredRate(perDay, .squad(.firstTeam)), used: 2)))
+        }
+        // 130 ÷ (130 ÷ 120) = 120 days: still given.
+        #expect(try withDrift(-130.0 / 120).days == 120)
+        // 121 days: no estimate, and rest from matches still clears it.
+        let beyond = try withDrift(-130.0 / 121)
+        #expect(beyond.days == nil)
+        #expect(!beyond.trend.restWillNotClear)
+        #expect(AdvisorText.clear(in: beyond) == "Clear in more days than the estimate covers")
+        // −0.1 a day would take 1,300 days.
+        let slow = try withDrift(-0.1)
+        #expect(slow.days == nil && !slow.trend.restWillNotClear)
+        // The fixed figure and the holiday estimate are not capped by it.
+        var q = parameters
+        var rules = q.jadednessTrendRules.value
+        rules.passDateWithinDays = 5
+        q.jadednessTrendRules = Parameter(rules, .derived, source: "test")
+        #expect(try one(p, parameters: q)?.days == 7)
+        let tired = Player.fixture(jadedness: 650)
+        let holiday = try #require(try one(tired, trends: trends(tired, drift: MeasuredRate(-0.1, .squad(.firstTeam)),
+                                                                 used: 2), parameters: q))
+        let unmeasured = try one(tired)?.days
+        #expect(holiday.level == .holiday && holiday.days == unmeasured && holiday.days != nil)
+    }
+
     @Test func noDaysWhenRestFromMatchesWillNotClearIt() throws {
         let p = Player.fixture(jadedness: 450)
         let a = try #require(try one(p, trends: trends(p, drift: MeasuredRate(2, .squad(.firstTeam)), used: 2)))
