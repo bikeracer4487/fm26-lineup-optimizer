@@ -1,4 +1,6 @@
 import Foundation
+import Observation
+import Synchronization
 import Testing
 import LineupEngine
 @testable import LineupAppCore
@@ -131,6 +133,29 @@ import LineupEngine
         #expect(reopened.notices.isEmpty)
         #expect(reopened.scouting == ScoutingState())
         #expect(FileManager.default.fileExists(atPath: file.path))
+    }
+
+    /// A hide or a show-again judges the candidates again before the screen next reads them, so the screen's read is
+    /// a kept one. It must still be told of the next hide, and of a show-again: hiding several players one after
+    /// another is the main use. (Found by the whole-branch review: only the first hide after a paste was seen.)
+    @Test func aViewReadingTheCandidatesIsToldOfEveryHideAndShowAgain() throws {
+        let t = try pasted()
+        let candidates = try ScoutingSetup.report(t.model).candidates
+        let a = try #require(candidates.first), b = try #require(candidates.dropFirst().first)
+        func isTold(_ change: () -> Void) -> Bool {
+            let told = Mutex(false)
+            withObservationTracking { _ = t.model.candidates(for: nil) } onChange: { told.withLock { $0 = true } }
+            change()
+            return told.withLock { $0 }
+        }
+        #expect(isTold { t.model.hideCandidate(a.id, for: nil) })                       // the first, read fresh
+        advance(t)
+        #expect(isTold { t.model.hideCandidate(b.id, for: nil) })                       // the second, read from the kept one
+        advance(t)
+        #expect(isTold { t.model.showCandidateAgain(a.id, for: nil) })
+        advance(t)
+        // Nothing changed, nothing told: a key no held player has.
+        #expect(!isTold { t.model.hideCandidate(PlayerID(key: "nobody at all"), for: nil) })
     }
 
     // MARK: What a person will meet (the plan's review focus)

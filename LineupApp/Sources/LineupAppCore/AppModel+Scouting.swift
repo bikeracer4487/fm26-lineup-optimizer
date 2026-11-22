@@ -25,9 +25,13 @@ extension AppModel {
     /// The held players judged against the needs for the tactic the Scouting screen shows: as the needs say while
     /// they are not ready or failed, then nothing pasted while no players are held. Judged when first read after a
     /// paste, a "Clear" or a replan (an import, a tactic change, a mark), and kept until the next; so a player since
-    /// signed and imported is left out the next time they are read.
+    /// signed and imported is left out the next time they are read. A hide or a show-again empties what is kept, too.
     public func candidates(for chosen: UUID?) -> CandidatesState {
-        let paste = scoutingPaste   // read first, so whatever shows this is told of a new paste
+        // Both read first, before anything kept is returned, so whatever shows this is told of a new paste and of a
+        // player hidden or shown again. The kept judgement is not observed, and `scoutingAction` fills it again before
+        // a screen next reads it, so a screen that read only the kept one would never hear of the next hide.
+        let paste = scoutingPaste
+        let hidden = scouting.hidden
         let needs: ScoutingNeeds
         switch scoutingNeeds(for: chosen) {
         case .notReady(let state): return .notReady(state)
@@ -39,7 +43,7 @@ extension AppModel {
             return .failed([Self.noPrimaryTactic])   // as for the needs: never seen
         }
         if let cached = adviceCache?.candidates[id] { return cached }
-        let judged = workedOutCandidates(paste, tactic: stored.tactic, needs: needs)
+        let judged = workedOutCandidates(paste, hidden: hidden, tactic: stored.tactic, needs: needs)
         adviceCache?.candidates[id] = judged
         return judged
     }
@@ -185,11 +189,12 @@ extension AppModel {
         }
     }
 
-    private func workedOutCandidates(_ paste: ScoutingPaste, tactic: Tactic, needs: ScoutingNeeds) -> CandidatesState {
+    private func workedOutCandidates(_ paste: ScoutingPaste, hidden: [HiddenCandidate], tactic: Tactic,
+                                     needs: ScoutingNeeds) -> CandidatesState {
         timesCandidatesJudged += 1
         do {
             return .ready(try Scouting.candidates(pasted: paste.players, held: squad.book.allPlayers,
-                                                  hidden: scouting.hidden, ownClub: ownClub, tactic: tactic,
+                                                  hidden: hidden, ownClub: ownClub, tactic: tactic,
                                                   needs: needs, catalog: catalog, profile: profile,
                                                   parameters: planParameters))
         } catch {
