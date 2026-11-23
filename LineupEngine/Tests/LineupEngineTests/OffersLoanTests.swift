@@ -168,9 +168,14 @@ import Testing
         #expect(terms(try asks([Self.ask(50, noBid: true), Self.ask(40, noBid: true)]).advice)?.wagePercent == 30)
         #expect(try asks([Self.ask(50, noBid: true), Self.ask(40, noBid: true), Self.ask(30, noBid: true)]).advice == .nothingLower(.noBidThree))
     }
-    @Test func anAskWithABidOrNoneYetIsRepeated() throws {
-        let s = try asks([Self.ask(50, noBid: false)])
-        #expect(terms(s.advice)?.wagePercent == 50 && !s.notes.contains(.steppedDown))
+    @Test func anAskStillWaitingLowersNothingAndFollowsThePresentSuggestion() throws {
+        for earlier in [[Self.ask(90, noBid: false)], [Self.ask(50, noBid: true), Self.ask(90, noBid: false)]] {
+            let s = try asks(earlier)
+            #expect(terms(s.advice)?.wagePercent == 50 && s.notes == [.shareLimitedBy(.value), .clubsOpenLow])
+        }
+    }
+    @Test func aSaleAskAnywhereInTheListIsWrongKindForALoanEvenWhenWaiting() {
+        #expect(throws: OfferError.wrongKind) { try asks([Self.saleAsk(), Self.ask(90, noBid: false)]) }
     }
     @Test func anAskOfNothingStaysAtNothingUntilTheRunIsTooLong() throws {
         let s = try asks([Self.ask(0, noBid: true)])

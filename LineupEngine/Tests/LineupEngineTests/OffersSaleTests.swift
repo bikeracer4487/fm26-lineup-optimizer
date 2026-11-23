@@ -221,4 +221,21 @@ import Testing
                                value: 40_000, wagePerWeek: 450, noBidCame: true)
         #expect(throws: OfferError.wrongKind) { try ask([loanAsk]) }
     }
+    @Test func anAskStillWaitingLowersNothingAndFollowsThePresentValue() throws {
+        let same = SaleTerms(now: 40_000, later: 0, nextFeePercent: 20)
+        let a = try Offers.ask(Self.subject(), kind: .sale, earlier: [asked(25_000, noBid: false)], parameters: Self.p)
+        #expect(a.advice == .propose(.sale(same), split: nil) && a.notes == [.doNotList, .noInterestBids])
+        let b = try Offers.ask(Self.subject(), kind: .sale, earlier: [asked(40_000, noBid: true), asked(25_000, noBid: false)], parameters: Self.p)
+        #expect(b.advice == .propose(.sale(same), split: nil) && b.notes == [.doNotList, .noInterestBids])
+        let c = try Offers.ask(Self.subject(value: 20_000), kind: .sale, earlier: [asked(40_000, noBid: false)], parameters: Self.p)
+        #expect(c.advice == .propose(.sale(SaleTerms(now: 20_000, later: 0, nextFeePercent: 20)), split: nil))
+    }
+    @Test func aLoanAskAnywhereInTheListIsWrongKindForASale() {
+        let loan = OfferAsk(id: UUID(), player: PlayerID(key: "fmrte:1"), playerName: "A", kind: .loan, day: Self.day,
+                            terms: .loan(LoanTerms(wagePercent: 50, feePerMonth: 0, playingTime: nil, recall: true, futureFee: nil)),
+                            value: 1, wagePerWeek: 1, noBidCame: false)
+        #expect(throws: OfferError.wrongKind) {
+            try Offers.ask(Self.subject(), kind: .sale, earlier: [loan, asked(25_000, noBid: false)], parameters: Self.p)
+        }
+    }
 }

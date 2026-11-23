@@ -78,12 +78,12 @@ public enum Offers {
         var notes: [OfferNote] = []
         if subject.value == 0 { notes.append(.valueIsZero) }
         var terms = SaleTerms(now: total, later: 0, nextFeePercent: rules.nextFeePercent)
+        var sales: [SaleTerms] = []
+        for item in earlier {
+            guard case .sale(let t) = item.terms else { throw OfferError.wrongKind }
+            sales.append(t)
+        }
         if let latest = earlier.last, latest.noBidCame {
-            var sales: [SaleTerms] = []
-            for item in earlier {
-                guard case .sale(let t) = item.terms else { throw OfferError.wrongKind }
-                sales.append(t)
-            }
             let run = earlier.reversed().prefix(while: { $0.noBidCame }).count
             if run > rules.stepsDownAtMost {
                 return OfferSuggestion(advice: .nothingLower(.noBidThree), notes: notes, basis: parameters.offerRules.evidence)
@@ -91,9 +91,6 @@ public enum Offers {
             let lowered = rounded((1 - rules.stepDown) * Double(sales[sales.count - 1].total), rules: rules)
             terms.now = min(total, lowered)
             notes.append(.steppedDown)
-        } else if let first = earlier.first {
-            guard case .sale(let t) = first.terms else { throw OfferError.wrongKind }
-            terms = t
         }
         notes += [.doNotList, .noInterestBids]
         return OfferSuggestion(advice: .propose(.sale(terms), split: nil), notes: notes, basis: parameters.offerRules.evidence)
@@ -312,7 +309,6 @@ public enum Offers {
             }
             return propose(lowered, limit: nil, extra: [.steppedDown])
         }
-        if let first = earlierTerms.first { return propose(first, limit: nil) }
         return propose(suggested, limit: figures.limit)
     }
 
