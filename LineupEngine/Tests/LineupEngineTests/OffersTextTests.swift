@@ -34,8 +34,8 @@ import Testing
     static func noBid(_ terms: SaleTerms) -> OfferAsk {
         OfferAsk(id: UUID(), player: PlayerID(key: "x"), playerName: "X", kind: .sale, day: day, terms: .sale(terms), value: 40_000, wagePerWeek: 450, noBidCame: true)
     }
-    static func reading(deals: Int = 0, agreed: Int = 0, paid: Int = 0, down: Int = 0, mp: Double? = nil, md: Double? = nil, line: Double? = nil, since: Day? = nil) -> OfferLineReading {
-        OfferLineReading(deals: deals, agreed: agreed, paid: paid, turnedDown: down, medianPaid: mp, medianTurnedDown: md, line: line, since: since)
+    static func reading(deals: Int = 0, asks: Int = 0, agreed: Int = 0, paid: Int = 0, down: Int = 0, mp: Double? = nil, md: Double? = nil, line: Double? = nil, since: Day? = nil) -> OfferLineReading {
+        OfferLineReading(deals: deals, asks: asks, agreed: agreed, paid: paid, turnedDown: down, medianPaid: mp, medianTurnedDown: md, line: line, since: since)
     }
     static func measures(sale: OfferLineReading = reading(), loan: OfferLineReading = reading(), counterDeals: Int = 0, step: Double? = nil) -> OfferMeasures {
         OfferMeasures(sale: sale, loan: loan, counterDeals: counterDeals, counterStep: step, measuredFrom: nil)
@@ -48,7 +48,7 @@ import Testing
         #expect(AdvisorText.valueCaution == "Read it before you transfer-list him: once he is listed with an asking price, the game stores that price as his value (carried over from FM26, four players).")
         #expect(AdvisorText.startingPlaceMeans == "A starting place is Regular Starter or anything the game ranks above it, and First-Choice Goalkeeper for a goalkeeper.")
         #expect(AdvisorText.nothingRecorded == "Nothing is recorded yet. Record what you propose and what clubs answer, and this part will say what your own offers show.")
-        #expect(AdvisorText.measureOffersAgainQuestion == "Measure again from today? Offers recorded before today stay in the record and are left out of what is measured.")
+        #expect(AdvisorText.measureOffersAgainQuestion == "Measure again from today? Offers recorded before today stay in the record and are left out of what is measured. This cannot be undone in the app.")
         #expect(AdvisorText.name(OfferKind.sale) == "Sale" && AdvisorText.name(OfferKind.loan) == "Loan")
         #expect(AdvisorText.name(LoanPurpose.development) == "For his development" && AdvisorText.name(LoanPurpose.wage) == "To move his wage")
         #expect(AdvisorText.name(PlayingTime.startingPlace) == "A starting place" && AdvisorText.name(PlayingTime.less) == "Less than a starting place")
@@ -69,6 +69,12 @@ import Testing
     @Test func aSaleProposedToAClubWithEnoughBudget() throws {
         let s = try Self.proposal(Self.subject(), .sale, club: Self.club())
         #expect(Self.lines(s, kind: .sale, subject: Self.subject(), club: "Barnet") == ["Propose £40,000 now, with 20% of his next fee."])
+    }
+
+    @Test func theRestAskedLaterNamesTheBudgetAsEntered() throws {
+        let s = try Self.proposal(Self.subject(), .sale, club: Self.club(budget: 35_400))
+        #expect(Self.lines(s, kind: .sale, subject: Self.subject(), club: "Barnet")[1] ==
+                "Barnet can spend £35,400 now; the rest is asked later. Whether a club agrees to money beyond its budget is not known.")
     }
 
     @Test func aSaleSplitWhenTheBudgetIsShort() throws {
@@ -235,17 +241,25 @@ import Testing
     @Test func theRecord() {
         let m = Self.money
         let theirBid = Self.saleRound(.club, now: 8_000, nil)
-        #expect(AdvisorText.roundLine(theirBid, club: "Barnet", money: m) == "Sat 21 Nov: Barnet bid £8,000 now.")
+        #expect(AdvisorText.roundLine(theirBid, club: "Barnet", clubFollows: false, money: m) == "Sat 21 Nov: Barnet bid £8,000 now.")
         let mine = Self.saleRound(.owner, now: 35_000, later: 5_000, fee: 20, .refused)
-        #expect(AdvisorText.roundLine(mine, club: "Barnet", money: m) == "Sat 21 Nov: you proposed £35,000 now and £5,000 later, with 20% of his next fee. Refused.")
+        #expect(AdvisorText.roundLine(mine, club: "Barnet", clubFollows: false, money: m) == "Sat 21 Nov: you proposed £35,000 now and £5,000 later, with 20% of his next fee. Refused.")
+        #expect(AdvisorText.roundLine(mine, club: "Barnet", clubFollows: true, money: m) == "Sat 21 Nov: you proposed £35,000 now and £5,000 later, with 20% of his next fee. Refused.")
         let theirLoan = Self.loanRound(.club, 20, time: .less, nil)
-        #expect(AdvisorText.roundLine(theirLoan, club: "Barnet", money: m) == "Sat 21 Nov: Barnet offered 20% of his wage and less than a starting place.")
+        #expect(AdvisorText.roundLine(theirLoan, club: "Barnet", clubFollows: false, money: m) == "Sat 21 Nov: Barnet offered 20% of his wage and less than a starting place.")
         let ask = OfferAsk(id: UUID(), player: PlayerID(key: "x"), playerName: "X", kind: .sale, day: Self.day,
                            terms: .sale(SaleTerms(now: 40_000, later: 0, nextFeePercent: 20)), value: 40_000, wagePerWeek: 450, noBidCame: true)
         #expect(AdvisorText.askLine(ask, money: m) == "Sat 21 Nov: offered to clubs at £40,000, with 20% of his next fee. No bid came.")
         #expect(AdvisorText.termsLine(.sale(SaleTerms(now: 35_000, later: 5_000, nextFeePercent: 20)), money: m) == "£35,000 now and £5,000 later, with 20% of his next fee.")
         #expect(AdvisorText.termsLine(.loan(LoanTerms(wagePercent: 100, feePerMonth: 500, playingTime: .startingPlace, recall: true, futureFee: nil)), money: m)
                 == "All of his wage, £500 a month and a starting place.")
+    }
+
+    @Test func aProposalTheClubAnsweredWithTermsOfItsOwnReadsCountered() {
+        let m = Self.money
+        let mine = Self.saleRound(.owner, now: 40_000, fee: 20, nil)
+        #expect(AdvisorText.roundLine(mine, club: "Barnet", clubFollows: true, money: m) == "Sat 21 Nov: you proposed £40,000 now, with 20% of his next fee. Countered.")
+        #expect(AdvisorText.roundLine(mine, club: "Barnet", clubFollows: false, money: m) == "Sat 21 Nov: you proposed £40,000 now, with 20% of his next fee. No answer yet.")
     }
 
     // MARK: measures
@@ -256,24 +270,41 @@ import Testing
         let measured = Self.measures(sale: Self.reading(deals: 7, agreed: 2, paid: 5, down: 6, mp: 0.22, md: 0.80, line: 0.51, since: since))
         #expect(AdvisorText.offerMeasureLines(measured, kind: .sale, rules: r) == [
             "Sales: 7 deals recorded since Tue 17 Nov, 2 agreed.",
-            "Clubs have paid about 22% of a player's value and turned down about 80%, so sales are now asked at 51% (from 5 paid and 6 turned down; this tool's estimate)."])
+            "Clubs have offered or paid about 22% of a player's value and turned down about 80%, so sales are now asked at 51% (from 5 offered or paid and 6 turned down; this tool's estimate)."])
         let few = Self.measures(sale: Self.reading(deals: 3, agreed: 1, paid: 2, down: 1, since: since))
         #expect(AdvisorText.offerMeasureLines(few, kind: .sale, rules: r) == [
             "Sales: 3 deals recorded since Tue 17 Nov, 1 agreed.",
-            "The line for sales is not measured yet: it needs 5 paid and 5 turned down, and has 2 and 1. Until then a sale is asked at the player's value."])
+            "The line for sales is not measured yet: it needs 5 offered or paid and 5 turned down, and has 2 and 1. Until then a sale is asked at the player's value."])
         let crossed = Self.measures(sale: Self.reading(deals: 10, agreed: 5, paid: 5, down: 5, mp: 0.6, md: 0.4, since: since))
         #expect(AdvisorText.offerMeasureLines(crossed, kind: .sale, rules: r)[1] ==
-                "Your sales show no line: clubs have paid about 60% of value and others turned down about 40%. A sale is still asked at the player's value.")
+                "Your sales show no line: clubs have offered or paid about 60% of value and others turned down about 40%. A sale is still asked at the player's value.")
         let loanSince = Day(year: 2026, month: 11, day: 21)!
         let loan = Self.measures(loan: Self.reading(deals: 1, agreed: 0, paid: 1, down: 0, since: loanSince))
         #expect(AdvisorText.offerMeasureLines(loan, kind: .loan, rules: r) == [
             "Loans: 1 deal recorded since Sat 21 Nov, none agreed.",
-            "The line for loans is not measured yet: it needs 5 paid and 5 turned down, and has 1 and 0. Until then a loan is asked at what the loan rule says a borrower bears."])
+            "The line for loans is not measured yet: it needs 5 offered or agreed and 5 turned down, and has 1 and 0. Until then a loan is asked at what the loan rule says a borrower bears."])
         let loanLine = Self.measures(loan: Self.reading(deals: 10, agreed: 5, paid: 5, down: 5, mp: 0.003, md: 0.0075, line: 0.00525, since: since))
         #expect(AdvisorText.offerMeasureLines(loanLine, kind: .loan, rules: r)[1] ==
-                "Borrowers have borne about 1.2% of a player's value a month and turned down about 3.0%, so loans are now asked at 2.1% (from 5 paid and 5 turned down; this tool's estimate).")
+                "Borrowers have offered or agreed to bear about 1.2% of a player's value a month and turned down about 3.0%, so loans are now asked at 2.1% (from 5 offered or agreed and 5 turned down; this tool's estimate).")
+        let loanCrossed = Self.measures(loan: Self.reading(deals: 10, agreed: 5, paid: 5, down: 5, mp: 0.0075, md: 0.003, since: since))
+        #expect(AdvisorText.offerMeasureLines(loanCrossed, kind: .loan, rules: r)[1] ==
+                "Your loans show no line: borrowers have offered or agreed to bear about 3.0% of value a month and others turned down about 1.2%. A loan is still asked at what the loan rule says a borrower bears.")
         #expect(AdvisorText.offerMeasureLines(.none, kind: .sale, rules: r) == ["Sales: nothing recorded."])
         #expect(AdvisorText.offerMeasureLines(.none, kind: .loan, rules: r) == ["Loans: nothing recorded."])
+    }
+
+    @Test func anAskAloneIsRecordedThoughNoDealIs() {
+        let r = Self.rules
+        let since = Day(year: 2026, month: 11, day: 13)!
+        let one = Self.measures(sale: Self.reading(asks: 1, since: since))
+        #expect(AdvisorText.offerMeasureLines(one, kind: .sale, rules: r) == [
+            "Sales: 1 ask recorded since Fri 13 Nov, and no deal yet.",
+            "The line for sales is not measured yet: it needs 5 offered or paid and 5 turned down, and has 0 and 0. Until then a sale is asked at the player's value."])
+        let two = Self.measures(loan: Self.reading(asks: 2, since: since))
+        #expect(AdvisorText.offerMeasureLines(two, kind: .loan, rules: r)[0] == "Loans: 2 asks recorded since Fri 13 Nov, and no deal yet.")
+        // With a deal, the deals' line stands, asks or not.
+        let both = Self.measures(sale: Self.reading(deals: 1, asks: 3, since: since))
+        #expect(AdvisorText.offerMeasureLines(both, kind: .sale, rules: r)[0] == "Sales: 1 deal recorded since Fri 13 Nov, none agreed.")
     }
 
     @Test func theCounterStepAndTheDay() {

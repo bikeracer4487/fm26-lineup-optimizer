@@ -5,7 +5,7 @@ import SwiftUI
 /// The sheet a round or an ask is recorded in, opened filled with the suggestion, as the fixture editor is laid out: its
 /// title and whose round it is, then the fields of its kind, each after its label (a sale's money now, money later and
 /// share of the next fee; a loan's share of the wage, fee a month, playing time with what a starting place means under
-/// it, the recall and a fee to buy him), the engine's sentence when the last Save was refused, and "Cancel" and "Save".
+/// it, the recall and a fee to buy him), how each money field is read beside it, the engine's sentence when the last Save was refused, and "Cancel" and "Save".
 /// The changes are held here until Save, which records them and closes the sheet; Cancel drops them.
 struct OfferRoundEditor: View {
     let model: AppModel
@@ -89,15 +89,19 @@ struct OfferRoundEditor: View {
         .boardAppearance()
     }
 
-    /// A row of the grid: its label, then a field whose digits go into the draft at each keystroke.
+    /// A row of the grid: its label, then a field whose digits go into the draft at each keystroke, with how a money
+    /// field is read after it (nothing after a percentage).
     private func amountRow(_ title: String, _ text: String, _ field: OfferField) -> some View {
         GridRow {
             label(title)
-            TextField(title, text: Binding(get: { text }, set: { draft.set(field, text: $0) }), prompt: Text(""))
-                .labelsHidden()
-                .boardField()
-                .multilineTextAlignment(.trailing)
-                .frame(width: Theme.Offers.editorFieldWidth)
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
+                TextField(title, text: Binding(get: { text }, set: { draft.set(field, text: $0) }), prompt: Text(""))
+                    .labelsHidden()
+                    .boardField()
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: Theme.Offers.editorFieldWidth)
+                AmountReading(reading: model.offerReading(field, in: draft))
+            }
         }
     }
 

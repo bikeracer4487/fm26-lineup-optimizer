@@ -21,12 +21,13 @@ extension AppModel {
         }
     }
 
-    /// Sets his value from what was typed: the digits of the text are the value, and text with no digit is none. When
+    /// Sets his value from what was typed, read by `TypedNumber`: its digits, at most twelve, are the value, and text
+    /// with no digit is none. When
     /// the value changes its day becomes today in the game (none with no value). Saves the offers file and does not
     /// plan; nothing for a player who is not in the squads, or when the value is unchanged.
     public func setOfferValue(text: String, for player: PlayerID) {
         guard heldPlayer(player) != nil else { return }
-        let value = Self.typedNumber(text)
+        let value = TypedNumber.value(text)
         var entry = offers.players[player] ?? PlayerOffer()
         guard entry.value != value else { return }
         entry.value = value
@@ -46,15 +47,17 @@ extension AppModel {
         save(.offers)
     }
 
-    /// What his loan is for: as the owner switched it; else development at `developingUpToAge` or under and moving his
-    /// wage when older; and moving his wage for a player not in the squads, whose age is not known.
+    /// What his loan is for: as saved, when the owner switched it or a loan ask or round was recorded for him (which
+    /// keeps the purpose then in force, so a birthday in the middle of a deal does not change it); else development at
+    /// `developingUpToAge` or under and moving his wage when older; and moving his wage for a player not in the squads,
+    /// whose age is not known.
     public func loanPurpose(for player: PlayerID) -> LoanPurpose {
         if let own = offers.players[player]?.purpose { return own }
         guard let held = heldPlayer(player) else { return .wage }
         return held.age <= planParameters.developingUpToAge.value ? .development : .wage
     }
 
-    /// Sets one of a club's figures from what was typed, its digits as for a value. The transfer budget is whole units;
+    /// Sets one of a club's figures from what was typed, read by `TypedNumber` as a value is. The transfer budget is whole units;
     /// the three wage figures are typed in the period FMRTE shows wages by (the squad book's `moneyStyle`) and kept by
     /// the week. The entry keeps the club's name as last typed, trimmed, and today in the game as its day. Saves the
     /// offers file and does not plan; nothing for a blank name, when the figures are unchanged, or for a blank figure
@@ -63,7 +66,7 @@ extension AppModel {
         let name = club.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
         let key = PlayerID.normalise(name)
-        let number = Self.typedNumber(text)
+        let number = TypedNumber.value(text)
         let old = offers.clubs[key]?.figures
         guard old != nil || number != nil else { return }
         var figures = old ?? ClubFigures(name: name, transferBudget: nil, wageBudgetPerWeek: nil, wagesSpentPerWeek: nil,
@@ -96,7 +99,8 @@ extension AppModel {
         }
     }
 
-    /// Records terms asked of clubs in general, dated today in the game with his value and wage as they stand now.
+    /// Records terms asked of clubs in general, dated today in the game with his value and wage as they stand now. A
+    /// loan ask keeps what his loan is for, when nothing is saved, as `keepLoanPurpose` says.
     /// Refused, with the engine's sentence and nothing saved, when he has no value typed or the terms are not good
     /// terms of his kind; nothing for a player with no mark or not in the squads, or within `offersActionInterval` of
     /// the last recording. Saves the offers file and does not plan.
@@ -111,6 +115,7 @@ extension AppModel {
             offers.asks.append(OfferAsk(id: UUID(), player: player, playerName: subject.name, kind: subject.kind,
                                         day: settings.currentDate, terms: terms, value: subject.value,
                                         wagePerWeek: subject.wagePerWeek, noBidCame: false))
+            keepLoanPurpose(for: player, kind: subject.kind)
             save(.offers)
             return nil
         }
@@ -132,7 +137,7 @@ extension AppModel {
     /// Records a round with the club of this name, dated today in the game with his value and wage as they stand now.
     /// It joins his open deal of the same kind with that club (`openDeal(for:club:)`), or opens one, which keeps the
     /// club's figures as entered now (nil when no figure is). A round of the club's after one of the owner's leaves that
-    /// round's answer as it is. Refused as `recordAsk` is; nothing, too, for a blank club name. Saves the offers file
+    /// round's answer as it is. A loan round keeps what his loan is for as a loan ask does. Refused as `recordAsk` is; nothing, too, for a blank club name. Saves the offers file
     /// and does not plan.
     @discardableResult public func recordRound(for player: PlayerID, club: String, by: RoundBy,
                                                terms: OfferTerms) -> String? {
@@ -156,6 +161,7 @@ extension AppModel {
                                               club: name, figures: figures.flatMap { $0.hasAnyFigure ? $0 : nil },
                                               rounds: [round], endedOn: nil))
             }
+            keepLoanPurpose(for: player, kind: subject.kind)
             save(.offers)
             return nil
         }
@@ -220,10 +226,16 @@ extension AppModel {
 
     // MARK: Working it out
 
-    /// The number in what was typed: its digits, or nil with none (as `LeagueFormatDraft.set` reads a field).
-    static func typedNumber(_ text: String) -> Int? {
-        let digits = text.filter { $0.isASCII && $0.isNumber }
-        return digits.isEmpty ? nil : Int(digits)
+    /// The first time a loan ask or a loan round is recorded for a player with no purpose saved, saves the purpose then
+    /// in force, so that it no longer follows his age in the middle of a deal. The caller saves the file.
+    private func keepLoanPurpose(for player: PlayerID, kind: OfferKind) {
+        switch kind {
+        case .sale: return
+        case .loan: break
+        }
+        guard offers.players[player]?.purpose == nil else { return }
+        let purpose = loanPurpose(for: player)
+        offers.players[player, default: PlayerOffer()].purpose = purpose
     }
 
     func heldPlayer(_ id: PlayerID) -> Player? {

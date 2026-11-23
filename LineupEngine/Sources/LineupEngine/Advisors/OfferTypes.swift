@@ -323,7 +323,8 @@ public enum ShareLimit: Equatable, Sendable { case all, value, wageLeft(Double),
 public enum OfferNote: Equatable, Sendable {
     case valueIsZero
     case doNotList, noInterestBids, clubsOpenLow
-    case nothingToSpendNow, restAskedLater(now: Int)
+    /// The club's transfer budget as entered, when the rest of the total is asked later.
+    case nothingToSpendNow, restAskedLater(budget: Int)
     case wageLeftUnderHisWage(left: Double), highestWageUnderHisWage(highest: Double)
     case shareLimitedBy(ShareLimit), recallWithFee, optionalFutureFee(Int)
     case steppedDown
@@ -347,6 +348,8 @@ public struct OfferSuggestion: Equatable, Sendable {
 /// What recorded deals of one kind show of the line clubs pay or turn down.
 public struct OfferLineReading: Equatable, Sendable {
     public var deals: Int
+    /// The asks of the kind in the window: an ask alone opens no deal, but it is recorded.
+    public var asks: Int
     public var agreed: Int
     public var paid: Int
     public var turnedDown: Int
@@ -355,9 +358,9 @@ public struct OfferLineReading: Equatable, Sendable {
     public var line: Double?
     public var since: Day?
 
-    public init(deals: Int, agreed: Int, paid: Int, turnedDown: Int, medianPaid: Double?, medianTurnedDown: Double?,
+    public init(deals: Int, asks: Int, agreed: Int, paid: Int, turnedDown: Int, medianPaid: Double?, medianTurnedDown: Double?,
                 line: Double?, since: Day?) {
-        self.deals = deals; self.agreed = agreed; self.paid = paid; self.turnedDown = turnedDown
+        self.deals = deals; self.asks = asks; self.agreed = agreed; self.paid = paid; self.turnedDown = turnedDown
         self.medianPaid = medianPaid; self.medianTurnedDown = medianTurnedDown; self.line = line; self.since = since
     }
 }
@@ -372,9 +375,9 @@ public struct OfferMeasures: Equatable, Sendable {
 
     /// Nothing recorded: every count 0, every figure nil.
     public static let none = OfferMeasures(
-        sale: OfferLineReading(deals: 0, agreed: 0, paid: 0, turnedDown: 0, medianPaid: nil, medianTurnedDown: nil,
+        sale: OfferLineReading(deals: 0, asks: 0, agreed: 0, paid: 0, turnedDown: 0, medianPaid: nil, medianTurnedDown: nil,
                                line: nil, since: nil),
-        loan: OfferLineReading(deals: 0, agreed: 0, paid: 0, turnedDown: 0, medianPaid: nil, medianTurnedDown: nil,
+        loan: OfferLineReading(deals: 0, asks: 0, agreed: 0, paid: 0, turnedDown: 0, medianPaid: nil, medianTurnedDown: nil,
                                line: nil, since: nil),
         counterDeals: 0, counterStep: nil, measuredFrom: nil)
 

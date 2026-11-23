@@ -13,7 +13,7 @@ extension AdvisorText {
     public static let valueCaution = "Read it before you transfer-list him: once he is listed with an asking price, the game stores that price as his value (carried over from FM26, four players)."
     public static let startingPlaceMeans = "A starting place is Regular Starter or anything the game ranks above it, and First-Choice Goalkeeper for a goalkeeper."
     public static let nothingRecorded = "Nothing is recorded yet. Record what you propose and what clubs answer, and this part will say what your own offers show."
-    public static let measureOffersAgainQuestion = "Measure again from today? Offers recorded before today stay in the record and are left out of what is measured."
+    public static let measureOffersAgainQuestion = "Measure again from today? Offers recorded before today stay in the record and are left out of what is measured. This cannot be undone in the app."
 
     // MARK: Names
 
@@ -141,16 +141,19 @@ extension AdvisorText {
         capitalised(record(terms, money)) + "."
     }
 
-    private static func answerWords(_ answer: RoundAnswer?) -> String {
+    /// An owner's round's answer; one with none that a round of the club's follows was countered.
+    private static func answerWords(_ answer: RoundAnswer?, clubFollows: Bool) -> String {
         switch answer {
         case .accepted?: " Accepted."
         case .refused?: " Refused."
         case .noReply?: " No answer."
-        case nil: " No answer yet."
+        case nil: clubFollows ? " Countered." : " No answer yet."
         }
     }
 
-    public static func roundLine(_ round: OfferRound, club: String, money: MoneyStyle) -> String {
+    /// A round as recorded. `clubFollows`: a round of the club's comes after this one in the deal, so an owner's round
+    /// with no answer was countered.
+    public static func roundLine(_ round: OfferRound, club: String, clubFollows: Bool, money: MoneyStyle) -> String {
         let day = shortDay(round.day)
         switch round.by {
         case .club:
@@ -162,7 +165,7 @@ extension AdvisorText {
             let accepted = round.answer == .accepted ? " You accepted." : ""
             return "\(day): \(club) \(verb) \(record(round.terms, money)).\(accepted)"
         case .owner:
-            return "\(day): you proposed \(record(round.terms, money)).\(answerWords(round.answer))"
+            return "\(day): you proposed \(record(round.terms, money)).\(answerWords(round.answer, clubFollows: clubFollows))"
         }
     }
 
@@ -316,8 +319,8 @@ extension AdvisorText {
             return "Clubs are reported to open at none of the wage and Squad Player, and to accept more when you propose the terms yourself (carried over from FM24, one report)."
         case .nothingToSpendNow:
             return "\(name) have nothing to spend now, so all of it is asked later. \(beyondBudget)"
-        case .restAskedLater(let now):
-            return "\(name) can spend \(Display.money(now, symbol: money.symbol)) now; the rest is asked later. \(beyondBudget)"
+        case .restAskedLater(let budget):
+            return "\(name) can spend \(Display.money(budget, symbol: money.symbol)) now; the rest is asked later. \(beyondBudget)"
         case .wageLeftUnderHisWage(let left):
             return "\(club.map { "\($0) have" } ?? "The club has") \(Display.wage(perWeek: left, money)) left in \(club == nil ? "its" : "their") wage budget and he earns \(Display.wage(perWeek: subject.wagePerWeek, money)): he would have to take less to go there."
         case .highestWageUnderHisWage(let highest):
@@ -360,33 +363,38 @@ extension AdvisorText {
         case .sale: reading = measures.sale; heading = "Sales"
         case .loan: reading = measures.loan; heading = "Loans"
         }
-        guard let since = reading.since, reading.deals > 0 || reading.paid > 0 || reading.turnedDown > 0 else {
+        guard let since = reading.since,
+              reading.deals > 0 || reading.asks > 0 || reading.paid > 0 || reading.turnedDown > 0 else {
             return ["\(heading): nothing recorded."]
         }
         let agreed = reading.agreed == 0 ? "none agreed" : "\(reading.agreed) agreed"
-        let first = "\(heading): \(count(reading.deals, "deal")) recorded since \(shortDay(since)), \(agreed)."
+        let first = reading.deals == 0 && reading.asks > 0
+            ? "\(heading): \(count(reading.asks, "ask")) recorded since \(shortDay(since)), and no deal yet."
+            : "\(heading): \(count(reading.deals, "deal")) recorded since \(shortDay(since)), \(agreed)."
         let weeks = Double(rules.weeksPerMonthInRule)
         let noun = kind == .sale ? "sale" : "loan"
         let fallback = kind == .sale ? "the player's value" : "what the loan rule says a borrower bears"
+        // A club's bid counts whether or not it was accepted, so a "paid" is said as offered or paid.
+        let offered = kind == .sale ? "offered or paid" : "offered or agreed"
         if let line = reading.line, let paid = reading.medianPaid, let down = reading.medianTurnedDown {
-            let basis = "(from \(reading.paid) paid and \(reading.turnedDown) turned down; this tool's estimate)"
+            let basis = "(from \(reading.paid) \(offered) and \(reading.turnedDown) turned down; this tool's estimate)"
             switch kind {
             case .sale:
-                return [first, "Clubs have paid about \(Display.percent(paid)) of a player's value and turned down about \(Display.percent(down)), so sales are now asked at \(Display.percent(line)) \(basis)."]
+                return [first, "Clubs have offered or paid about \(Display.percent(paid)) of a player's value and turned down about \(Display.percent(down)), so sales are now asked at \(Display.percent(line)) \(basis)."]
             case .loan:
-                return [first, "Borrowers have borne about \(Display.onePercentDecimal(paid * weeks)) of a player's value a month and turned down about \(Display.onePercentDecimal(down * weeks)), so loans are now asked at \(Display.onePercentDecimal(line * weeks)) \(basis)."]
+                return [first, "Borrowers have offered or agreed to bear about \(Display.onePercentDecimal(paid * weeks)) of a player's value a month and turned down about \(Display.onePercentDecimal(down * weeks)), so loans are now asked at \(Display.onePercentDecimal(line * weeks)) \(basis)."]
             }
         }
         if reading.paid >= rules.fewestEachWay, reading.turnedDown >= rules.fewestEachWay,
            let paid = reading.medianPaid, let down = reading.medianTurnedDown {
             switch kind {
             case .sale:
-                return [first, "Your sales show no line: clubs have paid about \(Display.percent(paid)) of value and others turned down about \(Display.percent(down)). A sale is still asked at \(fallback)."]
+                return [first, "Your sales show no line: clubs have offered or paid about \(Display.percent(paid)) of value and others turned down about \(Display.percent(down)). A sale is still asked at \(fallback)."]
             case .loan:
-                return [first, "Your loans show no line: borrowers have borne about \(Display.onePercentDecimal(paid * weeks)) of value a month and others turned down about \(Display.onePercentDecimal(down * weeks)). A loan is still asked at \(fallback)."]
+                return [first, "Your loans show no line: borrowers have offered or agreed to bear about \(Display.onePercentDecimal(paid * weeks)) of value a month and others turned down about \(Display.onePercentDecimal(down * weeks)). A loan is still asked at \(fallback)."]
             }
         }
-        return [first, "The line for \(noun)s is not measured yet: it needs \(rules.fewestEachWay) paid and \(rules.fewestEachWay) turned down, and has \(reading.paid) and \(reading.turnedDown). Until then a \(noun) is asked at \(fallback)."]
+        return [first, "The line for \(noun)s is not measured yet: it needs \(rules.fewestEachWay) \(offered) and \(rules.fewestEachWay) turned down, and has \(reading.paid) and \(reading.turnedDown). Until then a \(noun) is asked at \(fallback)."]
     }
 
     public static func counterStepLine(_ measures: OfferMeasures, rules: OfferRules) -> String {

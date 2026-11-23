@@ -753,6 +753,9 @@ public enum Theme {
         public static let clubFieldWidth: CGFloat = 220
         /// Between one club figure, with its label, and the next on their row.
         public static let figureGap: CGFloat = 20
+        /// The least room kept for how an amount is read beside its field, "£9,000 a month", so that the fields do not
+        /// move as digits are typed.
+        public static let readingMinimumWidth: CGFloat = 110
         /// A deal's card: room for a round's sentence at the reading width and the card's padding, so its "Delete"
         /// stays near its heading on a wide window.
         public static let cardMaximumWidth: CGFloat = 640

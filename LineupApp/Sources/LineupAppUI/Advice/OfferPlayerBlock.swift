@@ -69,7 +69,7 @@ struct OfferPlayerBlockView: View {
         }
     }
 
-    /// "His value", its field, the hint and the day it was entered after it; the caution under them.
+    /// "His value", its field and how it is read, the hint and the day it was entered after it; the caution under them.
     private var value: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
@@ -77,6 +77,7 @@ struct OfferPlayerBlockView: View {
                 AmountField(label: OffersPresentation.valueLabel, text: block.valueText) {
                     model.setOfferValue(text: $0, for: block.id)
                 }
+                AmountReading(reading: block.valueReading)
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                     MutedLines(lines: [valueHint] + [block.valueNote].compactMap { $0 }, size: Theme.TypeSize.small)
                 }
@@ -87,7 +88,7 @@ struct OfferPlayerBlockView: View {
 
     /// The terms to ask of clubs in general with "Record this ask", then his asks; nothing with neither.
     @ViewBuilder private var general: some View {
-        if block.general != nil || !block.asks.isEmpty {
+        if block.showsGeneral {
             OfferSection(title: OffersPresentation.generalHeading) {
                 if let general = block.general {
                     OfferSuggestionLines(lines: general.lines)
@@ -292,8 +293,8 @@ struct OfferAskRowView: View {
     }
 }
 
-/// A club's four figures, each label in a column before its field so the fields line up: two to a row when they fit
-/// across, one under another when not.
+/// A club's four figures, each label in a column before its field and how it is read after it, so the fields line up:
+/// two to a row when they fit across, one under another when not.
 private struct ClubFigureFields: View {
     let rows: [OfferFieldRow]
     let set: @MainActor @Sendable (ClubField, String) -> Void
@@ -313,6 +314,7 @@ private struct ClubFigureFields: View {
                     ForEach(rows[start..<min(start + perRow, rows.count)], id: \.field) { row in
                         FieldLabel(text: row.label, small: true)
                         AmountField(label: row.label, text: row.text) { set(row.field, $0) }
+                        AmountReading(reading: row.reading)
                             .padding(.trailing, Theme.Offers.figureGap)
                     }
                 }
@@ -332,6 +334,20 @@ private struct FieldLabel: View {
             .font(small ? Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold) : Theme.Typeface.text(weight: .bold))
             .foregroundStyle(small ? Theme.Colour.mutedInk : Theme.Colour.ink)
             .fixedSize()
+    }
+}
+
+/// How the tool reads an amount, beside its field in the muted ink: "£40,000"; nothing beside a blank field. It keeps
+/// its least width either way, so the fields do not move as digits are typed.
+struct AmountReading: View {
+    let reading: String?
+
+    var body: some View {
+        Text(reading ?? "")
+            .font(Theme.Typeface.text())
+            .foregroundStyle(Theme.Colour.mutedInk)
+            .fixedSize()
+            .frame(minWidth: Theme.Offers.readingMinimumWidth, alignment: .leading)
     }
 }
 

@@ -25,10 +25,22 @@ public enum Offers {
         }
         for (name, value) in [("fewestEachWay", rules.fewestEachWay), ("fewestCounterDeals", rules.fewestCounterDeals),
                               ("significantFigures", rules.significantFigures),
-                              ("weeksPerMonthInRule", rules.weeksPerMonthInRule)] where value < 1 {
+                              ("weeksPerMonthInRule", rules.weeksPerMonthInRule),
+                              ("instalmentMonths", rules.instalmentMonths),
+                              ("appearancesForLater", rules.appearancesForLater)] where value < 1 {
             found.append("offerRules \(name) is \(value), not 1 or more")
         }
-        if rules.noInterestBidLow > rules.noInterestBidHigh {
+        if rules.stepsDownAtMost < 0 {
+            found.append("offerRules stepsDownAtMost is \(rules.stepsDownAtMost), not 0 or more")
+        }
+        if !(0...100).contains(rules.nextFeePercent) {
+            found.append("offerRules nextFeePercent is \(rules.nextFeePercent), not between 0 and 100")
+        }
+        for (name, value) in [("noInterestBidLow", rules.noInterestBidLow), ("noInterestBidHigh", rules.noInterestBidHigh)]
+        where !value.isFinite {
+            found.append("offerRules \(name) is \(value), not a finite number")
+        }
+        if rules.noInterestBidLow.isFinite, rules.noInterestBidHigh.isFinite, rules.noInterestBidLow > rules.noInterestBidHigh {
             found.append("offerRules noInterestBidLow is \(rules.noInterestBidLow), over noInterestBidHigh (\(rules.noInterestBidHigh))")
         }
         return found
@@ -94,9 +106,10 @@ public enum Offers {
             if run > rules.stepsDownAtMost {
                 return OfferSuggestion(advice: .nothingLower(.noBidThree), notes: notes, basis: parameters.offerRules.evidence)
             }
-            let lowered = rounded((1 - rules.stepDown) * Double(sales[sales.count - 1].total), rules: rules)
+            let last = sales[sales.count - 1].total
+            let lowered = rounded((1 - rules.stepDown) * Double(last), rules: rules)
             terms.now = min(total, lowered)
-            notes.append(.steppedDown)
+            if terms.now < last { notes.append(.steppedDown) }
         }
         notes += [.doNotList, .noInterestBids]
         return OfferSuggestion(advice: .propose(.sale(terms), split: nil), notes: notes, basis: parameters.offerRules.evidence)
@@ -188,26 +201,28 @@ public enum Offers {
                 index -= 1
             }
             if run > rules.stepsDownAtMost { return suggestion(.nothingLower(.clubTurnedDownThree)) }
+            // Never under the club's best bid, even when his value was retyped since and the present ask is lower.
             let bestBid = zip(rounds, sales).filter { $0.0.by == .club }.map { $0.1.total }.max() ?? 0
             let lowered = rounded((1 - rules.stepDown) * Double(lastTerms.total), rules: rules)
-            let total = min(ask, max(lowered, bestBid))
-            notes.append(.steppedDown)
+            let total = max(min(ask, lowered), bestBid)
+            if total < lastTerms.total { notes.append(.steppedDown) }
             return try sale(total: total, club: club, subject: subject, rules: rules, notes: notes, basis: basis)
         }
     }
 
-    /// A first proposal or a step down: money now capped at the club's budget and rounded down, the rest later.
+    /// A first proposal or a step down: the whole total now when the club's budget covers it; else money now is the
+    /// budget rounded down, and the rest is asked later.
     private static func sale(total: Int, club: ClubFigures, subject: OfferSubject, rules: OfferRules, notes start: [OfferNote],
                              basis: Evidence) throws -> OfferSuggestion {
         guard let budget = club.transferBudget else { throw OfferError.missing(.transferBudget, club: club.name) }
         if budget < 0 { throw OfferError.negative(.transferBudget) }
-        let now = min(rounded(Double(min(total, budget)), down: true, rules: rules), budget)
+        let now = total <= budget ? total : min(rounded(Double(budget), down: true, rules: rules), budget)
         let later = total - now
         var notes = start
         if budget == 0 && total > 0 {
             notes.append(.nothingToSpendNow)
         } else if later > 0 {
-            notes.append(.restAskedLater(now: now))
+            notes.append(.restAskedLater(budget: budget))
         }
         if let left = club.wageLeftPerWeek, left < subject.wagePerWeek { notes.append(.wageLeftUnderHisWage(left: left)) }
         if let highest = club.highestWagePerWeek, highest < subject.wagePerWeek {

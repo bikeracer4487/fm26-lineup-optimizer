@@ -87,7 +87,7 @@ extension Offers {
                let a = medianPaid, let b = medianDown, a < b {
                 line = (a + b) / 2
             }
-            return OfferLineReading(deals: kindDeals.count, agreed: agreed, paid: paid.count, turnedDown: turnedDown.count,
+            return OfferLineReading(deals: kindDeals.count, asks: kindAsks.count, agreed: agreed, paid: paid.count, turnedDown: turnedDown.count,
                                     medianPaid: medianPaid, medianTurnedDown: medianDown, line: line, since: days.min())
         }
 

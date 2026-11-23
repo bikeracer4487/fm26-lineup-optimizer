@@ -26,7 +26,7 @@ import Testing
         let s = try Offers.proposal(Self.subject(), kind: .sale, club: Self.club(35_000), rounds: [], parameters: Self.p)
         #expect(s.advice == .propose(.sale(SaleTerms(now: 35_000, later: 5_000, nextFeePercent: 20)),
                                      split: SaleSplit(instalments: 2_200, afterAppearances: 2_800)))
-        #expect(s.notes == [.restAskedLater(now: 35_000)])
+        #expect(s.notes == [.restAskedLater(budget: 35_000)])
     }
     @Test func moneyNowIsRoundedDownNeverAboveTheBudget() throws {
         let s = try Offers.proposal(Self.subject(), kind: .sale, club: Self.club(9_950), rounds: [], parameters: Self.p)
@@ -182,7 +182,7 @@ import Testing
         let s = try next([mine(40_000, .refused)], budget: 20_000)
         #expect(s.advice == .propose(.sale(SaleTerms(now: 20_000, later: 16_000, nextFeePercent: 20)),
                                      split: SaleSplit(instalments: 7_000, afterAppearances: 9_000)))
-        #expect(s.notes == [.steppedDown, .restAskedLater(now: 20_000)])
+        #expect(s.notes == [.steppedDown, .restAskedLater(budget: 20_000)])
     }
     @Test func aStepDownIsTakenFromWhatHeRecordedAndNeverUnderTheirBestBid() throws {
         #expect(try next([mine(30_000, .refused)], budget: 50_000).advice
@@ -201,7 +201,48 @@ import Testing
     @Test func aPlayerOfNoValueStaysAtNothingWhenSteppedDown() throws {
         let s = try Offers.proposal(Self.subject(value: 0), kind: .sale, club: Self.club(0), rounds: [mine(0, .refused)], parameters: Self.p)
         #expect(s.advice == .propose(.sale(SaleTerms(now: 0, later: 0, nextFeePercent: 20)), split: nil))
-        #expect(s.notes == [.valueIsZero, .steppedDown])
+        #expect(s.notes == [.valueIsZero])                                              // nothing was lowered
+        let asked = try Offers.ask(Self.subject(value: 0), kind: .sale,
+                                   earlier: [OfferAsk(id: UUID(), player: PlayerID(key: "fmrte:1"), playerName: "A", kind: .sale,
+                                                      day: Self.day, terms: .sale(SaleTerms(now: 0, later: 0, nextFeePercent: 20)),
+                                                      value: 0, wagePerWeek: 450, noBidCame: true)],
+                                   parameters: Self.p)
+        #expect(asked.notes == [.valueIsZero, .doNotList, .noInterestBids])
+    }
+    @Test func aStepDownThatLowersNothingSaysNothingOfLowering() throws {
+        // The floor at the club's best bid gives the total he last recorded: nothing was lowered.
+        let s = try next([theirs(35_000), mine(35_000, .refused)], budget: 50_000)
+        #expect(s.advice == .propose(.sale(SaleTerms(now: 35_000, later: 0, nextFeePercent: 20)), split: nil))
+        #expect(!s.notes.contains(.steppedDown))
+        // An ask capped at a present ask no lower than the one stepped from: 10% under 20,000 is lower, so it says so.
+        let lowered = try ask([asked(20_000, noBid: true)])
+        #expect(lowered.advice == .propose(.sale(SaleTerms(now: 18_000, later: 0, nextFeePercent: 20)), split: nil))
+        #expect(lowered.notes.first == .steppedDown)
+    }
+    @Test func moneyNowIsTheWholeTotalWhenTheClubCanPayIt() throws {
+        // Bid 8,250, counter 9,900 refused, 8,900 refused: lowered to 8,000 and floored at the bid, 8,250, which the
+        // budget covers, so all of it is asked now and nothing later.
+        let s = try next([theirs(8_250), mine(8_250, later: 1_650, .refused), mine(8_900, .refused)])
+        #expect(s.advice == .propose(.sale(SaleTerms(now: 8_250, later: 0, nextFeePercent: 20)), split: nil))
+        #expect(!s.notes.contains { if case .restAskedLater = $0 { true } else { false } })
+    }
+    @Test func theRestAskedLaterCarriesTheBudgetAsEntered() throws {
+        let s = try Offers.proposal(Self.subject(), kind: .sale, club: Self.club(35_400), rounds: [], parameters: Self.p)
+        #expect(s.advice == .propose(.sale(SaleTerms(now: 35_000, later: 5_000, nextFeePercent: 20)),
+                                     split: SaleSplit(instalments: 2_200, afterAppearances: 2_800)))
+        #expect(s.notes == [.restAskedLater(budget: 35_400)])
+    }
+    @Test func aStepDownIsNeverUnderTheClubsBestBidEvenAboveThePresentAsk() throws {
+        // His value was retyped down to 20,000 after Barnet bid 25,000: the step down proposes the bid's total.
+        let s = try Offers.proposal(Self.subject(value: 20_000), kind: .sale, club: Self.club(50_000),
+                                    rounds: [theirs(25_000), mine(38_000, .refused)], parameters: Self.p)
+        #expect(s.advice == .propose(.sale(SaleTerms(now: 25_000, later: 0, nextFeePercent: 20)), split: nil))
+        #expect(s.notes == [.steppedDown])
+    }
+    @Test func aCounterOnAValueAboveNothingSaysNothingOfZeroAndIsCappedAtTheAsk() throws {
+        let s = try next([theirs(36_000)])                                              // 1.2 × 36,000 is over 40,000
+        #expect(s.advice == .counter(.sale(SaleTerms(now: 36_000, later: 4_000, nextFeePercent: 20))))
+        #expect(!s.notes.contains(.valueIsZero))
     }
     @Test func anAskThatDrewNoBidIsLoweredTwiceThenInterestComesFirst() throws {
         #expect(try ask([asked(40_000, noBid: true)]).advice == .propose(.sale(SaleTerms(now: 36_000, later: 0, nextFeePercent: 20)), split: nil))

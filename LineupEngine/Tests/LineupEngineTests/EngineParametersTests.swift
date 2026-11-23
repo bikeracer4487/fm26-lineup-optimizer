@@ -953,4 +953,44 @@ import Testing
             #expect(found.count == 1 && found[0].hasPrefix("offerRules "))
         }
     }
+
+    /// The problems `change` gives the offer rules.
+    private func offerProblems(_ change: (inout OfferRules) -> Void) -> [String] {
+        var q = EngineParameters.fm27
+        var r = q.offerRules.value
+        change(&r)
+        q.offerRules = Parameter(r, .derived, source: "test")
+        return FitnessModel.problems(in: q)
+    }
+
+    @Test func offerRulesWithFewerThanNoStepsDownAreRefused() {
+        #expect(offerProblems { $0.stepsDownAtMost = -1 }.count == 1)
+        #expect(offerProblems { $0.stepsDownAtMost = 0 }.isEmpty)
+    }
+
+    @Test func offerRulesAskingAShareOfTheNextFeeOutside0To100AreRefused() {
+        #expect(offerProblems { $0.nextFeePercent = -1 }.count == 1)
+        #expect(offerProblems { $0.nextFeePercent = 101 }.count == 1)
+        #expect(offerProblems { $0.nextFeePercent = 0 }.isEmpty && offerProblems { $0.nextFeePercent = 100 }.isEmpty)
+    }
+
+    @Test func offerRulesWithInstalmentsOverNoMonthsAreRefused() {
+        #expect(offerProblems { $0.instalmentMonths = 0 }.count == 1)
+        #expect(offerProblems { $0.instalmentMonths = 1 }.isEmpty)
+    }
+
+    @Test func offerRulesWithMoneyLaterAfterNoAppearancesAreRefused() {
+        #expect(offerProblems { $0.appearancesForLater = 0 }.count == 1)
+        #expect(offerProblems { $0.appearancesForLater = 1 }.isEmpty)
+    }
+
+    @Test func offerRulesWithANoInterestBidLowThatIsNotFiniteAreRefused() {
+        #expect(offerProblems { $0.noInterestBidLow = .nan }.count == 1)
+        #expect(offerProblems { $0.noInterestBidLow = -.infinity }.count == 1)
+    }
+
+    @Test func offerRulesWithANoInterestBidHighThatIsNotFiniteAreRefused() {
+        #expect(offerProblems { $0.noInterestBidHigh = .nan }.count == 1)
+        #expect(offerProblems { $0.noInterestBidHigh = .infinity }.count == 1)
+    }
 }

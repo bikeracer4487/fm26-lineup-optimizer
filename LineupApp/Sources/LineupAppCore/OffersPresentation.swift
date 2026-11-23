@@ -1,13 +1,16 @@
 import Foundation
 import LineupEngine
 
-/// One of a club's figures in a player's "To a club" row: its label, with the period on a wage figure, and what is
-/// entered for the club named, as plain digits (blank when nothing is).
+/// One of a club's figures in a player's "To a club" row: its label, with the period on a wage figure, what is entered
+/// for the club named, as plain digits (blank when nothing is), and how the tool reads it.
 public struct OfferFieldRow: Equatable, Sendable {
     public var field: ClubField
     /// "Can spend on transfers", "Wage budget, a month".
     public var label: String
     public var text: String
+    /// What is entered in the money style, shown beside the field: "£15,000", or "£9,000 a week" for a wage figure in
+    /// FMRTE's period; nil when nothing is.
+    public var reading: String?
 }
 
 /// A suggestion as the screen shows it: the engine's lines, the advice first, and the terms its "Record…" button opens
@@ -66,6 +69,9 @@ public struct OfferPlayerBlock: Identifiable, Equatable, Sendable {
     public var kind: OfferKind
     /// His value as plain digits; blank with none.
     public var valueText: String
+    /// His value in the money style, shown beside the field so that 40 typed for "40K" is seen at once: "£40,000"; nil
+    /// with none.
+    public var valueReading: String?
     /// "entered Sat 21 Nov"; nil with no value.
     public var valueNote: String?
     /// What his loan is for; nil for a sale.
@@ -102,6 +108,12 @@ public struct OfferPlayerBlock: Identifiable, Equatable, Sendable {
 
     /// The four figures are offered once a club is named: they are entered for that club, and with no name nothing
     /// typed in them could be kept.
+    /// "To clubs in general" is shown when there are terms to ask or asks recorded: a player whose value was cleared
+    /// after an ask still shows his asks.
+    public var showsGeneral: Bool {
+        general != nil || !asks.isEmpty
+    }
+
     public var showsClubFields: Bool {
         !clubName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -165,12 +177,15 @@ public struct OfferRoundDraft: Equatable, Sendable, Identifiable {
     public var playingTime: PlayingTime?
     public var recall: Bool
 
-    /// Opened filled with `terms` when they are of `kind`, each figure as plain digits ("0" for none of it), else blank.
-    /// The playing time: the club's own offer for a development loan starts at less than a starting place, since clubs
-    /// are reported to open there, and for a loan to move his wage at none, whatever the sheet is opened with; the
-    /// owner's own round or ask takes the terms' playing time, or with no terms what the loan is for asks (a starting
-    /// place for his development, none to move his wage). With no terms the recall starts kept, as every suggested loan
-    /// keeps it. `loanPurpose` is nil for a sale (`AppModel.offerDraft` fills it in from the player).
+    /// The owner's round or ask opens filled with `terms` when they are of `kind`, each figure as plain digits ("0" for
+    /// none of it), else blank. The club's bid or offer never takes `terms`, so that a stray Save cannot record the
+    /// owner's own figures as the club's: a sale opens with the money now blank and the money later and the share of
+    /// the next fee at 0, a loan with the share of his wage blank, the fee a month at 0 and no fee to buy him. The
+    /// playing time: the club's own offer for a development loan starts at less than a starting place, since clubs
+    /// are reported to open there, and for a loan to move his wage at none; the owner's own round or ask takes the
+    /// terms' playing time, or with no terms what the loan is for asks (a starting place for his development, none to
+    /// move his wage). With no terms the recall starts kept, as every suggested loan keeps it. `loanPurpose` is nil for
+    /// a sale (`AppModel.offerDraft` fills it in from the player).
     public init(player: PlayerID, kind: OfferKind, club: String, purpose: Purpose, loanPurpose: LoanPurpose?,
                 filledWith terms: OfferTerms?) {
         id = UUID()
@@ -181,7 +196,18 @@ public struct OfferRoundDraft: Equatable, Sendable, Identifiable {
         playingTime = nil
         recall = true
         var filledTime: PlayingTime?? = .none
-        switch (kind, terms) {
+        let filling: OfferTerms?
+        switch purpose {
+        case .theirs:
+            filling = nil
+            switch kind {
+            case .sale: (later, nextFee) = ("0", "0")
+            case .loan: feePerMonth = "0"
+            }
+        case .ask, .mine:
+            filling = terms
+        }
+        switch (kind, filling) {
         case (.sale, .sale(let t)?):
             (now, later, nextFee) = (String(t.now), String(t.later), String(t.nextFeePercent))
         case (.loan, .loan(let t)?):
@@ -196,7 +222,7 @@ public struct OfferRoundDraft: Equatable, Sendable, Identifiable {
         switch (purpose, self.loanPurpose) {
         case (.theirs, .development?): playingTime = .less
         case (.theirs, .wage?): playingTime = nil
-        case (.theirs, nil): playingTime = filledTime.flatMap { $0 }.map { _ in .less }
+        case (.theirs, nil): playingTime = nil
         case (.ask, let loan), (.mine, let loan):
             if case .some(let time) = filledTime {
                 playingTime = time
@@ -209,10 +235,10 @@ public struct OfferRoundDraft: Equatable, Sendable, Identifiable {
         }
     }
 
-    /// Sets a field of this kind from what was typed, keeping its digits only; a field of the other kind, or one the
-    /// sheet does not hold, is left as it is.
+    /// Sets a field of this kind from what was typed, keeping its digits only, at most twelve (`TypedNumber`); a field
+    /// of the other kind, or one the sheet does not hold, is left as it is.
     public mutating func set(_ field: OfferField, text: String) {
-        let digits = String(text.filter { $0.isASCII && $0.isNumber })
+        let digits = TypedNumber.digits(text)
         switch (field, kind) {
         case (.feeNow, .sale): now = digits
         case (.feeLater, .sale): later = digits
@@ -257,10 +283,24 @@ public struct OfferRoundDraft: Equatable, Sendable, Identifiable {
         }
     }
 
-    /// The number in a field: its digits, or nil with none (or too many to hold).
+    /// The number in a field, read by `TypedNumber`; nil with none.
     private static func digits(_ text: String) -> Int? {
-        let digits = text.filter { $0.isASCII && $0.isNumber }
-        return digits.isEmpty ? nil : Int(digits)
+        TypedNumber.value(text)
+    }
+
+    /// The text of a money field of this kind: a sale's money now and later, a loan's fee a month and fee to buy him;
+    /// nil for a percentage or a field of the other kind.
+    func moneyText(_ field: OfferField) -> String? {
+        switch (field, kind) {
+        case (.feeNow, .sale): now
+        case (.feeLater, .sale): later
+        case (.feePerMonth, .loan): feePerMonth
+        case (.futureFee, .loan): futureFee
+        case (.nextFeePercent, _), (.wagePercent, _), (.feeNow, .loan), (.feeLater, .loan), (.feePerMonth, .sale),
+             (.futureFee, .sale), (.value, _), (.wage, _), (.transferBudget, _), (.wageBudget, _), (.wagesSpent, _),
+             (.highestWage, _):
+            nil
+        }
     }
 
     private static func number(_ text: String, _ field: OfferField) throws -> Int {
@@ -361,6 +401,18 @@ public enum OffersPresentation {
         }
     }
 
+    /// A club figure as the tool reads it, in the money style: the transfer budget as money, "£15,000", a wage figure
+    /// in FMRTE's period, "£9,000 a week"; nil when it is not entered.
+    static func reading(_ field: ClubField, _ figures: ClubFigures?, money: MoneyStyle) -> String? {
+        func wage(_ perWeek: Double?) -> String? { perWeek.map { Display.wage(perWeek: $0, money) } }
+        return switch field {
+        case .transferBudget: figures?.transferBudget.map { Display.money($0, symbol: money.symbol) }
+        case .wageBudget: wage(figures?.wageBudgetPerWeek)
+        case .wagesSpent: wage(figures?.wagesSpentPerWeek)
+        case .highestWage: wage(figures?.highestWagePerWeek)
+        }
+    }
+
     /// A goalkeeper is a player whose positions are goalkeeper only (the design's rule): his pasted positions are "GK"
     /// and nothing else, without regard to case. One solid in goal who also plays elsewhere is not.
     static func isGoalkeeper(_ player: Player) -> Bool {
@@ -454,12 +506,23 @@ extension AppModel {
     }
 
     /// A sheet to record a round or an ask for the player, of the kind his mark gives and, for a loan, for what his loan
-    /// is for (`loanPurpose(for:)`), opened filled with `terms`; nil when he has no mark.
+    /// is for (`loanPurpose(for:)`), opened filled with `terms` for his own round or ask; the club's bid or offer ignores
+    /// `terms` and opens as `OfferRoundDraft` says. Nil when he has no mark.
     public func offerDraft(for player: PlayerID, club: String, purpose: OfferRoundDraft.Purpose,
                            filledWith terms: OfferTerms?) -> OfferRoundDraft? {
         guard let kind = offerKind(for: player) else { return nil }
+        let filling: OfferTerms? = switch purpose {
+        case .theirs: nil
+        case .ask, .mine: terms
+        }
         return OfferRoundDraft(player: player, kind: kind, club: club, purpose: purpose,
-                               loanPurpose: kind == .loan ? loanPurpose(for: player) : nil, filledWith: terms)
+                               loanPurpose: kind == .loan ? loanPurpose(for: player) : nil, filledWith: filling)
+    }
+
+    /// How the sheet reads a money field, shown beside it in the money style: "£35,000"; nil for a percentage, a field
+    /// of the other kind or a blank field.
+    public func offerReading(_ field: OfferField, in draft: OfferRoundDraft) -> String? {
+        draft.moneyText(field).flatMap(TypedNumber.value).map { Display.money($0, symbol: squad.book.moneyStyle.symbol) }
     }
 
     /// The line under the sheet's title saying whose round it is: "Josh Ashby · Barnet", or his name alone for an ask;
@@ -562,12 +625,14 @@ extension AppModel {
         return OfferPlayerBlock(
             id: player.id, name: player.name, details: OffersPresentation.details(of: player, money: context.money),
             kind: kind, valueText: entry?.value.map(String.init) ?? "",
+            valueReading: entry?.value.map { Display.money($0, symbol: context.money.symbol) },
             valueNote: entry?.value == nil ? nil : entry?.valueDay.map(AdvisorText.enteredOn),
             purpose: kind == .loan ? purpose : nil, needsValue: needsValue, general: general, asks: askRows,
             clubName: typed,
             clubFields: ClubField.allCases.map {
                 OfferFieldRow(field: $0, label: OffersPresentation.label($0, period: period),
-                              text: OffersPresentation.text($0, entered?.figures, period: period))
+                              text: OffersPresentation.text($0, entered?.figures, period: period),
+                              reading: OffersPresentation.reading($0, entered?.figures, money: context.money))
             },
             clubNote: entered.map { AdvisorText.enteredOn($0.enteredOn) },
             clubBlock: clubBlock, clubProblem: clubProblem, clubHasOpenDeal: clubHasOpenDeal, deals: deals)
@@ -581,7 +646,9 @@ extension AppModel {
         let open = live && state == .open
         let rounds = deal.rounds.enumerated().map { index, round in
             let last = open && index == deal.rounds.count - 1
-            return OfferRoundRow(line: AdvisorText.roundLine(round, club: deal.club, money: context.money),
+            let clubFollows = deal.rounds[(index + 1)...].contains { $0.by == .club }
+            return OfferRoundRow(line: AdvisorText.roundLine(round, club: deal.club, clubFollows: clubFollows,
+                                                             money: context.money),
                                  offersAnswers: last && round.by == .owner && round.answer == nil,
                                  offersAccept: last && round.by == .club && round.answer == nil)
         }

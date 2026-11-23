@@ -97,6 +97,15 @@ import LineupEngine
         #expect(s.t.reopened().offers.players[s.seller]?.value == nil)
     }
 
+    @Test func thirteenDigitsTypedKeepTheFirstTwelveAndTheValueIsNotCleared() throws {
+        let s = try ready()
+        s.model.setOfferValue(text: "40000", for: s.seller)
+        s.model.setOfferValue(text: "1234567890123", for: s.seller)
+        #expect(s.model.offers.players[s.seller]?.value == 123_456_789_012)
+        s.model.setClubFigure(.transferBudget, text: "9876543210987", club: "Barnet")
+        #expect(s.model.clubEntry(named: "Barnet")?.figures.transferBudget == 987_654_321_098)
+    }
+
     @Test func aValueOfZeroIsAValue() throws {
         let s = try ready()
         s.model.setOfferValue(text: "0", for: s.seller)
@@ -127,6 +136,61 @@ import LineupEngine
         let reopened = s.t.reopened()
         #expect(reopened.loanPurpose(for: young) == .wage)
         #expect(reopened.loanPurpose(for: older) == .development)
+    }
+
+    /// A markable player of `age` in the first team.
+    private func markable(age: Int, _ s: Setup) throws -> PlayerID {
+        try #require(s.model.players.first { player in
+            if case .loanedIn = s.model.squad.book.loanStatus(of: player, override: s.model.settings.clubOverride) {
+                return false
+            }
+            return player.age == age && !Removal.isOnYouthContract(player) && player.id != s.seller
+        }).id
+    }
+
+    /// Makes the player a year older in the first team, as his birthday and the next import would.
+    private func birthday(_ id: PlayerID, _ s: Setup) throws {
+        var players = try #require(s.model.squad.book.current[.firstTeam])
+        let index = try #require(players.firstIndex { $0.id == id })
+        players[index].age += 1
+        _ = s.model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: [], money: .weeklyPounds),
+                                     to: .firstTeam)
+    }
+
+    @Test func aLoansPurposeIsKeptOnceALoanRoundIsRecorded() throws {
+        let s = try ready()
+        let young = try markable(age: 23, s)
+        s.model.setMark(.toLoanOut, for: young)
+        s.model.setOfferValue(text: "8000", for: young)
+        #expect(s.model.offers.players[young]?.purpose == nil)
+        s.model.recordRound(for: young, club: "Barnet", by: .club, terms: Self.loan)
+        #expect(s.model.offers.players[young]?.purpose == .development)
+        #expect(s.t.reopened().offers.players[young]?.purpose == .development)
+        try birthday(young, s)
+        #expect(s.model.squad.book.allPlayers.first { $0.id == young }?.age == 24)
+        #expect(s.model.loanPurpose(for: young) == .development)
+    }
+
+    @Test func aLoansPurposeIsKeptOnceALoanAskIsRecordedAndASavedOneIsLeftAsItIs() throws {
+        let s = try ready()
+        let young = try markable(age: 23, s)
+        s.model.setMark(.toLoanOut, for: young)
+        s.model.setOfferValue(text: "8000", for: young)
+        s.model.recordAsk(for: young, terms: Self.loan)
+        #expect(s.model.offers.players[young]?.purpose == .development)
+        try birthday(young, s)
+        #expect(s.model.loanPurpose(for: young) == .development)
+        // One the owner switched stays as he set it.
+        advance(s.t)
+        s.model.setLoanPurpose(.wage, for: s.loanee)
+        s.model.setOfferValue(text: "8000", for: s.loanee)
+        s.model.recordAsk(for: s.loanee, terms: Self.loan)
+        #expect(s.model.offers.players[s.loanee]?.purpose == .wage)
+        // A sale keeps no purpose.
+        advance(s.t)
+        s.model.setOfferValue(text: "40000", for: s.seller)
+        s.model.recordAsk(for: s.seller, terms: Self.sale)
+        #expect(s.model.offers.players[s.seller]?.purpose == nil)
     }
 
     @Test func theKindFollowsTheMark() throws {

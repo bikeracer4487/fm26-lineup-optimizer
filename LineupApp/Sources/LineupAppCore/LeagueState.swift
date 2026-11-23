@@ -36,11 +36,10 @@ public struct LeagueFormatDraft: Equatable, Sendable {
         self[field].map { String($0) } ?? ""
     }
 
-    /// Sets a field from what was typed in it: the digits of the text are the number, and text with no digit is blank,
-    /// so a letter typed never shows and nothing is negative from the keyboard. Digits too many to hold leave it blank.
+    /// Sets a field from what was typed in it, read as every typed amount is (`TypedNumber`): its digits, at most
+    /// twelve, and text with no digit is blank, so a letter typed never shows and nothing is negative from the keyboard.
     public mutating func set(_ field: LeagueFormatField, text: String) {
-        let digits = text.filter { $0.isASCII && $0.isNumber }
-        self[field] = digits.isEmpty ? nil : Int(digits)
+        self[field] = TypedNumber.value(text)
     }
 
     private subscript(field: LeagueFormatField) -> Int? {

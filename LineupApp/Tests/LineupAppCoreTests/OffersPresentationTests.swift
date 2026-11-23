@@ -203,7 +203,8 @@ import LineupEngine
         #expect(card.isOpen)
         #expect(card.player == s.seller && card.club == "Barnet")
         let round = try #require(s.model.offers.deals.first?.rounds.first)
-        #expect(card.rounds.map(\.line) == [AdvisorText.roundLine(round, club: "Barnet", money: s.model.squad.book.moneyStyle)])
+        #expect(card.rounds.map(\.line) == [AdvisorText.roundLine(round, club: "Barnet", clubFollows: false,
+                                                                  money: s.model.squad.book.moneyStyle)])
         let next = try #require(card.next)
         #expect(next.lines.first?.hasPrefix("Counter once: £8,000 now") == true)
         #expect(next.terms == .sale(SaleTerms(now: 8_000, later: 1_600, nextFeePercent: 20)))
@@ -232,6 +233,23 @@ import LineupEngine
         card = try #require(try block(sheet(s.t), s.seller).deals.first)
         #expect(card.rounds.map(\.offersAnswers) == [false, false, false])
         #expect(card.rounds.map(\.offersAccept) == [false, false, false])
+    }
+
+    @Test func hisProposalTheClubAnsweredWithItsOwnTermsReadsCountered() throws {
+        let s = try ready()
+        s.model.setOfferValue(text: "40000", for: s.seller)
+        s.model.recordRound(for: s.seller, club: "Barnet", by: .owner, terms: Self.sale(40_000))
+        var card = try #require(try block(sheet(s.t), s.seller).deals.first)
+        #expect(card.rounds[0].line.hasSuffix(" No answer yet."))
+        advance(s.t)
+        s.model.recordRound(for: s.seller, club: "Barnet", by: .club, terms: Self.sale(30_000))
+        card = try #require(try block(sheet(s.t), s.seller).deals.first)
+        #expect(card.rounds[0].line.hasSuffix(" Countered."))
+        let rounds = try #require(s.model.offers.deals.first?.rounds)
+        let money = s.model.squad.book.moneyStyle
+        #expect(card.rounds.map(\.line) == [AdvisorText.roundLine(rounds[0], club: "Barnet", clubFollows: true, money: money),
+                                            AdvisorText.roundLine(rounds[1], club: "Barnet", clubFollows: false, money: money)])
+        #expect(s.model.offers.deals.first?.rounds.first?.answer == nil)                 // nothing stored changes
     }
 
     @Test func anAgreedOrEndedDealHasNoNextStepAndNothingToPress() throws {
@@ -367,6 +385,15 @@ import LineupEngine
         #expect(!sheet.showsMeasuredLine)
     }
 
+    @Test func anAskAloneIsSaidToBeRecorded() throws {
+        let s = try ready()
+        s.model.setOfferValue(text: "40000", for: s.seller)
+        s.model.recordAsk(for: s.seller, terms: Self.sale(40_000))
+        let sheet = sheet(s.t)
+        #expect(sheet.sales.first == "Sales: 1 ask recorded since Fri 13 Nov, and no deal yet.")
+        #expect(sheet.loans == ["Loans: nothing recorded."])
+    }
+
     @Test func recordedDealsGiveTheEnginesLinesAndOfferMeasureAgain() throws {
         let s = try ready()
         s.model.setOfferValue(text: "40000", for: s.seller)
@@ -452,10 +479,12 @@ import LineupEngine
         #expect((none.now, none.later, none.nextFee) == ("40000", "0", "20"))
         #expect(none.title == "Record this ask")
 
-        let blank = OfferRoundDraft(player: id, kind: .sale, club: "Barnet", purpose: .theirs, loanPurpose: nil,
+        let blank = OfferRoundDraft(player: id, kind: .sale, club: "Barnet", purpose: .mine, loanPurpose: nil,
                                     filledWith: nil)
         #expect((blank.now, blank.later, blank.nextFee) == ("", "", ""))
-        #expect(blank.title == "Record their bid")
+        let theirs = OfferRoundDraft(player: id, kind: .sale, club: "Barnet", purpose: .theirs, loanPurpose: nil,
+                                     filledWith: nil)
+        #expect(theirs.title == "Record their bid")
 
         let loan = LoanTerms(wagePercent: 50, feePerMonth: 1_000, playingTime: .startingPlace, recall: true, futureFee: nil)
         var mine = OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .mine, loanPurpose: .development,
@@ -511,8 +540,85 @@ import LineupEngine
         s.model.setLoanPurpose(.wage, for: s.loanee)
         let wage = try #require(s.model.offerDraft(for: s.loanee, club: "Barnet", purpose: .theirs, filledWith: Self.loan))
         #expect(wage.loanPurpose == .wage && wage.playingTime == nil)
+        #expect(wage.wagePercent == "")
         let unmarked = try #require(s.model.players.first { s.model.marks[$0.id] == nil }).id
         #expect(s.model.offerDraft(for: unmarked, club: "", purpose: .ask, filledWith: nil) == nil)
+    }
+
+    @Test func theirBidNeverOpensWithTheSuggestion() throws {
+        let s = try ready()
+        s.model.setOfferValue(text: "40000", for: s.seller)
+        let sale = try #require(s.model.offerDraft(for: s.seller, club: "Barnet", purpose: .theirs,
+                                                   filledWith: Self.sale(35_000, later: 5_000)))
+        #expect((sale.now, sale.later, sale.nextFee) == ("", "0", "0"))
+        // A stray Save records nothing: the money now is blank and named.
+        #expect(s.model.record(sale) == .refused("Enter the money now to record this."))
+        #expect(s.model.offers.deals.isEmpty)
+        let loanTerms = LoanTerms(wagePercent: 50, feePerMonth: 1_000, playingTime: .startingPlace, recall: false,
+                                  futureFee: 9_000)
+        s.model.setLoanPurpose(.development, for: s.loanee)
+        let development = try #require(s.model.offerDraft(for: s.loanee, club: "Barnet", purpose: .theirs,
+                                                          filledWith: .loan(loanTerms)))
+        #expect((development.wagePercent, development.feePerMonth, development.futureFee) == ("", "0", ""))
+        #expect(development.playingTime == .less && development.recall)
+        s.model.setLoanPurpose(.wage, for: s.loanee)
+        let wage = try #require(s.model.offerDraft(for: s.loanee, club: "Barnet", purpose: .theirs,
+                                                   filledWith: .loan(loanTerms)))
+        #expect((wage.wagePercent, wage.feePerMonth, wage.futureFee) == ("", "0", ""))
+        #expect(wage.playingTime == nil && wage.recall)
+        // His own proposal still opens with the suggestion.
+        let mine = try #require(s.model.offerDraft(for: s.seller, club: "Barnet", purpose: .mine,
+                                                   filledWith: Self.sale(35_000, later: 5_000)))
+        #expect((mine.now, mine.later, mine.nextFee) == ("35000", "5000", "20"))
+    }
+
+    @Test func eachAmountIsReadBackBesideItsFieldInTheMoneyStyle() throws {
+        let s = try ready()
+        #expect(try block(sheet(s.t), s.seller).valueReading == nil)                    // nothing beside a blank field
+        s.model.setOfferValue(text: "40K", for: s.seller)
+        #expect(try block(sheet(s.t), s.seller).valueReading == "£40")                  // 40 typed for 40K is seen at once
+        s.model.setOfferValue(text: "40,000", for: s.seller)
+        #expect(try block(sheet(s.t), s.seller).valueReading == "£40,000")
+        s.model.setClubFigure(.transferBudget, text: "15000", club: "Barnet")
+        s.model.setClubFigure(.wageBudget, text: "9000", club: "Barnet")
+        let fields = try block(sheet(s.t, clubs: [s.seller: "Barnet"]), s.seller).clubFields
+        #expect(fields.map(\.reading) == ["£15,000", "£9,000 a week", nil, nil])
+        // A monthly save reads its wage figures by the month.
+        try s.t.importFirstTeamInDollarsMonthly()
+        s.model.setClubFigure(.wagesSpent, text: "5,200", club: "Barnet")
+        let monthly = try block(sheet(s.t, clubs: [s.seller: "Barnet"]), s.seller).clubFields
+        #expect(monthly[2].reading == "$5,200 a month")
+    }
+
+    @Test func theSheetsMoneyFieldsAreReadBackAndItsPercentagesAreNot() throws {
+        let s = try ready()
+        var sale = try #require(s.model.offerDraft(for: s.seller, club: "Barnet", purpose: .mine,
+                                                   filledWith: Self.sale(35_000, later: 5_000)))
+        #expect(s.model.offerReading(.feeNow, in: sale) == "£35,000")
+        #expect(s.model.offerReading(.feeLater, in: sale) == "£5,000")
+        #expect(s.model.offerReading(.nextFeePercent, in: sale) == nil)
+        sale.set(.feeNow, text: "")
+        #expect(s.model.offerReading(.feeNow, in: sale) == nil)
+        sale.set(.feeNow, text: "1234567890123")
+        #expect(sale.now == "123456789012")                                             // twelve digits at most
+        var loan = try #require(s.model.offerDraft(for: s.loanee, club: "Barnet", purpose: .mine, filledWith: Self.loan))
+        #expect(s.model.offerReading(.feePerMonth, in: loan) == "£1,000")
+        #expect(s.model.offerReading(.wagePercent, in: loan) == nil)
+        #expect(s.model.offerReading(.futureFee, in: loan) == nil)
+        loan.set(.futureFee, text: "100000")
+        #expect(s.model.offerReading(.futureFee, in: loan) == "£100,000")
+        #expect(s.model.offerReading(.feeNow, in: loan) == nil)                          // not a loan's field
+    }
+
+    @Test func clubsInGeneralAreShownWithTermsOrWithAsks() throws {
+        let s = try ready()
+        #expect(!(try block(sheet(s.t), s.seller)).showsGeneral)                        // no value, no asks
+        s.model.setOfferValue(text: "40000", for: s.seller)
+        #expect(try block(sheet(s.t), s.seller).showsGeneral)
+        s.model.recordAsk(for: s.seller, terms: Self.sale(40_000))
+        s.model.setOfferValue(text: "", for: s.seller)
+        let asksOnly = try block(sheet(s.t), s.seller)
+        #expect(asksOnly.general == nil && !asksOnly.asks.isEmpty && asksOnly.showsGeneral)
     }
 
     @Test func aBlankFieldInTheDraftIsNamed() throws {
@@ -567,10 +673,12 @@ import LineupEngine
         advance(s.t)
         #expect(s.model.record(try draft("Barnet", .mine, Self.sale(40_000))) == .recorded)
         advance(s.t)
-        #expect(s.model.record(try draft("barnet", .theirs, Self.sale(30_000))) == .recorded)
+        var bid = try draft("barnet", .theirs, Self.sale(40_000))                         // opens blank, not at his terms
+        bid.set(.feeNow, text: "30,000")
+        #expect(s.model.record(bid) == .recorded)
         #expect(s.model.offers.deals.count == 1)
         #expect(s.model.offers.deals.first?.rounds.map(\.by) == [.owner, .club])
-        #expect(s.model.offers.deals.first?.rounds.map(\.terms) == [Self.sale(40_000), Self.sale(30_000)])
+        #expect(s.model.offers.deals.first?.rounds.map(\.terms) == [Self.sale(40_000), Self.sale(30_000, nextFee: 0)])
         #expect(s.model.timesPlanned == planned)
     }
 

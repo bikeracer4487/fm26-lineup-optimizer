@@ -137,6 +137,13 @@ import Testing
         // a loan deal for the same player
         #expect(measure([Self.loanDeal("a", paid: 0.001)], asks: [ask]).sale.turnedDown == 0)
     }
+    @Test func theAsksOfEachKindInTheWindowAreCounted() {
+        let m = measure([], asks: [Self.ask(10_000, day: Self.d(19)), Self.ask(9_000, day: Self.d(21))])
+        #expect(m.sale.asks == 2 && m.sale.deals == 0 && m.sale.since == Self.d(19))
+        #expect(m.loan.asks == 0)
+        #expect(measure([], asks: [Self.ask(10_000, day: Self.d(19))], from: Self.d(20)).sale.asks == 0)
+        #expect(OfferMeasures.none.sale.asks == 0 && OfferMeasures.none.loan.asks == 0)
+    }
     @Test func roundsBeforeTheDayToMeasureFromAreLeftOut() {
         let m = measure([Self.saleDeal(paid: 0.3, turnedDown: 0.9, day: Self.d(20))], asks: [Self.ask(10_000, day: Self.d(19))], from: Self.d(21))
         #expect(m.sale.deals == 0 && m.sale.paid == 0 && m.sale.turnedDown == 0 && m.sale.since == nil)
