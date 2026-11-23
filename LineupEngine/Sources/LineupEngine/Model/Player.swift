@@ -95,6 +95,9 @@ public struct Player: Identifiable, Equatable, Codable, Sendable {
     public var loanedTo: String?
     public var contractType: ContractType
     public var monthsLeft: Int?
+    /// The day his contract ends, from FMRTE's expiry-date column; nil when the pasted grid has no such column, when he
+    /// has no contract, and in a squad saved before the column was read.
+    public var contractEnds: Day?
     /// Kept per week whatever period FMRTE showed it in; need not be a whole number. See `WagePeriod`.
     public var wagePerWeek: Double
     public var askingPrice: Int?
@@ -109,7 +112,7 @@ public struct Player: Identifiable, Equatable, Codable, Sendable {
         condition: Double, sharpness: Double, jadedness: Int,
         isInjured: Bool, isBanned: Bool, club: String?, loanedTo: String?,
         contractType: ContractType, monthsLeft: Int?, wagePerWeek: Double, askingPrice: Int?,
-        nationalities: [String], extras: [String: String]
+        nationalities: [String], extras: [String: String], contractEnds: Day? = nil
     ) {
         self.id = id; self.name = name; self.squad = squad; self.age = age
         self.positionsText = positionsText
@@ -121,5 +124,6 @@ public struct Player: Identifiable, Equatable, Codable, Sendable {
         self.contractType = contractType; self.monthsLeft = monthsLeft
         self.wagePerWeek = wagePerWeek; self.askingPrice = askingPrice
         self.nationalities = nationalities; self.extras = extras
+        self.contractEnds = contractEnds
     }
 }

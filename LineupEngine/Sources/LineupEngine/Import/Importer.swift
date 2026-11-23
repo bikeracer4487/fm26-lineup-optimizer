@@ -58,9 +58,23 @@ public enum Importer {
     /// The wage column. FMRTE keeps this name whatever period it shows wages by.
     private static let wagePath = "Contract.WagePerWeek"
 
+    /// The day a contract ends: optional, and in the owner's team grid from 23 November 2026. FMRTE writes it month
+    /// first, "6/30/2030".
+    private static let expiryPath = "Contract.ContractExpiryDate"
+
     /// Columns the importer reads into a typed field; every other column goes into `extras`.
     private static let modelledColumns: Set<String> = Set(GridDetector.requiredColumns)
-        .union(["Contract.Club", "AskingPrice", "Nationalities", GridDetector.idPath])
+        .union(["Contract.Club", "AskingPrice", "Nationalities", GridDetector.idPath, expiryPath])
+
+    /// The day in an expiry-date cell: a month, a day and a four-digit year, digits only, with "/" between, that
+    /// name a day that exists. Nil for anything else, a date written day first with a day over 12 among them.
+    static func expiryDay(_ cell: String) -> Day? {
+        let parts = cell.trimmingCharacters(in: .whitespaces).split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[2].count == 4,
+              parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy { $0.isASCII && $0.isNumber } }),
+              let month = Int(parts[0]), let day = Int(parts[1]), let year = Int(parts[2]) else { return nil }
+        return Day(year: year, month: month, day: day)
+    }
 
     /// Text columns that must hold something other than whitespace. The grid detector accepts
     /// any text here, so the importer checks them.
@@ -180,6 +194,12 @@ public enum Importer {
             }
             // FMRTE writes a negative number for a contract that has run out; a player with none has no cell at all.
             let months = hasNoContract ? -1 : try int("Contract.MonthsLeft")
+            // A grid without the column gives no day; with it, every player who has a contract must have one.
+            var contractEnds: Day?
+            if index[expiryPath] != nil, !hasNoContract {
+                guard let day = expiryDay(cell(expiryPath)) else { throw fail(expiryPath) }
+                contractEnds = day
+            }
             let loan = cell("LoanContract.LoanedToTeam").trimmingCharacters(in: .whitespaces)
             let club = index["Contract.Club"].map { row[$0].trimmingCharacters(in: .whitespaces) }
             let conditionRaw = try int("Condition")
@@ -214,7 +234,7 @@ public enum Importer {
                 nationalities: index["Nationalities"].map {
                     row[$0].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
                 } ?? [],
-                extras: extras
+                extras: extras, contractEnds: contractEnds
             ))
         }
 

@@ -676,3 +676,75 @@ private func isNameWarning(_ warning: ImportWarning) -> Bool {
         #expect(first.name == "Tobi Adebayo-Rowling" && first.askingPrice == 0 && first.positionsText == "D/WB/M R")
     }
 }
+
+// MARK: - The day a contract ends (the owner's team grid of 23 November 2026, with FMRTE's expiry-date column)
+
+private let expiryPath = "Contract.ContractExpiryDate"
+
+/// The first-team paste taken with the expiry-date column, FMRTE set to dollars a month, with `change` applied to
+/// its rows.
+private func importFirstTeamWithExpiry(changingRows change: ([[String]]) -> [[String]] = { $0 }) throws -> ImportResult {
+    let rows = try Fixtures.text("captures/first-team-with-expiry.tsv")
+        .components(separatedBy: "\r\n").filter { !$0.isEmpty }
+        .map { $0.components(separatedBy: "\t") }
+    let text = change(rows).map { $0.joined(separator: "\t") }.joined(separator: "\r\n") + "\r\n"
+    return try Importer.importPlayers(clipboard: text,
+                                      fmrteConfig: Fixtures.settings("first-team-with-expiry", wages: "Monthly"),
+                                      squad: .firstTeam)
+}
+
+private func expiryColumn(_ path: String) throws -> Int {
+    try #require(Fixtures.gridColumns("first-team-with-expiry", grid: "TeamPlayersColumns").firstIndex(of: path))
+}
+
+/// The paste with the cells at `paths` of Caelan Avenell's row made `value`.
+private func importWithAvenell(_ paths: [String], as value: String) throws -> ImportResult {
+    let name = try expiryColumn("DisplayedName")
+    let cells = try paths.map(expiryColumn)
+    return try importFirstTeamWithExpiry { rows in
+        rows.map { row in
+            guard row[name] == quoted("Caelan Avenell") else { return row }
+            var row = row
+            for cell in cells { row[cell] = quoted(value) }
+            return row
+        }
+    }
+}
+
+@Test func theExpiryDateColumnIsReadAsTheDayTheContractEnds() throws {
+    let players = try importFirstTeamWithExpiry().players
+    #expect(players.count == 30)
+    let avenell = try #require(players.first { $0.name == "Caelan Avenell" })
+    #expect(avenell.contractEnds == Day(iso: "2030-06-30"))
+    let waddell = try #require(players.first { $0.name == "Hudson Waddell" })
+    #expect(waddell.contractEnds == Day(iso: "2030-05-31"))
+    #expect(players.allSatisfy { $0.contractEnds != nil })
+    #expect(players.allSatisfy { $0.extras[expiryPath] == nil })
+}
+
+@Test func aGridWithoutTheExpiryDateColumnGivesNoDay() throws {
+    #expect(try importFirstTeamWithIDs().players.allSatisfy { $0.contractEnds == nil })
+}
+
+@Test(arguments: ["", " ", "30/6/2030", "2/30/2030", "6/30", "6/30/2030/1", "June 2030", "6/30/30a", "0/1/2030", "6/30/30"])
+func anExpiryDateThatIsNotAMonthDayAndYearIsRefused(cell: String) throws {
+    #expect(throws: ImportError.invalidValue(player: "Caelan Avenell", column: expiryPath, value: cell)) {
+        try importWithAvenell([expiryPath], as: cell)
+    }
+}
+
+@Test func aPlayerWithNoContractHasNoDayWhateverTheCellHolds() throws {
+    let players = try importWithAvenell(contractPaths, as: "").players
+    let avenell = try #require(players.first { $0.name == "Caelan Avenell" })
+    #expect(avenell.contractType == .outOfContract)
+    #expect(avenell.contractEnds == nil)
+}
+
+@Test func aPlayerSavedBeforeTheDayWasReadStillOpens() throws {
+    let avenell = try #require(try importFirstTeamWithExpiry().players.first { $0.name == "Caelan Avenell" })
+    var object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(avenell)) as? [String: Any])
+    #expect(object.removeValue(forKey: "contractEnds") != nil)
+    let old = try JSONDecoder().decode(Player.self, from: JSONSerialization.data(withJSONObject: object))
+    #expect(old.contractEnds == nil)
+    #expect(old.monthsLeft == avenell.monthsLeft)
+}
