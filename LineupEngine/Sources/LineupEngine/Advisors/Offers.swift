@@ -64,36 +64,102 @@ public enum Offers {
         }
     }
 
-    /// The terms to ask of clubs in general. Sales with no earlier asks only for now; the rest follows in later tasks.
+    /// The terms to ask of clubs in general: his value's share, lowered after asks that drew no bid.
     public static func ask(_ subject: OfferSubject, kind: OfferKind, earlier: [OfferAsk], measures: OfferMeasures = .none,
                            parameters: EngineParameters) throws -> OfferSuggestion {
         try requireUsable(parameters)
-        guard kind == .sale, earlier.isEmpty else { throw OfferError.wrongKind }
+        guard kind == .sale else { throw OfferError.wrongKind }
         if subject.value < 0 { throw OfferError.negative(.value) }
         let rules = parameters.offerRules.value
         let total = rounded(rules.saleLine * Double(subject.value), rules: rules)
         var notes: [OfferNote] = []
         if subject.value == 0 { notes.append(.valueIsZero) }
+        var terms = SaleTerms(now: total, later: 0, nextFeePercent: rules.nextFeePercent)
+        if let latest = earlier.last, latest.noBidCame {
+            var sales: [SaleTerms] = []
+            for item in earlier {
+                guard case .sale(let t) = item.terms else { throw OfferError.wrongKind }
+                sales.append(t)
+            }
+            let run = earlier.reversed().prefix(while: { $0.noBidCame }).count
+            if run > rules.stepsDownAtMost {
+                return OfferSuggestion(advice: .nothingLower(.noBidThree), notes: notes, basis: parameters.offerRules.evidence)
+            }
+            let lowered = rounded((1 - rules.stepDown) * Double(sales[sales.count - 1].total), rules: rules)
+            terms.now = min(total, lowered)
+            notes.append(.steppedDown)
+        } else if let first = earlier.first {
+            guard case .sale(let t) = first.terms else { throw OfferError.wrongKind }
+            terms = t
+        }
         notes += [.doNotList, .noInterestBids]
-        return OfferSuggestion(
-            advice: .propose(.sale(SaleTerms(now: total, later: 0, nextFeePercent: rules.nextFeePercent)), split: nil),
-            notes: notes, basis: parameters.offerRules.evidence)
+        return OfferSuggestion(advice: .propose(.sale(terms), split: nil), notes: notes, basis: parameters.offerRules.evidence)
     }
 
-    /// The terms to propose to a named club. Sales with no rounds only for now; the rest follows in later tasks.
+    /// The terms to propose to a named club, or what to answer to its bid.
     public static func proposal(_ subject: OfferSubject, kind: OfferKind, club: ClubFigures, rounds: [OfferRound],
                                 measures: OfferMeasures = .none, parameters: EngineParameters) throws -> OfferSuggestion {
         try requireUsable(parameters)
-        guard kind == .sale, rounds.isEmpty else { throw OfferError.wrongKind }
+        guard kind == .sale else { throw OfferError.wrongKind }
         if subject.value < 0 { throw OfferError.negative(.value) }
-        guard let budget = club.transferBudget else { throw OfferError.missing(.transferBudget, club: club.name) }
-        if budget < 0 { throw OfferError.negative(.transferBudget) }
         let rules = parameters.offerRules.value
-        let total = rounded(rules.saleLine * Double(subject.value), rules: rules)
-        let now = min(rounded(Double(min(total, budget)), down: true, rules: rules), budget)
-        let later = total - now
+        let ask = rounded(rules.saleLine * Double(subject.value), rules: rules)
         var notes: [OfferNote] = []
         if subject.value == 0 { notes.append(.valueIsZero) }
+        let basis = parameters.offerRules.evidence
+        func suggestion(_ advice: OfferAdvice) -> OfferSuggestion {
+            OfferSuggestion(advice: advice, notes: notes, basis: basis)
+        }
+        var sales: [SaleTerms] = []
+        for round in rounds {
+            guard case .sale(let t) = round.terms else { throw OfferError.wrongKind }
+            sales.append(t)
+        }
+        guard let last = rounds.last, let lastTerms = sales.last else {
+            return try sale(total: ask, club: club, subject: subject, rules: rules, notes: notes, basis: basis)
+        }
+        switch last.by {
+        case .club:
+            let bid = lastTerms.total
+            if bid >= ask { return suggestion(.accept) }
+            var seenClub = false
+            for round in rounds.dropLast() {
+                if round.by == .club { seenClub = true } else if seenClub { return suggestion(.acceptOrLeave) }
+            }
+            let counter = min(ask, rounded(rules.counterStep * Double(bid), rules: rules))
+            if counter <= bid { return suggestion(.acceptOrLeave) }
+            let terms = SaleTerms(now: lastTerms.now, later: lastTerms.later + counter - bid,
+                                  nextFeePercent: max(lastTerms.nextFeePercent, rules.nextFeePercent))
+            return suggestion(.counter(.sale(terms)))
+        case .owner:
+            switch last.answer {
+            case nil: return suggestion(.awaitAnswer)
+            case .accepted?: return suggestion(.accept)
+            case .refused?, .noReply?: break
+            }
+            var run = 0
+            var index = rounds.count - 1
+            while index >= 0, rounds[index].by == .owner, rounds[index].answer == .refused || rounds[index].answer == .noReply {
+                run += 1
+                index -= 1
+            }
+            if run > rules.stepsDownAtMost { return suggestion(.nothingLower(.clubTurnedDownThree)) }
+            let bestBid = zip(rounds, sales).filter { $0.0.by == .club }.map { $0.1.total }.max() ?? 0
+            let lowered = rounded((1 - rules.stepDown) * Double(lastTerms.total), rules: rules)
+            let total = min(ask, max(lowered, bestBid))
+            notes.append(.steppedDown)
+            return try sale(total: total, club: club, subject: subject, rules: rules, notes: notes, basis: basis)
+        }
+    }
+
+    /// A first proposal or a step down: money now capped at the club's budget and rounded down, the rest later.
+    private static func sale(total: Int, club: ClubFigures, subject: OfferSubject, rules: OfferRules, notes start: [OfferNote],
+                             basis: Evidence) throws -> OfferSuggestion {
+        guard let budget = club.transferBudget else { throw OfferError.missing(.transferBudget, club: club.name) }
+        if budget < 0 { throw OfferError.negative(.transferBudget) }
+        let now = min(rounded(Double(min(total, budget)), down: true, rules: rules), budget)
+        let later = total - now
+        var notes = start
         if budget == 0 && total > 0 {
             notes.append(.nothingToSpendNow)
         } else if later > 0 {
@@ -110,7 +176,7 @@ public enum Offers {
         }
         return OfferSuggestion(
             advice: .propose(.sale(SaleTerms(now: now, later: later, nextFeePercent: rules.nextFeePercent)), split: split),
-            notes: notes, basis: parameters.offerRules.evidence)
+            notes: notes, basis: basis)
     }
 
     private static func requireUsable(_ parameters: EngineParameters) throws {

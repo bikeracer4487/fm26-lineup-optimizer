@@ -110,4 +110,115 @@ import Testing
         q.offerRules = Parameter(r, .derived, source: "test")
         #expect(throws: PlanError.self) { try Offers.ask(Self.subject(), kind: .sale, earlier: [], parameters: q) }
     }
+
+    // MARK: A sale's next step
+    static let day = Day(iso: "2026-11-21")!
+    func mine(_ now: Int, later: Int = 0, _ answer: RoundAnswer?) -> OfferRound {
+        OfferRound(day: Self.day, by: .owner, terms: .sale(SaleTerms(now: now, later: later, nextFeePercent: 20)),
+                   value: 40_000, wagePerWeek: 450, answer: answer)
+    }
+    func theirs(_ now: Int, later: Int = 0, fee: Int = 0) -> OfferRound {
+        OfferRound(day: Self.day, by: .club, terms: .sale(SaleTerms(now: now, later: later, nextFeePercent: fee)),
+                   value: 40_000, wagePerWeek: 450, answer: nil)
+    }
+    func asked(_ total: Int, noBid: Bool) -> OfferAsk {
+        OfferAsk(id: UUID(), player: PlayerID(key: "fmrte:1"), playerName: "A", kind: .sale, day: Self.day,
+                 terms: .sale(SaleTerms(now: total, later: 0, nextFeePercent: 20)), value: 40_000, wagePerWeek: 450, noBidCame: noBid)
+    }
+    func next(_ rounds: [OfferRound], budget: Int = 35_000) throws -> OfferSuggestion {
+        try Offers.proposal(Self.subject(), kind: .sale, club: Self.club(budget), rounds: rounds, parameters: Self.p)
+    }
+    func ask(_ earlier: [OfferAsk]) throws -> OfferSuggestion {
+        try Offers.ask(Self.subject(), kind: .sale, earlier: earlier, parameters: Self.p)
+    }
+
+    @Test func aBidAtOrAboveTheAskIsAccepted() throws {
+        #expect(try next([theirs(40_000)]).advice == .accept)
+        #expect(try next([theirs(30_000, later: 12_000)]).advice == .accept)
+    }
+    @Test func aLowerBidIsCounteredOnceKeepingItsMoneyNow() throws {
+        let s = try next([theirs(8_000)])
+        #expect(s.advice == .counter(.sale(SaleTerms(now: 8_000, later: 1_600, nextFeePercent: 20))))
+    }
+    @Test func theCounterIsNeverAboveTheAsk() throws {
+        #expect(try next([theirs(36_000)]).advice == .counter(.sale(SaleTerms(now: 36_000, later: 4_000, nextFeePercent: 20))))
+    }
+    @Test func aCounterKeepsALargerShareOfTheNextFeeTheClubOffered() throws {
+        #expect(try next([theirs(8_000, fee: 30)]).advice == .counter(.sale(SaleTerms(now: 8_000, later: 1_600, nextFeePercent: 30))))
+    }
+    @Test func afterOneCounterIsAnsweredThereIsNoSecond() throws {
+        #expect(try next([theirs(8_000), mine(8_000, later: 1_600, nil), theirs(8_500)]).advice == .acceptOrLeave)
+    }
+    @Test func anOpeningProposalIsNotACounter() throws {
+        #expect(try next([mine(40_000, nil), theirs(8_000)]).advice == .counter(.sale(SaleTerms(now: 8_000, later: 1_600, nextFeePercent: 20))))
+    }
+    @Test func aCounterNeedsNoBudgetButAStepDownDoes() throws {
+        let bare = ClubFigures(name: "Barnet", transferBudget: nil, wageBudgetPerWeek: nil, wagesSpentPerWeek: nil, highestWagePerWeek: nil)
+        #expect(try Offers.proposal(Self.subject(), kind: .sale, club: bare, rounds: [theirs(8_000)], parameters: Self.p).advice
+                == .counter(.sale(SaleTerms(now: 8_000, later: 1_600, nextFeePercent: 20))))
+        #expect(throws: OfferError.missing(.transferBudget, club: "Barnet")) {
+            try Offers.proposal(Self.subject(), kind: .sale, club: bare, rounds: [mine(40_000, .refused)], parameters: Self.p)
+        }
+    }
+    @Test func whileHisProposalIsUnansweredTheAdviceIsToWait() throws {
+        #expect(try next([mine(40_000, nil)]).advice == .awaitAnswer)
+    }
+    @Test func anAcceptedProposalIsAgreedAndNeedsNoMore() throws {
+        #expect(try next([mine(40_000, .accepted)]).advice == .accept)
+    }
+    @Test func aRefusalLowersTheNextProposalByATenthTwiceAndNoFurther() throws {
+        let once = try next([mine(40_000, .refused)], budget: 50_000)
+        #expect(once.advice == .propose(.sale(SaleTerms(now: 36_000, later: 0, nextFeePercent: 20)), split: nil))
+        #expect(once.notes.first == .steppedDown)
+        let twice = try next([mine(40_000, .refused), mine(36_000, .noReply)], budget: 50_000)
+        #expect(twice.advice == .propose(.sale(SaleTerms(now: 32_000, later: 0, nextFeePercent: 20)), split: nil))
+        #expect(try next([mine(40_000, .refused), mine(36_000, .noReply), mine(32_000, .refused)], budget: 50_000).advice
+                == .nothingLower(.clubTurnedDownThree))
+    }
+    @Test func aSteppedDownProposalIsSplitAsAFirstOneIs() throws {
+        let s = try next([mine(40_000, .refused)], budget: 20_000)
+        #expect(s.advice == .propose(.sale(SaleTerms(now: 20_000, later: 16_000, nextFeePercent: 20)),
+                                     split: SaleSplit(instalments: 7_000, afterAppearances: 9_000)))
+        #expect(s.notes == [.steppedDown, .restAskedLater(now: 20_000)])
+    }
+    @Test func aStepDownIsTakenFromWhatHeRecordedAndNeverUnderTheirBestBid() throws {
+        #expect(try next([mine(30_000, .refused)], budget: 50_000).advice
+                == .propose(.sale(SaleTerms(now: 27_000, later: 0, nextFeePercent: 20)), split: nil))
+        #expect(try next([theirs(35_000), mine(38_000, .refused)], budget: 50_000).advice
+                == .propose(.sale(SaleTerms(now: 35_000, later: 0, nextFeePercent: 20)), split: nil))
+    }
+    @Test func aStepDownIsCappedAtThePresentAsk() throws {
+        let s = try Offers.proposal(Self.subject(value: 20_000), kind: .sale, club: Self.club(50_000), rounds: [mine(40_000, .refused)], parameters: Self.p)
+        #expect(s.advice == .propose(.sale(SaleTerms(now: 20_000, later: 0, nextFeePercent: 20)), split: nil))
+    }
+    @Test func aClubsRoundEndsARunOfRefusals() throws {
+        let s = try next([mine(40_000, .refused), mine(36_000, .refused), theirs(5_000), mine(6_000, .refused)], budget: 50_000)
+        #expect(s.advice == .propose(.sale(SaleTerms(now: 5_400, later: 0, nextFeePercent: 20)), split: nil))
+    }
+    @Test func aPlayerOfNoValueStaysAtNothingWhenSteppedDown() throws {
+        let s = try Offers.proposal(Self.subject(value: 0), kind: .sale, club: Self.club(0), rounds: [mine(0, .refused)], parameters: Self.p)
+        #expect(s.advice == .propose(.sale(SaleTerms(now: 0, later: 0, nextFeePercent: 20)), split: nil))
+        #expect(s.notes == [.valueIsZero, .steppedDown])
+    }
+    @Test func anAskThatDrewNoBidIsLoweredTwiceThenInterestComesFirst() throws {
+        #expect(try ask([asked(40_000, noBid: true)]).advice == .propose(.sale(SaleTerms(now: 36_000, later: 0, nextFeePercent: 20)), split: nil))
+        #expect(try ask([asked(40_000, noBid: true)]).notes == [.steppedDown, .doNotList, .noInterestBids])
+        #expect(try ask([asked(40_000, noBid: true), asked(36_000, noBid: true)]).advice == .propose(.sale(SaleTerms(now: 32_000, later: 0, nextFeePercent: 20)), split: nil))
+        #expect(try ask([asked(40_000, noBid: true), asked(36_000, noBid: true), asked(32_000, noBid: true)]).advice == .nothingLower(.noBidThree))
+    }
+    @Test func anAskStillWaitingLowersNothing() throws {
+        #expect(try ask([asked(40_000, noBid: true), asked(36_000, noBid: false)]).advice == .propose(.sale(SaleTerms(now: 40_000, later: 0, nextFeePercent: 20)), split: nil))
+    }
+    @Test func aBidOfNothingForAPlayerOfNoValueIsAccepted() throws {
+        #expect(try Offers.proposal(Self.subject(value: 0), kind: .sale, club: Self.club(0), rounds: [theirs(0)], parameters: Self.p).advice == .accept)
+    }
+    @Test func aRoundOfLoanTermsInASaleIsRefused() {
+        let loan = OfferRound(day: Self.day, by: .club, terms: .loan(LoanTerms(wagePercent: 50, feePerMonth: 0, playingTime: nil, recall: true, futureFee: nil)),
+                              value: 40_000, wagePerWeek: 450, answer: nil)
+        #expect(throws: OfferError.wrongKind) { try next([loan]) }
+        let loanAsk = OfferAsk(id: UUID(), player: PlayerID(key: "fmrte:1"), playerName: "A", kind: .sale, day: Self.day,
+                               terms: .loan(LoanTerms(wagePercent: 50, feePerMonth: 0, playingTime: nil, recall: true, futureFee: nil)),
+                               value: 40_000, wagePerWeek: 450, noBidCame: true)
+        #expect(throws: OfferError.wrongKind) { try ask([loanAsk]) }
+    }
 }
