@@ -748,3 +748,37 @@ func anExpiryDateThatIsNotAMonthDayAndYearIsRefused(cell: String) throws {
     #expect(old.contractEnds == nil)
     #expect(old.monthsLeft == avenell.monthsLeft)
 }
+
+/// The paste with Caelan Avenell's contract type, months left, wage and expiry-date cells made the four given.
+private func importWithAvenell(type: String, months: String, wage: String, expiry: String) throws -> Player {
+    let name = try expiryColumn("DisplayedName")
+    let cells = try zip(contractPaths + [expiryPath], [type, months, wage, expiry]).map { (try expiryColumn($0), $1) }
+    let players = try importFirstTeamWithExpiry { rows in
+        rows.map { row in
+            guard row[name] == quoted("Caelan Avenell") else { return row }
+            var row = row
+            for (cell, value) in cells { row[cell] = quoted(value) }
+            return row
+        }
+    }.players
+    return try #require(players.first { $0.name == "Caelan Avenell" })
+}
+
+/// FMRTE pastes a player whose contract has run out, and one on a kind of contract with no end (an amateur), with a
+/// contract type, a wage and months left below zero (the search capture has "Amateur", "-1527", "$0" and "4", "-1527",
+/// "$0"). What it writes for his expiry date is not known, so the cell is not read: blank or a date, he has no day.
+@Test(arguments: [("Amateur", "-1527", ""), ("Amateur", "-1527", "1/1/1900"), ("4", "-1527", ""), ("4", "-1", "12/31/1899"),
+                  ("FullTime", "-1", ""), ("FullTime", "-2", "not a date")])
+func aPlayerWhoseMonthsLeftAreBelowZeroHasNoDayAndHisCellIsNotRead(type: String, months: String, expiry: String) throws {
+    let player = try importWithAvenell(type: type, months: months, wage: "$0", expiry: expiry)
+    #expect(player.monthsLeft == nil)
+    #expect(player.contractEnds == nil)
+}
+
+@Test func aPlayerWithMonthsLeftStillNeedsHisDay() throws {
+    #expect(throws: ImportError.invalidValue(player: "Caelan Avenell", column: expiryPath, value: "")) {
+        try importWithAvenell(type: "FullTime", months: "0", wage: "$5,735", expiry: "")
+    }
+    #expect(try importWithAvenell(type: "FullTime", months: "0", wage: "$5,735", expiry: "3/1/2028").contractEnds
+            == Day(iso: "2028-03-01"))
+}

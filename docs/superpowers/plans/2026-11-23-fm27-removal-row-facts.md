@@ -104,3 +104,40 @@
 - [ ] `CLAUDE.md`: the import paragraph (the new column), the Player Removal description, the pictures checked, the test counts.
 - [ ] `cd LineupApp && swift test` in the background, once.
 - [ ] One fresh reviewer on the whole diff, read-only, bounded; fix what it finds; commit.
+
+---
+
+## What changed during the build
+
+- A two-digit year ("6/30/30") is refused, beyond Task 1's list: it would have been read as the year 30.
+- Tasks 3 and 4 were built and committed together: taking the Costs column out of `RemovalColumn` does not compile
+  without the view's change.
+- On a wide board the name takes the room the fixed columns leave (at least 200 points) instead of a fixed 240.
+- Contract end days were added to the young-players sample only (`modelWithYoungPlayers`), not the base sample, which
+  many tests read as imported: the plain `removal-*` pictures show months left, the `removal-young-*` ones a day.
+- `AdvisorText.fullDay` is tested in `LeagueTextTests`, beside `shortDay`.
+- "28 months left", "No contract" and "contract ends …" are composed in Core (`PlayerFacts`), around the engine's
+  figure and day, as Offers composes "10 months left". The design's "Words" section gave them to the engine.
+
+## What the whole-branch review found
+
+One fresh reviewer read the whole diff on 23 November 2026, read-only.
+
+- **Fixed.** A player with a contract type and months left below zero (FMRTE's "Amateur" or "4", or a contract that
+  has run out) was asked for an expiry date: a blank cell would have refused the whole paste, an opponent's squad
+  among them, and a placeholder date would have been shown as a real day. He now has no day and his cell is not read
+  (`aPlayerWhoseMonthsLeftAreBelowZeroHasNoDayAndHisCellIsNotRead`, watched failing first). The design is revised.
+- **Left, small.** Any four-digit year is accepted for a player with months left, so a placeholder such as "1/1/1900"
+  on such a player would be shown as written. The refusal of a day-first date says only that the value is not valid,
+  not that month/day/year is wanted. VoiceOver hears the release-cost sentence on the row and again in the opened
+  row. A yearly salary of eight figures would be cut short in its 112-point column.
+
+## Limits left
+
+- A date written day first with every day 12 or under cannot be told from a month-first one and is read month first.
+- What FMRTE writes in the expiry-date cell of an amateur or a player whose contract has run out is not known; no
+  capture holds one.
+- The cost of a release is still reckoned from months left plus half a month, not from the day.
+- The dates appear only after each squad is imported again with the new column.
+- The install, and the look of the four columns in a live window, are left to the owner.
+

@@ -31,9 +31,13 @@ ends, when the pasted grid has the column.
 
 - A grid without the column gives no date and no error: the search grid has none, and neither do the captures or a
   squad saved before this change.
-- With the column, a player who has a contract and a blank cell, or a cell that is not a month/day/year date that
-  exists, is refused in a sentence naming the player and the column, as every other bad cell is.
-- A player with no contract has no end date.
+- With the column, a player who has months left and a blank cell, or a cell that is not a month, a day and a
+  four-digit year that name a day that exists, is refused in a sentence naming the player and the column, as every
+  other bad cell is.
+- A player with no contract has no end date. Neither has one whose months left are below zero: a contract that has
+  run out, or a kind with no end, such as an amateur's (FMRTE pastes "Amateur", "-1527", "$0"). His cell is not read,
+  since what FMRTE writes there is not known. (Revised after the whole-branch review: the first text asked every
+  player with a contract type for a day, which would have refused an opponent's squad holding such a player.)
 - The field is optional in the saved squad file, so saved state from before it opens with no notice. Each squad
   gains the dates at its next import; the U21s and U18s are pasted from the same grid.
 

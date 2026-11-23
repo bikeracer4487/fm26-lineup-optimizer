@@ -96,7 +96,8 @@ public struct Player: Identifiable, Equatable, Codable, Sendable {
     public var contractType: ContractType
     public var monthsLeft: Int?
     /// The day his contract ends, from FMRTE's expiry-date column; nil when the pasted grid has no such column, when he
-    /// has no contract, and in a squad saved before the column was read.
+    /// has no months left (no contract, one that has run out, or a kind with no end), and in a squad saved before the
+    /// column was read.
     public var contractEnds: Day?
     /// Kept per week whatever period FMRTE showed it in; need not be a whole number. See `WagePeriod`.
     public var wagePerWeek: Double

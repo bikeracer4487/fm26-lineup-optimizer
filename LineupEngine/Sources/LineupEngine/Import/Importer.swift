@@ -194,9 +194,11 @@ public enum Importer {
             }
             // FMRTE writes a negative number for a contract that has run out; a player with none has no cell at all.
             let months = hasNoContract ? -1 : try int("Contract.MonthsLeft")
-            // A grid without the column gives no day; with it, every player who has a contract must have one.
+            // A grid without the column gives no day; with it, every player with months left must have one. A player
+            // with no contract, and one whose months left are below zero (a contract that has run out, or a kind with
+            // no end, an amateur's), has no day, and his cell is not read: what FMRTE writes there is not known.
             var contractEnds: Day?
-            if index[expiryPath] != nil, !hasNoContract {
+            if index[expiryPath] != nil, months >= 0 {
                 guard let day = expiryDay(cell(expiryPath)) else { throw fail(expiryPath) }
                 contractEnds = day
             }
