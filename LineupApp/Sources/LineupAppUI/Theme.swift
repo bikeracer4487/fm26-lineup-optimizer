@@ -684,17 +684,21 @@ public enum Theme {
         /// The action, room for "Keep and play" on one line with a gap before the name; the longest, "Keep and
         /// develop" and "Loan for matches", wrap to a second.
         public static let actionColumn: CGFloat = 112
-        /// The name on a wide board; a longer name wraps to a second line. On a narrow board the name takes what the
-        /// other columns leave, with the costs sentence under it.
-        public static let nameColumn: CGFloat = 240
+        /// The least the name keeps on a wide board; it takes what the other columns leave, and a longer name wraps to a
+        /// second line. On a narrow board the player's facts go under it on one line.
+        public static let nameColumn: CGFloat = 200
         public static let squadColumn: CGFloat = 84
         public static let ageColumn: CGFloat = 40
+        /// Current ability and potential ability, each: room for three figures.
+        public static let abilityColumn: CGFloat = 44
+        /// The salary by the year, room for "$1,234,567".
+        public static let salaryColumn: CGFloat = 112
+        /// When the contract ends, after the table's lead: room for "30 Sep 2030" and "28 months left".
+        public static let contractColumn: CGFloat = 132
         public static let scoreColumn: CGFloat = 60
-        /// The least the costs sentence keeps beside the rest; below it, the sentence goes under the name.
-        public static let costsMinimum: CGFloat = 260
-        /// From this board width the costs sentence has a column of its own.
+        /// From this board width the player's facts have columns of their own.
         public static let wideTableWidth: CGFloat = disclosureColumn + stampColumn + actionColumn + nameColumn
-            + squadColumn + ageColumn + scoreColumn + Table.columnLead + costsMinimum
+            + squadColumn + ageColumn + 2 * abilityColumn + salaryColumn + contractColumn + scoreColumn
         /// The most lines a name wraps to.
         public static let nameLines = 2
         /// The points before each reason, right-aligned so the figures line up.

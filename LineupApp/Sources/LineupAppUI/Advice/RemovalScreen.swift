@@ -107,7 +107,7 @@ private struct MutedLine: View {
 }
 
 /// The table's headings over a heavy rule, on the board's white so rows scroll out of sight beneath. On a narrow board
-/// there is no costs column: the sentence is under each name.
+/// the player's abilities, salary and contract end have no columns: they are on one line under each name.
 private struct RemovalHeadings: View {
     let wide: Bool
 
@@ -142,19 +142,18 @@ private struct RemovalColumns<Cell: View, Disclosure: View>: View {
                 .frame(width: Theme.Removal.disclosureColumn, alignment: .leading)
             cell(.level).frame(width: Theme.Removal.stampColumn, alignment: .leading)
             cell(.action).frame(width: Theme.Removal.actionColumn, alignment: .leading)
-            if wide {
-                cell(.name).frame(width: Theme.Removal.nameColumn, alignment: .leading)
-            } else {
-                cell(.name).frame(maxWidth: .infinity, alignment: .leading)
-            }
+            cell(.name).frame(maxWidth: .infinity, alignment: .leading)
             cell(.squad).frame(width: Theme.Removal.squadColumn, alignment: .leading)
             cell(.age).frame(width: Theme.Removal.ageColumn, alignment: .trailing)
-            cell(.score).frame(width: Theme.Removal.scoreColumn, alignment: .trailing)
             if wide {
-                cell(.costs)
+                cell(.ability).frame(width: Theme.Removal.abilityColumn, alignment: .trailing)
+                cell(.potential).frame(width: Theme.Removal.abilityColumn, alignment: .trailing)
+                cell(.salary).frame(width: Theme.Removal.salaryColumn, alignment: .trailing)
+                cell(.contract)
                     .padding(.leading, Theme.Table.columnLead)
-                    .frame(minWidth: Theme.Removal.costsMinimum, maxWidth: .infinity, alignment: .leading)
+                    .frame(width: Theme.Removal.contractColumn, alignment: .leading)
             }
+            cell(.score).frame(width: Theme.Removal.scoreColumn, alignment: .trailing)
         }
     }
 }
@@ -218,8 +217,11 @@ private struct RemovalRowView: View {
                     .foregroundStyle(Theme.Colour.ink)
                     .lineLimit(Theme.Removal.nameLines)
                     .fixedSize(horizontal: false, vertical: true)
-                if !wide {
-                    costs
+                if !wide, let facts = row.facts {
+                    Text(facts.line)
+                        .font(Theme.Typeface.text(Theme.TypeSize.small))
+                        .foregroundStyle(Theme.Colour.mutedInk)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(.trailing, Theme.Spacing.s)
@@ -231,24 +233,32 @@ private struct RemovalRowView: View {
             Text(row.ageText ?? "")
                 .font(Theme.Typeface.text())
                 .foregroundStyle(Theme.Colour.ink)
+        case .ability:
+            fact(row.facts?.abilityText)
+        case .potential:
+            fact(row.facts?.potentialText)
+        case .salary:
+            fact(row.facts?.salaryText)
+        case .contract:
+            fact(row.facts?.contractText)
         case .score:
             Text(row.scoreText)
                 .font(Theme.Typeface.text(Theme.TypeSize.button, weight: .extraBold))
                 .foregroundStyle(Theme.Colour.ink)
-        case .costs:
-            costs
         }
     }
 
-    private var costs: some View {
-        Text(row.costsText)
-            .font(Theme.Typeface.text(Theme.TypeSize.small))
-            .foregroundStyle(Theme.Colour.mutedInk)
-            .fixedSize(horizontal: false, vertical: true)
+    /// One of the player's facts in its column; nothing when it is not known.
+    private func fact(_ text: String?) -> some View {
+        Text(text ?? "")
+            .font(Theme.Typeface.text())
+            .foregroundStyle(Theme.Colour.ink)
+            .lineLimit(1)
     }
 }
 
-/// An open row's reasons with their points, the sentence for why that action, the evidence note, and the control that
+/// An open row's sentence on what releasing him costs, his reasons with their points, the sentence for why that action,
+/// the evidence note, and the control that
 /// marks him, with the row's own choices and, under it, the row's note when it has one (a player on a youth contract
 /// cannot be marked to loan out).
 private struct RemovalDetail: View {
@@ -257,6 +267,12 @@ private struct RemovalDetail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Text(row.costsText)
+                .font(Theme.Typeface.text(Theme.TypeSize.small))
+                .foregroundStyle(Theme.Colour.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, Theme.Removal.pointsColumn + Theme.Spacing.m)
+                .padding(.bottom, Theme.Spacing.xs)
             PointedReasons(reasons: row.reasons)
             Text(row.whyText)
                 .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .semibold))
@@ -358,6 +374,12 @@ private struct YoungRowView: View {
                     .fixedSize()
             }
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                if let facts = row.factsLine {
+                    Text(facts)
+                        .font(Theme.Typeface.text(Theme.TypeSize.small))
+                        .foregroundStyle(Theme.Colour.mutedInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 // Keyed by place, so two identical lines are both shown.
                 ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
                     Text(line)

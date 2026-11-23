@@ -1078,6 +1078,7 @@ public enum SampleData {
         }
         model.history = copies + model.history
         model.save(.history)
+        let today = model.settings.currentDate
         edit(model) { player in
             switch player.name {
             case youngToDevelopName:
@@ -1098,6 +1099,11 @@ public enum SampleData {
                 player.monthsLeft = 24
                 player.potentialAbility = 85
             default: break
+            }
+            // The first team as pasted with FMRTE's expiry-date column, each contract ending half a month past his
+            // months left; the U21s as pasted without it, so Player Removal shows a day for some and months for others.
+            if player.squad == .firstTeam, let months = player.monthsLeft {
+                player.contractEnds = today.adding(days: months * 30 + 15)
             }
         }
         return model

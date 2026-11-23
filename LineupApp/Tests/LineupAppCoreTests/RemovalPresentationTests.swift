@@ -141,6 +141,100 @@ import Testing
                 + "Releasing him costs about £26,000; a mutual termination about £14,300")
     }
 
+    // MARK: Ability, salary and contract end
+
+    /// A first-team player of ability 92 and potential 120 on $5,735 a month, kept by the week.
+    private func player(_ key: String, contract: ContractType = .fullTime, months: Int? = 28, ends: Day? = nil,
+                        perWeek: Double = WagePeriod.monthly.perWeek(5_735)) -> Player {
+        Player(id: PlayerID(key: key), name: key, squad: .firstTeam, age: 23, positionsText: "D RC",
+               currentAbility: 92, potentialAbility: 120, attributes: [:], familiarity: [:],
+               condition: 1, sharpness: 1, jadedness: 0, isInjured: false, isBanned: false, club: nil, loanedTo: nil,
+               contractType: contract, monthsLeft: months, wagePerWeek: perWeek, askingPrice: nil, nationalities: [],
+               extras: [:], contractEnds: ends)
+    }
+
+    private let dollarsMonthly = MoneyStyle(symbol: "$", period: .monthly)
+
+    @Test func aPlayersFactsAreHisAbilitiesHisSalaryByTheYearAndTheDayHisContractEnds() throws {
+        let day = Day(iso: "2030-06-30")!
+        let given = player("p", ends: day)
+        let facts = PlayerFacts(given, money: dollarsMonthly)
+        #expect(facts.abilityText == "92")
+        #expect(facts.potentialText == "120")
+        #expect(facts.salaryText == "$68,820")
+        #expect(facts.salaryText == Display.yearlyAmount(perWeek: given.wagePerWeek, dollarsMonthly))
+        #expect(facts.contractText == "30 Jun 2030")
+        #expect(facts.contractText == AdvisorText.fullDay(day))
+        #expect(facts.line == "CA 92 · PA 120 · $68,820 a year · contract ends 30 Jun 2030")
+        #expect(facts.spokenText
+                == "Current ability 92, potential ability 120, $68,820 a year, contract ends 30 Jun 2030")
+    }
+
+    @Test func withoutADayTheContractFallsBackToMonthsLeft() {
+        let facts = PlayerFacts(player("p"), money: dollarsMonthly)
+        #expect(facts.contractText == "28 months left")
+        #expect(facts.line == "CA 92 · PA 120 · $68,820 a year · 28 months left")
+        #expect(facts.spokenText == "Current ability 92, potential ability 120, $68,820 a year, 28 months left")
+        #expect(PlayerFacts(player("p", months: 1), money: dollarsMonthly).contractText == "1 month left")
+        #expect(PlayerFacts(player("p", months: 0), money: dollarsMonthly).contractText == "0 months left")
+    }
+
+    @Test func theDayWinsOverMonthsLeft() throws {
+        let facts = PlayerFacts(player("p", months: 28, ends: Day(iso: "2030-05-31")!), money: dollarsMonthly)
+        #expect(facts.contractText == "31 May 2030")
+        #expect(!facts.line.contains("months left"))
+    }
+
+    @Test func aPlayerOutOfContractHasNoSalaryAndSaysHeHasNoContract() {
+        let facts = PlayerFacts(player("p", contract: .outOfContract, months: nil, perWeek: 0), money: dollarsMonthly)
+        #expect(facts.salaryText == nil)
+        #expect(facts.contractText == "No contract")
+        #expect(facts.line == "CA 92 · PA 120 · no contract")
+        #expect(facts.spokenText == "Current ability 92, potential ability 120, no contract")
+    }
+
+    @Test func aContractWithNeitherADayNorMonthsLeftShowsNothingForItsEnd() {
+        let facts = PlayerFacts(player("p", months: nil), money: dollarsMonthly)
+        #expect(facts.salaryText == "$68,820")
+        #expect(facts.contractText == nil)
+        #expect(facts.line == "CA 92 · PA 120 · $68,820 a year")
+    }
+
+    @Test func theSalaryIsInTheSquadsCurrencyWhateverPeriodItShowsWagesBy() {
+        #expect(PlayerFacts(player("p", perWeek: 600), money: .weeklyPounds).salaryText == "£31,200")
+    }
+
+    @Test func aRowCarriesItsPlayersFactsAndNoneForAPlayerNotHandedIn() throws {
+        let facts = PlayerFacts(player("p", ends: Day(iso: "2030-06-30")!), money: dollarsMonthly)
+        let sheet = RemovalPresentation.sheet(
+            report([advice("p", name: "Josh Ashby", score: 85), advice("gone", name: "Gone")], money: dollarsMonthly),
+            squads: [PlayerID(key: "p"): .u21], ages: [PlayerID(key: "p"): 19], facts: [PlayerID(key: "p"): facts])
+        #expect(sheet.rows.map(\.facts) == [facts, nil])
+        #expect(sheet.rows[0].spokenText == "High, Sell, Josh Ashby, U21s, Age 19, Current ability 92, "
+                + "potential ability 120, $68,820 a year, contract ends 30 Jun 2030, Score 85, "
+                + "Releasing him costs about $26,000; a mutual termination about $14,300")
+        #expect(!sheet.rows[1].spokenText.contains("ability"))
+    }
+
+    @Test func aYoungRowCarriesTheFactsLineAndNoneForAPlayerNotHandedIn() throws {
+        let facts = PlayerFacts(player("t", ends: Day(iso: "2030-06-30")!), money: dollarsMonthly)
+        let sheet = RemovalPresentation.sheet(
+            report([young("t", name: "Tom Reed", age: 20), young("n", name: "Nob", age: 18)]),
+            squads: [:], ages: [:], facts: [PlayerID(key: "t"): facts])
+        let tom = try #require(sheet.young.first { $0.id.key == "t" })
+        #expect(tom.factsLine == "CA 92 · PA 120 · $68,820 a year · contract ends 30 Jun 2030")
+        #expect(tom.spokenText == "Tom Reed, Age 20, striker, Keep and play. " + facts.spokenText + ". "
+                + tom.lines.joined(separator: " "))
+        let nob = try #require(sheet.young.first { $0.id.key == "n" })
+        #expect(nob.factsLine == nil)
+        #expect(nob.spokenText == "Nob, Age 18, striker, Keep and play. " + nob.lines.joined(separator: " "))
+    }
+
+    @Test func theTableHasTheFourFactsBetweenAgeAndScoreAndNoCostsColumn() {
+        #expect(RemovalPresentation.columns
+                == ["Level", "Action", "Name", "Squad", "Age", "CA", "PA", "Salary a year", "Contract ends", "Score"])
+    }
+
     // MARK: Marks
 
     @Test func aMarkedRowShowsItsMarkInTheEnginesWords() throws {
@@ -617,7 +711,8 @@ import Testing
         #expect(RemovalPresentation.explanation == "The advice judges players against the primary tactic.")
         #expect(RemovalPresentation.loansHeading == "Loans to the club")
         #expect(RemovalPresentation.scoreLabel == "Score")
-        #expect(RemovalPresentation.columns == ["Level", "Action", "Name", "Squad", "Age", "Score", "Costs"])
+        #expect(RemovalPresentation.columns
+                == ["Level", "Action", "Name", "Squad", "Age", "CA", "PA", "Salary a year", "Contract ends", "Score"])
         #expect(RemovalColumn.allCases.map(\.title) == RemovalPresentation.columns)
     }
 
@@ -655,6 +750,7 @@ import Testing
             let player = try #require(players[advice.player])
             #expect(row.squadText == player.squad.displayName)
             #expect(row.ageText == String(player.age))
+            #expect(row.facts == PlayerFacts(player, money: report.removal.money))
             #expect(row.reasons.map(\.text) == advice.reasons.map(\.text))
         }
         #expect(sheet.loans.map(\.id) == report.removal.loans.map(\.player))

@@ -27,9 +27,55 @@ public struct PointedReason: Hashable, Sendable {
     var spokenText: String { "\(pointsText) \(text)" }
 }
 
+/// What Player Removal shows of a player beside his advice: his current and potential ability (FMRTE's own numbers,
+/// under the owner's names for them), his salary by the year and when his contract ends.
+public struct PlayerFacts: Equatable, Sendable {
+    /// His current ability: "92".
+    public let abilityText: String
+    /// His potential ability: "120".
+    public let potentialText: String
+    /// His salary for a year in the squads' currency, in the engine's figure: "$68,820"; nil for a player with no
+    /// contract.
+    public let salaryText: String?
+    /// The day his contract ends as the engine writes it, "30 Jun 2030", when FMRTE's expiry-date column was pasted;
+    /// else his months left, "28 months left"; "No contract" for a player out of contract; nil when none is known.
+    public let contractText: String?
+    /// The four on one line, leaving out what is not known: "CA 92 · PA 120 · $68,820 a year · contract ends 30 Jun
+    /// 2030", the last part "28 months left" or "no contract" as it falls.
+    public let line: String
+    /// The line as said to assistive technology, the abilities by their full names.
+    public let spokenText: String
+
+    public init(_ player: Player, money: MoneyStyle) {
+        abilityText = String(player.currentAbility)
+        potentialText = String(player.potentialAbility)
+        let hasContract = player.contractType != .outOfContract
+        salaryText = hasContract ? Display.yearlyAmount(perWeek: player.wagePerWeek, money) : nil
+        let salaryPart = hasContract ? Display.yearly(perWeek: player.wagePerWeek, money) : nil
+        let contractPart: String?
+        if !hasContract {
+            contractText = "No contract"
+            contractPart = "no contract"
+        } else if let day = player.contractEnds {
+            contractText = AdvisorText.fullDay(day)
+            contractPart = "contract ends \(AdvisorText.fullDay(day))"
+        } else if let months = player.monthsLeft {
+            contractText = "\(months) \(months == 1 ? "month" : "months") left"
+            contractPart = contractText
+        } else {
+            contractText = nil
+            contractPart = nil
+        }
+        line = (["CA \(abilityText)", "PA \(potentialText)", salaryPart, contractPart] as [String?])
+            .compactMap { $0 }.joined(separator: " · ")
+        spokenText = (["Current ability \(abilityText)", "potential ability \(potentialText)", salaryPart, contractPart]
+                      as [String?]).compactMap { $0 }.joined(separator: ", ")
+    }
+}
+
 /// A column of the removal table, in its order.
 public enum RemovalColumn: CaseIterable, Hashable, Sendable {
-    case level, action, name, squad, age, score, costs
+    case level, action, name, squad, age, ability, potential, salary, contract, score
 
     public var title: String {
         switch self {
@@ -38,8 +84,11 @@ public enum RemovalColumn: CaseIterable, Hashable, Sendable {
         case .name: "Name"
         case .squad: "Squad"
         case .age: "Age"
+        case .ability: "CA"
+        case .potential: "PA"
+        case .salary: "Salary a year"
+        case .contract: "Contract ends"
         case .score: RemovalPresentation.scoreLabel
-        case .costs: "Costs"
         }
     }
 }
@@ -97,6 +146,8 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
     /// The engine's sentence shown under the mark control, saying a player on a youth contract cannot be loaned out;
     /// nil for anyone else.
     public let markNote: String?
+    /// His abilities, salary and contract end; nil when he is not in the squad book.
+    public let facts: PlayerFacts?
 
     /// Critical and high rows are open until the owner closes them; medium and keep rows closed until opened.
     public var opensByDefault: Bool {
@@ -109,11 +160,12 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
     /// The row as said to assistive technology.
     public var spokenText: String {
         let parts: [String?] = [stamp.text, actionText, markText, name, squadText, ageText.map { "Age \($0)" },
-                                "\(RemovalPresentation.scoreLabel) \(scoreText)", costsText]
+                                facts?.spokenText, "\(RemovalPresentation.scoreLabel) \(scoreText)", costsText]
         return parts.compactMap { $0 }.joined(separator: ", ")
     }
 
-    init(_ advice: RemovalAdvice, squad: Squad?, age: Int?, mark: SaleMark?, money: MoneyStyle) {
+    init(_ advice: RemovalAdvice, squad: Squad?, age: Int?, mark: SaleMark?, money: MoneyStyle, facts: PlayerFacts? = nil) {
+        self.facts = facts
         id = advice.player
         name = advice.name
         level = advice.level
@@ -152,10 +204,13 @@ public struct YoungRow: Identifiable, Equatable, Sendable {
     public let lines: [String]
     /// The row as said to assistive technology: "Tom Reed, Age 16, striker, Keep and develop. " and the lines.
     public let spokenText: String
+    /// His abilities, salary and contract end on one line; nil when he is not in the squad book.
+    public let factsLine: String?
 
     /// Nil for a player without an outlook, who has no place in the part.
-    init?(_ advice: RemovalAdvice) {
+    init?(_ advice: RemovalAdvice, facts: PlayerFacts? = nil) {
         guard let outlook = advice.outlook else { return nil }
+        factsLine = facts?.line
         let age = outlook.estimate.age
         var home = outlook.slots.first(where: \.isFirstChoice)?.slot
         if home == nil, case .first(let slot)? = advice.tier { home = slot }
@@ -166,7 +221,7 @@ public struct YoungRow: Identifiable, Equatable, Sendable {
         stamp = StatusStamp(text: actionText, tone: RemovalPresentation.youngStampTone(advice))
         lines = AdvisorText.youngLines(advice, names: RemovalPresentation.positionName)
         let head = ([advice.name, "Age \(age)"] + [position].compactMap { $0 } + [actionText]).joined(separator: ", ")
-        spokenText = "\(head). " + lines.joined(separator: " ")
+        spokenText = "\(head). " + (facts.map { "\($0.spokenText). " } ?? "") + lines.joined(separator: " ")
     }
 }
 
@@ -373,12 +428,12 @@ public enum RemovalPresentation {
         return StatusStamp(text: AdvisorText.name(verdict), tone: tone)
     }
 
-    /// The sheet for `report`, with each player's squad and age from `squads` and `ages`, and the owner's mark on him
-    /// from `marks`. The average ability is shown to the nearest whole number, and only when the report has one. Money
+    /// The sheet for `report`, with each player's squad and age from `squads` and `ages`, the owner's mark on him
+    /// from `marks`, and his abilities, salary and contract end from `facts`. The average ability is shown to the nearest whole number, and only when the report has one. Money
     /// is written as the report writes it: the squads' currency, the wages in FMRTE's period. The loans to the club take
     /// no mark. Every player with an outlook is also in the Young players part, oldest first, then by name and key.
     public static func sheet(_ report: RemovalReport, squads: [PlayerID: Squad], ages: [PlayerID: Int],
-                             marks: [PlayerID: SaleMark] = [:]) -> RemovalSheet {
+                             marks: [PlayerID: SaleMark] = [:], facts: [PlayerID: PlayerFacts] = [:]) -> RemovalSheet {
         let average = report.squadAverageAbility.map {
             RemovalFigure(label: averageLabel, figure: String(Int($0.rounded())))
         }
@@ -388,7 +443,7 @@ public enum RemovalPresentation {
             figures: [average].compactMap { $0 } + [wages],
             rows: report.advice.map {
                 RemovalRow($0, squad: squads[$0.player], age: ages[$0.player], mark: marks[$0.player],
-                           money: report.money)
+                           money: report.money, facts: facts[$0.player])
             },
             loans: report.loans.map(LoanBlock.init),
             young: report.advice.filter { $0.outlook != nil }
@@ -396,15 +451,17 @@ public enum RemovalPresentation {
                     let (ageA, ageB) = (a.outlook?.estimate.age ?? 0, b.outlook?.estimate.age ?? 0)
                     return (ageB, a.name, a.player.key) < (ageA, b.name, b.player.key)
                 }
-                .compactMap(YoungRow.init))
+                .compactMap { YoungRow($0, facts: facts[$0.player]) })
     }
 }
 
 extension AppModel {
-    /// The Player Removal screen's sheet for `report`, each player's squad and age as imported.
+    /// The Player Removal screen's sheet for `report`, each player's squad, age, abilities, salary and contract end as
+    /// imported.
     public func removalSheet(_ report: AdvisorsReport) -> RemovalSheet {
         let players = Dictionary(squad.book.allPlayers.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return RemovalPresentation.sheet(report.removal, squads: players.mapValues(\.squad), ages: players.mapValues(\.age),
-                                         marks: marks)
+                                         marks: marks,
+                                         facts: players.mapValues { PlayerFacts($0, money: report.removal.money) })
     }
 }
