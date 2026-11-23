@@ -54,6 +54,7 @@ import Testing
         #expect(AdvisorText.name(PlayingTime.startingPlace) == "A starting place" && AdvisorText.name(PlayingTime.less) == "Less than a starting place")
         #expect(AdvisorText.enteredOn(Self.day) == "entered Sat 21 Nov")
         #expect(AdvisorText.openDealBelow(club: "Barnet") == "You already have an open deal with Barnet for him: its rounds are below.")
+        #expect(AdvisorText.outOnLoanAlready == "He is out on loan already, so only a sale can be worked out.")
     }
 
     // MARK: sales

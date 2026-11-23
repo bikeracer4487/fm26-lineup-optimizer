@@ -199,7 +199,7 @@ import LineupEngine
         s.model.setOfferValue(text: "40000", for: s.seller)
         s.model.recordRound(for: s.seller, club: "Barnet", by: .club, terms: Self.sale(8_000))
         let card = try #require(try block(sheet(s.t), s.seller).deals.first)
-        #expect(card.heading == "Barnet · open")
+        #expect(card.heading == "Barnet · sale · open")
         #expect(card.isOpen)
         #expect(card.player == s.seller && card.club == "Barnet")
         let round = try #require(s.model.offers.deals.first?.rounds.first)
@@ -267,7 +267,7 @@ import LineupEngine
         advance(s.t)
         s.model.recordRound(for: s.seller, club: "Hendon", by: .club, terms: Self.sale(10_000))
         let deals = try block(sheet(s.t), s.seller).deals
-        #expect(deals.map(\.heading) == ["Hendon · open", "Wealdstone · ended", "Barnet · agreed"])
+        #expect(deals.map(\.heading) == ["Hendon · sale · open", "Wealdstone · sale · ended", "Barnet · sale · agreed"])
         #expect(deals.map(\.isOpen) == [true, false, false])
         for card in deals.dropFirst() {
             #expect(card.next == nil && card.problem == nil)
@@ -340,18 +340,19 @@ import LineupEngine
         #expect(sheet.sales.first == "Sales: 2 deals recorded since Fri 13 Nov, none agreed.")
     }
 
-    @Test func aSaleDealForAPlayerNowMarkedToLoanOutIsUnderEarlierOffers() throws {
+    @Test func aSaleDealForAPlayerNowMarkedToLoanOutStaysInHisBlock() throws {
+        // Revised on 22 November 2026 at the owner's request: a marked player's deals of both kinds stay in his block.
         let s = try ready()
         s.model.setOfferValue(text: "40000", for: s.seller)
         s.model.recordRound(for: s.seller, club: "Barnet", by: .club, terms: Self.sale(30_000))
         s.model.setMark(.toLoanOut, for: s.seller)
         let sheet = sheet(s.t)
         let now = try block(sheet, s.seller)
-        #expect(now.kind == .loan && now.deals.isEmpty)
+        #expect(now.kind == .loan && now.deals.map(\.heading) == ["Barnet · sale · open"])
+        #expect(now.deals.first?.isOpen == true)
         #expect(sheet.toLoanOut.contains { $0.id == s.seller })
-        #expect(sheet.earlier?.deals.count == 1)
-        #expect(sheet.earlier?.line == "1 deal for players no longer marked")
-        // A loan to Barnet is a new deal: the open sale is not his present kind.
+        #expect(sheet.earlier == nil)
+        // A loan to Barnet is a new deal: the open sale is not the kind shown.
         let loanTo = try block(self.sheet(s.t, clubs: [s.seller: "Barnet"]), s.seller)
         #expect(loanTo.clubHasOpenDeal == nil)
     }
@@ -368,7 +369,7 @@ import LineupEngine
         #expect(card.next == nil && card.problem == nil)
         #expect(!card.isOpen)                                                            // only the deletion is offered
         #expect(card.rounds.allSatisfy { !$0.offersAnswers && !$0.offersAccept })
-        #expect(card.heading.hasSuffix("Barnet · open"))
+        #expect(card.heading.hasSuffix("Barnet · sale · open"))
         #expect(earlier.asks.map(\.offersNoBid) == [false])
         #expect(earlier.line == "1 deal and 1 ask for players no longer marked")
     }
@@ -735,7 +736,7 @@ import LineupEngine
         #expect(seller.needsValue == nil && seller.general != nil)
         #expect(seller.asks.count == 1 && seller.asks.first?.offersNoBid == true)
         let deal = try #require(seller.deals.first)
-        #expect(seller.deals.count == 1 && deal.heading == "Barnet · open" && deal.isOpen)
+        #expect(seller.deals.count == 1 && deal.heading == "Barnet · sale · open" && deal.isOpen)
         #expect(deal.rounds.last?.offersAccept == true)
         #expect(deal.next?.terms != nil)
         let noValue = try #require(sheet.toSell.first { $0.valueText.isEmpty })

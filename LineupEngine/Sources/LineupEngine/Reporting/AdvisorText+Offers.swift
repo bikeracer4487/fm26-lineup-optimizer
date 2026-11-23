@@ -13,6 +13,8 @@ extension AdvisorText {
     public static let valueCaution = "Read it before you transfer-list him: once he is listed with an asking price, the game stores that price as his value (carried over from FM26, four players)."
     public static let startingPlaceMeans = "A starting place is Regular Starter or anything the game ranks above it, and First-Choice Goalkeeper for a goalkeeper."
     public static let nothingRecorded = "Nothing is recorded yet. Record what you propose and what clubs answer, and this part will say what your own offers show."
+    /// Said where loan terms would be worked out for a player who is out on loan already.
+    public static let outOnLoanAlready = "He is out on loan already, so only a sale can be worked out."
     public static let measureOffersAgainQuestion = "Measure again from today? Offers recorded before today stay in the record and are left out of what is measured. This cannot be undone in the app."
 
     // MARK: Names

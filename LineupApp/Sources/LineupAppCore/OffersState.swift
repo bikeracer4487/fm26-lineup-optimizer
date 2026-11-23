@@ -1,7 +1,8 @@
 import LineupEngine
 
-/// What the owner has typed for one player: his value with the day it was typed, and what his loan is for when he has
-/// switched it. Kept under his key, so it stays when his mark is taken off and is found again when he is marked again.
+/// What the owner has typed for one player: his value with the day it was typed, what his loan is for when he has
+/// switched it, and whether he chose sale or loan terms against his mark. Kept under his key, so it stays when his mark
+/// is taken off and is found again when he is marked again.
 public struct PlayerOffer: Equatable, Codable, Sendable {
     /// Nil when none is typed; 0 is a value.
     public var value: Int?
@@ -9,9 +10,12 @@ public struct PlayerOffer: Equatable, Codable, Sendable {
     public var valueDay: Day?
     /// Nil until the owner switches it; until then it follows his age (`AppModel.loanPurpose(for:)`).
     public var purpose: LoanPurpose?
+    /// The terms his block works out when the owner chose the kind his mark does not give; nil to follow the mark
+    /// (`AppModel.offerKind(for:)`). Absent in a file saved before the choice existed, which reads as nil.
+    public var kind: OfferKind?
 
-    public init(value: Int? = nil, valueDay: Day? = nil, purpose: LoanPurpose? = nil) {
-        self.value = value; self.valueDay = valueDay; self.purpose = purpose
+    public init(value: Int? = nil, valueDay: Day? = nil, purpose: LoanPurpose? = nil, kind: OfferKind? = nil) {
+        self.value = value; self.valueDay = valueDay; self.purpose = purpose; self.kind = kind
     }
 }
 

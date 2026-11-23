@@ -12,8 +12,44 @@ extension AppModel {
         Offers.measures(asks: offers.asks, deals: offers.deals, from: offers.measureFrom, parameters: planParameters)
     }
 
-    /// A sale for a player marked to sell, a loan for one marked to loan out, nil for one with no mark.
+    /// The terms his block works out, sale or loan: nil for a player with no mark; a sale when a loan cannot be worked
+    /// out for him (`loanRefusal(for:)`), whatever is saved; else the kind the owner chose (`setOfferKind`), else his
+    /// mark's (a sale for a player marked to sell, a loan for one marked to loan out). The owner asked on 22 November
+    /// 2026 to choose either for any marked player; the mark no longer sets the kind.
     public func offerKind(for player: PlayerID) -> OfferKind? {
+        guard let mark = markKind(for: player) else { return nil }
+        if loanRefusal(for: player) != nil { return .sale }
+        return offers.players[player]?.kind ?? mark
+    }
+
+    /// The engine's sentence on why loan terms cannot be worked out for him: he is on a youth contract
+    /// (`Removal.isOnYouthContract`), or he is out on loan already (as the squad book reads his loan with the club's
+    /// name); nil when they can, and for a player not in the squads.
+    public func loanRefusal(for player: PlayerID) -> String? {
+        guard let held = heldPlayer(player) else { return nil }
+        if Removal.isOnYouthContract(held) { return AdvisorText.youthContractNotLoaned }
+        switch squad.book.loanStatus(of: held, override: settings.clubOverride) {
+        case .loanedOut: return AdvisorText.outOnLoanAlready
+        case .own, .loanedIn: return nil
+        }
+    }
+
+    /// Chooses sale or loan terms for a marked player's block. The choice is saved with his value, as nil when it is
+    /// his mark's kind, so that the block follows his mark again. Saves the offers file and does not plan; nothing for a
+    /// player with no mark or not in the squads, for a loan when one cannot be worked out for him, or when the kind is
+    /// already shown.
+    public func setOfferKind(_ kind: OfferKind, for player: PlayerID) {
+        guard let mark = markKind(for: player), heldPlayer(player) != nil, kind != offerKind(for: player) else { return }
+        switch kind {
+        case .sale: break
+        case .loan: if loanRefusal(for: player) != nil { return }
+        }
+        offers.players[player, default: PlayerOffer()].kind = kind == mark ? nil : kind
+        save(.offers)
+    }
+
+    /// The kind his mark gives: a sale for a player marked to sell, a loan for one marked to loan out; nil with no mark.
+    private func markKind(for player: PlayerID) -> OfferKind? {
         switch marks[player] {
         case .toSell?: .sale
         case .toLoanOut?: .loan
@@ -89,25 +125,29 @@ extension AppModel {
         offers.clubs[PlayerID.normalise(name)]
     }
 
-    /// The player's open deal of his present kind with the club of this name, compared by `PlayerID.normalise`; nil
-    /// when there is none, or when he has no mark. A round recorded for him joins this deal.
-    public func openDeal(for player: PlayerID, club: String) -> OfferDeal? {
-        guard let kind = offerKind(for: player) else { return nil }
+    /// The player's open deal of `kind` (nil: the kind shown, `offerKind(for:)`) with the club of this name, compared
+    /// by `PlayerID.normalise`; nil when there is none, or when he has no mark. A round of that kind recorded for him
+    /// joins this deal.
+    public func openDeal(for player: PlayerID, club: String, kind: OfferKind? = nil) -> OfferDeal? {
+        guard let shown = offerKind(for: player) else { return nil }
+        let kind = kind ?? shown
         let key = PlayerID.normalise(club)
         return offers.deals.last {
             $0.player == player && $0.kind == kind && $0.state == .open && PlayerID.normalise($0.club) == key
         }
     }
 
-    /// Records terms asked of clubs in general, dated today in the game with his value and wage as they stand now. A
-    /// loan ask keeps what his loan is for, when nothing is saved, as `keepLoanPurpose` says.
-    /// Refused, with the engine's sentence and nothing saved, when he has no value typed or the terms are not good
-    /// terms of his kind; nothing for a player with no mark or not in the squads, or within `offersActionInterval` of
-    /// the last recording. Saves the offers file and does not plan.
-    @discardableResult public func recordAsk(for player: PlayerID, terms: OfferTerms) -> String? {
+    /// Records terms of `kind` (nil: the kind shown, `offerKind(for:)`) asked of clubs in general, dated today in the
+    /// game with his value and wage as they stand now. A loan ask keeps what his loan is for, when nothing is saved, as
+    /// `keepLoanPurpose` says.
+    /// Refused, with the engine's sentence and nothing saved, for a loan when one cannot be worked out for him
+    /// (`loanRefusal(for:)`), when he has no value typed, or when the terms are not good terms of that kind; nothing for
+    /// a player with no mark or not in the squads, or within `offersActionInterval` of the last recording. Saves the
+    /// offers file and does not plan.
+    @discardableResult public func recordAsk(for player: PlayerID, terms: OfferTerms, kind: OfferKind? = nil) -> String? {
         offersAction {
             let subject: RecordSubject
-            switch recordSubject(player, terms: terms) {
+            switch recordSubject(player, terms: terms, kind: kind) {
             case .refused(let sentence): return sentence
             case .nothing: return nil
             case .ready(let ready): subject = ready
@@ -134,16 +174,17 @@ extension AppModel {
         }
     }
 
-    /// Records a round with the club of this name, dated today in the game with his value and wage as they stand now.
-    /// It joins his open deal of the same kind with that club (`openDeal(for:club:)`), or opens one, which keeps the
-    /// club's figures as entered now (nil when no figure is). A round of the club's after one of the owner's leaves that
-    /// round's answer as it is. A loan round keeps what his loan is for as a loan ask does. Refused as `recordAsk` is; nothing, too, for a blank club name. Saves the offers file
-    /// and does not plan.
+    /// Records a round of `kind` (nil: the kind shown) with the club of this name, dated today in the game with his
+    /// value and wage as they stand now. It joins his open deal of that kind with that club
+    /// (`openDeal(for:club:kind:)`), or opens one, which keeps the club's figures as entered now (nil when no figure
+    /// is). A round of the club's after one of the owner's leaves that round's answer as it is. A loan round keeps what
+    /// his loan is for as a loan ask does. Refused as `recordAsk` is; nothing, too, for a blank club name. Saves the
+    /// offers file and does not plan.
     @discardableResult public func recordRound(for player: PlayerID, club: String, by: RoundBy,
-                                               terms: OfferTerms) -> String? {
+                                               terms: OfferTerms, kind: OfferKind? = nil) -> String? {
         offersAction {
             let subject: RecordSubject
-            switch recordSubject(player, terms: terms) {
+            switch recordSubject(player, terms: terms, kind: kind) {
             case .refused(let sentence): return sentence
             case .nothing: return nil
             case .ready(let ready): subject = ready
@@ -152,7 +193,7 @@ extension AppModel {
             guard !name.isEmpty else { return nil }
             let round = OfferRound(day: settings.currentDate, by: by, terms: terms, value: subject.value,
                                    wagePerWeek: subject.wagePerWeek, answer: nil)
-            if let open = openDeal(for: player, club: name),
+            if let open = openDeal(for: player, club: name, kind: subject.kind),
                let index = offers.deals.firstIndex(where: { $0.id == open.id }) {
                 offers.deals[index].rounds.append(round)
             } else {
@@ -258,10 +299,15 @@ extension AppModel {
         case nothing
     }
 
-    /// Whether terms can be recorded for the player: he is marked and in the squads, has a value, and the terms pass
-    /// `Offers.check` for his kind.
-    private func recordSubject(_ player: PlayerID, terms: OfferTerms) -> RecordCheck {
-        guard let kind = offerKind(for: player), let held = heldPlayer(player) else { return .nothing }
+    /// Whether terms of `kind` (nil: the kind shown) can be recorded for the player: he is marked and in the squads, a
+    /// loan can be worked out for him when it is a loan, he has a value, and the terms pass `Offers.check` for the kind.
+    private func recordSubject(_ player: PlayerID, terms: OfferTerms, kind asked: OfferKind?) -> RecordCheck {
+        guard let shown = offerKind(for: player), let held = heldPlayer(player) else { return .nothing }
+        let kind = asked ?? shown
+        switch kind {
+        case .sale: break
+        case .loan: if let refusal = loanRefusal(for: player) { return .refused(refusal) }
+        }
         guard let value = offers.players[player]?.value else {
             return .refused(ErrorDescriptions.describe(OfferError.missing(.value, club: nil)))
         }

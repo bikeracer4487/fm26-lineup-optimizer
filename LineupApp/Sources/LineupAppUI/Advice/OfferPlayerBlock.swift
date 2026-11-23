@@ -2,7 +2,9 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// One marked player: his name over what is known of him, with the menu of what his loan is for beside it; his value,
+/// One marked player: his name over what is known of him, with the control for sale or loan terms beside it, the menu of
+/// what his loan is for beside that when it shows loan terms, and the engine's sentence under them when only a sale can
+/// be worked out; his value,
 /// typed straight into the model, with the hint, the day it was entered and the caution; the terms to ask of clubs in
 /// general with "Record this ask", and his asks; "To a club", the club's name and its four figures, then the terms for
 /// it, or the sentence naming the figure they need, or the line saying his open deal there is below; then his deals.
@@ -19,7 +21,7 @@ struct OfferPlayerBlockView: View {
             WrappingRow(alignment: .top, spacing: Theme.Spacing.l) {
                 identity
             } trailing: {
-                purposeMenu
+                kindControl
             }
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
                 value
@@ -53,7 +55,25 @@ struct OfferPlayerBlockView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// What his loan is for, as a menu; nothing for a sale.
+    /// Sale terms or loan terms, from Core's choices, with the loan's purpose menu beside it and the sentence under it.
+    private var kindControl: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            HStack(alignment: .center, spacing: Theme.Spacing.m) {
+                BoardTabs(choices: block.kindChoices.map { ($0.kind, $0.title) },
+                          selection: Binding(get: { block.kind }, set: { model.setOfferKind($0, for: block.id) }))
+                purposeMenu
+            }
+            if let note = block.kindNote {
+                Text(note)
+                    .font(Theme.Typeface.text(Theme.TypeSize.small))
+                    .foregroundStyle(Theme.Colour.mutedInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: Theme.Layout.readingWidth, alignment: .leading)
+            }
+        }
+    }
+
+    /// What his loan is for, as a menu; nothing while his block shows sale terms.
     @ViewBuilder private var purposeMenu: some View {
         if let purpose = block.purpose {
             Picker(OffersPresentation.loanPurposeLabel, selection: Binding(
@@ -246,7 +266,7 @@ struct OfferDealCardView: View {
                 HStack(alignment: .center, spacing: Theme.Spacing.s) {
                     RecordButtons { purpose in
                         actions.open(model.offerDraft(for: card.player, club: card.club, purpose: purpose,
-                                                      filledWith: card.next?.terms))
+                                                      filledWith: card.next?.terms, kind: card.kind))
                     }
                     Button(OffersPresentation.endTitle) { model.endDeal(card.id) }
                         .buttonStyle(.secondary)
