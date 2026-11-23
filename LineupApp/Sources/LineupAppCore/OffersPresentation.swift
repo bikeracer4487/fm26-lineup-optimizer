@@ -32,6 +32,9 @@ public struct OfferRoundRow: Equatable, Sendable {
 /// One deal with one club: its heading, its rounds and, while it is open, the next step.
 public struct OfferDealCard: Identifiable, Equatable, Sendable {
     public var id: UUID
+    /// The player and the club the deal is with, as recorded: what a "Record…" button opens the sheet for.
+    public var player: PlayerID
+    public var club: String
     /// "Barnet · open", "Barnet · agreed", "Barnet · ended"; under "Earlier offers" the player's name first,
     /// "Sam Reed · Barnet · ended", since the card no longer stands under him.
     public var heading: String
@@ -88,6 +91,20 @@ public struct OfferPlayerBlock: Identifiable, Equatable, Sendable {
     public var clubHasOpenDeal: String?
     /// His deals of his kind: open ones first, then by the day of their last round, latest first.
     public var deals: [OfferDealCard]
+
+    /// "Record my proposal" and "Record their bid" are offered in his "To a club" row: a club is named, with no open
+    /// deal there (its card offers them), and he has a value and usable parameters, so there are terms for it or the
+    /// sentence naming the figure they need. A round needs no club figure, so it can be recorded with that sentence
+    /// showing; the sheet then opens blank.
+    public var offersClubRecording: Bool {
+        clubHasOpenDeal == nil && (clubBlock != nil || clubProblem != nil)
+    }
+
+    /// The four figures are offered once a club is named: they are entered for that club, and with no name nothing
+    /// typed in them could be kept.
+    public var showsClubFields: Bool {
+        !clubName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 /// The deals and asks of players no longer marked with their kind, under a line saying how many.
@@ -119,6 +136,9 @@ public struct OffersSheet: Equatable, Sendable {
     public var measuredFrom: String?
     /// "Measure again from today" is offered once anything is recorded.
     public var offersMeasureAgain: Bool
+
+    /// The line with the day measured from and "Measure again from today" is shown when it holds either.
+    public var showsMeasuredLine: Bool { measuredFrom != nil || offersMeasureAgain }
     /// Nil when every deal and ask is for a player marked with its kind.
     public var earlier: EarlierOffers?
     public var evidenceNote: [String]
@@ -221,6 +241,13 @@ public struct OfferRoundDraft: Equatable, Sendable, Identifiable {
         }
     }
 
+    /// Whether the sheet asks the playing time: for a loan for his development, or any loan whose terms carry one. A loan
+    /// to move his wage asks none, and the engine reads none from its rounds, so its sheet leaves the menu out rather
+    /// than show it with nothing chosen.
+    public var showsPlayingTime: Bool {
+        kind == .loan && (loanPurpose == .development || playingTime != nil)
+    }
+
     /// "Record this ask", "Record my proposal", "Record their bid".
     public var title: String {
         switch purpose {
@@ -272,6 +299,26 @@ public enum OffersPresentation {
     public static let shownHeading = "What your offers have shown"
     public static let measureAgainTitle = "Measure again from today"
     public static let earlierHeading = "Earlier offers"
+    public static let measureAgainConfirm = "Measure again"
+    /// The club's name in a player's "To a club" row, before anything is typed.
+    public static let clubPrompt = "Club"
+    /// The sheet's fields: a sale's, then a loan's.
+    public static let feeNowLabel = "Now"
+    public static let feeLaterLabel = "Later"
+    public static let nextFeeLabel = "Share of next fee, %"
+    public static let wagePercentLabel = "Share of his wage, %"
+    public static let feePerMonthLabel = "Fee a month"
+    public static let playingTimeLabel = "Playing time"
+    public static let recallLabel = "Recall kept"
+    public static let futureFeeLabel = "Fee to buy him later"
+    public static let loanPurposeLabel = "What the loan is for"
+
+    /// The playing time's menu in the sheet, in the engine's names.
+    public static let playingTimeChoices: [(value: PlayingTime, title: String)] =
+        PlayingTime.allCases.map { ($0, AdvisorText.name($0)) }
+    /// What a loan is for, as the menu by a loanee's name gives it, in the engine's names.
+    public static let loanPurposeChoices: [(value: LoanPurpose, title: String)] =
+        LoanPurpose.allCases.map { ($0, AdvisorText.name($0)) }
     /// Asked before a deal or an ask is deleted.
     public static let deleteDealQuestion = "Delete this deal and its rounds from the record?"
     public static let deleteAskQuestion = "Delete this ask from the record?"
@@ -415,6 +462,14 @@ extension AppModel {
                                loanPurpose: kind == .loan ? loanPurpose(for: player) : nil, filledWith: terms)
     }
 
+    /// The line under the sheet's title saying whose round it is: "Josh Ashby · Barnet", or his name alone for an ask;
+    /// blank for a player not in the squads.
+    public func offerEditorLine(_ draft: OfferRoundDraft) -> String {
+        let club = draft.club.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ([heldPlayer(draft.player)?.name, club.isEmpty ? nil : club] as [String?]).compactMap { $0 }
+            .joined(separator: " · ")
+    }
+
     /// Records the sheet: an ask, or a round of the owner's or the club's. Refused with the engine's sentence, a blank
     /// field the kind needs first, and nothing saved then; ignored, with nothing saved and nothing to say, as
     /// `recordAsk` and `recordRound` ignore it (a second click within `offersActionInterval`, a blank club, a player with
@@ -546,7 +601,8 @@ extension AppModel {
         }
         let heading = ((live ? [] : [deal.playerName]) + [deal.club, OffersPresentation.stateWord(state)])
             .joined(separator: " · ")
-        return OfferDealCard(id: deal.id, heading: heading, rounds: rounds, next: next, problem: problem, isOpen: open)
+        return OfferDealCard(id: deal.id, player: deal.player, club: deal.club, heading: heading, rounds: rounds,
+                             next: next, problem: problem, isOpen: open)
     }
 
     private func suggestionBlock(_ suggestion: OfferSuggestion, kind: OfferKind, subject: OfferSubject, club: String?,

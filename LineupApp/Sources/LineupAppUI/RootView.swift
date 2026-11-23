@@ -35,10 +35,12 @@ public struct RootView: View {
     ///     opens with.
     ///   - scoutingStart: the tab and the order the Scouting screen opens with, and whether every candidate's row, the
     ///     rest part, every group's "more players" line and the hidden players' list are open.
+    ///   - offersStart: the clubs typed in the Offers screen's "To a club" rows, and whether "Earlier offers" is open.
     public init(model: AppModel, showing screen: Screen = .squad, tacticSlot: TacticSlot? = nil,
                 matchStart: MatchStart = MatchStart(), elevensStart: ElevensStart = ElevensStart(),
                 removalStart: RemovalStart = RemovalStart(), fixturesStart: FixturesStart = FixturesStart(),
-                trainingStart: TrainingStart = TrainingStart(), scoutingStart: ScoutingStart = ScoutingStart()) {
+                trainingStart: TrainingStart = TrainingStart(), scoutingStart: ScoutingStart = ScoutingStart(),
+                offersStart: OffersStart = OffersStart()) {
         self.model = model
         self.tacticSlot = tacticSlot
         var selection: PickSelection?
@@ -70,6 +72,8 @@ public struct RootView: View {
         if scoutingStart.allOpen || scoutingStart.hiddenOpen {
             navigation.scoutingHiddenOpen = true
         }
+        navigation.offerClub = offersStart.clubs
+        navigation.offersEarlierOpen = offersStart.earlierOpen
         _navigation = State(initialValue: navigation)
     }
 
@@ -123,7 +127,7 @@ struct ScreenView: View {
         case .training: TrainingScreen(model: model, navigation: navigation)
         case .removal: RemovalScreen(model: model, navigation: navigation)
         case .scouting: ScoutingScreen(model: model, navigation: navigation)
-        case .offers: EmptyView()   // drawn by the next task
+        case .offers: OffersScreen(model: model, navigation: navigation)
         case .settings: SettingsScreen(model: model)
         }
     }

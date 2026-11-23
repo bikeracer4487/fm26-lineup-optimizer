@@ -733,6 +733,36 @@ public enum Theme {
         public static let cautionGap: CGFloat = 20
     }
 
+    // MARK: Offers
+
+    /// The Offers screen: each marked player's block, his deal cards, and the sheet a round is recorded in.
+    public enum Offers {
+        /// The space between the screen's parts: the two lists of players, what the offers have shown, earlier offers.
+        public static let partGap: CGFloat = 32
+        /// Between one player's block and the next.
+        public static let blockGap: CGFloat = 28
+        /// The screen is no wider than this, so a suggestion's buttons stay near its words on a wide window.
+        public static let columnMaximumWidth: CGFloat = 940
+        /// How far a player's parts sit in from his name, so they read as his.
+        public static let partIndent: CGFloat = 16
+        /// The most lines a player's name wraps to.
+        public static let nameLines = 2
+        /// His value, and each of a club's figures: room for seven digits.
+        public static let amountFieldWidth: CGFloat = 112
+        /// The club's name in his "To a club" row.
+        public static let clubFieldWidth: CGFloat = 220
+        /// Between one club figure, with its label, and the next on their row.
+        public static let figureGap: CGFloat = 20
+        /// A deal's card: room for a round's sentence at the reading width and the card's padding, so its "Delete"
+        /// stays near its heading on a wide window.
+        public static let cardMaximumWidth: CGFloat = 640
+        /// The sheet a round is recorded in: as wide as the fixture editor, its fields in a column after their labels.
+        public static let editorWidth: CGFloat = Layout.fixtureEditorWidth
+        public static let editorFieldWidth: CGFloat = 140
+        /// The picture of the sheet on its own: the sheet and the board round it.
+        public static let editorPicture = CGSize(width: 600, height: 520)
+    }
+
     // MARK: League
 
     /// The League screen: the three numbers, and the table's columns and rules.

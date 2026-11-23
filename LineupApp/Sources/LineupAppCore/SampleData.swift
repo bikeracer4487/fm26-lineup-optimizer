@@ -580,6 +580,92 @@ public enum SampleData {
         return model
     }
 
+    // MARK: Offers
+
+    /// The first-team player the offers sample marks to sell with a value, an ask and a deal with Barnet.
+    public static let offerSellerName = "Josh Ashby"
+    /// The first-team player of 23 the offers sample marks to loan out, so his loan is for his development.
+    public static let offerLoaneeName = "Ewan Clark"
+    /// The first-team player the offers sample marks to sell with no value.
+    public static let offerNoValueName = "Canice Carroll"
+    /// The first-team player the measured sample records ten sale deals for, then takes his mark off.
+    static let offerMeasuredName = "Dillon De Silva"
+    /// The club of the sample's open deal.
+    public static let offerDealClub = "Barnet"
+
+    /// The sample model with three first-team players marked, as the owner marks them, and offers recorded through the
+    /// model's own actions: Josh Ashby to sell, his value £40,000, the terms the screen suggests asked of clubs in general
+    /// with no bid yet, and a deal with Barnet in which his proposal of £40,000 was refused and Barnet then bid £8,000
+    /// now; Ewan Clark to loan out, his value £30,000; and Canice Carroll to sell, with no value. The scripted clock
+    /// moves a second at each reading, so no recording is taken for a double click.
+    @MainActor public static func modelWithOffers(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        try recordSampleOffers(in: model)
+        return model
+    }
+
+    /// The offers sample with ten sale deals recorded for Dillon De Silva, his value £10,000, before his mark was taken
+    /// off: in five a club bid £2,200 now, and in five his proposal of £8,000 now was refused, each with a club of its
+    /// own and ended. They stand under "Earlier offers" and give a line of 51% of value, which every sale's terms then
+    /// use.
+    @MainActor public static func modelWithMeasuredOffers(repositoryRoot: URL) throws -> AppModel {
+        let model = try build(repositoryRoot: repositoryRoot).model
+        let measured = try player(named: offerMeasuredName, in: model)
+        model.setMark(.toSell, for: measured)
+        model.setOfferValue(text: "10000", for: measured)
+        let clubs = ["Hendon", "Wealdstone", "Slough Town", "Hungerford Town", "Chesham United", "Bath City",
+                     "Chippenham Town", "Dorking Wanderers", "Farnborough", "Hampton & Richmond Borough"]
+        for (index, club) in clubs.enumerated() {
+            let paid = index < 5
+            let refusal = model.recordRound(for: measured, club: club, by: paid ? .club : .owner,
+                                            terms: .sale(SaleTerms(now: paid ? 2_200 : 8_000, later: 0, nextFeePercent: 0)))
+            guard refusal == nil, let deal = model.openDeal(for: measured, club: club) else {
+                throw SampleDataError(description: "The sample deal with \(club) was not recorded: \(refusal ?? "ignored").")
+            }
+            if !paid { model.answer(.refused, deal: deal.id) }
+            model.endDeal(deal.id)
+        }
+        model.setMark(nil, for: measured)
+        guard model.offers.deals.count == clubs.count, model.offerMeasures.sale.line != nil else {
+            throw SampleDataError(description: "The sample's ten sale deals give no line.")
+        }
+        try recordSampleOffers(in: model)
+        return model
+    }
+
+    /// Marks the offers sample's three players and records what `modelWithOffers` says.
+    @MainActor private static func recordSampleOffers(in model: AppModel) throws {
+        let seller = try player(named: offerSellerName, in: model)
+        let loanee = try player(named: offerLoaneeName, in: model)
+        let noValue = try player(named: offerNoValueName, in: model)
+        model.setMark(.toSell, for: seller)
+        model.setMark(.toLoanOut, for: loanee)
+        model.setMark(.toSell, for: noValue)
+        model.setOfferValue(text: "40000", for: seller)
+        model.setOfferValue(text: "30000", for: loanee)
+        guard let general = model.offersSheet(clubs: [:]).toSell.first(where: { $0.id == seller })?.general?.terms else {
+            throw SampleDataError(description: "The sample gives \(offerSellerName) no terms to ask.")
+        }
+        let asked = model.recordAsk(for: seller, terms: general)
+        let proposed = model.recordRound(for: seller, club: offerDealClub, by: .owner,
+                                         terms: .sale(SaleTerms(now: 40_000, later: 0, nextFeePercent: 20)))
+        if let deal = model.openDeal(for: seller, club: offerDealClub) { model.answer(.refused, deal: deal.id) }
+        let bid = model.recordRound(for: seller, club: offerDealClub, by: .club,
+                                    terms: .sale(SaleTerms(now: 8_000, later: 0, nextFeePercent: 0)))
+        guard asked == nil, proposed == nil, bid == nil, model.offers.asks.filter({ $0.player == seller }).count == 1,
+              model.openDeal(for: seller, club: offerDealClub)?.rounds.map(\.by) == [.owner, .club] else {
+            throw SampleDataError(description: "The sample's ask and deal for \(offerSellerName) were not recorded.")
+        }
+    }
+
+    /// The key of the first-team player of this name in the sample.
+    @MainActor private static func player(named name: String, in model: AppModel) throws -> PlayerID {
+        guard let player = model.squad.book.current[.firstTeam]?.first(where: { $0.name == name }) else {
+            throw SampleDataError(description: "The sample's first team has no \(name).")
+        }
+        return player.id
+    }
+
     /// The sample candidates, as a paste of them is held.
     static func sampleCandidates(repositoryRoot: URL) throws -> ScoutingPaste {
         var text = String(decoding: try fixture("captures/u21.tsv", under: repositoryRoot), as: UTF8.self)

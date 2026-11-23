@@ -177,6 +177,22 @@
 //                                              and for a side within the margin in a fixture the table speaks for,
 //                                              whose suggestion carries the table's base and the battling line
 //                                              ("fixtures-editor-league-battling-…").
+//                                              The Offers screen is drawn with nobody marked ("offers-empty-…");
+//                                              with two players marked to sell, one with a value, an ask and a
+//                                              deal with Barnet whose last round is Barnet's bid, one with no
+//                                              value, and one marked to loan out, tall enough for the three
+//                                              blocks and the foot ("offers-…"); with Barnet typed for the player
+//                                              marked to sell with no deal, given a value, and a budget that
+//                                              covers the whole fee ("offers-club-all-…"), that leaves part of it
+//                                              for later ("offers-club-…") and that is nothing
+//                                              ("offers-nothing-now-…"); with the loan switched to moving his
+//                                              wage and a club typed for it ("offers-loan-wage-…"); with ten sale
+//                                              deals recorded for a player no longer marked, so a line is measured
+//                                              ("offers-measured-…"); with the first seller's mark taken off and
+//                                              "Earlier offers" open ("offers-earlier-…"); and in the smallest
+//                                              window ("offers-small-…"). Its sheet is drawn on its own, for a
+//                                              proposal in the Barnet deal ("offers-editor-sale-…") and for the
+//                                              loan's ask ("offers-editor-loan-…").
 //                                              Every screen is drawn again in a narrow window, 800 by 700
 //                                              ("<screen>-narrow-…"), and Match Selection, Tactics, Fixtures
 //                                              and the advisor screens in the smallest window
@@ -247,6 +263,7 @@ enum SampleState {
     case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
     case arrowsRead, harmfulArrow, noInfluence, regrouping, spentGroup, endedGroup, youngPlayers
     case candidates, refusedCandidates, crowdedCandidates, hiddenCandidates
+    case offers, offersMeasured
     case league, leagueNoFormat, leagueRefused, leagueStale, leagueByHand
     case fallingTrends, risingTrends, beforeTrends, restedBeforeLine
 }
@@ -303,6 +320,8 @@ enum SampleState {
         case .refusedCandidates: return try SampleData.modelWithRefusedCandidates(repositoryRoot: url)
         case .crowdedCandidates: return try SampleData.modelWithCrowdedGroup(repositoryRoot: url)
         case .hiddenCandidates: return try SampleData.modelWithHiddenCandidates(repositoryRoot: url)
+        case .offers: return try SampleData.modelWithOffers(repositoryRoot: url)
+        case .offersMeasured: return try SampleData.modelWithMeasuredOffers(repositoryRoot: url)
         case .fallingTrends: return try SampleData.modelWithFallingTrends(repositoryRoot: url)
         case .risingTrends: return try SampleData.modelWithRisingTrends(repositoryRoot: url)
         case .beforeTrends: return try SampleData.modelBeforeTrends(repositoryRoot: url)
@@ -695,6 +714,76 @@ let narrowWindow = CGSize(width: 800, height: 700)
                              screens: [.scouting])
 }
 
+/// The key of the sample's player of this name, or the reason the pictures stop.
+@MainActor func samplePlayer(_ name: String, in model: AppModel) -> PlayerID {
+    guard let player = model.players.first(where: { $0.name == name }) else { fail("The sample has no \(name).") }
+    return player.id
+}
+
+/// The Offers screen and its sheet: see the usage at the top.
+@MainActor func drawOffers(_ root: String, to directory: URL, size: CGSize) throws {
+    // Tall enough for the three players' blocks, what the offers have shown and the evidence note; taller with a club's
+    // figures and terms in a block; shorter with the first seller's block moved under "Earlier offers".
+    let tall = CGSize(width: size.width, height: size.height * 2.9)
+    let taller = CGSize(width: size.width, height: size.height * 3.4)
+    let shorter = CGSize(width: size.width, height: size.height * 2.3)
+    try ScreenPictures.write(model: sampleModel(root), to: directory, size: size, variant: "empty", screens: [.offers])
+    try ScreenPictures.write(model: sampleModel(root, .offers), to: directory, size: tall, variant: nil, screens: [.offers])
+
+    // Barnet typed for the player marked to sell with no deal, given a value, with a budget that covers the whole fee,
+    // part of it, and none of it. The club's wage figures are entered too, so all four fields show a figure.
+    for (variant, budget) in [("club-all", "60000"), ("club", "15000"), ("nothing-now", "0")] {
+        let model = sampleModel(root, .offers)
+        let player = samplePlayer(SampleData.offerNoValueName, in: model)
+        model.setOfferValue(text: "25000", for: player)
+        let club = SampleData.offerDealClub
+        model.setClubFigure(.transferBudget, text: budget, club: club)
+        model.setClubFigure(.wageBudget, text: "9000", club: club)
+        model.setClubFigure(.wagesSpent, text: "8200", club: club)
+        model.setClubFigure(.highestWage, text: "900", club: club)
+        try ScreenPictures.write(model: model, to: directory, size: taller, variant: variant, screens: [.offers],
+                                 offersStart: OffersStart(clubs: [player: club]))
+    }
+
+    // The loan switched to moving his wage, with a club typed for it whose wage figures are entered.
+    let wage = sampleModel(root, .offers)
+    let loanee = samplePlayer(SampleData.offerLoaneeName, in: wage)
+    wage.setLoanPurpose(.wage, for: loanee)
+    wage.setClubFigure(.wageBudget, text: "6000", club: "Wealdstone")
+    wage.setClubFigure(.wagesSpent, text: "5600", club: "Wealdstone")
+    wage.setClubFigure(.highestWage, text: "700", club: "Wealdstone")
+    try ScreenPictures.write(model: wage, to: directory, size: taller, variant: "loan-wage", screens: [.offers],
+                             offersStart: OffersStart(clubs: [loanee: "Wealdstone"]))
+
+    try ScreenPictures.write(model: sampleModel(root, .offersMeasured), to: directory, size: tall, variant: "measured",
+                             screens: [.offers])
+
+    // The first seller's mark taken off: his deal and his ask move under "Earlier offers", opened.
+    let earlier = sampleModel(root, .offers)
+    earlier.setMark(nil, for: samplePlayer(SampleData.offerSellerName, in: earlier))
+    try ScreenPictures.write(model: earlier, to: directory, size: shorter, variant: "earlier", screens: [.offers],
+                             offersStart: OffersStart(earlierOpen: true))
+
+    try ScreenPictures.write(model: sampleModel(root, .offers), to: directory, size: Theme.Layout.minimumWindow,
+                             variant: "small", screens: [.offers])
+
+    // The sheet for the owner's proposal in the Barnet deal, filled with the next step; and for the loan's ask.
+    let offers = sampleModel(root, .offers)
+    let seller = samplePlayer(SampleData.offerSellerName, in: offers)
+    let sheet = offers.offersSheet(clubs: [:])
+    guard let deal = sheet.toSell.first(where: { $0.id == seller })?.deals.first,
+          let sale = offers.offerDraft(for: seller, club: deal.club, purpose: .mine, filledWith: deal.next?.terms) else {
+        fail("The offers sample has no deal for \(SampleData.offerSellerName).")
+    }
+    try ScreenPictures.writeOfferEditor(model: offers, draft: sale, to: directory, name: "offers-editor-sale")
+    let loanID = samplePlayer(SampleData.offerLoaneeName, in: offers)
+    guard let general = sheet.toLoanOut.first(where: { $0.id == loanID })?.general,
+          let loan = offers.offerDraft(for: loanID, club: "", purpose: .ask, filledWith: general.terms) else {
+        fail("The offers sample has no terms for \(SampleData.offerLoaneeName).")
+    }
+    try ScreenPictures.writeOfferEditor(model: offers, draft: loan, to: directory, name: "offers-editor-loan")
+}
+
 /// Draws the pictures and returns the process's exit status.
 @MainActor func drawPictures(to path: String, sampleDataRoot: String?) -> Int32 {
     do {
@@ -713,7 +802,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
         if let root = sampleDataRoot {
             // The left back has the most reasons in the first fixture.
             try ScreenPictures.write(model: sampleModel(root), to: directory, size: size,
-                                     screens: Screen.allCases.filter { ![.tactics, .training, .fixtures, .scouting].contains($0) },
+                                     screens: Screen.allCases.filter { ![.tactics, .training, .fixtures, .scouting, .offers].contains($0) },
                                      matchStart: MatchStart(slot: .D_L))
             // With an unsaved change, the left inside forward made a winger and selected, so the role menu,
             // "Remove", what he becomes and the marks for unsaved changes are all shown.
@@ -743,6 +832,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
             try drawRemoval(root, to: directory, size: size)
             try drawScouting(root, to: directory, size: size)
             try drawLeague(root, to: directory, size: size)
+            try drawOffers(root, to: directory, size: size)
         } else {
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size)
         }

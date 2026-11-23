@@ -210,8 +210,9 @@ private struct CandidateIdentity: View {
     }
 }
 
-/// The line the rest part is closed behind: how many are in it, a click opening or closing it.
-private struct RestToggle: View {
+/// The line the rest part is closed behind: how many are in it, a click opening or closing it. The Offers screen's
+/// earlier offers are closed behind one too.
+struct RestToggle: View {
     let line: String
     let isOpen: Bool
     let toggle: () -> Void

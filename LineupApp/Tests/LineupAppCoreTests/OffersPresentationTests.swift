@@ -201,6 +201,7 @@ import LineupEngine
         let card = try #require(try block(sheet(s.t), s.seller).deals.first)
         #expect(card.heading == "Barnet · open")
         #expect(card.isOpen)
+        #expect(card.player == s.seller && card.club == "Barnet")
         let round = try #require(s.model.offers.deals.first?.rounds.first)
         #expect(card.rounds.map(\.line) == [AdvisorText.roundLine(round, club: "Barnet", money: s.model.squad.book.moneyStyle)])
         let next = try #require(card.next)
@@ -363,6 +364,7 @@ import LineupEngine
         #expect(sheet.sales.isEmpty && sheet.loans.isEmpty && sheet.counterStep == nil)
         #expect(!sheet.offersMeasureAgain)
         #expect(sheet.measuredFrom == nil)
+        #expect(!sheet.showsMeasuredLine)
     }
 
     @Test func recordedDealsGiveTheEnginesLinesAndOfferMeasureAgain() throws {
@@ -377,6 +379,7 @@ import LineupEngine
         #expect(sheet.counterStep == AdvisorText.counterStepLine(measures, rules: rules))
         #expect(sheet.offersMeasureAgain)
         #expect(sheet.measuredFrom == nil)
+        #expect(sheet.showsMeasuredLine)
         moveDate(s.t, by: 1)
         s.model.measureOffersAgain()
         sheet = self.sheet(s.t)
@@ -611,6 +614,92 @@ import LineupEngine
         _ = sheet(s.t, clubs: [s.seller: "Wealdstone"])
         #expect(try ScoutingSetup.storeFiles(s.t) == files)
         #expect(s.model.timesPlanned == planned && s.model.offers == offers)
+    }
+
+    // MARK: The sample data the pictures are drawn from
+
+    @Test func theSampleOffersHoldAPlayerOfEachKindADealWithABidAndAnAsk() throws {
+        let model = try SampleData.modelWithOffers(repositoryRoot: Captures.repositoryRoot)
+        let sheet = model.offersSheet(clubs: [:])
+        #expect(sheet.nobodyMarked == nil)
+        #expect(sheet.toSell.count == 2 && sheet.toLoanOut.count == 1)
+        let seller = try #require(sheet.toSell.first { !$0.valueText.isEmpty })
+        #expect(seller.needsValue == nil && seller.general != nil)
+        #expect(seller.asks.count == 1 && seller.asks.first?.offersNoBid == true)
+        let deal = try #require(seller.deals.first)
+        #expect(seller.deals.count == 1 && deal.heading == "Barnet · open" && deal.isOpen)
+        #expect(deal.rounds.last?.offersAccept == true)
+        #expect(deal.next?.terms != nil)
+        let noValue = try #require(sheet.toSell.first { $0.valueText.isEmpty })
+        #expect(noValue.needsValue == "Enter his value to get terms.")
+        #expect(noValue.deals.isEmpty && noValue.asks.isEmpty)
+        let loanee = try #require(sheet.toLoanOut.first)
+        #expect(!loanee.valueText.isEmpty && loanee.general != nil)
+        #expect(loanee.purpose == .development)
+        #expect(sheet.earlier == nil)
+        #expect(sheet.offersMeasureAgain)
+    }
+
+    @Test func theMeasuredSampleGivesASaleLine() throws {
+        let model = try SampleData.modelWithMeasuredOffers(repositoryRoot: Captures.repositoryRoot)
+        #expect(model.offerMeasures.sale.line != nil)
+        let sheet = model.offersSheet(clubs: [:])
+        #expect(sheet.toSell.count == 2 && sheet.toLoanOut.count == 1)
+        #expect(sheet.earlier?.deals.count == 10)
+        #expect(sheet.earlier?.deals.allSatisfy { $0.heading.hasSuffix("ended") } == true)
+    }
+
+    // MARK: What the screen offers
+
+    @Test func aClubWithNoOpenDealOffersRecordingWithOrWithoutTerms() throws {
+        let s = try ready()
+        // No value: nothing can be recorded, so nothing is offered.
+        #expect(!(try block(sheet(s.t, clubs: [s.seller: "Barnet"]), s.seller)).offersClubRecording)
+        s.model.setOfferValue(text: "40000", for: s.seller)
+        // No club typed: nothing to record, and no figures to enter.
+        #expect(!(try block(sheet(s.t), s.seller)).offersClubRecording)
+        #expect(!(try block(sheet(s.t), s.seller)).showsClubFields)
+        #expect(!(try block(sheet(s.t, clubs: [s.seller: "  "]), s.seller)).showsClubFields)
+        #expect(try block(sheet(s.t, clubs: [s.seller: "Barnet"]), s.seller).showsClubFields)
+        // A club with no figures: its problem, and a bid or a proposal can still be recorded.
+        let problem = try block(sheet(s.t, clubs: [s.seller: "Barnet"]), s.seller)
+        #expect(problem.clubProblem != nil && problem.offersClubRecording)
+        s.model.setClubFigure(.transferBudget, text: "35000", club: "Barnet")
+        #expect(try block(sheet(s.t, clubs: [s.seller: "Barnet"]), s.seller).offersClubRecording)
+        // An open deal there takes its rounds below, in its card.
+        s.model.recordRound(for: s.seller, club: "Barnet", by: .club, terms: Self.sale(8_000))
+        let open = try block(sheet(s.t, clubs: [s.seller: "Barnet"]), s.seller)
+        #expect(open.clubHasOpenDeal != nil && !open.offersClubRecording)
+        #expect(open.showsClubFields)
+    }
+
+    @Test func theSheetSaysWhoseRoundItIs() throws {
+        let s = try ready()
+        let name = try player(s.seller, s.model).name
+        let round = try #require(s.model.offerDraft(for: s.seller, club: " Barnet ", purpose: .theirs, filledWith: nil))
+        #expect(s.model.offerEditorLine(round) == "\(name) · Barnet")
+        let ask = try #require(s.model.offerDraft(for: s.seller, club: "", purpose: .ask, filledWith: nil))
+        #expect(s.model.offerEditorLine(ask) == name)
+        let gone = OfferRoundDraft(player: PlayerID(key: "fmrte:999999"), kind: .sale, club: "", purpose: .ask,
+                                   loanPurpose: nil, filledWith: nil)
+        #expect(s.model.offerEditorLine(gone) == "")
+    }
+
+    @Test func thePlayingTimeIsAskedForADevelopmentLoanOrOneThatHasIt() {
+        let id = PlayerID(key: "fmrte:1")
+        let sale = OfferRoundDraft(player: id, kind: .sale, club: "", purpose: .ask, loanPurpose: nil,
+                                   filledWith: Self.sale(40_000))
+        #expect(!sale.showsPlayingTime)
+        let development = OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .theirs,
+                                          loanPurpose: .development, filledWith: nil)
+        #expect(development.showsPlayingTime)
+        var wage = OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .theirs, loanPurpose: .wage,
+                                   filledWith: nil)
+        #expect(!wage.showsPlayingTime)
+        wage.playingTime = .startingPlace
+        #expect(wage.showsPlayingTime)
+        #expect(OffersPresentation.playingTimeChoices.map(\.title) == ["A starting place", "Less than a starting place"])
+        #expect(OffersPresentation.loanPurposeChoices.map(\.title) == ["For his development", "To move his wage"])
     }
 
     // MARK: Navigation
