@@ -68,12 +68,18 @@ public enum Offers {
     public static func ask(_ subject: OfferSubject, kind: OfferKind, earlier: [OfferAsk], measures: OfferMeasures = .none,
                            parameters: EngineParameters) throws -> OfferSuggestion {
         try requireUsable(parameters)
+        let rules = measured(parameters.offerRules.value, measures)
+        let result: OfferSuggestion
         switch kind {
-        case .loan: return try loanAsk(subject, earlier: earlier, parameters: parameters)
-        case .sale: break
+        case .loan: result = try loanAsk(subject, earlier: earlier, rules: rules, parameters: parameters)
+        case .sale: result = try saleAsk(subject, earlier: earlier, rules: rules, parameters: parameters)
         }
+        return annotated(result, kind: kind, measures: measures)
+    }
+
+    private static func saleAsk(_ subject: OfferSubject, earlier: [OfferAsk], rules: OfferRules,
+                                parameters: EngineParameters) throws -> OfferSuggestion {
         if subject.value < 0 { throw OfferError.negative(.value) }
-        let rules = parameters.offerRules.value
         let total = rounded(rules.saleLine * Double(subject.value), rules: rules)
         var notes: [OfferNote] = []
         if subject.value == 0 { notes.append(.valueIsZero) }
@@ -100,12 +106,47 @@ public enum Offers {
     public static func proposal(_ subject: OfferSubject, kind: OfferKind, club: ClubFigures, rounds: [OfferRound],
                                 measures: OfferMeasures = .none, parameters: EngineParameters) throws -> OfferSuggestion {
         try requireUsable(parameters)
+        let rules = measured(parameters.offerRules.value, measures)
+        let result: OfferSuggestion
         switch kind {
-        case .loan: return try loanProposal(subject, club: club, rounds: rounds, parameters: parameters)
-        case .sale: break
+        case .loan: result = try loanProposal(subject, club: club, rounds: rounds, rules: rules, parameters: parameters)
+        case .sale: result = try saleProposal(subject, club: club, rounds: rounds, rules: rules, parameters: parameters)
         }
+        return annotated(result, kind: kind, measures: measures)
+    }
+
+    /// The rules with each estimate the record has measured in its place.
+    private static func measured(_ rules: OfferRules, _ measures: OfferMeasures) -> OfferRules {
+        var rules = rules
+        if let line = measures.sale.line { rules.saleLine = line }
+        if let line = measures.loan.line { rules.loanLinePerWeek = line }
+        if let step = measures.counterStep { rules.counterStep = step }
+        return rules
+    }
+
+    /// Says on a proposal or a counter which measured figures it used: the line of its kind, then, on a sale's counter,
+    /// the counter step. Every other advice used neither.
+    private static func annotated(_ suggestion: OfferSuggestion, kind: OfferKind, measures: OfferMeasures) -> OfferSuggestion {
+        var result = suggestion
+        let isCounter: Bool
+        switch suggestion.advice {
+        case .propose: isCounter = false
+        case .counter: isCounter = true
+        case .accept, .acceptOrLeave, .awaitAnswer, .nothingLower: return suggestion
+        }
+        switch kind {
+        case .sale:
+            if let line = measures.sale.line { result.notes.append(.measuredLine(line)) }
+            if isCounter, let step = measures.counterStep { result.notes.append(.measuredCounterStep(step)) }
+        case .loan:
+            if let line = measures.loan.line { result.notes.append(.measuredLine(line)) }
+        }
+        return result
+    }
+
+    private static func saleProposal(_ subject: OfferSubject, club: ClubFigures, rounds: [OfferRound], rules: OfferRules,
+                                     parameters: EngineParameters) throws -> OfferSuggestion {
         if subject.value < 0 { throw OfferError.negative(.value) }
-        let rules = parameters.offerRules.value
         let ask = rounded(rules.saleLine * Double(subject.value), rules: rules)
         var notes: [OfferNote] = []
         if subject.value == 0 { notes.append(.valueIsZero) }
@@ -285,9 +326,9 @@ public enum Offers {
         return t
     }
 
-    private static func loanAsk(_ subject: OfferSubject, earlier: [OfferAsk], parameters: EngineParameters) throws -> OfferSuggestion {
+    private static func loanAsk(_ subject: OfferSubject, earlier: [OfferAsk], rules: OfferRules,
+                                parameters: EngineParameters) throws -> OfferSuggestion {
         try checkLoanSubject(subject)
-        let rules = parameters.offerRules.value
         let basis = parameters.offerRules.evidence
         let earlierTerms = try earlier.map { try loanTerms(of: $0.terms) }
         var notes: [OfferNote] = []
@@ -312,10 +353,9 @@ public enum Offers {
         return propose(suggested, limit: figures.limit)
     }
 
-    private static func loanProposal(_ subject: OfferSubject, club: ClubFigures, rounds: [OfferRound],
+    private static func loanProposal(_ subject: OfferSubject, club: ClubFigures, rounds: [OfferRound], rules: OfferRules,
                                      parameters: EngineParameters) throws -> OfferSuggestion {
         try checkLoanSubject(subject)
-        let rules = parameters.offerRules.value
         let basis = parameters.offerRules.evidence
         var notes: [OfferNote] = []
         if subject.value == 0 { notes.append(.valueIsZero) }
