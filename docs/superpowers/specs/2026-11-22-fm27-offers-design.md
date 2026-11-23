@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: terms to propose when selling or loaning out a player
 
 Date: 22 November 2026
-Status: built, by `docs/superpowers/plans/2026-11-22-fm27-offers.md`, on 22 November 2026. The passages changed during the build are marked "revised" (sections 1, 3, 4, 5, 6, 7 and 8, and the list left to the builder), and those changed by the fixes after the whole-branch review the same day are marked "revised after the whole-branch review" (sections 1, 3, 5, 6 and 8, and the list left to the builder). It was written for the owner's approval, and a reviewer read it as a builder the same day (see the foot). He chose the approach (the third of three, below) on 22 November 2026. Everything marked "this design's call" is the builder's, and is his to change, and so are the plan's own calls beyond the design, listed in the plan.
+Status: built, by `docs/superpowers/plans/2026-11-22-fm27-offers.md`, on 22 November 2026. The passages changed during the build are marked "revised" (sections 1, 3, 4, 5, 6, 7 and 8, and the list left to the builder), and those changed by the fixes after the whole-branch review the same day are marked "revised after the whole-branch review" (sections 1, 3, 5, 6 and 8, and the list left to the builder). Those the owner changed after using the build, the same day, are marked "revised on 22 November 2026 at the owner's request" (sections 5 and 8, and the calls): every marked player's block now offers sale terms or loan terms, whatever his mark. It was written for the owner's approval, and a reviewer read it as a builder the same day (see the foot). He chose the approach (the third of three, below) on 22 November 2026. Everything marked "this design's call" is the builder's, and is his to change, and so are the plan's own calls beyond the design, listed in the plan.
 
 Research: `docs/Research/fm27-sale-and-loan-offer-acceptance.md`, of 22 November 2026. The earlier `docs/Research/fm27-selling-and-loans.md` is about whether playing a player helps to sell him, and its loan rule was corrected that day.
 
@@ -177,6 +177,8 @@ A deal or an ask recorded by mistake can be deleted, after a question. *Revised 
 
 *Revised during the build: a deal opened for a club with no figure entered keeps no figures. A round joins only an open deal of the player's present kind with that club; a deal of the other kind (his mark changed since) stays apart.*
 
+*Revised on 22 November 2026 at the owner's request: a round joins the open deal of the round's own kind with that club, which is the kind his block shows when it is recorded from the block, and the deal's kind when it is recorded from the deal's card. A sale and a loan with one club can both be open. A loan round or ask for a player on a youth contract or one already out on loan is refused with the engine's sentence, and nothing is saved.*
+
 ## 6. What the offers have shown
 
 Each ask and each round has a **ratio**:
@@ -272,17 +274,17 @@ WHAT YOUR OFFERS HAVE SHOWN
 EARLIER OFFERS   3 deals for players no longer marked
 ```
 
-- The players are those marked, in two parts, "To sell" and "To loan out", each in the squad's order. With nobody marked the screen says so and leads to Player Removal, where a player is marked.
+- The players are those marked, in two parts, "To sell" and "To loan out", each in the squad's order. With nobody marked the screen says so and leads to Player Removal, where a player is marked. *Revised on 22 November 2026 at the owner's request: the parts still list who is marked which, and each block has a two-way control beside the player's name, "Sale terms" and "Loan terms", which starts at his mark's kind and is saved with his value. It changes only which terms his block works out: the ask of clubs in general, the proposal to a club, and what "Record this ask", "Record my proposal" and "Record their bid" record from those two places. The loan's purpose menu stands beside it whenever loan terms are shown. A loan cannot be worked out for a player on a youth contract or one already out on loan: the control offers sale terms only, and the engine's sentence stands under it ("A player on a youth contract cannot be loaned out; he can be sold or released." or "He is out on loan already, so only a sale can be worked out."). His deals and asks of both kinds stay in his block whatever the control shows; each card's heading names its kind ("Barnet · sale · open"), "No bid came" is offered on his latest ask of each kind, and a card's next step and the rounds recorded from its buttons follow the deal's kind. The line saying an open deal with the club named is below is about a deal of the kind shown.*
 - A recorded round is entered in a sheet, as the fixture and mentoring editors are, opened filled with the suggestion. *Revised after the whole-branch review: the owner's own round or ask opens filled with the suggestion; "Record their bid" opens blank (section 5). How each amount was read is shown beside its field (section 1).* The owner's round then shows "Accepted", "Refused" and "No reply" until one is pressed; "Record their bid" records a round of the club's.
 - Under the deal's last round stands the suggestion for the next one, worked out from the rounds so far.
-- Deals and asks for a player who is no longer marked (sold, out on loan, or the mark taken off) are listed at the foot under "Earlier offers", closed at every launch behind a line saying how many, with their rounds and nothing to press but the deletion. They still count in the measures.
+- Deals and asks for a player who is no longer marked (sold, out on loan, or the mark taken off) are listed at the foot under "Earlier offers", closed at every launch behind a line saying how many, with their rounds and nothing to press but the deletion. They still count in the measures. *Revised on 22 November 2026 at the owner's request: "Earlier offers" holds only the deals and asks of players who hold no mark or are in no squad; a deal of the other kind than his mark's stays in his block.*
 - The buttons that record or answer a round are ignored within half a second of the last, as Training's and Scouting's are, since each moves the next button under the pointer.
 - *Revised during the build:*
-  - *The mark sets the kind (the plan's call 4): a player marked to sell gets sale terms only, and one marked to loan out loan terms only.*
+  - *The mark sets the kind (the plan's call 4): a player marked to sell gets sale terms only, and one marked to loan out loan terms only.* *Revised on 22 November 2026 at the owner's request: the mark no longer sets the kind; the control above does, starting at the mark's.*
   - *"Record my proposal" and "Record their bid" are offered beside a club's line naming a figure it needs, not only under its terms: a club's bid needs no figures, and could not otherwise be recorded. The sheet then opens blank.*
   - *A loan to move his wage has no playing-time menu in the sheet, since such a loan asks none. The club's own offer for a development loan opens at less than a starting place.*
   - *The sheet closes only when something was recorded: recording says recorded, refused with the engine's sentence (shown in the sheet), or ignored (a second click within the half second, or a blank club), and the sheet stays open for the last two.*
-  - *Under "Earlier offers" each card's heading and each ask names the player ("Old Boy · Barnet · ended"), since nothing else says whose they are.*
+  - *Under "Earlier offers" each card's heading and each ask names the player ("Old Boy · Barnet · ended"), since nothing else says whose they are.* *Revised on 22 November 2026 at the owner's request: every card's heading names the deal's kind too ("Old Boy · Barnet · sale · ended").*
 
 ## 9. Where it lives
 
@@ -332,5 +334,6 @@ EARLIER OFFERS   3 deals for players no longer marked
 10. A value of 0 is taken as it reads: no fee asked, none of the wage asked, and nothing measured from it.
 11. Playing time is a starting place or less. A development loan asks a starting place; a loan to move a wage asks none.
 12. The counter step is measured only from sales in which he countered.
+13. *Revised on 22 November 2026 at the owner's request:* the mark no longer sets the kind; every marked player can be shown sale terms or loan terms, except that a player on a youth contract or out on loan can be shown sale terms only.
 
 A reviewer read this as a builder on 22 November 2026. Its four questions are answered in the text: a value of 0 (section 1), which deals measure the counter step (section 6), the playing-time levels (section 4) and how the steps down add up and where they stop (sections 3 and 4).
