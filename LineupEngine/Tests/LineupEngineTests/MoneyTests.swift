@@ -26,6 +26,18 @@ import Testing
         #expect(Display.wage(perWeek: 600.49, .weeklyPounds) == "£600 a week")
     }
 
+    @Test func aSalaryByTheYearIsFiftyTwoWeeksWhateverThePeriodShown() {
+        // Caelan Avenell's $5,735 a month, kept by the week: 5,735 × 12 = 68,820 a year.
+        let perWeek = WagePeriod.monthly.perWeek(5_735)
+        #expect(Display.yearlyAmount(perWeek: perWeek, dollarsMonthly) == "$68,820")
+        #expect(Display.yearly(perWeek: perWeek, dollarsMonthly) == "$68,820 a year")
+        #expect(Display.yearlyAmount(perWeek: 600, .weeklyPounds) == "£31,200")
+        #expect(Display.yearly(perWeek: 600, .weeklyPounds) == "£31,200 a year")
+        #expect(Display.yearlyAmount(perWeek: 0, dollarsMonthly) == "$0")
+        // Rounded to a whole unit: 600.01 a week is 31,200.52 a year.
+        #expect(Display.yearlyAmount(perWeek: 600.01, .weeklyPounds) == "£31,201")
+    }
+
     @Test func theImportSaysHowWagesWereRead() {
         #expect(Display.wagesRead(dollarsMonthly) == "Wages are in $ a month, as FMRTE shows them.")
         #expect(Display.wagesRead(.weeklyPounds) == "Wages are in £ a week, as FMRTE shows them.")

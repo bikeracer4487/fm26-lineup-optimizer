@@ -227,6 +227,11 @@ import Testing
         #expect(AdvisorText.shortDay(Day(year: 2027, month: 1, day: 3)!) == "Sun 3 Jan")
     }
 
+    @Test func aDayIsWrittenWithItsYearAndNoWeekday() {
+        #expect(AdvisorText.fullDay(Day(year: 2030, month: 6, day: 30)!) == "30 Jun 2030")
+        #expect(AdvisorText.fullDay(Day(year: 2028, month: 7, day: 1)!) == "1 Jul 2028")
+    }
+
     @Test func theFixedSentences() {
         #expect(AdvisorText.tableOutOfDate == "A league match has been played since; paste the table again.")
         #expect(AdvisorText.tableStopsLine(matchesLeft: 3, beyond: 2)

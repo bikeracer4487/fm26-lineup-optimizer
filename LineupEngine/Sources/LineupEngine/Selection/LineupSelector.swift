@@ -545,6 +545,17 @@ public enum Display {
         money(Int(style.period.amount(perWeek: perWeek).rounded()), symbol: style.symbol)
     }
 
+    /// A wage kept per week, as a whole amount for a year of 52 weeks, whatever period the style shows wages by:
+    /// "$68,820".
+    public static func yearlyAmount(perWeek: Double, _ style: MoneyStyle) -> String {
+        money(Int(WagePeriod.yearly.amount(perWeek: perWeek).rounded()), symbol: style.symbol)
+    }
+
+    /// The same with its period: "$68,820 a year".
+    public static func yearly(perWeek: Double, _ style: MoneyStyle) -> String {
+        yearlyAmount(perWeek: perWeek, style) + WagePeriod.yearly.suffix
+    }
+
     /// How an import read its wages: "Wages are in $ a month, as FMRTE shows them."
     public static func wagesRead(_ style: MoneyStyle) -> String {
         "Wages are in \(style.symbol)\(style.period.suffix), as FMRTE shows them."

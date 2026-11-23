@@ -13,6 +13,13 @@ public enum AdvisorText {
         return "\(weekday) \(parts[2]) \(months[parts[1] - 1])"
     }
 
+    /// "30 Jun 2030": a day with its year and no weekday, for a day that may be years off.
+    public static func fullDay(_ day: Day) -> String {
+        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        let parts = day.iso.split(separator: "-").compactMap { Int($0) }
+        return "\(parts[2]) \(months[parts[1] - 1]) \(parts[0])"
+    }
+
     public static func name(_ level: RestLevel) -> String {
         switch level {
         case .holiday: "Holiday"
