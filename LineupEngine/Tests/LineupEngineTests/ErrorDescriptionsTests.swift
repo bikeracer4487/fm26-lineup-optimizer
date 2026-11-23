@@ -337,4 +337,21 @@ import Testing
         #expect(ErrorDescriptions.describe(LeagueTableWarning.pointsDoNotFit(team: "Marine", points: 32, fromResults: 35))
                 == "Marine have 32 points where their results give 35; the table's points are used.")
     }
+
+    @Test func offerErrorsAreSaidInWholeSentences() {
+        #expect(ErrorDescriptions.describe(OfferError.missing(.transferBudget, club: "Barnet")) == "Enter what Barnet can spend on transfers to get terms for them.")
+        #expect(ErrorDescriptions.describe(OfferError.missing(.wageBudget, club: "Barnet")) == "Enter Barnet's wage budget to get terms for them.")
+        #expect(ErrorDescriptions.describe(OfferError.missing(.wagesSpent, club: "Barnet")) == "Enter the wages Barnet have spent to get terms for them.")
+        #expect(ErrorDescriptions.describe(OfferError.missing(.value, club: nil)) == "Enter his value to get terms.")
+        #expect(ErrorDescriptions.describe(OfferError.over100(.wagePercent)) == "The share of his wage cannot be over 100%.")
+        #expect(ErrorDescriptions.describe(OfferError.over100(.nextFeePercent)) == "The share of his next fee cannot be over 100%.")
+        #expect(ErrorDescriptions.describe(OfferError.wrongKind) == "These are not the terms of this kind of deal.")
+        #expect(ErrorDescriptions.describe(OfferError.missing(.feeNow, club: nil)) == "Enter the money now to record this.")
+        #expect(ErrorDescriptions.describe(OfferError.negative(.feePerMonth)) == "The fee a month cannot be below 0.")
+        for field in OfferField.allCases {
+            #expect(!ErrorDescriptions.describe(OfferError.negative(field)).isEmpty)
+            #expect(!ErrorDescriptions.describe(OfferError.missing(field, club: nil)).isEmpty)
+            #expect(!ErrorDescriptions.describe(OfferError.over100(field)).isEmpty)
+        }
+    }
 }

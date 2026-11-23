@@ -15,6 +15,7 @@ public enum ErrorDescriptions {
         case let e as OpponentReadingError: describe(e)
         case let e as LeagueTableError: describe(e)
         case let e as LeagueFormatError: describe(e)
+        case let e as OfferError: describe(e)
         default: "Unexpected error: \(error.localizedDescription)"
         }
     }
@@ -169,6 +170,47 @@ public enum ErrorDescriptions {
             let total = format.promoted + format.playOffs + format.relegated
             return "\(format.promoted) promoted, \(format.playOffs) in the play-offs and \(format.relegated) relegated make "
                 + "\(total), more than the \(teams) teams in the table."
+        }
+    }
+
+    /// The words for a field of an offer, in a sentence.
+    private static func words(_ field: OfferField) -> String {
+        switch field {
+        case .value: "his value"
+        case .transferBudget: "the transfer budget"
+        case .wageBudget: "the wage budget"
+        case .wagesSpent: "the wages spent"
+        case .highestWage: "the highest wage"
+        case .wagePercent: "the share of his wage"
+        case .feeNow: "the money now"
+        case .feeLater: "the money later"
+        case .nextFeePercent: "the share of his next fee"
+        case .feePerMonth: "the fee a month"
+        case .futureFee: "the future fee"
+        }
+    }
+
+    public static func describe(_ error: OfferError) -> String {
+        switch error {
+        case .missing(let field, let club):
+            switch (field, club) {
+            case (.transferBudget, let club?): return "Enter what \(club) can spend on transfers to get terms for them."
+            case (.wageBudget, let club?): return "Enter \(club)'s wage budget to get terms for them."
+            case (.wagesSpent, let club?): return "Enter the wages \(club) have spent to get terms for them."
+            case (.value, nil): return "Enter his value to get terms."
+            default: return "Enter \(words(field)) to record this."
+            }
+        case .negative(let field):
+            let text = words(field)
+            return "\(text.prefix(1).uppercased())\(text.dropFirst()) cannot be below 0."
+        case .over100(let field):
+            switch field {
+            case .wagePercent: return "The share of his wage cannot be over 100%."
+            case .nextFeePercent: return "The share of his next fee cannot be over 100%."
+            case .value, .transferBudget, .wageBudget, .wagesSpent, .highestWage, .feeNow, .feeLater, .feePerMonth, .futureFee:
+                return "\(words(field).prefix(1).uppercased())\(words(field).dropFirst()) cannot be over 100%."
+            }
+        case .wrongKind: return "These are not the terms of this kind of deal."
         }
     }
 

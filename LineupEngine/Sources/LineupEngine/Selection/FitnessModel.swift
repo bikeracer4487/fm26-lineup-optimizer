@@ -408,6 +408,7 @@ public enum FitnessModel {
         }
         found += GamePlanAdvisor.problems(in: parameters.gamePlanRules.value)
         found += League.problems(in: parameters.leagueStandingRules.value)
+        found += Offers.problems(in: parameters.offerRules.value)
         found += jadednessProblems(in: parameters)
         return found
     }

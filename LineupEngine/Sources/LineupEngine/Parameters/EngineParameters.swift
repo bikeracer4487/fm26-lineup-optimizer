@@ -733,6 +733,8 @@ public struct EngineParameters: Sendable {
     public var leagueStandingRules: Parameter<LeagueStandingRules>
     /// The numbers behind measuring each player's jadedness trend from the imports.
     public var jadednessTrendRules: Parameter<JadednessTrendRules>
+    /// The numbers behind the terms suggested for a sale or a loan out.
+    public var offerRules: Parameter<OfferRules>
     /// Multiplies each day's condition recovery, by the player's jadedness (x is a jadedness).
     public var conditionRecoveryByJadedness: Parameter<[CurvePoint]>
     /// Jadedness does not rise above this.
@@ -1234,6 +1236,21 @@ public struct EngineParameters: Sendable {
                     + "fewestOwnIntervals (for a rate of his own), fewestSharedIntervals and fewestSharedDays (for a "
                     + "squad's rate to speak for him), onCourseDays (the weeks shown), steadyPerWeek (the drift counted "
                     + "as steady), keptDays (how long readings are kept) and passDateWithinDays (how far ahead a date is given)"),
+            offerRules: Parameter(
+                OfferRules(saleLine: 1.0, loanLinePerWeek: 1.0 / 192, counterStep: 1.2, nextFeePercent: 20,
+                           appearancesForLater: 50, laterInInstalments: 0.44, instalmentMonths: 12, wageStepPercent: 10,
+                           weeksPerMonthInRule: 4, noInterestBidLow: 0.05, noInterestBidHigh: 0.10, stepDown: 0.10,
+                           stepsDownAtMost: 2, fewestEachWay: 5, fewestCounterDeals: 3, significantFigures: 2),
+                .derived,
+                source: "the weakest of its numbers, from docs/Research/fm27-sale-and-loan-offer-acceptance.md: no test in "
+                    + "any version shows what a club accepts. saleLine (players a club wants go for about their value: FM24, "
+                    + "reports), counterStep (clubs come up 10 to 20%: FM24, one report), nextFeePercent (the only share "
+                    + "reported as accepted: FM24, two sales; 20% of profit in FM27's own Director of Football example), "
+                    + "laterInInstalments and appearancesForLater (that one FM27 example), loanLinePerWeek and "
+                    + "weeksPerMonthInRule (the loan rule in circulation, about FM22, no sample), wageStepPercent (an older "
+                    + "version's manual and a guide), noInterestBidLow and noInterestBidHigh (FM24, one poster, about three "
+                    + "players) are carried over. instalmentMonths, stepDown, stepsDownAtMost, fewestEachWay, "
+                    + "fewestCounterDeals and significantFigures are the design's choice of 22 November 2026"),
             conditionRecoveryByJadedness: Parameter(
                 [CurvePoint(x: -500, factor: 1), CurvePoint(x: 0, factor: 1), CurvePoint(x: 500, factor: 0.832),
                  CurvePoint(x: 1_000, factor: 0.574)],

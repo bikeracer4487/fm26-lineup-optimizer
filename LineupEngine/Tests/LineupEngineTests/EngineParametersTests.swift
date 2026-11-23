@@ -922,4 +922,35 @@ import Testing
         #expect(listed["jadednessCeiling"]?.evidence == .fm27Observation)
         #expect(EngineParameters.fm27.jadednessCeiling.value == 1_000)
     }
+
+    @Test func theOfferRulesAreListedAsDerived() {
+        let listed = Dictionary(uniqueKeysWithValues: EngineParameters.fm27.all.map { ($0.name, $0) })
+        #expect(listed["offerRules"]?.evidence == .derived)
+        #expect(EngineParameters.fm27.offerRules.value
+                == OfferRules(saleLine: 1.0, loanLinePerWeek: 1.0 / 192, counterStep: 1.2, nextFeePercent: 20,
+                              appearancesForLater: 50, laterInInstalments: 0.44, instalmentMonths: 12, wageStepPercent: 10,
+                              weeksPerMonthInRule: 4, noInterestBidLow: 0.05, noInterestBidHigh: 0.10, stepDown: 0.10,
+                              stepsDownAtMost: 2, fewestEachWay: 5, fewestCounterDeals: 3, significantFigures: 2))
+    }
+
+    @Test func badOfferRulesAreNamedByTheParameterProblems() {
+        func problems(_ change: (inout OfferRules) -> Void) -> [String] {
+            var q = EngineParameters.fm27
+            var r = q.offerRules.value
+            change(&r)
+            q.offerRules = Parameter(r, .derived, source: "test")
+            return FitnessModel.problems(in: q)
+        }
+        #expect(FitnessModel.problems(in: .fm27).isEmpty)
+        let changes: [(inout OfferRules) -> Void] = [
+            { $0.saleLine = 0 }, { $0.loanLinePerWeek = 0 }, { $0.counterStep = .nan },
+            { $0.wageStepPercent = 0 }, { $0.wageStepPercent = 30 },
+            { $0.laterInInstalments = 1.5 }, { $0.stepDown = 1 }, { $0.stepDown = -0.1 },
+            { $0.fewestEachWay = 0 }, { $0.fewestCounterDeals = 0 }, { $0.significantFigures = 0 },
+            { $0.weeksPerMonthInRule = 0 }, { $0.noInterestBidLow = 0.2 }]
+        for change in changes {
+            let found = problems(change)
+            #expect(found.count == 1 && found[0].hasPrefix("offerRules "))
+        }
+    }
 }
