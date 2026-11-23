@@ -551,9 +551,13 @@ import Testing
             #expect(player.currentAbility > 0 && a.outlook != nil, "\(player.id.key)")
             #expect(a.matchesHere != nil, "\(player.id.key)")
             switch a.action {
-            case .terminate, .sell:
+            case .terminate:
                 #expect(a.level == .high || a.level == .critical, "\(player.id.key)")
-                #expect(player.contractType != .youth, "\(player.id.key)")
+                // A youth contract is released where a full-time one is terminated.
+                #expect(!a.onYouthContract, "\(player.id.key)")
+            case .sell:
+                // A youth contract can be sold (the owner's correction of 22 November 2026).
+                #expect(a.level == .high || a.level == .critical, "\(player.id.key)")
             case .loanForMatches:
                 #expect((player.monthsLeft ?? 0) > 12 && player.contractType != .youth, "\(player.id.key)")
                 #expect(!removal.advisedToLeave.contains(player.id), "\(player.id.key)")

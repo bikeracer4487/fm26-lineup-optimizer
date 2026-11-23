@@ -138,8 +138,7 @@ import Testing
         // The contract decides, not the cost.
         for (release, mutual) in [(Int?.none, Int?.none), (0, 0), (24_700, 13_585)] {
             #expect(AdvisorText.why(.release, for: removal(release: release, mutual: mutual, onYouthContract: true))
-                    == "He is on a youth contract, so he cannot be sold or loaned out: releasing him is the only way to "
-                        + "move him on")
+                    == "He is on a youth contract that is nearly up, so releasing him is the way to move him on")
         }
         #expect(AdvisorText.why(.terminate, for: advice)
                 == "His contract is nearly over and no fee is likely to beat the cost of ending it")
@@ -280,8 +279,8 @@ import Testing
         }
     }
 
-    @Test func aYouthContractCannotBeMarked() {
-        #expect(AdvisorText.youthContractNotMarked == "A player on a youth contract cannot be sold or loaned out, only released.")
+    @Test func aYouthContractCannotBeLoaned() {
+        #expect(AdvisorText.youthContractNotLoaned == "A player on a youth contract cannot be loaned out; he can be sold or released.")
     }
 
     // MARK: Development

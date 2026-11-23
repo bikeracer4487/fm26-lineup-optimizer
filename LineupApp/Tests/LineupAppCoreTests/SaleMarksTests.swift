@@ -102,19 +102,38 @@ import LineupEngine
         #expect(t.model.marks.isEmpty)
     }
 
-    @Test func aYouthContractPlayerCannotBeMarked() throws {
+    @Test func aYouthContractPlayerCanBeMarkedToSellAndNotToLoanOut() throws {
+        // A player on a youth contract can be sold and cannot be loaned out (the owner's correction of 22 November 2026).
         let (t, _, _) = try ready()
         t.importSquad(.firstTeam, paste: paste(onYouthContracts(try rows(), [0])), grids: try Captures.firstTeamGrids)
         let youth = try player(onRow: 0, t.model)
         let other = try player(onRow: 1, t.model)
         #expect(t.model.players.first { $0.id == youth }?.contractType == .youth)
-        t.model.setMark(.toSell, for: youth)
         t.model.setMark(.toLoanOut, for: youth)
         #expect(t.model.marks.isEmpty)
-        // A player on a full-time contract still can be.
-        t.model.setMark(.toSell, for: other)
-        #expect(t.model.marks == [other: .toSell])
-        #expect(t.reopened().marks == [other: .toSell])
+        t.model.setMark(.toSell, for: youth)
+        #expect(t.model.marks == [youth: .toSell])
+        #expect(t.reopened().marks == [youth: .toSell])
+        // A mark to loan out does not replace his mark to sell.
+        t.model.setMark(.toLoanOut, for: youth)
+        #expect(t.model.marks == [youth: .toSell])
+        // A player on a full-time contract can still be marked either way.
+        t.model.setMark(.toLoanOut, for: other)
+        #expect(t.model.marks == [youth: .toSell, other: .toLoanOut])
+    }
+
+    @Test func aYouthContractPlayerMarkedToSellIsFavouredInTheLowFixture() throws {
+        let (t, low, _) = try ready()
+        let starter = try #require(picks(t.model, low).first)
+        let row = try #require(try rows().firstIndex { $0[2] == "\"\(starter.name)\"" })
+        t.importSquad(.firstTeam, paste: paste(onYouthContracts(try rows(), [row])), grids: try Captures.firstTeamGrids)
+        #expect(t.model.players.first { $0.id == starter.player }?.contractType == .youth)
+        t.model.setMark(.toSell, for: starter.player)
+        let marked = try #require(picks(t.model, low).first { $0.player == starter.player })
+        #expect(marked.adjustments.contains {
+            $0.kind == .shopWindow
+                && $0.reason == "Marked to sell: favoured for minutes, an untested way to bring offers (×1.03)"
+        })
     }
 
     @Test func aPlayerNotInAnySquadCannotBeMarked() throws {
@@ -229,24 +248,26 @@ import LineupEngine
         #expect(t.model.marks.isEmpty)
     }
 
-    @Test func aMarkIsDroppedWhenItsPlayerIsImportedOnAYouthContract() throws {
+    @Test func aLoanMarkIsDroppedAndASaleMarkKeptWhenItsPlayerIsImportedOnAYouthContract() throws {
         let (t, _, _) = try ready()
         let youth = try player(onRow: 0, t.model)
         let sold = try player(onRow: 1, t.model)
         let loaned = try player(onRow: 2, t.model)
+        let youthSold = try player(onRow: 3, t.model)
         t.model.setMark(.toLoanOut, for: youth)
         t.model.setMark(.toSell, for: sold)
         t.model.setMark(.toLoanOut, for: loaned)
-        t.importSquad(.firstTeam, paste: paste(onYouthContracts(try rows(), [0])), grids: try Captures.firstTeamGrids)
-        #expect(t.model.marks == [sold: .toSell, loaned: .toLoanOut])
-        #expect(t.reopened().marks == [sold: .toSell, loaned: .toLoanOut])
-        // A youth contract with no months left is read as no contract: that player's mark stays.
+        t.model.setMark(.toSell, for: youthSold)
+        t.importSquad(.firstTeam, paste: paste(onYouthContracts(try rows(), [0, 3])), grids: try Captures.firstTeamGrids)
+        #expect(t.model.marks == [sold: .toSell, loaned: .toLoanOut, youthSold: .toSell])
+        #expect(t.reopened().marks == [sold: .toSell, loaned: .toLoanOut, youthSold: .toSell])
+        // A youth contract with no months left is read as no contract: a mark to loan out on that player stays.
         var expired = try rows()
-        expired[1][Self.contractCell] = "\"Youth\""
-        expired[1][Self.monthsLeftCell] = "\"0\""
+        expired[2][Self.contractCell] = "\"Youth\""
+        expired[2][Self.monthsLeftCell] = "\"0\""
         t.importSquad(.firstTeam, paste: paste(expired), grids: try Captures.firstTeamGrids)
-        #expect(t.model.players.first { $0.id == sold }?.contractType == .youth)
-        #expect(t.model.marks == [sold: .toSell, loaned: .toLoanOut])
+        #expect(t.model.players.first { $0.id == loaned }?.contractType == .youth)
+        #expect(t.model.marks == [sold: .toSell, loaned: .toLoanOut, youthSold: .toSell])
     }
 
     @Test func aMarkGoesWhenThePlayerBecomesALoanee() throws {

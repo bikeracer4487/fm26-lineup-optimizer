@@ -68,8 +68,8 @@ public struct RemovalAdvice: Equatable, Sendable {
     public let watchReason: WatchReason?
     /// A loan for matches at exactly `loanForMatchesFromAge`: worth it only where he will start regularly.
     public let loanOnlyToStart: Bool
-    /// He is on a youth contract that has not run out (one with 0 months left is read as no contract), so he can only
-    /// be kept or released.
+    /// He is on a youth contract that has not run out (one with 0 months left is read as no contract), so he can be
+    /// sold or released and cannot be loaned out.
     public let onYouthContract: Bool
     public let isFalseProspect: Bool
     public let isMentor: Bool
@@ -120,9 +120,10 @@ public enum Removal {
     private static let roundingNoise = 1e-9
 
     /// Whether `player` is on a youth contract that has not run out: one with 0 months left is read as no contract; one
-    /// with months left unknown is still a youth contract. Such a player can only be kept or released, so he is never
-    /// marked to sell or to loan out. The one reading of a youth contract: his advice's `onYouthContract` and the
-    /// planner's mark rule both take it from here.
+    /// with months left unknown is still a youth contract. Such a player can be sold or released and cannot be loaned
+    /// out (the owner's correction of 22 November 2026 to his earlier statement; FM27 observation), so he can be marked
+    /// to sell and never to loan out. The one reading of a youth contract: his advice's `onYouthContract`, the planner's
+    /// mark rule and the app's marks and offers all take it from here.
     public static func isOnYouthContract(_ player: Player) -> Bool {
         if case .youth = player.contractType { return player.monthsLeft != 0 }
         return false
@@ -385,21 +386,24 @@ public enum Removal {
             evidence.append(parameters.contractMonthsAllowance.evidence)
         }
 
-        // A player on a youth contract can only be kept or released, at any age (the owner's statement; FM27
-        // observation), and a young false prospect is sold, not terminated: buyers still pay for his potential.
+        // A player on a youth contract can be sold or released and cannot be loaned out, at any age (the owner's
+        // correction of 22 November 2026 to his earlier statement; FM27 observation). He follows the full-time
+        // contract's rules, except that where a full-time contract would be terminated he is released: nothing is known
+        // about ending a youth contract by agreement. A young false prospect is sold, not terminated: buyers still pay
+        // for his potential.
         let action: RemovalAction
         var keepReason: KeepReason?
         var watchReason: WatchReason?
         var loanOnlyToStart = false
         switch level {
         case .high, .critical:
-            if outOfContract || onYouthContract {
+            if outOfContract {
                 action = .release
             } else if outlook != nil && isFalseProspect {
                 action = .sell
             } else if level == .critical, let months = player.monthsLeft, months <= rules.terminateWithinMonths,
                       let mutualCost, player.askingPrice.map({ $0 < mutualCost }) ?? true {
-                action = .terminate
+                action = onYouthContract ? .release : .terminate
             } else {
                 action = .sell
             }

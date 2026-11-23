@@ -249,8 +249,8 @@ private struct RemovalRowView: View {
 }
 
 /// An open row's reasons with their points, the sentence for why that action, the evidence note, and the control that
-/// marks him to sell or to loan out, or, for a player on a youth contract, the engine's sentence saying why he cannot be
-/// marked.
+/// marks him, with the row's own choices and, under it, the row's note when it has one (a player on a youth contract
+/// cannot be marked to loan out).
 private struct RemovalDetail: View {
     let row: RemovalRow
     let setMark: (SaleMark?) -> Void
@@ -270,20 +270,19 @@ private struct RemovalDetail: View {
                     .foregroundStyle(Theme.Colour.mutedInk)
                     .padding(.leading, Theme.Removal.pointsColumn + Theme.Spacing.m)
             }
-            Group {
-                if let refusal = row.markRefusalText {
-                    Text(refusal)
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                HStack(alignment: .center, spacing: Theme.Spacing.m) {
+                    Text(RemovalPresentation.markLabel)
                         .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
                         .foregroundStyle(Theme.Colour.mutedInk)
+                    BoardTabs(choices: row.markChoices.map { ($0.mark, $0.title) },
+                              selection: Binding(get: { row.mark }, set: { setMark($0) }))
+                }
+                if let note = row.markNote {
+                    Text(note)
+                        .font(Theme.Typeface.text(Theme.TypeSize.small))
+                        .foregroundStyle(Theme.Colour.mutedInk)
                         .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    HStack(alignment: .center, spacing: Theme.Spacing.m) {
-                        Text(RemovalPresentation.markLabel)
-                            .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .semibold))
-                            .foregroundStyle(Theme.Colour.mutedInk)
-                        BoardTabs(choices: RemovalPresentation.markChoices.map { ($0.mark, $0.title) },
-                                  selection: Binding(get: { row.mark }, set: { setMark($0) }))
-                    }
                 }
             }
             .padding(.top, Theme.Spacing.s)

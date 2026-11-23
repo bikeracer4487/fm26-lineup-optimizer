@@ -285,15 +285,15 @@ public enum AdvisorText {
     }
 
     /// The rule that chose the action, in one sentence. The termination line is a parameter, so it is not named in
-    /// months here. A release is said from his contract: out of contract, or on a youth contract that can only be
-    /// released. A young player kept to develop, kept to play or watched is told why from `advice.keepReason`,
+    /// months here. A release is said from his contract: out of contract, or on a youth contract nearly up, where a
+    /// full-time contract would be terminated. A young player kept to develop, kept to play or watched is told why from `advice.keepReason`,
     /// `advice.matchesHere` and `advice.watchReason`, and a loan for matches at the youngest age for one says it is
     /// worth it only where he will start.
     public static func why(_ action: RemovalAction, for advice: RemovalAdvice) -> String {
         switch action {
         case .release:
             advice.onYouthContract
-                ? "He is on a youth contract, so he cannot be sold or loaned out: releasing him is the only way to move him on"
+                ? "He is on a youth contract that is nearly up, so releasing him is the way to move him on"
                 : "He is out of contract, so releasing him costs nothing"
         case .develop: whyDevelop(advice.keepReason, advice.matchesHere?.basis)
         case .play:

@@ -545,16 +545,21 @@ import Testing
         #expect(sheet.rows.map(\.whyText) == given.map { AdvisorText.why($0.action, for: $0) })
     }
 
-    @Test func aYouthContractRowCarriesTheRefusalAndOthersDoNot() throws {
+    @Test func aYouthContractRowOffersOnlyTheMarkToSellWithTheNote() throws {
         let given = [young("y", name: "Youth Deal", age: 16, action: .release, onYouthContract: true),
                      young("f", name: "Full Time", age: 19, action: .loanForMatches),
                      advice("o", name: "Older One")]
         let sheet = RemovalPresentation.sheet(report(given), squads: [:], ages: [:])
-        func refusal(_ key: String) -> String? { sheet.rows.first { $0.id.key == key }?.markRefusalText }
-        #expect(refusal("y") == AdvisorText.youthContractNotMarked)
-        #expect(refusal("y") == "A player on a youth contract cannot be sold or loaned out, only released.")
-        #expect(refusal("f") == nil)
-        #expect(refusal("o") == nil)
+        func row(_ key: String) throws -> RemovalRow { try #require(sheet.rows.first { $0.id.key == key }) }
+        #expect(try row("y").markChoices.map(\.title) == ["No mark", "To sell"])
+        #expect(try row("y").markChoices.map(\.mark) == [nil, .toSell])
+        #expect(try row("y").markNote == AdvisorText.youthContractNotLoaned)
+        #expect(try row("y").markNote == "A player on a youth contract cannot be loaned out; he can be sold or released.")
+        for key in ["f", "o"] {
+            #expect(try row(key).markChoices.map(\.title) == ["No mark", "To sell", "To loan out"], "\(key)")
+            #expect(try row(key).markChoices == RemovalPresentation.markChoices, "\(key)")
+            #expect(try row(key).markNote == nil, "\(key)")
+        }
     }
 
     @Test func theSampleWithYoungPlayersShowsEachAdvice() throws {
@@ -574,6 +579,10 @@ import Testing
         #expect(develop.action == .develop && develop.onYouthContract && develop.outlook?.estimate.age == 16)
         let release = try advice(SampleData.youngToReleaseName)
         #expect(release.action == .release && release.onYouthContract && release.outlook?.estimate.age == 16)
+        // On a youth contract nearly up, where a full-time contract would be terminated: released.
+        #expect(release.level == .critical)
+        #expect(AdvisorText.why(release.action, for: release)
+                == "He is on a youth contract that is nearly up, so releasing him is the way to move him on")
         #expect(release.outlook?.level == .markedlyLower)
         let loan = try advice(SampleData.youngToLoanName)
         #expect(loan.action == .loanForMatches && !loan.onYouthContract && loan.outlook?.estimate.age == 19)
@@ -592,8 +601,8 @@ import Testing
         #expect(sheet.young.map(\.id) == young.map(\.player))
         #expect(Set(sheet.young.map(\.actionText)).isSuperset(of: ["Keep and develop", "Release", "Loan for matches",
                                                                    "Keep and play"]))
-        let refused = Set(sheet.rows.filter { $0.markRefusalText != nil }.map(\.name))
-        #expect(refused == [SampleData.youngToDevelopName, SampleData.youngToReleaseName])
+        let noted = Set(sheet.rows.filter { $0.markNote != nil }.map(\.name))
+        #expect(noted == [SampleData.youngToDevelopName, SampleData.youngToReleaseName])
     }
 
     // MARK: Empty squad and words

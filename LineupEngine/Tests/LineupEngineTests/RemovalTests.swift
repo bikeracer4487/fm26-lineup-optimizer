@@ -980,32 +980,40 @@ import Testing
         #expect(b.action == .loanForMatches && b.watchReason == nil)
     }
 
-    @Test func aYouthContractIsNeverLoanedOrSold() throws {
+    @Test func aYouthContractIsSoldOrReleasedAndNeverLoaned() throws {
         // Below the high level, worth developing, not getting matches, with 24 months left: kept to develop, where a
         // full-time contract is loaned for matches.
         let youth = try advice(try prospect(age: 19, months: 24) { $0.contractType = .youth })
         #expect(youth.action == .develop && youth.keepReason == .youthContract)
         #expect(try advice(try prospect(age: 19, months: 24)).action == .loanForMatches)
-        // At the high level (markedly lower, +70): released, where a full-time contract is sold.
+        // At the high level (markedly lower, +70): sold, as a full-time contract is (the owner's correction of
+        // 22 November 2026).
         func lower(_ contract: ContractType, months: Int?) -> Player {
             target(age: 19, currentAbility: 50, potentialAbility: 50) { $0.contractType = contract; $0.monthsLeft = months }
         }
         let high = try advice(lower(.youth, months: nil))
-        #expect(high.level == .high && high.action == .release)
+        #expect(high.level == .high && high.action == .sell)
         #expect(high.onYouthContract)
-        #expect(AdvisorText.why(high.action, for: high)
-                == "He is on a youth contract, so he cannot be sold or loaned out: releasing him is the only way to move him on")
+        #expect(AdvisorText.why(high.action, for: high) == "Selling is the way left: nothing cheaper applies")
+        #expect(try advice(lower(.fullTime, months: nil)).action == .sell)
         // A youth contract with 0 months left is read as no contract: released at no cost, for that reason.
         let ended = try advice(lower(.youth, months: 0))
         #expect(!ended.onYouthContract && ended.action == .release)
         #expect(AdvisorText.why(ended.action, for: ended) == "He is out of contract, so releasing him costs nothing")
-        #expect(try advice(lower(.fullTime, months: nil)).action == .sell)
-        // At critical with 8 months left and no buyer (+15): released, where a full-time contract is terminated, and
+        // At critical with 8 months left and no buyer (+15), where a full-time contract is terminated: released, and
         // the release is costed.
         let critical = try advice(lower(.youth, months: 8))
         #expect(critical.level == .critical && critical.action == .release)
         #expect(critical.releaseCost == 18_417)
-        #expect(try advice(lower(.fullTime, months: 8)).action == .terminate)
+        #expect(AdvisorText.why(critical.action, for: critical)
+                == "He is on a youth contract that is nearly up, so releasing him is the way to move him on")
+        let fullTime = try advice(lower(.fullTime, months: 8))
+        #expect(fullTime.level == .critical && fullTime.action == .terminate)
+        // Out of the terminate case (a buyer would pay more than ending it costs), the same youth contract is sold.
+        let wanted = try advice(target(age: 19, currentAbility: 50, potentialAbility: 50) {
+            $0.contractType = .youth; $0.monthsLeft = 8; $0.askingPrice = 1_000_000
+        })
+        #expect(wanted.level == .critical && wanted.action == .sell)
     }
 
     @Test func whoIsOnAYouthContractIsReadAsTheAdviceReadsIt() throws {
@@ -1274,6 +1282,15 @@ import Testing
         #expect(!plain.isFalseProspect)
         #expect(plain.score == 85 && plain.level == .critical)
         #expect(plain.action == .terminate)
+        // On a youth contract the false prospect is sold too, and the plain player is released, not terminated.
+        let youthProspect = try advice(target(age: 20, attributes: [.professionalism: 11], currentAbility: 30,
+                                              potentialAbility: 150) { $0.contractType = .youth; $0.monthsLeft = 8 })
+        #expect(youthProspect.isFalseProspect && youthProspect.level == .critical)
+        #expect(youthProspect.action == .sell)
+        let youthPlain = try advice(target(age: 20, attributes: [.professionalism: 11], currentAbility: 30,
+                                           potentialAbility: 40) { $0.contractType = .youth; $0.monthsLeft = 8 })
+        #expect(!youthPlain.isFalseProspect && youthPlain.level == .critical)
+        #expect(youthPlain.action == .release)
     }
 
     @Test func aLoanForMatchesIsNotAdvisedToLeaveAndHisWageIsNotAtStake() throws {
@@ -1336,15 +1353,15 @@ import Testing
         #expect(backup23.action == .loanForMatches)
         let backup24 = try advice(backup(age: 24))
         #expect(backup24.outlook == nil && old.contains(backup24.action))
-        // A youth contract is released at any age: at 24 as at 23. On a full-time contract the same player of 24 is
-        // sold, as before.
+        // A youth contract is sold at the high level at any age, at 24 as at 23, as the same player of 24 on a full-time
+        // contract is.
         func weak(age: Int, _ contract: ContractType) -> Player {
             target(age: age, currentAbility: 50, potentialAbility: 50) { $0.contractType = contract; $0.monthsLeft = nil }
         }
         let youth24 = try advice(weak(age: 24, .youth))
         #expect(youth24.level == .high || youth24.level == .critical)
-        #expect(youth24.outlook == nil && youth24.action == .release)
-        #expect(try advice(weak(age: 23, .youth)).action == .release)
+        #expect(youth24.outlook == nil && youth24.action == .sell)
+        #expect(try advice(weak(age: 23, .youth)).action == .sell)
         let fullTime24 = try advice(weak(age: 24, .fullTime))
         #expect(fullTime24.level == youth24.level && fullTime24.action == .sell)
         // A player of 24 who is watched keeps the old sentence.

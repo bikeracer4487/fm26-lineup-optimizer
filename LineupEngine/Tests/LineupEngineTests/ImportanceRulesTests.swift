@@ -919,25 +919,33 @@ import Testing
         #expect(order.firstIndex(of: .development)! < order.firstIndex(of: .shopWindow)!)
     }
 
-    @Test func aMarkOnAYouthContractPlayerIsIgnored() {
+    @Test func aMarkToSellCountsOnAYouthContractAndAMarkToLoanOutDoesNot() {
+        // A player on a youth contract can be sold and cannot be loaned out (the owner's correction of 22 November 2026).
         var p = Player.fixture(age: 18, currentAbility: 100, potentialAbility: 100)
-        #expect(every(run(p, .low, marks: [p.id: .toSell]), .shopWindow)?.factor == 1.03)
+        #expect(every(run(p, .sharpness, marks: [p.id: .toLoanOut]), .shopWindow)?.factor == 1.03)
         p.contractType = .youth
-        #expect(every(run(p, .low, marks: [p.id: .toSell]), .shopWindow) == nil)
+        #expect(every(run(p, .low, marks: [p.id: .toSell]), .shopWindow)?.factor == 1.03)
+        #expect(every(run(p, .sharpness, marks: [p.id: .toSell]), .shopWindow)?.factor == 1.03)
+        #expect(every(run(p, .low, marks: [p.id: .toLoanOut]), .shopWindow) == nil)
         #expect(every(run(p, .sharpness, marks: [p.id: .toLoanOut]), .shopWindow) == nil)
+        // Only in the fixtures where any mark counts.
+        #expect(every(run(p, .medium, marks: [p.id: .toSell]), .shopWindow) == nil)
     }
 
-    @Test func aMarkCountsOnAYouthContractWithNoMonthsLeftAndNotOnOneWithMonthsLeft() {
-        // A youth contract with 0 months left is no contract, as Player Removal reads it: the mark counts.
+    @Test func aMarkToLoanOutCountsOnAYouthContractWithNoMonthsLeftAndNotOnOneWithMonthsLeft() {
+        // A youth contract with 0 months left is no contract, as Player Removal reads it: both marks count.
         var p = Player.fixture(age: 18, currentAbility: 100, potentialAbility: 100)
         p.contractType = .youth
         p.monthsLeft = 0
         #expect(every(run(p, .low, marks: [p.id: .toSell]), .shopWindow)?.factor == 1.03)
         #expect(every(run(p, .sharpness, marks: [p.id: .toLoanOut]), .shopWindow)?.factor == 1.03)
-        // With months left, or months unknown, it is a youth contract: the mark means nothing.
+        // With months left, or months unknown, it is a youth contract: a mark to loan out means nothing, a mark to sell
+        // counts.
         for months in [1, 24, nil] {
             p.monthsLeft = months
-            #expect(every(run(p, .low, marks: [p.id: .toSell]), .shopWindow) == nil, "\(String(describing: months))")
+            #expect(every(run(p, .low, marks: [p.id: .toLoanOut]), .shopWindow) == nil, "\(String(describing: months))")
+            #expect(every(run(p, .low, marks: [p.id: .toSell]), .shopWindow)?.factor == 1.03,
+                    "\(String(describing: months))")
         }
     }
 

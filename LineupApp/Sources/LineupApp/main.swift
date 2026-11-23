@@ -139,7 +139,8 @@
 //                                              with young players to develop, release and loan out, tall
 //                                              enough for the whole Young players part ("removal-young-…"),
 //                                              and the same with every row open, so a youth-contract row
-//                                              shows why he cannot be marked ("removal-young-open-…"),
+//                                              shows its two-entry mark control and the note that he cannot
+//                                              be loaned out ("removal-young-open-…"),
 //                                              and in the narrow window's width ("removal-young-narrow-…").
 //                                              The Scouting screen ("scouting-…") is drawn on its Needs tab
 //                                              ("scouting-needs-…", and "scouting-needs-small-…" in the

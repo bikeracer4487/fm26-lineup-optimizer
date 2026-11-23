@@ -308,13 +308,15 @@ public enum ImportanceRules {
         guard let mark = context.marks[player.id], factor != 1 else { return [] }
         // A mark made before he became a loanee must not favour another club's player.
         if case .loanedIn = LoanStatus.of(player, ownClub: context.ownClub) { return [] }
-        // A player on a youth contract cannot be sold or loaned out, so a mark held from before means nothing. Read as
-        // Player Removal reads it: one with 0 months left is no contract.
-        if Removal.isOnYouthContract(player) { return [] }
+        // A player on a youth contract can be sold and cannot be loaned out (the owner's correction of 22 November
+        // 2026), so a mark to sell favours him as it does anyone, and a mark to loan out held from a file means nothing.
+        // Read as Player Removal reads it: one with 0 months left is no contract.
         let words: String
         switch mark {
         case .toSell: words = "to sell"
-        case .toLoanOut: words = "to loan out"
+        case .toLoanOut:
+            if Removal.isOnYouthContract(player) { return [] }
+            words = "to loan out"
         }
         return [Adjustment(kind: .shopWindow, factor: factor,
                            reason: "Marked \(words): favoured for minutes, an untested way to bring offers (×\(Display.twoDecimals(factor)))")]

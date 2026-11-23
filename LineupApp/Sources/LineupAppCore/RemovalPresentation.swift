@@ -91,9 +91,12 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
     public let mark: SaleMark?
     /// The mark in the engine's words: "To sell"; nil when he has none.
     public let markText: String?
-    /// The engine's sentence on why he cannot be marked, shown in place of the mark control, for a player on a youth
-    /// contract as his advice reads it; nil for anyone else.
-    public let markRefusalText: String?
+    /// The mark control's choices: "No mark" and the mark to sell for a player on a youth contract as his advice reads
+    /// it, who cannot be loaned out; "No mark" and both marks for anyone else.
+    public let markChoices: [MarkChoice]
+    /// The engine's sentence shown under the mark control, saying a player on a youth contract cannot be loaned out;
+    /// nil for anyone else.
+    public let markNote: String?
 
     /// Critical and high rows are open until the owner closes them; medium and keep rows closed until opened.
     public var opensByDefault: Bool {
@@ -125,7 +128,9 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
         noteText = AdvisorText.note(for: advice.basis).map { "(\($0))" }
         self.mark = mark
         markText = mark.map(AdvisorText.name)
-        markRefusalText = advice.onYouthContract ? AdvisorText.youthContractNotMarked : nil
+        markChoices = advice.onYouthContract
+            ? RemovalPresentation.markChoices.filter { $0.mark != .toLoanOut } : RemovalPresentation.markChoices
+        markNote = advice.onYouthContract ? AdvisorText.youthContractNotLoaned : nil
     }
 }
 
@@ -303,7 +308,8 @@ public enum RemovalPresentation {
     public static let markLabel = "Mark"
     /// What a mark does and how far to trust it, in the engine's words.
     public static let marksNote = AdvisorText.marksNote
-    /// The control's choices: no mark, then each mark in the engine's words.
+    /// The control's choices for a player who can be marked either way: no mark, then each mark in the engine's words.
+    /// Each row carries its own (`RemovalRow.markChoices`).
     public static let markChoices = [MarkChoice(mark: nil, title: "No mark")]
         + SaleMark.allCases.map { MarkChoice(mark: $0, title: AdvisorText.name($0)) }
     public static let averageLabel = "First team's average ability"

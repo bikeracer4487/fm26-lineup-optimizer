@@ -50,8 +50,9 @@ extension AdvisorText {
         return "\(passing) \(rival) at \(position): favoured for matches there (×\(Display.twoDecimals(factor)))"
     }
 
-    /// Said where a player on a youth contract would be marked to sell or to loan out.
-    public static let youthContractNotMarked = "A player on a youth contract cannot be sold or loaned out, only released."
+    /// Said where a player on a youth contract would be marked to loan out, or have loan terms worked out: he can be
+    /// sold or released and cannot be loaned out (the owner's correction of 22 November 2026; FM27 observation).
+    public static let youthContractNotLoaned = "A player on a youth contract cannot be loaned out; he can be sold or released."
 
     /// How his reach was worked out, as a reach figure is never shown without it: "Ability 55, potential 140. At 16 with
     /// Professionalism 15 this tool expects about 13 points a season now, fewer later: could reach his potential."
