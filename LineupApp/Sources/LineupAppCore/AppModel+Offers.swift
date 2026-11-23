@@ -1,0 +1,281 @@
+import Foundation
+import LineupEngine
+
+extension AppModel {
+    /// A recording, "No bid came", an answer, accepting a club's terms and ending a deal are ignored within this long of
+    /// the end of the last of them: each changes the rows under the pointer, so a double-click would otherwise record
+    /// twice or answer the next round too. One clock for them all, apart from the Training and Scouting screens'.
+    public static let offersActionInterval: TimeInterval = 0.5
+
+    /// What the recorded asks and deals show, read from `offers.measureFrom` (all of the record when it is nil).
+    public var offerMeasures: OfferMeasures {
+        Offers.measures(asks: offers.asks, deals: offers.deals, from: offers.measureFrom, parameters: planParameters)
+    }
+
+    /// A sale for a player marked to sell, a loan for one marked to loan out, nil for one with no mark.
+    public func offerKind(for player: PlayerID) -> OfferKind? {
+        switch marks[player] {
+        case .toSell?: .sale
+        case .toLoanOut?: .loan
+        case nil: nil
+        }
+    }
+
+    /// Sets his value from what was typed: the digits of the text are the value, and text with no digit is none. When
+    /// the value changes its day becomes today in the game (none with no value). Saves the offers file and does not
+    /// plan; nothing for a player who is not in the squads, or when the value is unchanged.
+    public func setOfferValue(text: String, for player: PlayerID) {
+        guard heldPlayer(player) != nil else { return }
+        let value = Self.typedNumber(text)
+        var entry = offers.players[player] ?? PlayerOffer()
+        guard entry.value != value else { return }
+        entry.value = value
+        entry.valueDay = value == nil ? nil : settings.currentDate
+        offers.players[player] = entry
+        save(.offers)
+    }
+
+    /// Sets what his loan is for, which then stays whatever his age. Saves the offers file and does not plan; nothing for
+    /// a player who is not in the squads, or when it is already his.
+    public func setLoanPurpose(_ purpose: LoanPurpose, for player: PlayerID) {
+        guard heldPlayer(player) != nil else { return }
+        var entry = offers.players[player] ?? PlayerOffer()
+        guard entry.purpose != purpose else { return }
+        entry.purpose = purpose
+        offers.players[player] = entry
+        save(.offers)
+    }
+
+    /// What his loan is for: as the owner switched it; else development at `developingUpToAge` or under and moving his
+    /// wage when older; and moving his wage for a player not in the squads, whose age is not known.
+    public func loanPurpose(for player: PlayerID) -> LoanPurpose {
+        if let own = offers.players[player]?.purpose { return own }
+        guard let held = heldPlayer(player) else { return .wage }
+        return held.age <= planParameters.developingUpToAge.value ? .development : .wage
+    }
+
+    /// Sets one of a club's figures from what was typed, its digits as for a value. The transfer budget is whole units;
+    /// the three wage figures are typed in the period FMRTE shows wages by (the squad book's `moneyStyle`) and kept by
+    /// the week. The entry keeps the club's name as last typed, trimmed, and today in the game as its day. Saves the
+    /// offers file and does not plan; nothing for a blank name, or when the figures are unchanged.
+    public func setClubFigure(_ field: ClubField, text: String, club: String) {
+        let name = club.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        let key = PlayerID.normalise(name)
+        let number = Self.typedNumber(text)
+        let old = offers.clubs[key]?.figures
+        var figures = old ?? ClubFigures(name: name, transferBudget: nil, wageBudgetPerWeek: nil, wagesSpentPerWeek: nil,
+                                         highestWagePerWeek: nil)
+        figures.name = name
+        let perWeek = number.map { squad.book.moneyStyle.period.perWeek(Double($0)) }
+        switch field {
+        case .transferBudget: figures.transferBudget = number
+        case .wageBudget: figures.wageBudgetPerWeek = perWeek
+        case .wagesSpent: figures.wagesSpentPerWeek = perWeek
+        case .highestWage: figures.highestWagePerWeek = perWeek
+        }
+        guard figures != old else { return }
+        offers.clubs[key] = ClubEntry(figures: figures, enteredOn: settings.currentDate)
+        save(.offers)
+    }
+
+    /// The figures entered for the club of this name, compared by `PlayerID.normalise`; nil when none are.
+    public func clubEntry(named name: String) -> ClubEntry? {
+        offers.clubs[PlayerID.normalise(name)]
+    }
+
+    /// The player's open deal with the club of this name, compared by `PlayerID.normalise`; nil when there is none.
+    public func openDeal(for player: PlayerID, club: String) -> OfferDeal? {
+        let key = PlayerID.normalise(club)
+        return offers.deals.last { $0.player == player && $0.state == .open && PlayerID.normalise($0.club) == key }
+    }
+
+    /// Records terms asked of clubs in general, dated today in the game with his value and wage as they stand now.
+    /// Refused, with the engine's sentence and nothing saved, when he has no value typed or the terms are not good
+    /// terms of his kind; nothing for a player with no mark or not in the squads, or within `offersActionInterval` of
+    /// the last recording. Saves the offers file and does not plan.
+    @discardableResult public func recordAsk(for player: PlayerID, terms: OfferTerms) -> String? {
+        offersAction {
+            let subject: RecordSubject
+            switch recordSubject(player, terms: terms) {
+            case .refused(let sentence): return sentence
+            case .nothing: return nil
+            case .ready(let ready): subject = ready
+            }
+            offers.asks.append(OfferAsk(id: UUID(), player: player, playerName: subject.name, kind: subject.kind,
+                                        day: settings.currentDate, terms: terms, value: subject.value,
+                                        wagePerWeek: subject.wagePerWeek, noBidCame: false))
+            save(.offers)
+            return nil
+        }
+    }
+
+    /// Marks the ask as one that drew no bid. Nothing when it is already marked or there is no such ask, or within
+    /// `offersActionInterval` of the last recording. Saves the offers file and does not plan.
+    public func noBidCame(_ ask: UUID) {
+        offersAction {
+            guard let index = offers.asks.firstIndex(where: { $0.id == ask }), !offers.asks[index].noBidCame else {
+                return nil
+            }
+            offers.asks[index].noBidCame = true
+            save(.offers)
+            return nil
+        }
+    }
+
+    /// Records a round with the club of this name, dated today in the game with his value and wage as they stand now.
+    /// It joins his open deal of the same kind with that club (names by `PlayerID.normalise`), or opens one, which keeps
+    /// the club's figures as entered now (nil when none are). A round of the club's after one of the owner's leaves that
+    /// round's answer as it is. Refused as `recordAsk` is; nothing, too, for a blank club name. Saves the offers file
+    /// and does not plan.
+    @discardableResult public func recordRound(for player: PlayerID, club: String, by: RoundBy,
+                                               terms: OfferTerms) -> String? {
+        offersAction {
+            let subject: RecordSubject
+            switch recordSubject(player, terms: terms) {
+            case .refused(let sentence): return sentence
+            case .nothing: return nil
+            case .ready(let ready): subject = ready
+            }
+            let name = club.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return nil }
+            let round = OfferRound(day: settings.currentDate, by: by, terms: terms, value: subject.value,
+                                   wagePerWeek: subject.wagePerWeek, answer: nil)
+            let key = PlayerID.normalise(name)
+            if let index = offers.deals.lastIndex(where: {
+                $0.player == player && $0.kind == subject.kind && $0.state == .open && PlayerID.normalise($0.club) == key
+            }) {
+                offers.deals[index].rounds.append(round)
+            } else {
+                offers.deals.append(OfferDeal(id: UUID(), player: player, playerName: subject.name, kind: subject.kind,
+                                              club: name, figures: clubEntry(named: name)?.figures, rounds: [round],
+                                              endedOn: nil))
+            }
+            save(.offers)
+            return nil
+        }
+    }
+
+    /// Sets the club's answer on the deal's last round, when the deal is open and that round is the owner's with no
+    /// answer yet. Nothing otherwise, or within `offersActionInterval` of the last recording. Saves the offers file and
+    /// does not plan.
+    public func answer(_ answer: RoundAnswer, deal: UUID) {
+        changeLastRound(of: deal) { round in
+            guard round.by == .owner, round.answer == nil else { return false }
+            round.answer = answer
+            return true
+        }
+    }
+
+    /// Accepts the club's terms: the deal's last round is marked accepted, so the deal is agreed, when the deal is open
+    /// and that round is the club's. Nothing otherwise, or within `offersActionInterval` of the last recording. Saves the
+    /// offers file and does not plan.
+    public func acceptTheirs(deal: UUID) {
+        changeLastRound(of: deal) { round in
+            guard round.by == .club, round.answer == nil else { return false }
+            round.answer = .accepted
+            return true
+        }
+    }
+
+    /// Ends an open deal today in the game. Nothing for a deal that is not open, or within `offersActionInterval` of the
+    /// last recording. Saves the offers file and does not plan.
+    public func endDeal(_ deal: UUID) {
+        offersAction {
+            guard let index = offers.deals.firstIndex(where: { $0.id == deal }), offers.deals[index].state == .open else {
+                return nil
+            }
+            offers.deals[index].endedOn = settings.currentDate
+            save(.offers)
+            return nil
+        }
+    }
+
+    /// Removes the deal, after the screen has asked. Saves the offers file and does not plan; nothing for no such deal.
+    public func deleteDeal(_ deal: UUID) {
+        guard offers.deals.contains(where: { $0.id == deal }) else { return }
+        offers.deals.removeAll { $0.id == deal }
+        save(.offers)
+    }
+
+    /// Removes the ask, after the screen has asked. Saves the offers file and does not plan; nothing for no such ask.
+    public func deleteAsk(_ ask: UUID) {
+        guard offers.asks.contains(where: { $0.id == ask }) else { return }
+        offers.asks.removeAll { $0.id == ask }
+        save(.offers)
+    }
+
+    /// Reads the measures from today in the game on; every ask and deal stays in the record. Saves the offers file and
+    /// does not plan.
+    public func measureOffersAgain() {
+        guard offers.measureFrom != settings.currentDate else { return }
+        offers.measureFrom = settings.currentDate
+        save(.offers)
+    }
+
+    // MARK: Working it out
+
+    /// The number in what was typed: its digits, or nil with none (as `LeagueFormatDraft.set` reads a field).
+    static func typedNumber(_ text: String) -> Int? {
+        let digits = text.filter { $0.isASCII && $0.isNumber }
+        return digits.isEmpty ? nil : Int(digits)
+    }
+
+    private func heldPlayer(_ id: PlayerID) -> Player? {
+        squad.book.allPlayers.first { $0.id == id }
+    }
+
+    /// What a recording for a player is made with: his kind, his name, his value and his wage now.
+    private struct RecordSubject {
+        let kind: OfferKind
+        let name: String
+        let value: Int
+        let wagePerWeek: Double
+    }
+
+    private enum RecordCheck {
+        case ready(RecordSubject)
+        /// The engine's sentence.
+        case refused(String)
+        /// No mark, or not in the squads: there is nothing to record against.
+        case nothing
+    }
+
+    /// Whether terms can be recorded for the player: he is marked and in the squads, has a value, and the terms pass
+    /// `Offers.check` for his kind.
+    private func recordSubject(_ player: PlayerID, terms: OfferTerms) -> RecordCheck {
+        guard let kind = offerKind(for: player), let held = heldPlayer(player) else { return .nothing }
+        guard let value = offers.players[player]?.value else {
+            return .refused(ErrorDescriptions.describe(OfferError.missing(.value, club: nil)))
+        }
+        do {
+            try Offers.check(terms, kind: kind)
+        } catch {
+            return .refused(ErrorDescriptions.describe(error))
+        }
+        return .ready(RecordSubject(kind: kind, name: held.name, value: value, wagePerWeek: held.wagePerWeek))
+    }
+
+    /// Changes the last round of an open deal through `change`, which says whether it changed it, and saves; guarded as a
+    /// recording is.
+    private func changeLastRound(of deal: UUID, _ change: (inout OfferRound) -> Bool) {
+        offersAction {
+            guard let index = offers.deals.firstIndex(where: { $0.id == deal }), offers.deals[index].state == .open,
+                  let last = offers.deals[index].rounds.indices.last,
+                  change(&offers.deals[index].rounds[last]) else { return nil }
+            save(.offers)
+            return nil
+        }
+    }
+
+    /// Runs `action` unless it arrives within `offersActionInterval` of the end of the last one that ran: the first always
+    /// runs. The clock is read again once it has finished and that time recorded as the last action's end. Returns what
+    /// the action returned, or nil when it was ignored.
+    @discardableResult private func offersAction(_ action: () -> String?) -> String? {
+        let start = environment.now()
+        if let last = lastOffersAction, start - last < Self.offersActionInterval { return nil }
+        let result = action()
+        lastOffersAction = environment.now()
+        return result
+    }
+}

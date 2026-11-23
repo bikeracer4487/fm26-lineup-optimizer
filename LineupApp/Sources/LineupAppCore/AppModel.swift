@@ -120,6 +120,8 @@ public struct AppEnvironment: Sendable {
     @ObservationIgnored var lastTrainingAction: TimeInterval?
     /// When the last "Hide" or "Show again" on the Scouting screen ended, by the environment's clock.
     @ObservationIgnored var lastScoutingAction: TimeInterval?
+    /// When the last recording, answer or end of a deal on the Offers screen ended, by the environment's clock.
+    @ObservationIgnored var lastOffersAction: TimeInterval?
     /// When the last suggestion was taken from the Fixtures table, on `environment.now`'s clock; nil before the first.
     @ObservationIgnored var lastSuggestionAction: TimeInterval?
 
@@ -139,6 +141,9 @@ public struct AppEnvironment: Sendable {
     /// The pasted players the owner has hidden. Changed only through `hideCandidate(_:for:)` and
     /// `showCandidateAgain(_:for:)`; a paste and "Clear" leave it alone.
     public internal(set) var scouting: ScoutingState
+    /// The values, the clubs' figures and the record of offers. Changed only through the actions in
+    /// `AppModel+Offers.swift`, which save it and nothing else; none plans.
+    public internal(set) var offers: OffersState
     /// Why the last paste on the Scouting screen was refused, in the engine's sentence; nil after a good paste.
     public internal(set) var scoutingPasteProblem: String?
 
@@ -184,6 +189,7 @@ public struct AppEnvironment: Sendable {
         let league = store.load(.league, as: LeagueState.self, otherwise: LeagueState())
         let fitness = store.load(.fitness, as: FitnessState.self, otherwise: FitnessState())
         let scouting = store.load(.scouting, as: ScoutingState.self, otherwise: ScoutingState())
+        let offers = store.load(.offers, as: OffersState.self, otherwise: OffersState())
         self.settings = settings.value
         self.tactics = tactics.value
         self.fixtures = fixtures.value.sorted(by: Self.dateOrder)
@@ -195,6 +201,7 @@ public struct AppEnvironment: Sendable {
         self.league = league.value
         self.fitness = fitness.value
         self.scouting = scouting.value
+        self.offers = offers.value
         self.leagueFormatDraft = LeagueFormatDraft(league.value.format)
         // A draft is kept only for a saved tactic it differs from. When the tactics file could not be read and was left
         // where it is, its tactics are still on disk, so every draft is kept for them.
@@ -205,7 +212,8 @@ public struct AppEnvironment: Sendable {
             : drafts.value.filter { saved[$0.id] != nil && saved[$0.id] != $0.tactic }
         self.tacticDrafts = Dictionary(kept.map { ($0.id, TacticDraft($0.tactic)) }, uniquingKeysWith: { first, _ in first })
         self.notices = [settings.notice, tactics.notice, fixtures.notice, history.notice, squad.notice, drafts.notice,
-                        training.notice, marks.notice, mentoring.notice, league.notice, fitness.notice, scouting.notice]
+                        training.notice, marks.notice, mentoring.notice, league.notice, fitness.notice, scouting.notice,
+                        offers.notice]
             .compactMap { $0 }.map(Notice.init(text:))
         self.lastImport = nil
         self.planState = .needsSquad
@@ -217,7 +225,7 @@ public struct AppEnvironment: Sendable {
                                             (.drafts, drafts.replaceOnDisk || kept.count != drafts.value.count),
                                             (.training, training.replaceOnDisk), (.marks, marks.replaceOnDisk), (.mentoring, mentoring.replaceOnDisk),
                                             (.league, league.replaceOnDisk), (.fitness, fitness.replaceOnDisk),
-                                            (.scouting, scouting.replaceOnDisk)]
+                                            (.scouting, scouting.replaceOnDisk), (.offers, offers.replaceOnDisk)]
         for (file, replace) in replaced where replace { save(file) }
         // A state saved before personality was read at each import has no reading: start from the squads held.
         if self.mentoring.readings.isEmpty {
@@ -264,6 +272,7 @@ public struct AppEnvironment: Sendable {
             case .league: try store.save(league, to: .league)
             case .fitness: try store.save(fitness, to: .fitness)
             case .scouting: try store.save(scouting, to: .scouting)
+            case .offers: try store.save(offers, to: .offers)
             }
             return true
         } catch {

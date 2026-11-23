@@ -407,6 +407,50 @@ import LineupEngine
         }
     }
 
+    @Test func theOffersFileIsOneOfTheFiles() {
+        #expect(StoreFile.allCases.contains(.offers))
+        #expect(StoreFile.offers.rawValue == "offers")
+        #expect(!StoreFile.offers.isNoticedWhenMissing)
+    }
+
+    @Test func aMissingOffersFileIsNotNoticedBesideOthers() throws {
+        try withStore { store, _ in
+            try store.save(settings, to: .settings)
+            let loaded = store.load(.offers, as: OffersState.self, otherwise: OffersState())
+            #expect(loaded.value == OffersState())
+            #expect(loaded.notice == nil)
+            #expect(loaded.replaceOnDisk)
+        }
+    }
+
+    @Test func anUnreadableOffersFileIsKeptAsideWithANotice() throws {
+        try withStore { store, dir in
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data("{".utf8).write(to: dir.appendingPathComponent("offers.json"))
+            let loaded = store.load(.offers, as: OffersState.self, otherwise: OffersState())
+            #expect(loaded.value == OffersState())
+            #expect(try #require(loaded.notice).hasPrefix("Your recorded offers could not be read as saved data"))
+            #expect(try #require(loaded.notice).contains("the record starts empty"))
+            #expect(loaded.replaceOnDisk)
+            expectKeptAside(dir, original: "offers.json", kept: "offers.unreadable-1.json")
+        }
+    }
+
+    @Test func offersAreSavedWithEachPlayerUnderHisKey() throws {
+        try withStore { store, dir in
+            var state = OffersState()
+            state.players[PlayerID(key: "fmrte:7")] = PlayerOffer(value: 40_000, valueDay: Day(iso: "2026-11-13")!,
+                                                                  purpose: .wage)
+            try store.save(state, to: .offers)
+            let json = try JSONSerialization.jsonObject(
+                with: Data(contentsOf: dir.appendingPathComponent("offers.json"))) as! [String: Any]
+            let value = try #require(json["value"] as? [String: Any])
+            let players = try #require(value["players"] as? [String: Any])
+            #expect(Set(players.keys) == ["fmrte:7"])
+            #expect(store.load(.offers, as: OffersState.self, otherwise: OffersState()).value == state)
+        }
+    }
+
     @Test func theFitnessFileIsOneOfTheFiles() {
         #expect(StoreFile.allCases.contains(.fitness))
         #expect(StoreFile.fitness.rawValue == "fitness")

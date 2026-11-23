@@ -17,10 +17,10 @@ public enum WagePeriod: String, Codable, CaseIterable, Sendable {
     }
 
     /// An amount for one of this period, per week: a monthly amount × 12 ÷ 52, a yearly one ÷ 52.
-    func perWeek(_ amount: Double) -> Double { amount * perYear / Self.weeksPerYear }
+    public func perWeek(_ amount: Double) -> Double { amount * perYear / Self.weeksPerYear }
 
     /// A weekly amount for one of this period: per week × 52 ÷ 12 for a month, × 52 for a year.
-    func amount(perWeek: Double) -> Double { perWeek * Self.weeksPerYear / perYear }
+    public func amount(perWeek: Double) -> Double { perWeek * Self.weeksPerYear / perYear }
 
     /// The period after an amount: " a week", " a month", " a year".
     var suffix: String {
