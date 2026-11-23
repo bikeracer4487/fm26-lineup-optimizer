@@ -132,7 +132,12 @@ import Testing
     }
     @Test func theOwnersRoundWaitsForTheAnswerAndIsAcceptedWhenAccepted() throws {
         #expect(try next(.development, [Self.mine(50, nil)]).advice == .awaitAnswer)
-        #expect(try next(.development, [Self.mine(50, .accepted)]).advice == .accept)
+        #expect(try next(.development, [Self.mine(50, .accepted)]).advice == .agreed)
+        var accepted = Self.theirs(30, .startingPlace); accepted.answer = .accepted
+        let s = try next(.development, [accepted])
+        #expect(s.advice == .agreed && s.notes.isEmpty)
+        var wageAccepted = Self.theirs(20, .less); wageAccepted.answer = .accepted
+        #expect(try next(.wage, [wageAccepted]).advice == .agreed)
     }
     @Test func aRefusalDropsTheFeeFirstThenAStepOfTheShare() throws {
         let a = try next(.development, [Self.mine(100, fee: 500, .refused)], value: 120_000)

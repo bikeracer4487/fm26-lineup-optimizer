@@ -102,6 +102,9 @@ import Testing
         let c = Self.club()
         let accept = try Self.proposal(subject, .sale, club: c, rounds: [Self.saleRound(.club, now: 40_000, nil)])
         #expect(Self.lines(accept, kind: .sale, subject: subject, club: "Barnet") == ["Accept: it meets your ask."])
+        let agreed = try Self.proposal(subject, .sale, club: c, rounds: [Self.saleRound(.owner, now: 40_000, fee: 20, .accepted)])
+        #expect(agreed.advice == .agreed)
+        #expect(Self.lines(agreed, kind: .sale, subject: subject, club: "Barnet") == ["The deal is agreed."])
         let counter = try Self.proposal(subject, .sale, club: c, rounds: [Self.saleRound(.club, now: 8_000, nil)])
         #expect(Self.lines(counter, kind: .sale, subject: subject, club: "Barnet") == [
             "Counter once: £8,000 now and £1,600 later, after 50 league appearances, with 20% of his next fee."])
@@ -143,12 +146,12 @@ import Testing
     @Test func measuredFiguresUsedAreSaid() throws {
         let line = Self.measures(sale: Self.reading(line: 0.51))
         let s = try Self.ask(Self.subject(), .sale, measures: line)
-        #expect(Self.lines(s, kind: .sale, subject: Self.subject()).last == "Asked at 51% of his value, the line your own offers show (this tool's estimate).")
+        #expect(Self.lines(s, kind: .sale, subject: Self.subject()).last == "The line your own offers show is 51% of his value (this tool's estimate).")
         let step = Self.measures(sale: Self.reading(line: 0.51), counterDeals: 3, step: 1.15)
         let counter = try Self.proposal(Self.subject(), .sale, club: Self.club(), rounds: [Self.saleRound(.club, now: 8_000, nil)], measures: step)
         let l = Self.lines(counter, kind: .sale, subject: Self.subject(), club: "Barnet")
-        #expect(l.suffix(2) == ["Asked at 51% of his value, the line your own offers show (this tool's estimate).",
-                                "Countered at 15% over the bid, as your own agreed sales show (this tool's estimate)."])
+        #expect(l.suffix(2) == ["The line your own offers show is 51% of his value (this tool's estimate).",
+                                "Your own agreed sales show clubs coming up 15% over a bid (this tool's estimate)."])
     }
 
     // MARK: loans
@@ -158,7 +161,7 @@ import Testing
         let s = try Self.ask(subject, .loan)
         #expect(Self.lines(s, kind: .loan, subject: subject) == [
             "Ask 50% of his wage, a starting place (Regular Starter) and no fee, and keep the recall.",
-            "50% is what the loan rule says a borrower bears: his value ÷ 192 a week (carried over from about FM22, no sample).",
+            "50% is within what the loan rule says a borrower bears: his value ÷ 192 a week (carried over from about FM22, no sample).",
             "Clubs are reported to open at none of the wage and Squad Player, and to accept more when you propose the terms yourself (carried over from FM24, one report)."])
     }
 
@@ -167,13 +170,13 @@ import Testing
         let left = try Self.proposal(subject, .loan, club: Self.club(budget: nil, wageBudget: 5_000, spent: 4_800))
         #expect(Self.lines(left, kind: .loan, subject: subject, club: "Barnet") == [
             "Ask 40% of his wage, a starting place (First-Choice Goalkeeper) and no fee, and keep the recall.",
-            "40% is what Barnet have left in their wage budget: £200 a week."])
+            "40% is within what Barnet have left in their wage budget: £200 a week."])
         let highest = try Self.proposal(subject, .loan, club: Self.club(budget: nil, wageBudget: 5_000, spent: 3_000, highest: 150))
-        #expect(Self.lines(highest, kind: .loan, subject: subject, club: "Barnet").last == "30% is the highest wage Barnet can offer: £150 a week.")
+        #expect(Self.lines(highest, kind: .loan, subject: subject, club: "Barnet").last == "30% is within the highest wage Barnet can offer: £150 a week.")
         let big = Self.subject(value: 120_000, wage: 500)
         let monthly = try Self.proposal(big, .loan, club: Self.club(budget: nil, wageBudget: 5_000, spent: 4_550))
         #expect(Self.lines(monthly, kind: .loan, subject: big, club: "Barnet", style: Self.monthly).contains(
-            "90% is what Barnet have left in their wage budget: £1,950 a month."))
+            "90% is within what Barnet have left in their wage budget: £1,950 a month."))
     }
 
     @Test func aLoanWithAFee() throws {
@@ -220,8 +223,8 @@ import Testing
         let m = Self.measures(loan: Self.reading(line: 0.00525))
         let s = try Self.ask(subject, .loan, measures: m)
         let l = Self.lines(s, kind: .loan, subject: subject)
-        #expect(l.contains("50% is what your own offers show a borrower bears."))
-        #expect(l.last == "Asked at 2.1% of his value a month, the line your own offers show (this tool's estimate)." || l.contains("Asked at 2.1% of his value a month, the line your own offers show (this tool's estimate)."))
+        #expect(l.contains("50% is within what your own offers show a borrower bears."))
+        #expect(l.last == "The line your own offers show is 2.1% of his value a month (this tool's estimate)." || l.contains("The line your own offers show is 2.1% of his value a month (this tool's estimate)."))
         let all = Self.subject(value: 120_000, wage: 500)
         let big = try Self.ask(all, .loan, measures: m)
         #expect(Self.lines(big, kind: .loan, subject: all).contains("All of his wage is within what your own offers show a borrower bears."))
@@ -285,12 +288,38 @@ import Testing
     @Test func theEvidenceNoteTakesItsNumbersFromTheRules() {
         #expect(AdvisorText.offersEvidenceNote(Self.rules) == [
             "A club offers only what it can afford (FM26, official). The club's budget and wage figures are the club's own, as you entered them.",
-            "Carried over from reports on older versions, none of them a test: a sale at about his value, 20% of his next fee, the loan rule of his value ÷ 192 a week, and a counter of 10 to 20% over a bid.",
+            "Carried over from reports on older versions, none of them a test: a sale at about his value, 20% of his next fee, the loan rule of his value ÷ 192 a week, and a counter of up to 20% over a bid.",
             "This tool's own, with no evidence: the 12 months of instalments, the step down of 10% after a refusal and its limit of two, and the 5 deals each way and 3 countered sales needed before anything is measured.",
             "What is measured from your own offers shows only what you tried: a line rises only when a higher ask is accepted."])
         var changed = Self.rules
         changed.nextFeePercent = 25
         #expect(AdvisorText.offersEvidenceNote(changed)[1].contains("25% of his next fee"))
+    }
+
+    @Test func withNoClubNameTheCautionsAreSentences() throws {
+        let subject = Self.subject()
+        let s = try Self.proposal(subject, .sale, club: Self.club(wageBudget: 3_300, spent: 3_000, highest: 400))
+        let l = Self.lines(s, kind: .sale, subject: subject, club: nil)
+        #expect(l.contains("The club has £300 a week left in its wage budget and he earns £450 a week: he would have to take less to go there."))
+        #expect(l.contains("The highest wage the club can offer is £400 a week and he earns £450 a week: he would have to take less to go there."))
+        let loan = Self.subject(value: 50_000, wage: 500)
+        let down = try Self.proposal(loan, .loan, club: Self.club(budget: nil, wageBudget: 5_000, spent: 3_000), rounds: [Self.loanRound(.owner, 0, time: .startingPlace, .refused)])
+        #expect(Self.lines(down, kind: .loan, subject: loan, club: nil) == ["At none of his wage and turned down, the club does not want him on these terms."])
+    }
+
+    @Test func aLoanRuleOfZeroLeavesTheDivisorOut() throws {
+        var r = Self.rules
+        r.loanLinePerWeek = 0
+        let subject = Self.subject(value: 50_000, wage: 500)
+        let s = OfferSuggestion(advice: .propose(.loan(LoanTerms(wagePercent: 50, feePerMonth: 0, playingTime: .startingPlace, recall: true, futureFee: nil)), split: nil),
+                                notes: [.shareLimitedBy(.value), .shareLimitedBy(.all)], basis: Self.p.offerRules.evidence)
+        let l = AdvisorText.offerLines(s, kind: .loan, subject: subject, club: nil, money: Self.money, rules: r)
+        #expect(l[1] == "50% is within what the loan rule says a borrower bears (carried over from about FM22, no sample).")
+        #expect(l[2] == "All of his wage is within what the loan rule says a borrower bears (carried over from about FM22, no sample).")
+        let note = AdvisorText.offersEvidenceNote(r)
+        #expect(note[1] == "Carried over from reports on older versions, none of them a test: a sale at about his value, 20% of his next fee, the loan rule, and a counter of up to 20% over a bid.")
+        r.loanLinePerWeek = .infinity
+        #expect(!AdvisorText.offersEvidenceNote(r)[1].contains("÷"))
     }
 
     @Test func noSentenceHoldsNanOrInf() throws {

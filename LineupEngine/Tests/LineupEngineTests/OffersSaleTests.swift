@@ -164,7 +164,10 @@ import Testing
         #expect(try next([mine(40_000, nil)]).advice == .awaitAnswer)
     }
     @Test func anAcceptedProposalIsAgreedAndNeedsNoMore() throws {
-        #expect(try next([mine(40_000, .accepted)]).advice == .accept)
+        #expect(try next([mine(40_000, .accepted)]).advice == .agreed)
+        var bid = theirs(30_000); bid.answer = .accepted
+        let s = try next([bid])
+        #expect(s.advice == .agreed && s.notes.isEmpty)
     }
     @Test func aRefusalLowersTheNextProposalByATenthTwiceAndNoFurther() throws {
         let once = try next([mine(40_000, .refused)], budget: 50_000)

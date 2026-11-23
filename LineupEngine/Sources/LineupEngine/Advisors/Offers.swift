@@ -132,7 +132,7 @@ public enum Offers {
         switch suggestion.advice {
         case .propose: isCounter = false
         case .counter: isCounter = true
-        case .accept, .acceptOrLeave, .awaitAnswer, .nothingLower: return suggestion
+        case .accept, .agreed, .acceptOrLeave, .awaitAnswer, .nothingLower: return suggestion
         }
         switch kind {
         case .sale:
@@ -158,6 +158,9 @@ public enum Offers {
         for round in rounds {
             guard case .sale(let t) = round.terms else { throw OfferError.wrongKind }
             sales.append(t)
+        }
+        if rounds.contains(where: { $0.answer == .accepted }) {
+            return OfferSuggestion(advice: .agreed, notes: [], basis: basis)
         }
         guard let last = rounds.last, let lastTerms = sales.last else {
             return try sale(total: ask, club: club, subject: subject, rules: rules, notes: notes, basis: basis)
@@ -363,6 +366,9 @@ public enum Offers {
             OfferSuggestion(advice: advice, notes: notes + extra, basis: basis)
         }
         let loans = try rounds.map { try loanTerms(of: $0.terms) }
+        if rounds.contains(where: { $0.answer == .accepted }) {
+            return OfferSuggestion(advice: .agreed, notes: [], basis: basis)
+        }
         guard let last = rounds.last, let lastTerms = loans.last else {
             let figures = try loanFigures(subject, club: club, rules: rules)
             let terms = loanTerms(percent: figures.percent, fee: figures.fee, purpose: subject.purpose)

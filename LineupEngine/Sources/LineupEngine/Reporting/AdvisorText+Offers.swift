@@ -67,8 +67,21 @@ extension AdvisorText {
     }
 
     /// The loan rule's divisor, as the rule is spoken of: his value ÷ 192 a week.
-    private static func loanDivisor(_ rules: OfferRules) -> String {
-        "\(Int((1 / rules.loanLinePerWeek).rounded()))"
+    /// Nil when the rule's figure is 0 or not finite, so that the clause is left out rather than written wrongly.
+    private static func loanDivisor(_ rules: OfferRules) -> String? {
+        let divisor = 1 / rules.loanLinePerWeek
+        guard rules.loanLinePerWeek > 0, rules.loanLinePerWeek.isFinite, divisor.isFinite, divisor >= 0.5, divisor < 1e9 else { return nil }
+        return "\(Int(divisor.rounded()))"
+    }
+
+    /// "his value ÷ 192 a week" with its leading ": ", or nothing.
+    private static func loanDivisorClause(_ rules: OfferRules) -> String {
+        loanDivisor(rules).map { ": his value ÷ \($0) a week" } ?? ""
+    }
+
+    /// "the loan rule of his value ÷ 192 a week", or "the loan rule".
+    private static func loanRuleOf(_ rules: OfferRules) -> String {
+        loanDivisor(rules).map { "the loan rule of his value ÷ \($0) a week" } ?? "the loan rule"
     }
 
     private static func startingPlaceName(goalkeeper: Bool) -> String {
@@ -187,7 +200,7 @@ extension AdvisorText {
     private static func adviceTerms(_ advice: OfferAdvice) -> OfferTerms? {
         switch advice {
         case .propose(let terms, _), .counter(let terms): terms
-        case .accept, .acceptOrLeave, .awaitAnswer, .nothingLower: nil
+        case .accept, .agreed, .acceptOrLeave, .awaitAnswer, .nothingLower: nil
         }
     }
 
@@ -227,6 +240,8 @@ extension AdvisorText {
                 case .wage: return "Accept: it meets the share you asked."
                 }
             }
+        case .agreed:
+            return "The deal is agreed."
         case .acceptOrLeave:
             return "Accept it or leave it: earlier reports are of two or three chances before a club withdraws (carried over, one report)."
         case .awaitAnswer:
@@ -234,11 +249,11 @@ extension AdvisorText {
         case .nothingLower(let reason):
             switch reason {
             case .clubTurnedDownThree:
-                return "\(name) have turned down or not answered \(numberWord(rules.stepsDownAtMost + 1)) proposals. Leave it, or ask what they would pay."
+                return "\(club.map { "\($0) have" } ?? "The club has") turned down or not answered \(numberWord(rules.stepsDownAtMost + 1)) proposals. Leave it, or ask what they would pay."
             case .noBidThree:
                 return "\(capitalised(numberWord(rules.stepsDownAtMost + 1))) asks have drawn no bid. Earlier reports are that with no club interested no price brings one (carried over from FM24, reports only). Find interest first: ask his agent about interest, or pitch him against a club's stated need."
             case .clubDoesNotWantHim:
-                return "At none of his wage and turned down, \(name) do not want him on these terms."
+                return "At none of his wage and turned down, \(club.map { "\($0) do" } ?? "the club does") not want him on these terms."
             }
         }
     }
@@ -304,21 +319,21 @@ extension AdvisorText {
         case .restAskedLater(let now):
             return "\(name) can spend \(Display.money(now, symbol: money.symbol)) now; the rest is asked later. \(beyondBudget)"
         case .wageLeftUnderHisWage(let left):
-            return "\(name) have \(Display.wage(perWeek: left, money)) left in their wage budget and he earns \(Display.wage(perWeek: subject.wagePerWeek, money)): he would have to take less to go there."
+            return "\(club.map { "\($0) have" } ?? "The club has") \(Display.wage(perWeek: left, money)) left in \(club == nil ? "its" : "their") wage budget and he earns \(Display.wage(perWeek: subject.wagePerWeek, money)): he would have to take less to go there."
         case .highestWageUnderHisWage(let highest):
-            return "The highest wage \(name) can offer is \(Display.wage(perWeek: highest, money)) and he earns \(Display.wage(perWeek: subject.wagePerWeek, money)): he would have to take less to go there."
+            return "The highest wage \(club ?? "the club") can offer is \(Display.wage(perWeek: highest, money)) and he earns \(Display.wage(perWeek: subject.wagePerWeek, money)): he would have to take less to go there."
         case .shareLimitedBy(let limit):
             let lead = percent.map { "\($0)%" } ?? "The share"
             let rule = measuredLine
                 ? "what your own offers show a borrower bears"
-                : "what the loan rule says a borrower bears: his value ÷ \(loanDivisor(rules)) a week (carried over from about FM22, no sample)"
+                : "what the loan rule says a borrower bears\(loanDivisorClause(rules)) (carried over from about FM22, no sample)"
             switch limit {
             case .all: return "All of his wage is within \(rule)."
-            case .value: return "\(lead) is \(rule)."
+            case .value: return "\(lead) is within \(rule)."
             case .wageLeft(let left):
-                return "\(lead) is what \(club ?? "the club") \(club == nil ? "has" : "have") left in their wage budget: \(Display.wage(perWeek: left, money))."
+                return "\(lead) is within what \(club.map { "\($0) have" } ?? "the club has") left in \(club == nil ? "its" : "their") wage budget: \(Display.wage(perWeek: left, money))."
             case .highestWage(let highest):
-                return "\(lead) is the highest wage \(club ?? "the club") can offer: \(Display.wage(perWeek: highest, money))."
+                return "\(lead) is within the highest wage \(club ?? "the club") can offer: \(Display.wage(perWeek: highest, money))."
             }
         case .recallWithFee:
             return "Older versions did not allow a recall clause with a loan fee (carried over from FM11 and FM19, reports only): if the game refuses, drop the fee."
@@ -327,12 +342,12 @@ extension AdvisorText {
         case .measuredLine(let line):
             switch kind {
             case .sale:
-                return "Asked at \(Display.percent(line)) of his value, the line your own offers show (this tool's estimate)."
+                return "The line your own offers show is \(Display.percent(line)) of his value (this tool's estimate)."
             case .loan:
-                return "Asked at \(Display.onePercentDecimal(line * Double(rules.weeksPerMonthInRule))) of his value a month, the line your own offers show (this tool's estimate)."
+                return "The line your own offers show is \(Display.onePercentDecimal(line * Double(rules.weeksPerMonthInRule))) of his value a month (this tool's estimate)."
             }
         case .measuredCounterStep(let step):
-            return "Countered at \(Display.percent(step - 1)) over the bid, as your own agreed sales show (this tool's estimate)."
+            return "Your own agreed sales show clubs coming up \(Display.percent(step - 1)) over a bid (this tool's estimate)."
         }
     }
 
@@ -386,7 +401,7 @@ extension AdvisorText {
     public static func offersEvidenceNote(_ rules: OfferRules) -> [String] {
         [
             "A club offers only what it can afford (FM26, official). The club's budget and wage figures are the club's own, as you entered them.",
-            "Carried over from reports on older versions, none of them a test: a sale at about his value, \(rules.nextFeePercent)% of his next fee, the loan rule of his value ÷ \(loanDivisor(rules)) a week, and a counter of 10 to \(Display.percent(rules.counterStep - 1)) over a bid.",
+            "Carried over from reports on older versions, none of them a test: a sale at about his value, \(rules.nextFeePercent)% of his next fee, \(loanRuleOf(rules)), and a counter of up to \(Display.percent(rules.counterStep - 1)) over a bid.",
             "This tool's own, with no evidence: the \(rules.instalmentMonths) months of instalments, the step down of \(Display.percent(rules.stepDown)) after a refusal and its limit of \(numberWord(rules.stepsDownAtMost)), and the \(rules.fewestEachWay) deals each way and \(rules.fewestCounterDeals) countered sales needed before anything is measured.",
             "What is measured from your own offers shows only what you tried: a line rises only when a higher ask is accepted.",
         ]

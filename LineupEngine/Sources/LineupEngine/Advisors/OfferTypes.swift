@@ -308,6 +308,8 @@ public enum OfferAdvice: Equatable, Sendable {
     case propose(OfferTerms, split: SaleSplit?)
     case counter(OfferTerms)
     case accept
+    /// A round has been accepted: there is nothing left to answer.
+    case agreed
     case acceptOrLeave
     case awaitAnswer
     case nothingLower(NothingLower)
