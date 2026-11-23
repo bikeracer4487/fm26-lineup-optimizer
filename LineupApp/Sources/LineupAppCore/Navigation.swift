@@ -33,8 +33,8 @@ public enum MentoringEditing: Identifiable, Equatable, Sendable {
 /// Match Selection's fixture, selected pick and view, the squad table's filter, search and sort, the tactic shown,
 /// a fixture being edited and the fixture whose suggested importance's reasons are shown, the Elevens screen's view,
 /// tactic and slot, the Player Removal screen's filter and the rows opened or closed, and the Training screen's tab,
-/// the squad its Mentoring tab shows and what that tab has open for editing, and the Scouting screen's tab, tactic,
-/// order, opened rows and rest part.
+/// the squad its Mentoring tab shows and what that tab has open for editing, the Scouting screen's tab, tactic,
+/// order, opened rows and rest part, and the Offers screen's typed clubs, earlier offers and round being recorded.
 @MainActor @Observable public final class Navigation {
     public var screen: Screen?
     /// The fixture shown. While nil, or once it has left the plan, `MatchPresentation.initialFixture`.
@@ -75,6 +75,11 @@ public enum MentoringEditing: Identifiable, Equatable, Sendable {
     public var scoutingRestOpen = false
     public var scoutingMoreOpen: Set<String> = []
     public var scoutingHiddenOpen = false
+    /// The Offers screen's club typed in each player's "To a club" row, whether "Earlier offers" is open, and the round
+    /// being recorded (nil: none). In memory only: empty and closed at every launch.
+    public var offerClub: [PlayerID: String] = [:]
+    public var offersEarlierOpen = false
+    public var offerEditor: OfferRoundDraft?
 
     /// Opens the candidate's row, or closes it when open.
     public func toggleScoutingRow(_ id: PlayerID) {

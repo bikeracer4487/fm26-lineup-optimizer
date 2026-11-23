@@ -57,13 +57,15 @@ extension AppModel {
     /// Sets one of a club's figures from what was typed, its digits as for a value. The transfer budget is whole units;
     /// the three wage figures are typed in the period FMRTE shows wages by (the squad book's `moneyStyle`) and kept by
     /// the week. The entry keeps the club's name as last typed, trimmed, and today in the game as its day. Saves the
-    /// offers file and does not plan; nothing for a blank name, or when the figures are unchanged.
+    /// offers file and does not plan; nothing for a blank name, when the figures are unchanged, or for a blank figure
+    /// of a club with no entry.
     public func setClubFigure(_ field: ClubField, text: String, club: String) {
         let name = club.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
         let key = PlayerID.normalise(name)
         let number = Self.typedNumber(text)
         let old = offers.clubs[key]?.figures
+        guard old != nil || number != nil else { return }
         var figures = old ?? ClubFigures(name: name, transferBudget: nil, wageBudgetPerWeek: nil, wagesSpentPerWeek: nil,
                                          highestWagePerWeek: nil)
         figures.name = name
@@ -84,10 +86,14 @@ extension AppModel {
         offers.clubs[PlayerID.normalise(name)]
     }
 
-    /// The player's open deal with the club of this name, compared by `PlayerID.normalise`; nil when there is none.
+    /// The player's open deal of his present kind with the club of this name, compared by `PlayerID.normalise`; nil
+    /// when there is none, or when he has no mark. A round recorded for him joins this deal.
     public func openDeal(for player: PlayerID, club: String) -> OfferDeal? {
+        guard let kind = offerKind(for: player) else { return nil }
         let key = PlayerID.normalise(club)
-        return offers.deals.last { $0.player == player && $0.state == .open && PlayerID.normalise($0.club) == key }
+        return offers.deals.last {
+            $0.player == player && $0.kind == kind && $0.state == .open && PlayerID.normalise($0.club) == key
+        }
     }
 
     /// Records terms asked of clubs in general, dated today in the game with his value and wage as they stand now.
@@ -124,8 +130,8 @@ extension AppModel {
     }
 
     /// Records a round with the club of this name, dated today in the game with his value and wage as they stand now.
-    /// It joins his open deal of the same kind with that club (names by `PlayerID.normalise`), or opens one, which keeps
-    /// the club's figures as entered now (nil when none are). A round of the club's after one of the owner's leaves that
+    /// It joins his open deal of the same kind with that club (`openDeal(for:club:)`), or opens one, which keeps the
+    /// club's figures as entered now (nil when no figure is). A round of the club's after one of the owner's leaves that
     /// round's answer as it is. Refused as `recordAsk` is; nothing, too, for a blank club name. Saves the offers file
     /// and does not plan.
     @discardableResult public func recordRound(for player: PlayerID, club: String, by: RoundBy,
@@ -141,15 +147,14 @@ extension AppModel {
             guard !name.isEmpty else { return nil }
             let round = OfferRound(day: settings.currentDate, by: by, terms: terms, value: subject.value,
                                    wagePerWeek: subject.wagePerWeek, answer: nil)
-            let key = PlayerID.normalise(name)
-            if let index = offers.deals.lastIndex(where: {
-                $0.player == player && $0.kind == subject.kind && $0.state == .open && PlayerID.normalise($0.club) == key
-            }) {
+            if let open = openDeal(for: player, club: name),
+               let index = offers.deals.firstIndex(where: { $0.id == open.id }) {
                 offers.deals[index].rounds.append(round)
             } else {
+                let figures = clubEntry(named: name)?.figures
                 offers.deals.append(OfferDeal(id: UUID(), player: player, playerName: subject.name, kind: subject.kind,
-                                              club: name, figures: clubEntry(named: name)?.figures, rounds: [round],
-                                              endedOn: nil))
+                                              club: name, figures: figures.flatMap { $0.hasAnyFigure ? $0 : nil },
+                                              rounds: [round], endedOn: nil))
             }
             save(.offers)
             return nil
@@ -221,7 +226,7 @@ extension AppModel {
         return digits.isEmpty ? nil : Int(digits)
     }
 
-    private func heldPlayer(_ id: PlayerID) -> Player? {
+    func heldPlayer(_ id: PlayerID) -> Player? {
         squad.book.allPlayers.first { $0.id == id }
     }
 
@@ -277,5 +282,12 @@ extension AppModel {
         let result = action()
         lastOffersAction = environment.now()
         return result
+    }
+}
+
+extension ClubFigures {
+    /// Whether any of the four figures is entered.
+    var hasAnyFigure: Bool {
+        transferBudget != nil || wageBudgetPerWeek != nil || wagesSpentPerWeek != nil || highestWagePerWeek != nil
     }
 }

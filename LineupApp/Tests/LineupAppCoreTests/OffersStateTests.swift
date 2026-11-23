@@ -181,7 +181,49 @@ import LineupEngine
         #expect(try ScoutingSetup.storeFiles(s.t) == files)
     }
 
+    @Test func aBlankFigureForAClubWithNoEntrySavesNothing() throws {
+        let s = try ready()
+        let files = try ScoutingSetup.storeFiles(s.t)
+        s.model.setClubFigure(.transferBudget, text: "", club: "Barnet")
+        s.model.setClubFigure(.wageBudget, text: "abc", club: "Barnet")
+        #expect(s.model.offers.clubs.isEmpty)
+        #expect(s.model.clubEntry(named: "Barnet") == nil)
+        #expect(try ScoutingSetup.storeFiles(s.t) == files)
+        // A figure typed for it is saved as before.
+        s.model.setClubFigure(.transferBudget, text: "35,000", club: "Barnet")
+        #expect(s.model.clubEntry(named: "Barnet")?.figures.transferBudget == 35_000)
+    }
+
+    @Test func aDealOpenedForAClubWithNoFigureEnteredTakesNone() throws {
+        let s = try ready()
+        s.model.setOfferValue(text: "40000", for: s.seller)
+        s.model.setClubFigure(.transferBudget, text: "35,000", club: "Barnet")
+        s.model.setClubFigure(.transferBudget, text: "", club: "Barnet")                 // every figure blank again
+        #expect(s.model.clubEntry(named: "Barnet")?.figures.transferBudget == nil)
+        s.model.recordRound(for: s.seller, club: "Barnet", by: .club, terms: Self.sale)
+        #expect(try #require(s.model.offers.deals.first).figures == nil)
+    }
+
     // MARK: Recording
+
+    @Test func anOpenDealIsFoundOnlyForHisPresentKind() throws {
+        let s = try ready()
+        s.model.setOfferValue(text: "40000", for: s.seller)
+        s.model.recordRound(for: s.seller, club: "Barnet", by: .club, terms: Self.sale)
+        let sale = try #require(s.model.offers.deals.first)
+        #expect(s.model.openDeal(for: s.seller, club: "Barnet") == sale)
+        s.model.setMark(.toLoanOut, for: s.seller)
+        #expect(s.model.openDeal(for: s.seller, club: "Barnet") == nil)                  // the open sale is not a loan
+        advance(s.t)
+        s.model.recordRound(for: s.seller, club: "Barnet", by: .owner, terms: Self.loan)
+        #expect(s.model.offers.deals.count == 2)
+        #expect(s.model.openDeal(for: s.seller, club: "Barnet")?.kind == .loan)
+        #expect(s.model.offers.deals.first?.rounds.count == 1)                           // the sale was not joined
+        s.model.setMark(.toSell, for: s.seller)
+        #expect(s.model.openDeal(for: s.seller, club: "barnet")?.id == sale.id)
+        s.model.setMark(nil, for: s.seller)
+        #expect(s.model.openDeal(for: s.seller, club: "Barnet") == nil)                  // no mark, no kind
+    }
 
     @Test func recordingAnAskNeedsAMarkAValueAndTermsOfHisKind() throws {
         let s = try ready()

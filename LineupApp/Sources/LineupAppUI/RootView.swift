@@ -123,6 +123,7 @@ struct ScreenView: View {
         case .training: TrainingScreen(model: model, navigation: navigation)
         case .removal: RemovalScreen(model: model, navigation: navigation)
         case .scouting: ScoutingScreen(model: model, navigation: navigation)
+        case .offers: EmptyView()   // drawn by the next task
         case .settings: SettingsScreen(model: model)
         }
     }
