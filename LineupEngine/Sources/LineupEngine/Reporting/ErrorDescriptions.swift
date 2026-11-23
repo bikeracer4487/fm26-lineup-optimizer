@@ -193,12 +193,18 @@ public enum ErrorDescriptions {
     public static func describe(_ error: OfferError) -> String {
         switch error {
         case .missing(let field, let club):
-            switch (field, club) {
-            case (.transferBudget, let club?): return "Enter what \(club) can spend on transfers to get terms for them."
-            case (.wageBudget, let club?): return "Enter \(club)'s wage budget to get terms for them."
-            case (.wagesSpent, let club?): return "Enter the wages \(club) have spent to get terms for them."
-            case (.value, nil): return "Enter his value to get terms."
-            default: return "Enter \(words(field)) to record this."
+            let generic = "Enter \(words(field)) to record this."
+            switch field {
+            case .transferBudget:
+                return club.map { "Enter what \($0) can spend on transfers to get terms for them." } ?? generic
+            case .wageBudget:
+                return club.map { "Enter \($0)'s wage budget to get terms for them." } ?? generic
+            case .wagesSpent:
+                return club.map { "Enter the wages \($0) have spent to get terms for them." } ?? generic
+            case .value:
+                return club == nil ? "Enter his value to get terms." : generic
+            case .highestWage, .wagePercent, .feeNow, .feeLater, .nextFeePercent, .feePerMonth, .futureFee:
+                return generic
             }
         case .negative(let field):
             let text = words(field)
