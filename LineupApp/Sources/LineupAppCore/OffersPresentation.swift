@@ -136,6 +136,8 @@ public struct OfferRoundDraft: Equatable, Sendable, Identifiable {
     /// Blank for an ask.
     public var club: String
     public var purpose: Purpose
+    /// What the loan is for; nil for a sale.
+    public var loanPurpose: LoanPurpose?
     /// A sale's money now and later and the share of his next fee.
     public var now, later, nextFee: String
     /// A loan's share of the wage, fee a month and fee to buy him (blank: none).
@@ -144,15 +146,21 @@ public struct OfferRoundDraft: Equatable, Sendable, Identifiable {
     public var recall: Bool
 
     /// Opened filled with `terms` when they are of `kind`, each figure as plain digits ("0" for none of it), else blank.
-    /// The club's own offer for a development loan starts at less than a starting place, since clubs are reported to
-    /// open there. With no terms the recall starts kept, as every suggested loan keeps it.
-    public init(player: PlayerID, kind: OfferKind, club: String, purpose: Purpose, filledWith terms: OfferTerms?) {
+    /// The playing time: the club's own offer for a development loan starts at less than a starting place, since clubs
+    /// are reported to open there, and for a loan to move his wage at none, whatever the sheet is opened with; the
+    /// owner's own round or ask takes the terms' playing time, or with no terms what the loan is for asks (a starting
+    /// place for his development, none to move his wage). With no terms the recall starts kept, as every suggested loan
+    /// keeps it. `loanPurpose` is nil for a sale (`AppModel.offerDraft` fills it in from the player).
+    public init(player: PlayerID, kind: OfferKind, club: String, purpose: Purpose, loanPurpose: LoanPurpose?,
+                filledWith terms: OfferTerms?) {
         id = UUID()
         self.player = player; self.kind = kind; self.club = club; self.purpose = purpose
+        self.loanPurpose = kind == .loan ? loanPurpose : nil
         (now, later, nextFee) = ("", "", "")
         (wagePercent, feePerMonth, futureFee) = ("", "", "")
         playingTime = nil
         recall = true
+        var filledTime: PlayingTime?? = .none
         switch (kind, terms) {
         case (.sale, .sale(let t)?):
             (now, later, nextFee) = (String(t.now), String(t.later), String(t.nextFeePercent))
@@ -160,12 +168,24 @@ public struct OfferRoundDraft: Equatable, Sendable, Identifiable {
             (wagePercent, feePerMonth) = (String(t.wagePercent), String(t.feePerMonth))
             futureFee = t.futureFee.map(String.init) ?? ""
             recall = t.recall
-            switch purpose {
-            case .theirs: playingTime = t.playingTime == nil ? nil : .less
-            case .ask, .mine: playingTime = t.playingTime
-            }
+            filledTime = .some(t.playingTime)
         case (.sale, .loan?), (.loan, .sale?), (.sale, nil), (.loan, nil):
             break
+        }
+        guard kind == .loan else { return }
+        switch (purpose, self.loanPurpose) {
+        case (.theirs, .development?): playingTime = .less
+        case (.theirs, .wage?): playingTime = nil
+        case (.theirs, nil): playingTime = filledTime.flatMap { $0 }.map { _ in .less }
+        case (.ask, let loan), (.mine, let loan):
+            if case .some(let time) = filledTime {
+                playingTime = time
+            } else {
+                switch loan {
+                case .development?: playingTime = .startingPlace
+                case .wage?, nil: playingTime = nil
+                }
+            }
         }
     }
 
@@ -220,6 +240,14 @@ public struct OfferRoundDraft: Equatable, Sendable, Identifiable {
         guard let number = digits(text) else { throw OfferError.missing(field, club: nil) }
         return number
     }
+}
+
+/// What became of a sheet sent to be recorded: recorded (the sheet closes), refused with the engine's sentence, or
+/// ignored with nothing to say (the sheet stays open as it is).
+public enum OfferRecordResult: Equatable, Sendable {
+    case recorded
+    case refused(String)
+    case ignored
 }
 
 /// The Offers screen's plain labels and headings; every word about advice is the engine's.
@@ -284,6 +312,13 @@ public enum OffersPresentation {
         case .wagesSpent: wage(figures?.wagesSpentPerWeek)
         case .highestWage: wage(figures?.highestWagePerWeek)
         }
+    }
+
+    /// A goalkeeper is a player whose positions are goalkeeper only (the design's rule): his pasted positions are "GK"
+    /// and nothing else, without regard to case. One solid in goal who also plays elsewhere is not.
+    static func isGoalkeeper(_ player: Player) -> Bool {
+        player.positionsText.trimmingCharacters(in: .whitespaces)
+            .caseInsensitiveCompare(Position.goalkeeper.rawValue) == .orderedSame
     }
 
     /// "14 months left", "1 month left".
@@ -371,21 +406,35 @@ extension AppModel {
             evidenceNote: AdvisorText.offersEvidenceNote(rules))
     }
 
-    /// Records the sheet: an ask, or a round of the owner's or the club's. Returns the sentence of a refusal, a blank
-    /// field the kind needs first, and saves nothing then; nil when it was recorded, or ignored as `recordAsk` and
-    /// `recordRound` ignore it.
-    @discardableResult public func record(_ draft: OfferRoundDraft) -> String? {
+    /// A sheet to record a round or an ask for the player, of the kind his mark gives and, for a loan, for what his loan
+    /// is for (`loanPurpose(for:)`), opened filled with `terms`; nil when he has no mark.
+    public func offerDraft(for player: PlayerID, club: String, purpose: OfferRoundDraft.Purpose,
+                           filledWith terms: OfferTerms?) -> OfferRoundDraft? {
+        guard let kind = offerKind(for: player) else { return nil }
+        return OfferRoundDraft(player: player, kind: kind, club: club, purpose: purpose,
+                               loanPurpose: kind == .loan ? loanPurpose(for: player) : nil, filledWith: terms)
+    }
+
+    /// Records the sheet: an ask, or a round of the owner's or the club's. Refused with the engine's sentence, a blank
+    /// field the kind needs first, and nothing saved then; ignored, with nothing saved and nothing to say, as
+    /// `recordAsk` and `recordRound` ignore it (a second click within `offersActionInterval`, a blank club, a player with
+    /// no mark or not in the squads), so the sheet stays open.
+    @discardableResult public func record(_ draft: OfferRoundDraft) -> OfferRecordResult {
         let terms: OfferTerms
         do {
             terms = try draft.terms()
         } catch {
-            return ErrorDescriptions.describe(error)
+            return .refused(ErrorDescriptions.describe(error))
         }
+        let before = offers
+        let refusal: String?
         switch draft.purpose {
-        case .ask: return recordAsk(for: draft.player, terms: terms)
-        case .mine: return recordRound(for: draft.player, club: draft.club, by: .owner, terms: terms)
-        case .theirs: return recordRound(for: draft.player, club: draft.club, by: .club, terms: terms)
+        case .ask: refusal = recordAsk(for: draft.player, terms: terms)
+        case .mine: refusal = recordRound(for: draft.player, club: draft.club, by: .owner, terms: terms)
+        case .theirs: refusal = recordRound(for: draft.player, club: draft.club, by: .club, terms: terms)
         }
+        if let refusal { return .refused(refusal) }
+        return offers == before ? .ignored : .recorded
     }
 
     // MARK: Working it out
@@ -406,7 +455,7 @@ extension AppModel {
         let purpose = loanPurpose(for: player.id)
         let subject = entry?.value.map {
             OfferSubject(value: $0, wagePerWeek: player.wagePerWeek,
-                         isGoalkeeper: (player.familiarity[.goalkeeper] ?? 0) >= context.parameters.depthSolidFamiliarity.value,
+                         isGoalkeeper: OffersPresentation.isGoalkeeper(player),
                          purpose: purpose)
         }
         // Nothing is worked out without his value or with parameters that cannot be used: one sentence says why.

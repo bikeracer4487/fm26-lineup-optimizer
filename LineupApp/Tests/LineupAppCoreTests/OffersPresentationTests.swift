@@ -432,50 +432,90 @@ import LineupEngine
     @Test func theDraftOpensFilledAndGivesBackTheTerms() throws {
         let id = PlayerID(key: "fmrte:1")
         let terms = OfferTerms.sale(SaleTerms(now: 35_000, later: 5_000, nextFeePercent: 20))
-        var draft = OfferRoundDraft(player: id, kind: .sale, club: "Barnet", purpose: .mine, filledWith: terms)
+        var draft = OfferRoundDraft(player: id, kind: .sale, club: "Barnet", purpose: .mine, loanPurpose: nil,
+                                    filledWith: terms)
         #expect((draft.now, draft.later, draft.nextFee) == ("35000", "5000", "20"))
         #expect(try draft.terms() == terms)
         #expect(draft.title == "Record my proposal")
+        #expect(draft.loanPurpose == nil)
         draft.set(.feeNow, text: "£12,500")
         #expect(draft.now == "12500")
         #expect(try draft.terms() == .sale(SaleTerms(now: 12_500, later: 5_000, nextFeePercent: 20)))
         draft.set(.wagePercent, text: "50")                                              // not a sale's field
         #expect(draft.wagePercent == "")
 
-        let none = OfferRoundDraft(player: id, kind: .sale, club: "", purpose: .ask, filledWith: Self.sale(40_000))
+        let none = OfferRoundDraft(player: id, kind: .sale, club: "", purpose: .ask, loanPurpose: nil,
+                                   filledWith: Self.sale(40_000))
         #expect((none.now, none.later, none.nextFee) == ("40000", "0", "20"))
         #expect(none.title == "Record this ask")
 
-        let blank = OfferRoundDraft(player: id, kind: .sale, club: "Barnet", purpose: .theirs, filledWith: nil)
+        let blank = OfferRoundDraft(player: id, kind: .sale, club: "Barnet", purpose: .theirs, loanPurpose: nil,
+                                    filledWith: nil)
         #expect((blank.now, blank.later, blank.nextFee) == ("", "", ""))
         #expect(blank.title == "Record their bid")
 
         let loan = LoanTerms(wagePercent: 50, feePerMonth: 1_000, playingTime: .startingPlace, recall: true, futureFee: nil)
-        var mine = OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .mine, filledWith: .loan(loan))
+        var mine = OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .mine, loanPurpose: .development,
+                                   filledWith: .loan(loan))
         #expect((mine.wagePercent, mine.feePerMonth, mine.futureFee) == ("50", "1000", ""))
         #expect(mine.playingTime == .startingPlace && mine.recall)
+        #expect(mine.loanPurpose == .development)
         #expect(try mine.terms() == .loan(loan))
         mine.set(.futureFee, text: "100,000")
         mine.recall = false
         mine.playingTime = nil
         #expect(try mine.terms() == .loan(LoanTerms(wagePercent: 50, feePerMonth: 1_000, playingTime: nil, recall: false,
                                                     futureFee: 100_000)))
-        // Their offer for a development loan starts at less than a starting place; a wage loan asks none.
-        let theirs = OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .theirs, filledWith: .loan(loan))
-        #expect(theirs.playingTime == .less)
         var wageLoan = loan
         wageLoan.playingTime = nil
-        let theirsWage = OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .theirs, filledWith: .loan(wageLoan))
-        #expect(theirsWage.playingTime == nil)
         wageLoan.futureFee = 0
-        let withFee = OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .mine, filledWith: .loan(wageLoan))
+        let withFee = OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .mine, loanPurpose: .wage,
+                                      filledWith: .loan(wageLoan))
         #expect(withFee.futureFee == "0")
         #expect(try withFee.terms() == .loan(wageLoan))
     }
 
+    @Test func theirOfferForADevelopmentLoanStartsAtLessThanAStartingPlaceAndForAWageLoanAtNone() throws {
+        let id = PlayerID(key: "fmrte:1")
+        let development = LoanTerms(wagePercent: 50, feePerMonth: 0, playingTime: .startingPlace, recall: true,
+                                    futureFee: nil)
+        var wage = development
+        wage.playingTime = nil
+        for terms in [OfferTerms.loan(development), .loan(wage), nil] {
+            let theirs = OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .theirs,
+                                         loanPurpose: .development, filledWith: terms)
+            #expect(theirs.playingTime == .less)
+            let theirsWage = OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .theirs,
+                                             loanPurpose: .wage, filledWith: terms)
+            #expect(theirsWage.playingTime == nil)
+        }
+        // The owner's own round opened with no terms asks what the loan is for asks.
+        #expect(OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .mine, loanPurpose: .development,
+                                filledWith: nil).playingTime == .startingPlace)
+        #expect(OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .mine, loanPurpose: .wage,
+                                filledWith: nil).playingTime == nil)
+    }
+
+    @Test func aDraftForAPlayerTakesHisKindFromHisMarkAndHisLoansPurpose() throws {
+        let s = try ready()
+        let sale = try #require(s.model.offerDraft(for: s.seller, club: "", purpose: .ask, filledWith: Self.sale(40_000)))
+        #expect(sale.kind == .sale && sale.loanPurpose == nil && sale.player == s.seller && sale.purpose == .ask)
+        #expect(sale.now == "40000")
+        s.model.setLoanPurpose(.development, for: s.loanee)
+        let development = try #require(s.model.offerDraft(for: s.loanee, club: "Barnet", purpose: .theirs, filledWith: nil))
+        #expect(development.kind == .loan && development.loanPurpose == .development && development.club == "Barnet")
+        #expect(development.playingTime == .less)
+        s.model.setLoanPurpose(.wage, for: s.loanee)
+        let wage = try #require(s.model.offerDraft(for: s.loanee, club: "Barnet", purpose: .theirs, filledWith: Self.loan))
+        #expect(wage.loanPurpose == .wage && wage.playingTime == nil)
+        let unmarked = try #require(s.model.players.first { s.model.marks[$0.id] == nil }).id
+        #expect(s.model.offerDraft(for: unmarked, club: "", purpose: .ask, filledWith: nil) == nil)
+    }
+
     @Test func aBlankFieldInTheDraftIsNamed() throws {
         let id = PlayerID(key: "fmrte:1")
-        var sale = OfferRoundDraft(player: id, kind: .sale, club: "Barnet", purpose: .mine, filledWith: Self.sale(40_000))
+        var sale = OfferRoundDraft(player: id, kind: .sale, club: "Barnet", purpose: .mine, loanPurpose: nil,
+                                   filledWith: Self.sale(40_000))
         sale.set(.feeNow, text: "")
         #expect(throws: OfferError.missing(.feeNow, club: nil)) { try sale.terms() }
         sale.set(.feeNow, text: "1")
@@ -486,7 +526,8 @@ import LineupEngine
         #expect(throws: OfferError.missing(.nextFeePercent, club: nil)) { try sale.terms() }
         #expect(ErrorDescriptions.describe(OfferError.missing(.feeNow, club: nil)) == "Enter the money now to record this.")
 
-        var loan = OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .mine, filledWith: Self.loan)
+        var loan = OfferRoundDraft(player: id, kind: .loan, club: "Barnet", purpose: .mine, loanPurpose: .development,
+                                   filledWith: Self.loan)
         loan.set(.wagePercent, text: "")
         #expect(throws: OfferError.missing(.wagePercent, club: nil)) { try loan.terms() }
         loan.set(.wagePercent, text: "25")
@@ -496,34 +537,69 @@ import LineupEngine
 
     @Test func savingADraftRecordsItAndARefusalIsReturnedWithNothingSaved() throws {
         let s = try ready()
-        let unvalued = OfferRoundDraft(player: s.seller, kind: .sale, club: "", purpose: .ask, filledWith: Self.sale(40_000))
-        #expect(s.model.record(unvalued) == "Enter his value to get terms.")
+        func draft(_ club: String, _ purpose: OfferRoundDraft.Purpose, _ terms: OfferTerms) throws -> OfferRoundDraft {
+            try #require(s.model.offerDraft(for: s.seller, club: club, purpose: purpose, filledWith: terms))
+        }
+        #expect(s.model.record(try draft("", .ask, Self.sale(40_000))) == .refused("Enter his value to get terms."))
         #expect(s.model.offers.asks.isEmpty)
         advance(s.t)
         s.model.setOfferValue(text: "40000", for: s.seller)
-        var blank = OfferRoundDraft(player: s.seller, kind: .sale, club: "Barnet", purpose: .mine,
-                                    filledWith: Self.sale(40_000))
+        var blank = try draft("Barnet", .mine, Self.sale(40_000))
         blank.set(.feeNow, text: "")
         let files = try ScoutingSetup.storeFiles(s.t)
-        #expect(s.model.record(blank) == "Enter the money now to record this.")
+        #expect(s.model.record(blank) == .refused("Enter the money now to record this."))
         #expect(try ScoutingSetup.storeFiles(s.t) == files)
         #expect(s.model.offers.deals.isEmpty)
 
         let planned = s.model.timesPlanned
         let general = try #require(try block(sheet(s.t), s.seller).general?.terms)
-        #expect(s.model.record(OfferRoundDraft(player: s.seller, kind: .sale, club: "", purpose: .ask,
-                                               filledWith: general)) == nil)
+        #expect(s.model.record(try draft("", .ask, general)) == .recorded)
         #expect(s.model.offers.asks.map(\.terms) == [general])
+        // A second click within the guard is ignored, and says so, so the sheet stays open.
+        #expect(s.model.record(try draft("", .ask, general)) == .ignored)
+        #expect(s.model.offers.asks.count == 1)
         advance(s.t)
-        #expect(s.model.record(OfferRoundDraft(player: s.seller, kind: .sale, club: "Barnet", purpose: .mine,
-                                               filledWith: Self.sale(40_000))) == nil)
+        #expect(s.model.record(try draft("  ", .mine, Self.sale(40_000))) == .ignored)    // a blank club
+        #expect(s.model.offers.deals.isEmpty)
         advance(s.t)
-        #expect(s.model.record(OfferRoundDraft(player: s.seller, kind: .sale, club: "barnet", purpose: .theirs,
-                                               filledWith: Self.sale(30_000))) == nil)
+        #expect(s.model.record(try draft("Barnet", .mine, Self.sale(40_000))) == .recorded)
+        advance(s.t)
+        #expect(s.model.record(try draft("barnet", .theirs, Self.sale(30_000))) == .recorded)
         #expect(s.model.offers.deals.count == 1)
         #expect(s.model.offers.deals.first?.rounds.map(\.by) == [.owner, .club])
         #expect(s.model.offers.deals.first?.rounds.map(\.terms) == [Self.sale(40_000), Self.sale(30_000)])
         #expect(s.model.timesPlanned == planned)
+    }
+
+    // MARK: Goalkeepers
+
+    /// Marks the player to loan out for his development, with a value, and gives back his loan block's general lines.
+    private func developmentLoanLines(_ s: Setup, _ id: PlayerID) throws -> [String] {
+        s.model.setMark(.toLoanOut, for: id)
+        #expect(s.model.marks[id] == .toLoanOut)
+        s.model.setLoanPurpose(.development, for: id)
+        s.model.setOfferValue(text: "200000", for: id)
+        return try #require(try block(sheet(s.t), id).general?.lines)
+    }
+
+    @Test func aGoalkeeperIsAPlayerWhosePositionsAreGoalkeeperOnly() throws {
+        let s = try ready()
+        let keeper = try #require(s.model.squad.book.allPlayers.first { $0.name == "Jonny Maxted" })
+        #expect(keeper.positionsText == "GK")
+        let lines = try developmentLoanLines(s, keeper.id)
+        #expect(lines.first?.contains("a starting place (First-Choice Goalkeeper)") == true)
+    }
+
+    @Test func anOutfieldPlayerSolidInGoalIsNotAGoalkeeper() throws {
+        let s = try ready()
+        var players = try #require(s.model.squad.book.current[.firstTeam])
+        let index = try #require(players.firstIndex { $0.id == s.loanee })
+        #expect(players[index].positionsText.uppercased() != "GK")
+        players[index].familiarity[.goalkeeper] = 20
+        _ = s.model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: [], money: .weeklyPounds),
+                                     to: .firstTeam)
+        let lines = try developmentLoanLines(s, s.loanee)
+        #expect(lines.first?.contains("a starting place (Regular Starter)") == true)
     }
 
     @Test func buildingTheSheetChangesNothingAndSavesNothing() throws {
