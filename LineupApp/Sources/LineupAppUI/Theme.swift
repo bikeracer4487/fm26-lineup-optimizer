@@ -759,6 +759,8 @@ public enum Theme {
         /// A deal's card: room for a round's sentence at the reading width and the card's padding, so its "Delete"
         /// stays near its heading on a wide window.
         public static let cardMaximumWidth: CGFloat = 640
+        /// The engine's sentence under the sale-or-loan control when only a sale can be worked out: a few short lines.
+        public static let kindNoteWidth: CGFloat = 300
         /// The sheet a round is recorded in: as wide as the fixture editor, its fields in a column after their labels.
         public static let editorWidth: CGFloat = Layout.fixtureEditorWidth
         public static let editorFieldWidth: CGFloat = 140

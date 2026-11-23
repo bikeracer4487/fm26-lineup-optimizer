@@ -189,7 +189,11 @@
 //                                              ("offers-nothing-now-…"); with the loan switched to moving his
 //                                              wage and a club typed for it ("offers-loan-wage-…"); with ten sale
 //                                              deals recorded for a player no longer marked, so a line is measured
-//                                              ("offers-measured-…"); with the first seller's mark taken off and
+//                                              ("offers-measured-…"); with the first seller switched to loan
+//                                              terms, his sale deal with Barnet still in his block
+//                                              ("offers-toggled-…"); with the player marked to sell with no
+//                                              value out on loan, so he is offered sale terms alone with the
+//                                              engine's sentence ("offers-onloan-…"); with the first seller's mark taken off and
 //                                              "Earlier offers" open ("offers-earlier-…"); and in the smallest
 //                                              window ("offers-small-…"). Its sheet is drawn on its own, for a
 //                                              proposal in the Barnet deal ("offers-editor-sale-…") and for the
@@ -264,7 +268,7 @@ enum SampleState {
     case hierarchy, staleHierarchy, mentoringGroup, mentoringWarning, stoppedGroup, mentoringFailure
     case arrowsRead, harmfulArrow, noInfluence, regrouping, spentGroup, endedGroup, youngPlayers
     case candidates, refusedCandidates, crowdedCandidates, hiddenCandidates
-    case offers, offersMeasured
+    case offers, offersMeasured, offerOutOnLoan
     case league, leagueNoFormat, leagueRefused, leagueStale, leagueByHand
     case fallingTrends, risingTrends, beforeTrends, restedBeforeLine
 }
@@ -323,6 +327,7 @@ enum SampleState {
         case .hiddenCandidates: return try SampleData.modelWithHiddenCandidates(repositoryRoot: url)
         case .offers: return try SampleData.modelWithOffers(repositoryRoot: url)
         case .offersMeasured: return try SampleData.modelWithMeasuredOffers(repositoryRoot: url)
+        case .offerOutOnLoan: return try SampleData.modelWithOfferOutOnLoan(repositoryRoot: url)
         case .fallingTrends: return try SampleData.modelWithFallingTrends(repositoryRoot: url)
         case .risingTrends: return try SampleData.modelWithRisingTrends(repositoryRoot: url)
         case .beforeTrends: return try SampleData.modelBeforeTrends(repositoryRoot: url)
@@ -757,6 +762,16 @@ let narrowWindow = CGSize(width: 800, height: 700)
                              offersStart: OffersStart(clubs: [loanee: "Wealdstone"]))
 
     try ScreenPictures.write(model: sampleModel(root, .offersMeasured), to: directory, size: tall, variant: "measured",
+                             screens: [.offers])
+
+    // The first seller switched to loan terms: his loan terms and the loan's purpose menu, his sale ask and his sale deal
+    // with Barnet still in his block.
+    let toggled = sampleModel(root, .offers)
+    toggled.setOfferKind(.loan, for: samplePlayer(SampleData.offerSellerName, in: toggled))
+    try ScreenPictures.write(model: toggled, to: directory, size: tall, variant: "toggled", screens: [.offers])
+
+    // The player marked to sell with no value out on loan: sale terms alone, with the engine's sentence under them.
+    try ScreenPictures.write(model: sampleModel(root, .offerOutOnLoan), to: directory, size: tall, variant: "onloan",
                              screens: [.offers])
 
     // The first seller's mark taken off: his deal and his ask move under "Earlier offers", opened.

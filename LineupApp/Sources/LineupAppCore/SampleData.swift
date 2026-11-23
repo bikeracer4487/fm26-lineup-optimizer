@@ -604,6 +604,20 @@ public enum SampleData {
         return model
     }
 
+    /// The offers sample with Canice Carroll, marked to sell with no value, out on loan at Wallingford Town, as an import
+    /// of the changed squad would have him, so only sale terms can be worked out for him.
+    @MainActor public static func modelWithOfferOutOnLoan(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithOffers(repositoryRoot: repositoryRoot)
+        edit(model) { player in
+            if player.name == offerNoValueName { player.loanedTo = "Wallingford Town" }
+        }
+        let id = try player(named: offerNoValueName, in: model)
+        guard model.loanRefusal(for: id) == AdvisorText.outOnLoanAlready, model.marks[id] == .toSell else {
+            throw SampleDataError(description: "The sample's \(offerNoValueName) is not out on loan and marked to sell.")
+        }
+        return model
+    }
+
     /// The offers sample with ten sale deals recorded for Dillon De Silva, his value £10,000, before his mark was taken
     /// off: in five a club bid £2,200 now, and in five his proposal of £8,000 now was refused, each with a club of its
     /// own and ended. They stand under "Earlier offers" and give a line of 51% of value, which every sale's terms then

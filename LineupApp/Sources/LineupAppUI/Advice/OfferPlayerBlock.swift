@@ -3,7 +3,7 @@ import LineupEngine
 import SwiftUI
 
 /// One marked player: his name over what is known of him, with the control for sale or loan terms beside it, the menu of
-/// what his loan is for beside that when it shows loan terms, and the engine's sentence under them when only a sale can
+/// what his loan is for under that when it shows loan terms, and the engine's sentence under them when only a sale can
 /// be worked out; his value,
 /// typed straight into the model, with the hint, the day it was entered and the caution; the terms to ask of clubs in
 /// general with "Record this ask", and his asks; "To a club", the club's name and its four figures, then the terms for
@@ -55,20 +55,20 @@ struct OfferPlayerBlockView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Sale terms or loan terms, from Core's choices, with the loan's purpose menu beside it and the sentence under it.
+    /// Sale terms or loan terms, from Core's choices, with the loan's purpose menu and the sentence under it, all against
+    /// the trailing edge, so the control stands in the same place in every block whether or not the menu shows.
     private var kindControl: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            HStack(alignment: .center, spacing: Theme.Spacing.m) {
-                BoardTabs(choices: block.kindChoices.map { ($0.kind, $0.title) },
-                          selection: Binding(get: { block.kind }, set: { model.setOfferKind($0, for: block.id) }))
-                purposeMenu
-            }
+        VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
+            BoardTabs(choices: block.kindChoices.map { ($0.kind, $0.title) },
+                      selection: Binding(get: { block.kind }, set: { model.setOfferKind($0, for: block.id) }))
+            purposeMenu
             if let note = block.kindNote {
                 Text(note)
                     .font(Theme.Typeface.text(Theme.TypeSize.small))
                     .foregroundStyle(Theme.Colour.mutedInk)
+                    .multilineTextAlignment(.trailing)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: Theme.Layout.readingWidth, alignment: .leading)
+                    .frame(maxWidth: Theme.Offers.kindNoteWidth, alignment: .trailing)
             }
         }
     }

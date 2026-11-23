@@ -318,4 +318,21 @@ import LineupEngine
         #expect(sheet.earlier?.line == "1 deal and 1 ask for players no longer marked")
         #expect(sheet.earlier?.deals.map(\.heading) == ["\(try #require(s.model.players.first { $0.id == s.seller }).name) · Barnet · sale · open"])
     }
+
+    // MARK: The sample data the pictures are drawn from
+
+    @Test func theSampleWithAPlayerOutOnLoanOffersHimSaleTermsAlone() throws {
+        let model = try SampleData.modelWithOfferOutOnLoan(repositoryRoot: Captures.repositoryRoot)
+        let sheet = model.offersSheet(clubs: [:])
+        let away = try #require(sheet.toSell.first { $0.name == SampleData.offerNoValueName })
+        #expect(away.kindChoices.map(\.kind) == [.sale] && away.kind == .sale)
+        #expect(away.kindNote == AdvisorText.outOnLoanAlready)
+        let seller = try #require(sheet.toSell.first { $0.name == SampleData.offerSellerName })
+        #expect(seller.kindChoices.count == 2 && seller.kindNote == nil)
+        // Switched to loan terms, the first seller keeps his sale deal in his block.
+        model.setOfferKind(.loan, for: seller.id)
+        let toggled = try #require(model.offersSheet(clubs: [:]).toSell.first { $0.id == seller.id })
+        #expect(toggled.kind == .loan && toggled.purpose != nil)
+        #expect(toggled.deals.map(\.heading) == ["Barnet · sale · open"])
+    }
 }
