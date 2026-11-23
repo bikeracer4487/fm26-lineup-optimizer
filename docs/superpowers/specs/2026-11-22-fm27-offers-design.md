@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: terms to propose when selling or loaning out a player
 
 Date: 22 November 2026
-Status: written for the owner's approval. He chose the approach (the third of three, below) on 22 November 2026. Everything marked "this design's call" is the builder's, and is his to change.
+Status: built, by `docs/superpowers/plans/2026-11-22-fm27-offers.md`, on 22 November 2026. The passages changed during the build are marked "revised" (sections 1, 3, 4, 5, 6, 7 and 8, and the list left to the builder). It was written for the owner's approval, and a reviewer read it as a builder the same day (see the foot). He chose the approach (the third of three, below) on 22 November 2026. Everything marked "this design's call" is the builder's, and is his to change, and so are the plan's own calls beyond the design, listed in the plan.
 
 Research: `docs/Research/fm27-sale-and-loan-offer-acceptance.md`, of 22 November 2026. The earlier `docs/Research/fm27-selling-and-loans.md` is about whether playing a player helps to sell him, and its loan rule was corrected that day.
 
@@ -68,9 +68,9 @@ The owner chose 3 on 22 November 2026.
 | Wages spent | Wage Used | a loan to that club |
 | Highest wage it can offer | Max Wage (aprox.) | nothing; used when entered |
 
-The club's name is free text. A club's figures are kept under its name (names compared by `PlayerID.normalise`) with the day entered, so they fill the fields the next time that club is named, with "entered Sat 21 Nov" beside them. The wage it has left is the wage budget less the wages spent, and 0 when that is below 0.
+The club's name is free text. A club's figures are kept under its name (names compared by `PlayerID.normalise`) with the day entered, so they fill the fields the next time that club is named, with "entered Sat 21 Nov" beside them. The wage it has left is the wage budget less the wages spent, and 0 when that is below 0. *Revised during the build: the four fields appear once a club is named, since nothing typed in them with no name could be kept; a blank figure typed for a club with no entry saves nothing.*
 
-**Money.** Amounts are typed and shown in the squad book's money style, as wages already are: a wage figure is in the period FMRTE is set to (monthly, in the owner's save), and each wage field's label says the period. The engine keeps wages by the week. A loan fee is always by the month, as the game asks for it. Whether FMRTE's club page shows the wage budget in the period of its wage setting has not been checked; the first real entry is the owner's to compare with the game's own figure for a club.
+**Money.** Amounts are typed and shown in the squad book's money style, as wages already are: a wage figure is in the period FMRTE is set to (monthly, in the owner's save), and each wage field's label says the period. The engine keeps wages by the week. A loan fee is always by the month, as the game asks for it. *Revised during the build (the plan's call 6): a club's three wage figures are kept by the week too, converted from FMRTE's period when typed, so a later change of that period shows them converted, not misread. Money is written in full, "£35,000", as the rest of the app writes it, not "£35K" as the examples below have it (the plan's call 5).* Whether FMRTE's club page shows the wage budget in the period of its wage setting has not been checked; the first real entry is the owner's to compare with the game's own figure for a club.
 
 **What a loan is for** is one of two: his development, or moving his wage. It starts as development for a player of 23 or under (`developingUpToAge`) and as moving his wage for one older, and the owner can switch it. It is kept with the player's value.
 
@@ -99,7 +99,7 @@ Write V for his value, L for the sale line, and T for the total asked: L × V.
 **To a named club** whose transfer budget remaining is B:
 
 - Money now is the smaller of T and B. It is never rounded above B.
-- What is left of T is asked later: 44% of it in instalments over 12 months and 56% after 50 league appearances. The shares and the 50 are from the one FM27 example of the terms the game's own Director of Football proposed; the 12 months is this design's call.
+- What is left of T is asked later: 44% of it in instalments over 12 months and 56% after 50 league appearances. The shares and the 50 are from the one FM27 example of the terms the game's own Director of Football proposed; the 12 months is this design's call. *Revised during the build (the plan's call 7): the instalments are 44% rounded, and the money after appearances is what remains, so the parts always add up to what is asked later.*
 - 20% of his next fee is asked on top. The fee, not the profit: at one percentage a share of the fee is never the smaller.
 - When something is asked later, a caution says so: "Barnet can spend £35K now; the rest is asked later. Whether a club agrees to money beyond its budget is not known."
 - When B is 0, everything is asked later, and the first line says the club has nothing to spend now.
@@ -111,6 +111,8 @@ Write V for his value, L for the sale line, and T for the total asked: L × V.
 - Otherwise counter once, at the smaller of T and the counter step × b. The counter keeps the club's own money now and adds the difference after 50 league appearances, with 20% of his next fee if the bid had none.
 - When the club has already answered one counter of the owner's in this deal with another bid: no further counter. The line says to accept it or leave it, since earlier reports are of two or three chances before a club withdraws (carried over, one report).
 - A measured counter step of 1 or less means clubs have not come up: the line is to accept or leave it.
+- *Revised during the build: the counter asks the larger of the club's share of the next fee and 20%, and its sentence writes the club's own later money and the difference added as one figure: "Counter once: £8,000 now and £1,600 later, after 50 league appearances, with 20% of his next fee."*
+- *Revised during the build: a deal with any accepted round, the owner's or the club's, gets "The deal is agreed." in place of a suggestion; the first build told the owner to accept what was already agreed. The same holds for a loan. While the owner's last round has no answer the suggestion is "Waiting for Barnet's answer." (the plan's call 2).*
 
 **After a refusal or no reply**, the next suggestion steps down. The 10% and the limit of two are this design's calls, with no evidence.
 
@@ -118,6 +120,7 @@ Write V for his value, L for the sale line, and T for the total asked: L × V.
 - To clubs in general, when his last ask for the player has "No bid came": 10% under that ask's total, at most the present T.
 - At most two steps down in a row. A run is the owner's rounds refused or unanswered since the club's last round in a deal, or the asks in a row with "No bid came". After two steps and a third refusal or silence there is no lower suggestion. In a deal the line says the club has turned down or not answered three proposals, and to leave it or ask what it would pay. To clubs in general it says three asks have drawn no bid, that earlier reports are that with no club interested no price brings one (carried over from FM24, reports only), and to find interest first: ask his agent about interest, or pitch him against a club's stated need.
 - Retyping his value or a newly measured line changes T, and so the cap; it does not end a run.
+- *Revised during the build: to clubs in general, an ask still waiting (no "No bid came" set yet) changes nothing: the suggestion is the present terms from his present value, never the terms of an ask recorded earlier. The plan's words "the first ask's terms" were read as the first recorded ask and corrected. A step down from an ask of nothing (a value of 0) stays at nothing, and the line that three asks have drawn no bid is given only once the run of asks with no bid passes two. The same holds for a loan.*
 
 Amounts are rounded to two significant figures (this design's call), money now always down.
 
@@ -132,7 +135,7 @@ Write W for his wage a week, V for his value and L for the loan line. What a bor
 - for a named club, the wage it has left ÷ W;
 - for a named club with a highest wage entered, that wage ÷ W;
 
-rounded down to a step of 10%. The step is carried over from an older version's manual and a guide; the owner should check it against the game's loan screen, and it is one parameter.
+rounded down to a step of 10%. The step is carried over from an older version's manual and a guide; the owner should check it against the game's loan screen, and it is one parameter. *Revised during the build: the line naming the limit says the share "is within" it, with the club's figure a week, since the share is rounded down and "is" contradicted the figure beside it: "40% is within what Barnet have left in their wage budget: £200 a week."*
 
 **A fee a month** is asked only when the share is 100% and the borrower is taken to bear more than his wage: 4 × (what it bears a week − W), where for a named club what it bears is at most the wage it has left. The 4 is the rule's own weeks in a month. At the owner's level this is rare: a player on £500 a week needs a value above £96,000. A player with no wage has no share to ask, and the fee rule applies with a wage of 0.
 
@@ -154,6 +157,7 @@ When a fee a month is asked with the recall kept, a caution says older versions 
 
 - For his development: accept when its playing time is a starting place, whatever the share, since matches are what the loan is for. Otherwise send back its share with a starting place.
 - To move his wage: accept when its share is at or above the suggestion. Otherwise send back the smaller of the suggestion and its share plus one step.
+- *Revised during the build (the plan's call 1): a loan gets one counter too. When the club has already answered a counter of the owner's with terms of its own, the line is to accept it or leave it, as for a sale; without that limit the suggestion would repeat one counter for ever.*
 
 **After a refusal or no reply**, the next suggestion drops the fee first, then one step of the share, each taken from the terms he last recorded and never above the present suggestion. In a deal the steps go on down to none of the wage; at none of the wage and refused, the line says this club does not want him on these terms, and there is no lower suggestion. To clubs in general the limit is the sale's: at most two steps down in a row, then the line that three asks have drawn no bid and that interest comes before a lower ask.
 
@@ -169,7 +173,9 @@ Two things are recorded, both saved.
 
 The record keeps the player's name and the club's name as text, so it reads when the player has gone. Recording is never required, and the owner may record terms other than the suggestion; the form opens filled with the suggestion and every field can be changed.
 
-A deal or an ask recorded by mistake can be deleted, after a question.
+A deal or an ask recorded by mistake can be deleted, after a question. *Revised during the build: the questions read "Delete this deal and its rounds from the record?" and "Delete this ask from the record?".*
+
+*Revised during the build: a deal opened for a club with no figure entered keeps no figures. A round joins only an open deal of the player's present kind with that club; a deal of the other kind (his mark changed since) stays apart.*
 
 ## 6. What the offers have shown
 
@@ -191,7 +197,7 @@ An ask gives no "paid". It is "turned down" at its ratio when a club's first rou
 
 An ask or a round made on a value of 0 has no ratio, and counts in none of the three measures.
 
-A measured number replaces its estimate in every suggestion from then on, and the suggestion's working says so.
+A measured number replaces its estimate in every suggestion from then on, and the suggestion's working says so. *Revised during the build: the working gives the figure the record shows, not a claim about the terms, since terms lowered, a counter capped at the ask, or a value of 0 are not at the line: "The line your own offers show is 51% of his value (this tool's estimate).", for a loan "The line your own offers show is 2.1% of his value a month (this tool's estimate).", and for the counter step "Your own agreed sales show clubs coming up 15% over a bid (this tool's estimate)."*
 
 **Measure again from today.** A patch can change how clubs bid (27.1.0 "tweaked AI transfer balancing" with no detail). The owner can set a day to measure from, as Rest does: asks and rounds dated before it stay in the file and are left out of the measures. It asks first, and cannot be undone in the app.
 
@@ -206,13 +212,15 @@ A measured number replaces its estimate in every suggestion from then on, and th
 
 A loan's ratio is written as a share of value a month (the week's ratio × 4).
 
+*Revised during the build: the counter step's line reads "Clubs have come up about 15% from a first bid (from 3 agreed sales you countered; this tool's estimate).", a kind with nothing in the window reads "Loans: nothing recorded.", and the loans' lines follow the sales' ("Borrowers have borne about 1.2% of a player's value a month and turned down about 3.0%, so loans are now asked at 2.1% …").*
+
 ## 7. The words and the evidence
 
 Every sentence is the engine's (`AdvisorText`, a new file for offers), shown as written. Each suggestion carries the weakest evidence among the numbers it used, as every other piece of advice does, and its lines say which is which: the club's budget is the club's own figure as entered; the rest is carried over or this tool's estimate. A measured number says how many deals it rests on and that it is this tool's estimate.
 
 The screen's first line: "Terms to propose for the players you have marked to sell or to loan out. No test in any version of the game shows what a club accepts: every figure here is a place to start, and says what it rests on."
 
-An evidence note stands at the foot, saying in a few lines what is known (a club offers only what it can afford, FM26, official), what is carried over from reports (the sale at about value, 20% of the next fee, the loan rule, the counter), and what is this design's own (the 10% steps, the 12 months, the counts needed to measure).
+An evidence note stands at the foot, saying in a few lines what is known (a club offers only what it can afford, FM26, official), what is carried over from reports (the sale at about value, 20% of the next fee, the loan rule, the counter), and what is this design's own (the 10% steps, the 12 months, the counts needed to measure). *Revised during the build: the counter is said as "a counter of up to 20% over a bid", since the counter is capped at the ask.*
 
 ## 8. The screen
 
@@ -260,6 +268,12 @@ EARLIER OFFERS   3 deals for players no longer marked
 - Under the deal's last round stands the suggestion for the next one, worked out from the rounds so far.
 - Deals and asks for a player who is no longer marked (sold, out on loan, or the mark taken off) are listed at the foot under "Earlier offers", closed at every launch behind a line saying how many, with their rounds and nothing to press but the deletion. They still count in the measures.
 - The buttons that record or answer a round are ignored within half a second of the last, as Training's and Scouting's are, since each moves the next button under the pointer.
+- *Revised during the build:*
+  - *The mark sets the kind (the plan's call 4): a player marked to sell gets sale terms only, and one marked to loan out loan terms only.*
+  - *"Record my proposal" and "Record their bid" are offered beside a club's line naming a figure it needs, not only under its terms: a club's bid needs no figures, and could not otherwise be recorded. The sheet then opens blank.*
+  - *A loan to move his wage has no playing-time menu in the sheet, since such a loan asks none. The club's own offer for a development loan opens at less than a starting place.*
+  - *The sheet closes only when something was recorded: recording says recorded, refused with the engine's sentence (shown in the sheet), or ignored (a second click within the half second, or a blank club), and the sheet stays open for the last two.*
+  - *Under "Earlier offers" each card's heading and each ask names the player ("Old Boy · Barnet · ended"), since nothing else says whose they are.*
 
 ## 9. Where it lives
 
@@ -291,7 +305,7 @@ EARLIER OFFERS   3 deals for players no longer marked
 
 - The layout of a player's block and of the sheet, within the visual direction, and the names of the types and files.
 - Whether asks and deals are one stored type or two.
-- Whether `lineup-cli` gets a command that prints a suggestion for a player of the captured squad.
+- Whether `lineup-cli` gets a command that prints a suggestion for a player of the captured squad. *Revised during the build: it gets none (the plan's call 3), since the captured squad has no values.*
 - The exact wording of each sentence, within the examples above.
 - How a typed amount is read (digits, with the currency symbol and separators ignored), as the League screen's numbers are.
 
