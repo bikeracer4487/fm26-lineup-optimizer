@@ -162,8 +162,8 @@ private struct ShownPart: View {
     }
 }
 
-/// The deals and asks of players no longer marked, closed behind the line saying how many; open, their cards and asks,
-/// with nothing to press but the deletion.
+/// The deals and asks of players no longer marked, closed behind the line saying how many; open, their cards and asks.
+/// An open deal's card still records its outcome and can be ended; nothing else but the deletion is offered.
 private struct EarlierPart: View {
     let earlier: EarlierOffers
     let model: AppModel

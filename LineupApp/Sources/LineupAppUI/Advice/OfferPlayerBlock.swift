@@ -216,7 +216,8 @@ private struct RecordButtons: View {
 
 /// One deal on a card: its heading with "Delete"; each round's line, with the club's three answers under the owner's
 /// round that waits for one, and "I accepted" under the club's; the next step in the suggestion's style, or the
-/// sentence naming the figure it needs; then, while it is open, "Record my proposal", "Record their bid" and "End".
+/// sentence naming the figure it needs; then, while it is open, "Record my proposal" and "Record their bid" when the card
+/// offers recording, and "End".
 struct OfferDealCardView: View {
     let card: OfferDealCard
     let model: AppModel
@@ -264,9 +265,11 @@ struct OfferDealCardView: View {
             }
             if card.isOpen {
                 HStack(alignment: .center, spacing: Theme.Spacing.s) {
-                    RecordButtons { purpose in
-                        actions.open(model.offerDraft(for: card.player, club: card.club, purpose: purpose,
-                                                      filledWith: card.next?.terms, kind: card.kind))
+                    if card.offersRecording {
+                        RecordButtons { purpose in
+                            actions.open(model.offerDraft(for: card.player, club: card.club, purpose: purpose,
+                                                          filledWith: card.next?.terms, kind: card.kind))
+                        }
                     }
                     Button(OffersPresentation.endTitle) { model.endDeal(card.id) }
                         .buttonStyle(.secondary)

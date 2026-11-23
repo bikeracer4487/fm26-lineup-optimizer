@@ -335,4 +335,149 @@ import LineupEngine
         #expect(toggled.kind == .loan && toggled.purpose != nil)
         #expect(toggled.deals.map(\.heading) == ["Barnet · sale · open"])
     }
+
+    // MARK: The choice follows a change of mark
+
+    @Test func aSavedChoiceIsClearedWhenHisMarkChanges() throws {
+        let s = try ready()
+        s.model.setLoanPurpose(.wage, for: s.seller)
+        s.model.setOfferKind(.loan, for: s.seller)
+        #expect(s.model.offers.players[s.seller]?.kind == .loan)
+        // A mark set again unchanged clears nothing and writes nothing.
+        let files = try ScoutingSetup.storeFiles(s.t)
+        s.model.setMark(.toSell, for: s.seller)
+        #expect(s.model.offers.players[s.seller]?.kind == .loan)
+        #expect(try ScoutingSetup.storeFiles(s.t) == files)
+        // Re-marked to loan out, then to sell: his block opens on his mark's kind each time.
+        s.model.setMark(.toLoanOut, for: s.seller)
+        #expect(s.model.offers.players[s.seller]?.kind == nil)
+        #expect(s.model.offerKind(for: s.seller) == .loan)
+        s.model.setMark(.toSell, for: s.seller)
+        #expect(s.model.offerKind(for: s.seller) == .sale)
+        #expect(s.t.reopened().offerKind(for: s.seller) == .sale)
+        // His value and his loan's purpose stay.
+        #expect(s.model.offers.players[s.seller]?.value == 40_000)
+        #expect(s.model.offers.players[s.seller]?.purpose == .wage)
+        // Taking the mark off clears it too.
+        s.model.setOfferKind(.loan, for: s.seller)
+        s.model.setMark(nil, for: s.seller)
+        #expect(s.model.offers.players[s.seller]?.kind == nil)
+        #expect(s.t.reopened().offers.players[s.seller]?.kind == nil)
+    }
+
+    @Test func pressingSaleTermsClearsASavedLoanWhileALoanIsRefused() throws {
+        let s = try ready()
+        s.model.setOfferKind(.loan, for: s.seller)
+        try edit(s, s.seller) { $0.contractType = .youth; $0.monthsLeft = 24 }
+        #expect(s.model.offerKind(for: s.seller) == .sale)                               // sale already shown
+        #expect(s.model.offers.players[s.seller]?.kind == .loan)
+        s.model.setOfferKind(.sale, for: s.seller)
+        #expect(s.model.offers.players[s.seller]?.kind == nil)
+        #expect(s.t.reopened().offers.players[s.seller]?.kind == nil)
+        // Back on a full-time contract he opens on his mark's kind, not the old loan choice.
+        try edit(s, s.seller) { $0.contractType = .fullTime }
+        #expect(s.model.offerKind(for: s.seller) == .sale)
+    }
+
+    // MARK: An open deal stays answerable wherever its card is shown
+
+    /// The first team pasted again without the player, as an import after he was sold: his mark is dropped.
+    private func importWithout(_ id: PlayerID, _ s: Setup) throws {
+        let name = try #require(s.model.players.first { $0.id == id }).name
+        let rows = try Captures.firstTeam.split(whereSeparator: \.isNewline).map(String.init)
+            .filter { !$0.contains("\t\"\(name)\"\t") }
+        s.t.importSquad(.firstTeam, paste: rows.joined(separator: "\n") + "\n", grids: try Captures.firstTeamGrids)
+        #expect(!s.model.players.contains { $0.id == id })
+        #expect(s.model.marks[id] == nil)
+    }
+
+    private func earlierCard(_ s: Setup) throws -> OfferDealCard {
+        try #require(sheet(s.t).earlier?.deals.first)
+    }
+
+    /// A card that records outcomes and offers no terms: no next step and no "Record…" buttons.
+    private func expectOutcomesOnly(_ card: OfferDealCard, sourceLocation: SourceLocation = #_sourceLocation) {
+        #expect(card.isOpen, sourceLocation: sourceLocation)
+        #expect(!card.offersRecording && card.next == nil && card.problem == nil, sourceLocation: sourceLocation)
+    }
+
+    @Test func anOpenDealOfAPlayerWhoLeftCanBeAnsweredFromEarlierOffers() throws {
+        let s = try ready()
+        s.model.recordRound(for: s.seller, club: "Barnet", by: .owner, terms: Self.sale)
+        try importWithout(s.seller, s)
+        var card = try earlierCard(s)
+        expectOutcomesOnly(card)
+        #expect(card.rounds.map(\.offersAnswers) == [true])
+        advance(s.t)
+        s.model.answer(.accepted, deal: card.id)
+        #expect(s.model.offers.deals.first?.state == .agreed)
+        #expect(s.model.offerMeasures.sale.paid == 1 && s.model.offerMeasures.sale.agreed == 1)
+        // Agreed, it offers nothing but the deletion.
+        card = try earlierCard(s)
+        #expect(!card.isOpen && !card.offersRecording)
+        #expect(card.rounds.allSatisfy { !$0.offersAnswers && !$0.offersAccept })
+    }
+
+    @Test func theClubsLastRoundCanBeAcceptedAndADealEndedFromEarlierOffers() throws {
+        let s = try ready()
+        s.model.recordRound(for: s.seller, club: "Barnet", by: .club, terms: Self.sale)
+        advance(s.t)
+        s.model.recordRound(for: s.seller, club: "Wealdstone", by: .club, terms: Self.sale)
+        try importWithout(s.seller, s)
+        let cards = try #require(sheet(s.t).earlier?.deals)
+        #expect(cards.count == 2)
+        for card in cards {
+            expectOutcomesOnly(card)
+            #expect(card.rounds.map(\.offersAccept) == [true])
+        }
+        let barnet = try #require(cards.first { $0.club == "Barnet" })
+        let wealdstone = try #require(cards.first { $0.club == "Wealdstone" })
+        advance(s.t)
+        s.model.acceptTheirs(deal: barnet.id)
+        advance(s.t)
+        s.model.endDeal(wealdstone.id)
+        #expect(s.model.offers.deals.first { $0.id == barnet.id }?.state == .agreed)
+        #expect(s.model.offers.deals.first { $0.id == wealdstone.id }?.state == .ended)
+        let after = try #require(sheet(s.t).earlier?.deals)
+        #expect(after.allSatisfy { !$0.isOpen && !$0.offersRecording })
+        #expect(after.allSatisfy { $0.rounds.allSatisfy { !$0.offersAnswers && !$0.offersAccept } })
+    }
+
+    @Test func aLoanDealOfAPlayerNowOutOnLoanStaysAnswerableInHisBlock() throws {
+        let s = try ready()
+        s.model.setClubFigure(.wageBudget, text: "9000", club: "Barnet")
+        s.model.setClubFigure(.wagesSpent, text: "8000", club: "Barnet")
+        s.model.setOfferKind(.loan, for: s.seller)
+        s.model.recordRound(for: s.seller, club: "Barnet", by: .owner, terms: Self.loan)
+        advance(s.t)
+        s.model.recordRound(for: s.seller, club: "Hendon", by: .club, terms: Self.loan)
+        advance(s.t)
+        s.model.recordRound(for: s.seller, club: "Wealdstone", by: .club, terms: Self.loan)
+        try edit(s, s.seller) { $0.loanedTo = "Elsewhere Town" }
+        #expect(s.model.marks[s.seller] == .toSell)
+        let cards = try block(sheet(s.t), s.seller).deals
+        #expect(cards.count == 3 && cards.allSatisfy { $0.kind == .loan })
+        for card in cards { expectOutcomesOnly(card) }
+        let barnet = try #require(cards.first { $0.club == "Barnet" })
+        let hendon = try #require(cards.first { $0.club == "Hendon" })
+        let wealdstone = try #require(cards.first { $0.club == "Wealdstone" })
+        #expect(barnet.rounds.map(\.offersAnswers) == [true])
+        #expect(hendon.rounds.map(\.offersAccept) == [true])
+        advance(s.t)
+        s.model.answer(.accepted, deal: barnet.id)
+        advance(s.t)
+        s.model.acceptTheirs(deal: hendon.id)
+        advance(s.t)
+        s.model.endDeal(wealdstone.id)
+        let states = Dictionary(uniqueKeysWithValues: s.model.offers.deals.map { ($0.club, $0.state) })
+        #expect(states == ["Barnet": .agreed, "Hendon": .agreed, "Wealdstone": .ended])
+        #expect(try block(sheet(s.t), s.seller).deals.allSatisfy { !$0.isOpen && !$0.offersRecording })
+    }
+
+    @Test func aCardOfAMarkedPlayerWhoseKindCanBeWorkedOutOffersRecording() throws {
+        let s = try ready()
+        s.model.recordRound(for: s.seller, club: "Barnet", by: .club, terms: Self.sale)
+        let card = try #require(try block(sheet(s.t), s.seller).deals.first)
+        #expect(card.isOpen && card.offersRecording && card.next != nil)
+    }
 }

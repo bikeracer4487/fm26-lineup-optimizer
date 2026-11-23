@@ -5,7 +5,9 @@ extension AppModel {
     /// marked player slightly in low-importance and sharpness fixtures. Only a player in the squads who is not on loan
     /// here can be marked, and a player on a youth contract (as the engine reads one: `Removal.isOnYouthContract`) only
     /// to sell, since he cannot be loaned out (the owner's correction of 22 November 2026); for anything else nothing
-    /// happens. A mark can be taken off whoever holds it.
+    /// happens. A mark can be taken off whoever holds it. A change of mark (to the other mark or to none) clears his
+    /// saved choice of terms on Offers, so his block opens on his new mark's kind; his value, his loan's purpose and his
+    /// record stay. The offers file is saved only when that clears something.
     public func setMark(_ mark: SaleMark?, for player: PlayerID) {
         if mark != nil {
             guard let held = squad.book.allPlayers.first(where: { $0.id == player }) else { return }
@@ -16,6 +18,10 @@ extension AppModel {
         marks[player] = mark
         if mark == nil { marksAbsentFrom[player] = nil }
         save(.marks)
+        if offers.players[player]?.kind != nil {
+            offers.players[player]?.kind = nil
+            save(.offers)
+        }
         replan()
     }
 

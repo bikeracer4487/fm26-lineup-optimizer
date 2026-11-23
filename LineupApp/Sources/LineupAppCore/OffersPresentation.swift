@@ -25,10 +25,11 @@ public struct OfferSuggestionBlock: Equatable, Sendable {
 /// One round of a deal, in the engine's words, and what can be pressed under it.
 public struct OfferRoundRow: Equatable, Sendable {
     public var line: String
-    /// "Accepted", "Refused" and "No reply": on the last round of an open deal of a marked player, when it is the
-    /// owner's with no answer yet.
+    /// "Accepted", "Refused" and "No reply": on the last round of an open deal, when it is the owner's with no answer
+    /// yet, wherever the card is shown.
     public var offersAnswers: Bool
-    /// "I accepted": on the last round of an open deal of a marked player, when it is the club's.
+    /// "I accepted": on the last round of an open deal, when it is the club's with no answer yet, wherever the card is
+    /// shown.
     public var offersAccept: Bool
 }
 
@@ -45,14 +46,19 @@ public struct OfferDealCard: Identifiable, Equatable, Sendable {
     /// ended", since the card no longer stands under him.
     public var heading: String
     public var rounds: [OfferRoundRow]
-    /// The suggestion for the next round, of the deal's kind; nil unless the deal is open, its player is marked, the
-    /// deal's kind can be worked out for him, and he has a value.
+    /// The suggestion for the next round, of the deal's kind; nil unless `offersRecording`, and he has a value.
     public var next: OfferSuggestionBlock?
     /// The engine's sentence when the next step needs a figure that is not entered.
     public var problem: String?
-    /// The deal is open, its player is marked and its kind can be worked out for him, so "Record my proposal", "Record
-    /// their bid" and "End" are offered; false for every card under "Earlier offers", where only the deletion is.
+    /// The deal is open, so "End" is offered, and the outcome buttons on its last round (`OfferRoundRow`), wherever the
+    /// card is shown: under "Earlier offers" too, and for a loan deal of a player who can no longer be loaned, so that
+    /// a deal agreed in the game after he left can still be recorded (revised on 22 November 2026). False for an
+    /// agreed or ended deal, which offers only the deletion.
     public var isOpen: Bool
+    /// The deal is open, its player is marked and in the squads, and its kind can be worked out for him, so the next
+    /// step is worked out and "Record my proposal" and "Record their bid" are offered; false under "Earlier offers"
+    /// and for a loan deal of a player who cannot be loaned, where no terms can be worked out for him.
+    public var offersRecording: Bool
 }
 
 /// One choice of the control beside a marked player's name: sale terms or loan terms, in Core's plain words.
@@ -687,14 +693,16 @@ extension AppModel {
             clubBlock: clubBlock, clubProblem: clubProblem, clubHasOpenDeal: clubHasOpenDeal, deals: deals)
     }
 
-    /// A deal's card. `live` for a deal of a marked player whose kind can be worked out for him, whatever kind his block
-    /// shows: its last round offers what can be pressed, and, while open and with a `subject`, the next step of the
-    /// deal's kind is worked out from its rounds with the club's figures as entered now, else the deal's own, else the
-    /// name alone. `named` under "Earlier offers", where the heading names the player.
+    /// A deal's card. While the deal is open its last round offers the outcome buttons and the card offers "End",
+    /// whatever the player's mark, squad or contract. `live` for a deal of a marked player whose kind can be worked out
+    /// for him, whatever kind his block shows: while open, the card offers recording, and with a `subject` the next
+    /// step of the deal's kind is worked out from its rounds with the club's figures as entered now, else the deal's
+    /// own, else the name alone. `named` under "Earlier offers", where the heading names the player.
     private func dealCard(_ deal: OfferDeal, subject: OfferSubject?, live: Bool, named: Bool,
                           context: OffersContext) -> OfferDealCard {
         let state = deal.state
-        let open = live && state == .open
+        let open = state == .open
+        let recording = live && open
         let rounds = deal.rounds.enumerated().map { index, round in
             let last = open && index == deal.rounds.count - 1
             let clubFollows = deal.rounds[(index + 1)...].contains { $0.by == .club }
@@ -705,7 +713,7 @@ extension AppModel {
         }
         var next: OfferSuggestionBlock?
         var problem: String?
-        if open, let subject {
+        if recording, let subject {
             let entered = clubEntry(named: deal.club)?.figures
             var figures = (entered?.hasAnyFigure == true ? entered : nil) ?? deal.figures ?? Self.figures(named: deal.club)
             figures.name = deal.club
@@ -721,7 +729,7 @@ extension AppModel {
                        + [deal.club, OffersPresentation.kindWord(deal.kind), OffersPresentation.stateWord(state)])
             .joined(separator: " · ")
         return OfferDealCard(id: deal.id, player: deal.player, club: deal.club, kind: deal.kind, heading: heading,
-                             rounds: rounds, next: next, problem: problem, isOpen: open)
+                             rounds: rounds, next: next, problem: problem, isOpen: open, offersRecording: recording)
     }
 
     private func suggestionBlock(_ suggestion: OfferSuggestion, kind: OfferKind, subject: OfferSubject, club: String?,

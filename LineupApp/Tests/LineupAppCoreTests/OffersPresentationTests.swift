@@ -357,7 +357,7 @@ import LineupEngine
         #expect(loanTo.clubHasOpenDeal == nil)
     }
 
-    @Test func anOpenDealUnderEarlierOffersHasNoNextStepAndNothingToAnswer() throws {
+    @Test func anOpenDealUnderEarlierOffersHasNoNextStepAndCanStillBeAnswered() throws {
         let s = try ready()
         s.model.setOfferValue(text: "40000", for: s.seller)
         s.model.recordRound(for: s.seller, club: "Barnet", by: .owner, terms: Self.sale(40_000))
@@ -367,8 +367,9 @@ import LineupEngine
         let earlier = try #require(sheet(s.t).earlier)
         let card = try #require(earlier.deals.first)
         #expect(card.next == nil && card.problem == nil)
-        #expect(!card.isOpen)                                                            // only the deletion is offered
-        #expect(card.rounds.allSatisfy { !$0.offersAnswers && !$0.offersAccept })
+        // Revised on 22 November 2026: an open deal stays answerable under "Earlier offers"; no terms are offered.
+        #expect(card.isOpen && !card.offersRecording)
+        #expect(card.rounds.map(\.offersAnswers) == [true])
         #expect(card.heading.hasSuffix("Barnet · sale · open"))
         #expect(earlier.asks.map(\.offersNoBid) == [false])
         #expect(earlier.line == "1 deal and 1 ask for players no longer marked")

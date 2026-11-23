@@ -35,16 +35,19 @@ extension AppModel {
     }
 
     /// Chooses sale or loan terms for a marked player's block. The choice is saved with his value, as nil when it is
-    /// his mark's kind, so that the block follows his mark again. Saves the offers file and does not plan; nothing for a
-    /// player with no mark or not in the squads, for a loan when one cannot be worked out for him, or when the kind is
-    /// already shown.
+    /// his mark's kind, so that the block follows his mark again; a change of mark clears it (`setMark`). Saves the
+    /// offers file and does not plan; nothing for a player with no mark or not in the squads, for a loan when one cannot
+    /// be worked out for him, or when the saved choice would not change. Sale terms chosen while a loan is refused, and
+    /// so already shown, still clear a saved loan, so it does not come back when he can be loaned again.
     public func setOfferKind(_ kind: OfferKind, for player: PlayerID) {
-        guard let mark = markKind(for: player), heldPlayer(player) != nil, kind != offerKind(for: player) else { return }
+        guard let mark = markKind(for: player), heldPlayer(player) != nil else { return }
         switch kind {
         case .sale: break
         case .loan: if loanRefusal(for: player) != nil { return }
         }
-        offers.players[player, default: PlayerOffer()].kind = kind == mark ? nil : kind
+        let choice: OfferKind? = kind == mark ? nil : kind
+        guard offers.players[player]?.kind != choice else { return }
+        offers.players[player, default: PlayerOffer()].kind = choice
         save(.offers)
     }
 
