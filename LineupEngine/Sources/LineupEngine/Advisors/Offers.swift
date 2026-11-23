@@ -68,7 +68,10 @@ public enum Offers {
     public static func ask(_ subject: OfferSubject, kind: OfferKind, earlier: [OfferAsk], measures: OfferMeasures = .none,
                            parameters: EngineParameters) throws -> OfferSuggestion {
         try requireUsable(parameters)
-        guard kind == .sale else { throw OfferError.wrongKind }
+        switch kind {
+        case .loan: return try loanAsk(subject, earlier: earlier, parameters: parameters)
+        case .sale: break
+        }
         if subject.value < 0 { throw OfferError.negative(.value) }
         let rules = parameters.offerRules.value
         let total = rounded(rules.saleLine * Double(subject.value), rules: rules)
@@ -100,7 +103,10 @@ public enum Offers {
     public static func proposal(_ subject: OfferSubject, kind: OfferKind, club: ClubFigures, rounds: [OfferRound],
                                 measures: OfferMeasures = .none, parameters: EngineParameters) throws -> OfferSuggestion {
         try requireUsable(parameters)
-        guard kind == .sale else { throw OfferError.wrongKind }
+        switch kind {
+        case .loan: return try loanProposal(subject, club: club, rounds: rounds, parameters: parameters)
+        case .sale: break
+        }
         if subject.value < 0 { throw OfferError.negative(.value) }
         let rules = parameters.offerRules.value
         let ask = rounded(rules.saleLine * Double(subject.value), rules: rules)
@@ -122,10 +128,7 @@ public enum Offers {
         case .club:
             let bid = lastTerms.total
             if bid >= ask { return suggestion(.accept) }
-            var seenClub = false
-            for round in rounds.dropLast() {
-                if round.by == .club { seenClub = true } else if seenClub { return suggestion(.acceptOrLeave) }
-            }
+            if alreadyCountered(rounds) { return suggestion(.acceptOrLeave) }
             let counter = min(ask, rounded(rules.counterStep * Double(bid), rules: rules))
             if counter <= bid { return suggestion(.acceptOrLeave) }
             let terms = SaleTerms(now: lastTerms.now, later: lastTerms.later + counter - bid,
@@ -182,5 +185,182 @@ public enum Offers {
     private static func requireUsable(_ parameters: EngineParameters) throws {
         let problems = FitnessModel.problems(in: parameters)
         guard problems.isEmpty else { throw PlanError.badParameters(problems) }
+    }
+
+    /// True when the club has already answered a counter of the owner's: a club round, then an owner round, before the
+    /// last round.
+    private static func alreadyCountered(_ rounds: [OfferRound]) -> Bool {
+        var seenClub = false
+        for round in rounds.dropLast() {
+            if round.by == .club { seenClub = true } else if seenClub { return true }
+        }
+        return false
+    }
+
+    // MARK: Loans
+
+    /// Far below the 1/100 a whole percentage resolves to; absorbs binary floating-point error before rounding down.
+    private static let shareNoise = 1e-9
+
+    /// The share of his wage a loan asks, the club's limit that set it, and the fee a month.
+    private struct LoanFigures {
+        var percent: Int
+        var limit: ShareLimit?
+        var fee: Int
+    }
+
+    private static func checkLoanSubject(_ subject: OfferSubject) throws {
+        if subject.value < 0 { throw OfferError.negative(.value) }
+        if subject.wagePerWeek < 0 { throw OfferError.negative(.wage) }
+    }
+
+    /// The share, its limit and the fee for the loan of this player, to a club (its wage left and highest wage cap
+    /// the share and the fee) or, with no club, to clubs in general.
+    private static func loanFigures(_ subject: OfferSubject, club: ClubFigures?, rules: OfferRules) throws -> LoanFigures {
+        let tau = rules.loanLinePerWeek * Double(subject.value)
+        let wage = subject.wagePerWeek
+        var left: Double?
+        var highest: Double?
+        if let club {
+            guard let budget = club.wageBudgetPerWeek else { throw OfferError.missing(.wageBudget, club: club.name) }
+            guard let spent = club.wagesSpentPerWeek else { throw OfferError.missing(.wagesSpent, club: club.name) }
+            if budget < 0 { throw OfferError.negative(.wageBudget) }
+            if spent < 0 { throw OfferError.negative(.wagesSpent) }
+            left = max(0, budget - spent)
+            if let figure = club.highestWagePerWeek {
+                if figure < 0 { throw OfferError.negative(.highestWage) }
+                highest = figure
+            }
+        }
+        let bears = min(tau, left ?? tau)
+        func fee(atWholeWage whole: Bool) -> Int {
+            guard whole else { return 0 }
+            return rounded(Double(rules.weeksPerMonthInRule) * (bears - wage), rules: rules)
+        }
+        guard wage > 0 else { return LoanFigures(percent: 0, limit: nil, fee: fee(atWholeWage: true)) }
+        var best: (share: Double, limit: ShareLimit) = (tau / wage, .value)
+        if let left, left / wage < best.share { best = (left / wage, .wageLeft(left)) }
+        if let highest, highest / wage < best.share { best = (highest / wage, .highestWage(highest)) }
+        let whole = best.share * 100 + shareNoise >= 100
+        if whole { return LoanFigures(percent: 100, limit: .all, fee: fee(atWholeWage: true)) }
+        let steps = Int((best.share * 100 / Double(rules.wageStepPercent) + shareNoise).rounded(.down))
+        return LoanFigures(percent: steps * rules.wageStepPercent, limit: best.limit, fee: 0)
+    }
+
+    private static func loanTerms(percent: Int, fee: Int, purpose: LoanPurpose) -> LoanTerms {
+        let time: PlayingTime? = switch purpose {
+        case .development: .startingPlace
+        case .wage: nil
+        }
+        return LoanTerms(wagePercent: percent, feePerMonth: fee, playingTime: time, recall: true, futureFee: nil)
+    }
+
+    /// The loan's own notes, in order: the limit, the recall with a fee, the fee that may be offered to buy him, and
+    /// that clubs in general are open.
+    private static func loanNotes(_ terms: LoanTerms, limit: ShareLimit?, subject: OfferSubject, openToClubs: Bool,
+                                  rules: OfferRules) -> [OfferNote] {
+        var notes: [OfferNote] = []
+        if let limit { notes.append(.shareLimitedBy(limit)) }
+        if terms.feePerMonth > 0 && terms.recall { notes.append(.recallWithFee) }
+        switch subject.purpose {
+        case .development: break
+        case .wage:
+            let future = rounded(rules.saleLine * Double(subject.value), rules: rules)
+            if future > 0 { notes.append(.optionalFutureFee(future)) }
+        }
+        if openToClubs { notes.append(.clubsOpenLow) }
+        return notes
+    }
+
+    /// One step down from what the owner last recorded: the fee first, then a step of the share; never above the
+    /// present suggestion. Nil when there is nothing lower: no share and no fee.
+    private static func steppedDown(from last: LoanTerms, suggested: LoanTerms, rules: OfferRules) -> LoanTerms? {
+        if last.wagePercent == 0 && last.feePerMonth == 0 { return nil }
+        let share = last.feePerMonth > 0 ? last.wagePercent : max(0, last.wagePercent - rules.wageStepPercent)
+        var terms = suggested
+        terms.wagePercent = min(share, suggested.wagePercent)
+        terms.feePerMonth = 0
+        return terms
+    }
+
+    private static func loanTerms(of terms: OfferTerms) throws -> LoanTerms {
+        guard case .loan(let t) = terms else { throw OfferError.wrongKind }
+        return t
+    }
+
+    private static func loanAsk(_ subject: OfferSubject, earlier: [OfferAsk], parameters: EngineParameters) throws -> OfferSuggestion {
+        try checkLoanSubject(subject)
+        let rules = parameters.offerRules.value
+        let basis = parameters.offerRules.evidence
+        let earlierTerms = try earlier.map { try loanTerms(of: $0.terms) }
+        var notes: [OfferNote] = []
+        if subject.value == 0 { notes.append(.valueIsZero) }
+        let figures = try loanFigures(subject, club: nil, rules: rules)
+        let suggested = loanTerms(percent: figures.percent, fee: figures.fee, purpose: subject.purpose)
+        func propose(_ terms: LoanTerms, limit: ShareLimit?, extra: [OfferNote] = []) -> OfferSuggestion {
+            OfferSuggestion(advice: .propose(.loan(terms), split: nil),
+                            notes: notes + extra + loanNotes(terms, limit: limit, subject: subject, openToClubs: true, rules: rules),
+                            basis: basis)
+        }
+        if let latest = earlier.last, latest.noBidCame, let last = earlierTerms.last {
+            let run = earlier.reversed().prefix(while: { $0.noBidCame }).count
+            if run > rules.stepsDownAtMost {
+                return OfferSuggestion(advice: .nothingLower(.noBidThree), notes: notes, basis: basis)
+            }
+            guard let lowered = steppedDown(from: last, suggested: suggested, rules: rules) else {
+                return propose(last, limit: nil)
+            }
+            return propose(lowered, limit: nil, extra: [.steppedDown])
+        }
+        if let first = earlierTerms.first { return propose(first, limit: nil) }
+        return propose(suggested, limit: figures.limit)
+    }
+
+    private static func loanProposal(_ subject: OfferSubject, club: ClubFigures, rounds: [OfferRound],
+                                     parameters: EngineParameters) throws -> OfferSuggestion {
+        try checkLoanSubject(subject)
+        let rules = parameters.offerRules.value
+        let basis = parameters.offerRules.evidence
+        var notes: [OfferNote] = []
+        if subject.value == 0 { notes.append(.valueIsZero) }
+        func suggestion(_ advice: OfferAdvice, extra: [OfferNote] = []) -> OfferSuggestion {
+            OfferSuggestion(advice: advice, notes: notes + extra, basis: basis)
+        }
+        let loans = try rounds.map { try loanTerms(of: $0.terms) }
+        guard let last = rounds.last, let lastTerms = loans.last else {
+            let figures = try loanFigures(subject, club: club, rules: rules)
+            let terms = loanTerms(percent: figures.percent, fee: figures.fee, purpose: subject.purpose)
+            return suggestion(.propose(.loan(terms), split: nil),
+                              extra: loanNotes(terms, limit: figures.limit, subject: subject, openToClubs: false, rules: rules))
+        }
+        switch last.by {
+        case .club:
+            switch subject.purpose {
+            case .development:
+                if lastTerms.playingTime == .startingPlace { return suggestion(.accept) }
+                if alreadyCountered(rounds) { return suggestion(.acceptOrLeave) }
+                return suggestion(.counter(.loan(loanTerms(percent: lastTerms.wagePercent, fee: lastTerms.feePerMonth,
+                                                           purpose: .development))))
+            case .wage:
+                let figures = try loanFigures(subject, club: club, rules: rules)
+                if lastTerms.wagePercent >= figures.percent { return suggestion(.accept) }
+                if alreadyCountered(rounds) { return suggestion(.acceptOrLeave) }
+                let share = min(figures.percent, lastTerms.wagePercent + rules.wageStepPercent)
+                return suggestion(.counter(.loan(loanTerms(percent: share, fee: lastTerms.feePerMonth, purpose: .wage))))
+            }
+        case .owner:
+            switch last.answer {
+            case nil: return suggestion(.awaitAnswer)
+            case .accepted?: return suggestion(.accept)
+            case .refused?, .noReply?: break
+            }
+            let figures = try loanFigures(subject, club: club, rules: rules)
+            let suggested = loanTerms(percent: figures.percent, fee: figures.fee, purpose: subject.purpose)
+            guard let lowered = steppedDown(from: lastTerms, suggested: suggested, rules: rules) else {
+                return suggestion(.nothingLower(.clubDoesNotWantHim))
+            }
+            return suggestion(.propose(.loan(lowered), split: nil),
+                              extra: [.steppedDown] + loanNotes(lowered, limit: nil, subject: subject, openToClubs: false, rules: rules))
+        }
     }
 }

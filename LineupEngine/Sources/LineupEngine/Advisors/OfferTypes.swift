@@ -384,7 +384,7 @@ public struct OfferMeasures: Equatable, Sendable {
 
 /// A field of an offer a sentence can name.
 public enum OfferField: String, Sendable, CaseIterable {
-    case value, transferBudget, wageBudget, wagesSpent, highestWage, wagePercent, feeNow, feeLater, nextFeePercent, feePerMonth, futureFee
+    case value, wage, transferBudget, wageBudget, wagesSpent, highestWage, wagePercent, feeNow, feeLater, nextFeePercent, feePerMonth, futureFee
 }
 
 /// Why terms cannot be worked out or recorded.

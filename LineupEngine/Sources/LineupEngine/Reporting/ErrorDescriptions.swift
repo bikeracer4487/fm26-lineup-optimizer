@@ -177,6 +177,7 @@ public enum ErrorDescriptions {
     private static func words(_ field: OfferField) -> String {
         switch field {
         case .value: "his value"
+        case .wage: "his wage"
         case .transferBudget: "the transfer budget"
         case .wageBudget: "the wage budget"
         case .wagesSpent: "the wages spent"
@@ -203,7 +204,7 @@ public enum ErrorDescriptions {
                 return club.map { "Enter the wages \($0) have spent to get terms for them." } ?? generic
             case .value:
                 return club == nil ? "Enter his value to get terms." : generic
-            case .highestWage, .wagePercent, .feeNow, .feeLater, .nextFeePercent, .feePerMonth, .futureFee:
+            case .wage, .highestWage, .wagePercent, .feeNow, .feeLater, .nextFeePercent, .feePerMonth, .futureFee:
                 return generic
             }
         case .negative(let field):
@@ -213,7 +214,7 @@ public enum ErrorDescriptions {
             switch field {
             case .wagePercent: return "The share of his wage cannot be over 100%."
             case .nextFeePercent: return "The share of his next fee cannot be over 100%."
-            case .value, .transferBudget, .wageBudget, .wagesSpent, .highestWage, .feeNow, .feeLater, .feePerMonth, .futureFee:
+            case .value, .wage, .transferBudget, .wageBudget, .wagesSpent, .highestWage, .feeNow, .feeLater, .feePerMonth, .futureFee:
                 return "\(words(field).prefix(1).uppercased())\(words(field).dropFirst()) cannot be over 100%."
             }
         case .wrongKind: return "These are not the terms of this kind of deal."
