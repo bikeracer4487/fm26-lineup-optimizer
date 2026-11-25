@@ -1012,6 +1012,42 @@ import Testing
         #expect(draft.pasteProblem == nil)
         #expect(draft.opponentReadingText == AdvisorText.opponentReading(expected, on: DayText.short(today)))
         #expect(FixtureDraft.pasteButtonTitle == "Paste their squad")
+        // With no tactic the advice is not ready, so there is no suggestion and the importance stays as it was.
+        #expect(t.model.suggestion(for: draft) == nil)
+        #expect(draft.importance == .medium)
+    }
+
+    @Test func aPasteSetsTheImportanceToTheOneSuggestedWithTheStrengthItRead() throws {
+        for start in Importance.allCases {
+            let (model, draft) = try SampleData.draftWithOpponentReading(repositoryRoot: Captures.repositoryRoot,
+                                                                         importance: start)
+            defer { try? FileManager.default.removeItem(at: model.store.directory) }
+            let suggestion = try #require(model.suggestion(for: draft))
+            #expect(draft.importance == suggestion.importance, "from \(start)")
+            // Nothing is left to take: "Use it" is not offered.
+            #expect(model.suggestionNote(for: draft)?.showsUseIt == false)
+        }
+    }
+
+    @Test func afterAPasteTheOwnerCanChooseAnotherImportance() throws {
+        let (model, pasted) = try SampleData.draftWithOpponentReading(repositoryRoot: Captures.repositoryRoot)
+        defer { try? FileManager.default.removeItem(at: model.store.directory) }
+        var draft = pasted
+        let other = try #require(Importance.allCases.first { $0 != pasted.importance })
+        draft.importance = other
+        #expect(model.suggestionNote(for: draft)?.showsUseIt == true)
+        let id = try #require(model.save(draft))
+        #expect(model.fixtures.first { $0.id == id }?.importance == other)
+    }
+
+    @Test func aRefusedPasteLeavesTheImportanceAsItWas() throws {
+        for start in Importance.allCases {
+            let (model, draft) = try SampleData.draftWithRefusedPaste(repositoryRoot: Captures.repositoryRoot,
+                                                                      importance: start)
+            defer { try? FileManager.default.removeItem(at: model.store.directory) }
+            #expect(draft.pasteProblem != nil)
+            #expect(draft.importance == start)
+        }
     }
 
     @Test func nothingIsSavedUntilTheFixtureIs() throws {
@@ -1020,6 +1056,9 @@ import Testing
         var draft = draft(t)
         let bytes = fixturesBytes(t)
         let fixtures = t.model.fixtures
+        // The paste reads the suggestion, so it reads the advice; the screen has read it already, and it is not worked
+        // out again.
+        _ = t.model.adviceState
         let planned = t.model.timesPlanned, advised = t.model.timesAdvised
         t.model.pasteOpponentSquad(into: &draft)
         #expect(fixturesBytes(t) == bytes)
@@ -1266,7 +1305,9 @@ extension FixturePresentationTests {
         c.model.pasteOpponentSquad(into: &draft)
         #expect(draft.pasteProblem == nil, "\(draft.pasteProblem ?? "")")
         let reading = try #require(draft.opponentReading)
-        // The paste moved nothing in the saved fixture; saving the draft keeps its importance and adds the reading.
+        // The paste takes the suggested importance; the owner puts the fixture's own back before saving.
+        #expect(draft.importance == c.model.suggestion(for: draft)?.importance)
+        draft.importance = fixture.importance
         c.model.save(draft)
         let current = try #require(c.model.fixtures.first { $0.id == fixture.id })
         let line = try #require(c.model.suggestionLine(for: current))

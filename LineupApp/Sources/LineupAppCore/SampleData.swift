@@ -346,10 +346,12 @@ public enum SampleData {
 
     /// The sample model and a draft of its second fixture, a league match, after its opponent's squad was pasted: the
     /// capture of the same first team taken with FMRTE's `Id` column, which the sample, keyed by name, does not take for
-    /// its own players. The draft has a reading and the strength it set.
-    @MainActor public static func draftWithOpponentReading(repositoryRoot: URL) throws -> (model: AppModel, draft: FixtureDraft) {
+    /// its own players. The draft has a reading, the strength it set and the importance suggested with that strength.
+    /// With `importance`, the draft is set to it before the paste.
+    @MainActor public static func draftWithOpponentReading(repositoryRoot: URL, importance: Importance? = nil) throws
+        -> (model: AppModel, draft: FixtureDraft) {
         let (model, draft) = try draftAfterPaste(repositoryRoot: repositoryRoot, paste: "first-team-with-id.tsv",
-                                                 grids: "first-team-with-id.grids.json")
+                                                 grids: "first-team-with-id.grids.json", importance: importance)
         guard draft.opponentReading != nil else {
             throw SampleDataError(description: "The sample opponent squad was not read: \(draft.pasteProblem ?? "no reason given")")
         }
@@ -357,10 +359,11 @@ public enum SampleData {
     }
 
     /// The sample model and a draft of its second fixture after the owner's own first team was pasted as the opponent's,
-    /// which is refused: the draft says why and has no reading.
-    @MainActor public static func draftWithRefusedPaste(repositoryRoot: URL) throws -> (model: AppModel, draft: FixtureDraft) {
+    /// which is refused: the draft says why and has no reading. With `importance`, the draft is set to it before the paste.
+    @MainActor public static func draftWithRefusedPaste(repositoryRoot: URL, importance: Importance? = nil) throws
+        -> (model: AppModel, draft: FixtureDraft) {
         let (model, draft) = try draftAfterPaste(repositoryRoot: repositoryRoot, paste: "first-team.tsv",
-                                                 grids: "first-team.grids.json")
+                                                 grids: "first-team.grids.json", importance: importance)
         guard draft.pasteProblem != nil else {
             throw SampleDataError(description: "Pasting the sample's own first team as the opponent's was not refused.")
         }
@@ -368,8 +371,9 @@ public enum SampleData {
     }
 
     /// The sample model and a draft of its second fixture after `paste`, with its grid layouts `grids`, was pasted as the
-    /// opponent's squad.
-    @MainActor private static func draftAfterPaste(repositoryRoot: URL, paste: String, grids: String) throws
+    /// opponent's squad, the draft set to `importance` first when one is given.
+    @MainActor private static func draftAfterPaste(repositoryRoot: URL, paste: String, grids: String,
+                                                   importance: Importance?) throws
         -> (model: AppModel, draft: FixtureDraft) {
         let (model, input) = try build(repositoryRoot: repositoryRoot)
         guard model.fixtures.count >= 2 else {
@@ -378,6 +382,7 @@ public enum SampleData {
         input.clipboard = String(decoding: try fixture("captures/\(paste)", under: repositoryRoot), as: UTF8.self)
         input.config = .data(try fixture("captures/\(grids)", under: repositoryRoot))
         var draft = model.fixtureDraft(for: model.fixtures[1])
+        if let importance { draft.importance = importance }
         model.pasteOpponentSquad(into: &draft)
         return (model, draft)
     }

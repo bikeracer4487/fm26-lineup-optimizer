@@ -475,8 +475,8 @@ let narrowWindow = CGSize(width: 800, height: 700)
 
     // The editor after the opponent's squad was pasted, and after the owner's own squad was pasted and refused.
     let url = URL(fileURLWithPath: root, isDirectory: true)
-    for (name, make) in [("fixtures-editor-reading", SampleData.draftWithOpponentReading),
-                         ("fixtures-editor-refused", SampleData.draftWithRefusedPaste)] {
+    for (name, make) in [("fixtures-editor-reading", { try SampleData.draftWithOpponentReading(repositoryRoot: $0) }),
+                         ("fixtures-editor-refused", { try SampleData.draftWithRefusedPaste(repositoryRoot: $0) })] {
         let pasted: (model: AppModel, draft: FixtureDraft)
         do { pasted = try make(url) } catch { fail("\(error)") }
         try ScreenPictures.writeFixtureEditor(model: pasted.model, draft: pasted.draft, to: directory, name: name,
