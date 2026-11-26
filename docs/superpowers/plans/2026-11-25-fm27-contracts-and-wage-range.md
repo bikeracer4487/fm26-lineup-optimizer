@@ -770,7 +770,44 @@ public let wageCaution: String?     // on the closed row
 
 ---
 
-### Task 9: Close out
+### Task 9: Current ability on the Elevens tables
+
+Added at the owner's request of 25 November 2026, after the design was approved: "add CA to the First XI and
+Second XI tables on the Elevens screen". It changes no advice.
+
+**Files:**
+- Modify: `LineupApp/Sources/LineupAppCore/ElevensPresentation.swift` (`ElevenRow`, `elevenColumns`, where the
+  rows are built), `LineupApp/Sources/LineupAppUI/Advice/ElevensScreen.swift` (the headings and the row),
+  `LineupApp/Sources/LineupAppUI/Theme.swift` (`Theme.Elevens.abilityColumn`)
+- Test: `LineupApp/Tests/LineupAppCoreTests/ElevensPresentationTests.swift`
+
+**Interfaces:**
+- Produces: `ElevenRow.abilityText: String?` — his current ability as a whole number ("92"), from the squad
+  book's player with the row's key; nil for an unfilled slot. `ElevensPresentation.elevenColumns` gains "CA"
+  between the player's column and the rating's, the name Player Removal's table uses.
+
+- [ ] **Step 1: Write the failing tests:**
+
+```swift
+// every filled row of the sample's first and second eleven has abilityText == String(his currentAbility)
+// an unfilled slot's row has abilityText == nil
+// elevenColumns == [<the first heading as it is>, "CA", <the rating heading>, <the familiarity heading>]
+// spokenText reads "left back, Evan Humphries, CA 92, 124.4": the ability after the name, said with its label
+```
+
+- [ ] **Step 2: Run** `tools/test_app.sh --filter ElevensPresentationTests`. Expected: fails to build.
+- [ ] **Step 3: Implement** in Core, then draw the column in `ElevensScreen` between the name and the rating,
+  in the body face like the other numbers, its width from `Theme.Elevens.abilityColumn`. The Depth view is
+  left as it is.
+- [ ] **Step 4: Run** the filter. Expected: pass.
+- [ ] **Step 5: Draw** `elevens-*` into `.build/pictures-contracts` and look at the First XI and Second XI
+  pictures, light and dark and at the smallest window: the column lines up under its heading and no name is
+  cut short that was whole before.
+- [ ] **Step 6: Commit.** "Show current ability on the First XI and Second XI tables", with the owner's request.
+
+---
+
+### Task 10: Close out
 
 **Files:**
 - Modify: `CLAUDE.md`, this plan (closing sections), the spec (mark anything revised during the build)
