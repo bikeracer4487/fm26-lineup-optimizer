@@ -7,6 +7,39 @@ extension AppModel {
     /// Scouting's.
     public static let contractsActionInterval: TimeInterval = 0.5
 
+    /// The Contracts screen for the primary tactic: the engine's list from the squad book's players in its order, the
+    /// marks, the advice's Player Removal and elevens, the players not being renewed and today in the game, each listed
+    /// player with the range for his tier and the agent's figure. Worked out each time it is read, so a change of
+    /// date, mark or figure shows at once.
+    public var contractsSheet: ContractsSheetState {
+        let state = adviceState
+        guard case .ready(let advice) = state, let primary = primaryTactic else { return .notReady(state) }
+        let players = squad.book.allPlayers
+        let club = ownClub
+        let parameters = planParameters
+        do {
+            let report = try Contracts.report(
+                players: players, ownClub: club, marks: marks, removal: advice.removal, elevens: advice.elevens,
+                tactic: primary.tactic, dismissed: Set(contracts.dismissed.keys), today: settings.currentDate,
+                catalog: catalog, profile: profile, parameters: parameters)
+            let wages = WageRange.tierWages(tiers: advice.elevens.tiers, players: players, ownClub: club)
+            let byID = Dictionary(players.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            return .ready(try ContractsPresentation.sheet(report, players: byID, ownClub: club, wages: wages,
+                                                          state: contracts, money: squad.book.moneyStyle,
+                                                          parameters: parameters))
+        } catch {
+            return .failed([ErrorDescriptions.describe(error)])
+        }
+    }
+
+    /// The count on the Contracts pill: the players listed in its parts; nil while the list is not ready or cannot be
+    /// worked out, and at 0.
+    public var contractsCount: Int? {
+        guard case .ready(let sheet) = contractsSheet else { return nil }
+        let count = sheet.parts.reduce(0) { $0 + $1.rows.count }
+        return count > 0 ? count : nil
+    }
+
     /// Sets one of the club's wage figures from what the owner typed, in the period FMRTE shows wages by, kept by the
     /// week. Blank clears it and 0 is a value. The day entered is today in the game, or nil once all three are blank.
     /// Saves the contracts file and nothing else; does not plan.

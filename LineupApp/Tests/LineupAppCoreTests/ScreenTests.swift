@@ -2,14 +2,14 @@ import Testing
 @testable import LineupAppCore
 
 @Suite struct ScreenTests {
-    @Test func theTwelveScreensComeInPillOrderWithTheAdvisorsAfterMatchSelectionAndScoutingAfterPlayerRemoval() {
+    @Test func theThirteenScreensComeInOrderWithContractsAfterPlayerRemovalAndScoutingAfterContracts() {
         #expect(Screen.allCases == [.squad, .tactics, .fixtures, .league, .matchSelection, .elevens, .rest, .training, .removal,
-                                    .scouting, .offers, .settings])
+                                    .contracts, .scouting, .offers, .settings])
     }
 
     @Test func theRowAndTheMenuSplitTheScreens() {
         #expect(Screen.menuScreens == [.tactics, .elevens, .rest, .offers, .settings])
-        #expect(Screen.rowScreens == [.squad, .fixtures, .league, .matchSelection, .training, .removal, .scouting])
+        #expect(Screen.rowScreens == [.squad, .fixtures, .league, .matchSelection, .training, .removal, .contracts, .scouting])
         #expect(Set(Screen.rowScreens + Screen.menuScreens) == Set(Screen.allCases))
     }
 
@@ -22,12 +22,12 @@ import Testing
 
     @Test func eachScreenHasItsTitle() {
         #expect(Screen.allCases.map(\.title) == ["Squad", "Tactics", "Fixtures", "League", "Match Selection", "Elevens", "Rest",
-                                                 "Training", "Player Removal", "Scouting", "Offers", "Settings"])
+                                                 "Training", "Player Removal", "Contracts", "Scouting", "Offers", "Settings"])
     }
 
     @Test func eachPillIsTheTitleExceptPlayerRemovalWhichIsShortened() {
         #expect(Screen.allCases.map(\.pillTitle) == ["Squad", "Tactics", "Fixtures", "League", "Match Selection", "Elevens", "Rest",
-                                                     "Training", "Removal", "Scouting", "Offers", "Settings"])
+                                                     "Training", "Removal", "Contracts", "Scouting", "Offers", "Settings"])
         #expect(Screen.allCases.filter { $0.pillTitle != $0.title } == [.removal])
     }
 
@@ -49,6 +49,7 @@ import Testing
         #expect(Screen.matchSelection.id == "matchSelection")
         #expect(Screen.removal.id == "removal")
         #expect(Screen.scouting.id == "scouting")
+        #expect(Screen.contracts.id == "contracts")
         #expect(Set(Screen.allCases.map(\.id)).count == Screen.allCases.count)
     }
 }

@@ -34,7 +34,8 @@ public enum MentoringEditing: Identifiable, Equatable, Sendable {
 /// a fixture being edited and the fixture whose suggested importance's reasons are shown, the Elevens screen's view,
 /// tactic and slot, the Player Removal screen's filter and the rows opened or closed, and the Training screen's tab,
 /// the squad its Mentoring tab shows and what that tab has open for editing, the Scouting screen's tab, tactic,
-/// order, opened rows and rest part, and the Offers screen's typed clubs, earlier offers and round being recorded.
+/// order, opened rows and rest part, the Contracts screen's "Not renewing" part, and the Offers screen's typed clubs,
+/// earlier offers and round being recorded.
 @MainActor @Observable public final class Navigation {
     public var screen: Screen?
     /// The fixture shown. While nil, or once it has left the plan, `MatchPresentation.initialFixture`.
@@ -75,6 +76,8 @@ public enum MentoringEditing: Identifiable, Equatable, Sendable {
     public var scoutingRestOpen = false
     public var scoutingMoreOpen: Set<String> = []
     public var scoutingHiddenOpen = false
+    /// Whether the Contracts screen's "Not renewing" part is open. In memory only: closed at every launch.
+    public var contractsDismissedOpen = false
     /// The Offers screen's club typed in each player's "To a club" row, whether "Earlier offers" is open, and the round
     /// being recorded (nil: none). In memory only: empty and closed at every launch.
     public var offerClub: [PlayerID: String] = [:]

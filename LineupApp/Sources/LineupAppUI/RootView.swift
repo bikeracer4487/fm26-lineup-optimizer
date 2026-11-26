@@ -126,6 +126,7 @@ struct ScreenView: View {
         case .rest: RestScreen(model: model)
         case .training: TrainingScreen(model: model, navigation: navigation)
         case .removal: RemovalScreen(model: model, navigation: navigation)
+        case .contracts: EmptyView()   // the Contracts screen comes in the plan's next task
         case .scouting: ScoutingScreen(model: model, navigation: navigation)
         case .offers: OffersScreen(model: model, navigation: navigation)
         case .settings: SettingsScreen(model: model)

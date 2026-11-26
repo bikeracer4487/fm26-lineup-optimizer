@@ -1,6 +1,7 @@
 /// The app's screens, in the order the top row lists them: the advisors after Match Selection, Settings last.
 public enum Screen: String, CaseIterable, Identifiable, Sendable {
-    case squad, tactics, fixtures, league, matchSelection, elevens, rest, training, removal, scouting, offers, settings
+    case squad, tactics, fixtures, league, matchSelection, elevens, rest, training, removal, contracts, scouting, offers,
+         settings
 
     public var id: String { rawValue }
 
@@ -16,18 +17,19 @@ public enum Screen: String, CaseIterable, Identifiable, Sendable {
         case .rest: "Rest"
         case .training: "Training"
         case .removal: "Player Removal"
+        case .contracts: "Contracts"
         case .scouting: "Scouting"
         case .offers: "Offers"
         case .settings: "Settings"
         }
     }
 
-    /// The screen's name on its pill in the top row: the title, shortened where twelve pills need the room.
+    /// The screen's name on its pill: the title, except Player Removal's, which stays shortened on the top row.
     public var pillTitle: String {
         switch self {
         case .removal: "Removal"
-        case .squad, .tactics, .fixtures, .league, .matchSelection, .elevens, .rest, .training, .scouting, .offers,
-             .settings: title
+        case .squad, .tactics, .fixtures, .league, .matchSelection, .elevens, .rest, .training, .contracts, .scouting,
+             .offers, .settings: title
         }
     }
 
@@ -35,7 +37,7 @@ public enum Screen: String, CaseIterable, Identifiable, Sendable {
     public var isInMenu: Bool {
         switch self {
         case .tactics, .elevens, .rest, .offers, .settings: true
-        case .squad, .fixtures, .league, .matchSelection, .training, .removal, .scouting: false
+        case .squad, .fixtures, .league, .matchSelection, .training, .removal, .contracts, .scouting: false
         }
     }
 

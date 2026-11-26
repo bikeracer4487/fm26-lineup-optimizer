@@ -695,6 +695,97 @@ public enum SampleData {
         }
     }
 
+    // MARK: Contracts
+
+    /// Today in the game in the contracts sample: the last day of the 2027–28 season, so the contracts that end that
+    /// day are in their last six months and those that end on 30 June 2029 in their last year.
+    static let contractsDate = Day(year: 2028, month: 6, day: 30)!
+
+    /// The second-eleven player the contracts sample makes out of contract.
+    public static let contractsOutOfContractName = "Iestyn Hughes"
+    /// The player the contracts sample is not renewing.
+    public static let contractsDismissedName = "Dejan Tetek"
+    /// The player the contracts sample types an agent's figure for.
+    public static let contractsFigureName = "Evan Humphries"
+
+    /// The contracts sample: the first team as the owner pasted it on 23 November 2026, with FMRTE's expiry-date column
+    /// and FMRTE set to dollars a month, alone in a new model with the sample 4-2-3-1, imported with today in the game
+    /// `contractsDate` (the paste's months left are as FMRTE wrote them some four months earlier; the list reads the
+    /// end days). One player of the second eleven, `contractsOutOfContractName`, is made out of contract, as an
+    /// import would have him; `contractsDismissedName` is not being renewed; the club's three figures are typed
+    /// (a wage budget of $130,000, wages spent of $118,000 and a highest wage of $9,000, each a month); and an agent's
+    /// figure of $9,500 a month, above the highest wage, is typed for `contractsFigureName`. The scripted clock moves a
+    /// second at each reading, so no action is taken for a double click.
+    @MainActor public static func modelWithContracts(repositoryRoot: URL) throws -> AppModel {
+        let model = try modelWithContractsNoFigures(repositoryRoot: repositoryRoot)
+        model.setWageLimit(.wageBudget, text: "130000")
+        model.setWageLimit(.wagesSpent, text: "118000")
+        model.setWageLimit(.highestWage, text: "9000")
+        let figure = try player(named: contractsFigureName, in: model)
+        model.setAgentFigure(text: "9500", for: figure)
+        guard case .ready(let sheet) = model.contractsSheet,
+              let row = sheet.parts.flatMap(\.rows).first(where: { $0.id == figure }), !row.verdictLines.isEmpty else {
+            throw SampleDataError(description: "The contracts sample does not list \(contractsFigureName) with a verdict.")
+        }
+        return model
+    }
+
+    /// The contracts sample with nothing typed: no club figure and no agent's figure. One player is still out of
+    /// contract and one still not being renewed. Fails unless the first two parts each list a player and the third lists
+    /// the player made out of contract.
+    @MainActor public static func modelWithContractsNoFigures(repositoryRoot: URL) throws -> AppModel {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("lineup-contracts-\(UUID().uuidString)")
+        let input = ScriptedInput(today: contractsDate)
+        let model = AppModel(store: Store(directory: directory), environment: input.environment)
+        guard var layouts = try JSONSerialization.jsonObject(
+            with: try fixture("captures/first-team-with-expiry.grids.json", under: repositoryRoot)) as? [String: Any] else {
+            throw SampleDataError(description: "The first team's layouts with the expiry-date column are not a JSON object.")
+        }
+        layouts["Wages"] = "Monthly"
+        input.clipboard = String(decoding: try fixture("captures/first-team-with-expiry.tsv", under: repositoryRoot),
+                                 as: UTF8.self)
+        input.config = .data(try JSONSerialization.data(withJSONObject: layouts))
+        model.importSquad(.firstTeam)
+        if case .failed(_, let reason)? = model.lastImport {
+            throw SampleDataError(description: "The sample first-team-with-expiry.tsv could not be imported: \(reason)")
+        }
+        if model.ownClub == nil {
+            var settings = model.settings
+            settings.clubName = clubName
+            model.update(settings)
+        }
+        let tactic: Tactic
+        do {
+            tactic = try JSONDecoder().decode(Tactic.self, from: try fixture("tactics/sample-4231.json", under: repositoryRoot))
+        } catch let error as DecodingError {
+            throw SampleDataError(description: "The sample tactic is not valid: \(ErrorDescriptions.describe(error))")
+        }
+        let tacticID = model.addTactic(named: tactic.name)
+        model.update(StoredTactic(id: tacticID, tactic: tactic))
+
+        edit(model) { player in
+            guard player.name == contractsOutOfContractName else { return }
+            player.contractType = .outOfContract
+            player.monthsLeft = nil
+            player.contractEnds = nil
+            player.wagePerWeek = 0
+        }
+        model.dismissContract(try player(named: contractsDismissedName, in: model))
+
+        guard case .ready(let sheet) = model.contractsSheet else {
+            throw SampleDataError(description: "The contracts sample gives no list: \(model.contractsSheet)")
+        }
+        let headings = ContractPart.allCases.map(AdvisorText.contractPartHeading)
+        let outOfContract = try player(named: contractsOutOfContractName, in: model)
+        guard sheet.parts.map(\.heading) == headings,
+              sheet.parts.last?.rows.contains(where: { $0.id == outOfContract }) == true,
+              sheet.dismissed.count == 1 else {
+            throw SampleDataError(description: "The contracts sample does not list a player in each part and one not "
+                                  + "being renewed: \(sheet.parts.map { ($0.heading, $0.rows.map(\.name)) })")
+        }
+        return model
+    }
+
     /// The key of the first-team player of this name in the sample.
     @MainActor private static func player(named name: String, in model: AppModel) throws -> PlayerID {
         guard let player = model.squad.book.current[.firstTeam]?.first(where: { $0.name == name }) else {
