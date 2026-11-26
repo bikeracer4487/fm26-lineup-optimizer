@@ -187,6 +187,57 @@ import Testing
         #expect(WageRange.tier(of: .belowCover) == .neither)
     }
 
+    // MARK: A pasted player
+
+    func candidateSlot(_ slot: SlotID, _ level: CandidateLevel, margin: Double?) -> CandidateSlot {
+        CandidateSlot(slot: slot, rating: 70, ipFamiliarity: 15, oopFamiliarity: 15, isSolid: true, level: level,
+                      firstChoice: nil, secondChoice: nil, firstChoiceIsOutOfPosition: false, marginOverFirst: margin,
+                      stillWeakBy: nil, later: nil, laterAgainstWeakLine: nil, answers: [])
+    }
+
+    func candidate(_ slots: [CandidateSlot], headline: SlotID?) -> Candidate {
+        Candidate(player: .fixture(name: "Pasted", club: "Other FC"), slots: slots, headline: headline,
+                  headlineAnswer: headline == nil ? nil : .moreDepth, part: .rest, outlook: nil, isAgeNamed: false,
+                  cautions: [], basis: .derived)
+    }
+
+    @Test func aCandidateHeadlinedAsCoverWhoWouldStartElsewhereIsPricedAsAStarter() throws {
+        let wages: [WageTier: [PlayerWage]] = [
+            .firstEleven: [wage("A", 1_000), wage("B", 1_200), wage("C", 1_400)],
+            .neither: [wage("D", 100), wage("E", 200), wage("F", 300)],
+        ]
+        let pasted = candidate([candidateSlot(.D_L, .wouldCountAsCover, margin: -0.1),
+                                candidateSlot(.D_R, .wouldStart, margin: 0.02)], headline: .D_L)
+        let found = try #require(try WageRange.candidateGuide(pasted, wages: wages, limits: .none, parameters: parameters))
+        #expect(found.level == .wouldStart)
+        #expect(found.slot == .D_R)
+        #expect(found.guide == (try WageRange.guide(tier: .firstEleven, slot: .D_R, wages: wages, excluding: nil,
+                                                     presentWagePerWeek: nil, limits: .none, parameters: parameters)))
+        #expect(found.guide.paid?.highest == 1_400)
+        #expect(!found.guide.leavesHimOut)
+    }
+
+    @Test func aCandidateWhoseBestIsHisHeadlineIsPricedThere() throws {
+        let pasted = candidate([candidateSlot(.D_L, .wouldMakeSecond, margin: -0.02),
+                                candidateSlot(.D_R, .belowCover, margin: -0.3)], headline: .D_L)
+        let found = try #require(try WageRange.candidateGuide(pasted, wages: five, limits: .none, parameters: parameters))
+        #expect(found.level == .wouldMakeSecond && found.slot == .D_L)
+        #expect(found.guide.tier == .secondEleven)
+    }
+
+    @Test func aCandidateWithNoSlotHasNoGuide() throws {
+        #expect(try WageRange.candidateGuide(candidate([], headline: nil), wages: five, limits: .none,
+                                             parameters: parameters) == nil)
+    }
+
+    @Test func aCandidatesBudgetLeftAddsNothingBack() throws {
+        let pasted = candidate([candidateSlot(.D_L, .wouldMakeSecond, margin: -0.02)], headline: .D_L)
+        let limits = WageLimits(wageBudgetPerWeek: 20_000, wagesSpentPerWeek: 19_000)
+        let found = try #require(try WageRange.candidateGuide(pasted, wages: five, limits: limits, parameters: parameters))
+        #expect(found.guide.budgetLeftPerWeek == 1_000)
+        #expect(!found.guide.countsHisWageBack)
+    }
+
     // MARK: Tier wages
 
     func owned(_ name: String, wage: Double = 500) -> Player {

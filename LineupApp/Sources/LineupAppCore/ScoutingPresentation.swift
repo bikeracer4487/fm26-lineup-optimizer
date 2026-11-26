@@ -71,22 +71,42 @@ public struct ScoutingCandidateRow: Identifiable, Equatable, Sendable {
     public let cautions: [String]
     /// Each other slot he can play, in the tactic's order, with its lines.
     public let otherSlots: [ScoutingOtherSlot]
+    /// The engine's lines on his wage against what his tier is paid here, for the opened row: the lead naming his tier
+    /// and slot, the range, his wage now and what it is against the range, and that what he would ask is not known.
+    /// Empty when he can play no slot or the elevens for the tactic shown are not ready.
+    public let wageLines: [String]
+    /// The engine's sentence, on the closed row, when his wage now is over the most the club can offer one player, over
+    /// his tier's share of the wage budget, or above anything his tier is paid; nil otherwise, when his wage is in
+    /// another currency than the squads', or when he is paid nothing.
+    public let wageCaution: String?
+
+    init(id: PlayerID, name: String, age: Int, positions: String, club: String?, onLoan: String?, askingPrice: String?,
+         wage: String, detailsText: String, isInjured: Bool, todayLines: [String], laterLines: [String],
+         cautions: [String], otherSlots: [ScoutingOtherSlot], wageLines: [String] = [], wageCaution: String? = nil) {
+        self.id = id; self.name = name; self.age = age; self.positions = positions; self.club = club
+        self.onLoan = onLoan; self.askingPrice = askingPrice; self.wage = wage; self.detailsText = detailsText
+        self.isInjured = isInjured; self.todayLines = todayLines; self.laterLines = laterLines
+        self.cautions = cautions; self.otherSlots = otherSlots; self.wageLines = wageLines
+        self.wageCaution = wageCaution
+    }
 
     /// Stamped beside his name: injured, which changes nothing else.
     public var stamps: [StatusStamp] { isInjured ? [ElevensPresentation.injuredStamp] : [] }
 
-    /// The lines the row shows, open or closed: everything but his other slots, which show while it is open; in the
-    /// rest part, while closed, only his first line today (and his cautions, which always show).
+    /// The lines the row shows, open or closed: everything but his other slots and his wage lines, which show while it
+    /// is open; in the rest part, while closed, only his first line today (and his cautions, which always show). The
+    /// wage caution shows while the row is closed: open, the same sentence is among his wage lines.
     public func linesShown(inRest: Bool, isOpen: Bool) -> ScoutingRowLines {
         let brief = inRest && !isOpen
         return ScoutingRowLines(today: brief ? Array(todayLines.prefix(1)) : todayLines,
-                                later: brief ? [] : laterLines, otherSlots: isOpen ? otherSlots : [])
+                                later: brief ? [] : laterLines, otherSlots: isOpen ? otherSlots : [],
+                                wageCaution: isOpen ? nil : wageCaution, wage: isOpen ? wageLines : [])
     }
 
-    /// Whether opening the row shows anything more: his other slots, and, in the rest part, where a closed row shows
-    /// only his first line today and his cautions, the lines it leaves out.
+    /// Whether opening the row shows anything more: his other slots or his wage lines, and, in the rest part, where a
+    /// closed row shows only his first line today and his cautions, the lines it leaves out.
     public func opens(inRest: Bool) -> Bool {
-        !otherSlots.isEmpty || (inRest && (todayLines.count > 1 || !laterLines.isEmpty))
+        !otherSlots.isEmpty || !wageLines.isEmpty || (inRest && (todayLines.count > 1 || !laterLines.isEmpty))
     }
 }
 
@@ -108,6 +128,16 @@ public struct ScoutingRowLines: Equatable, Sendable {
     public let today: [String]
     public let later: [String]
     public let otherSlots: [ScoutingOtherSlot]
+    /// The wage caution, drawn after the cautions in the caution style; nil while the row is open.
+    public let wageCaution: String?
+    /// The wage lines, after his other slots; empty while the row is closed.
+    public let wage: [String]
+
+    init(today: [String], later: [String], otherSlots: [ScoutingOtherSlot], wageCaution: String? = nil,
+         wage: [String] = []) {
+        self.today = today; self.later = later; self.otherSlots = otherSlots
+        self.wageCaution = wageCaution; self.wage = wage
+    }
 }
 
 /// One group of candidates: those listed under one slot of a part (answering one need there, or none), or the rest.
@@ -146,6 +176,11 @@ public struct CandidatesSheet: Equatable, Sendable {
     public let hidden: [ScoutingHiddenRow]
     /// How well backed the candidates shown are, once for them all; nil for FM27 evidence or none shown.
     public let evidenceNote: String?
+    /// The engine's sentence on what a wage range is, while any row has wage lines; nil otherwise.
+    public let wageEvidenceNote: String?
+
+    /// The evidence note's lines, the wage sentence last.
+    public var evidenceLines: [String] { [evidenceNote, wageEvidenceNote].compactMap { $0 } }
 
     /// The line the hidden players are closed behind, "3 hidden players"; nil when none is hidden.
     public var hiddenLine: String? { hidden.isEmpty ? nil : ScoutingPresentation.hiddenLine(hidden.count) }
@@ -165,6 +200,15 @@ public struct ScoutingHiddenRow: Identifiable, Equatable, Sendable {
     public let name: String
     /// As a candidate's row has it (`ScoutingPresentation.details`).
     public let detailsText: String
+}
+
+/// What a pasted player's wage is set beside: what the whole squad's elevens for the tactic shown are paid, by tier
+/// (`WageRange.tierWages`), the club's three figures, how the squads write money, and the parameters.
+public struct CandidateWageBasis: Sendable {
+    public let wages: [WageTier: [PlayerWage]]
+    public let limits: WageLimits
+    public let money: MoneyStyle
+    public let parameters: EngineParameters
 }
 
 /// What the Scouting screen shows, in the engine's words; Core holds only the labels.
@@ -188,6 +232,8 @@ public enum ScoutingPresentation {
     public static let laterLabel = AdvisorText.name(CandidateOrder.later)
     public static let otherSlotsLabel = "Other slots"
     public static let cautionsLabel = "Cautions"
+    /// Before a candidate's wage lines in the opened row.
+    public static let wageLabel = "Wage"
     /// Before the Today and Later control, whose words are also the row labels.
     public static let orderLabel = "Order by"
     /// Above the engine's sentences when the needs or the candidates for the tactic shown cannot be worked out.
@@ -229,8 +275,8 @@ public enum ScoutingPresentation {
     /// What a click on the rest part's line does.
     public static func restHelp(_ isOpen: Bool) -> String { isOpen ? "Hide them" : "Show them" }
 
-    /// What a click on a candidate's name does.
-    public static func rowHelp(_ isOpen: Bool) -> String { isOpen ? "Show less" : "Show his other slots" }
+    /// What a click on a candidate's name does: his other slots and his wage lines show while it is open.
+    public static func rowHelp(_ isOpen: Bool) -> String { isOpen ? "Show less" : "Show more" }
 
     public static func needsSheet(_ needs: ScoutingNeeds, parameters: EngineParameters) -> NeedsSheet {
         NeedsSheet(
@@ -246,9 +292,10 @@ public enum ScoutingPresentation {
             evidenceNote: AdvisorText.note(for: needs.basis))
     }
 
-    /// The held players' sheet: `pasted` is how many players the paste held, and `money` how it wrote money.
+    /// The held players' sheet: `pasted` is how many players the paste held, and `money` how it wrote money. With
+    /// `wages`, each row carries his wage set beside what his tier is paid; without, none does.
     public static func candidatesSheet(_ report: CandidatesReport, order: CandidateOrder, pasted: Int,
-                                       money: MoneyStyle) -> CandidatesSheet {
+                                       money: MoneyStyle, wages: CandidateWageBasis? = nil) -> CandidatesSheet {
         var partsSeen: Set<CandidatePart> = []
         let groups = report.groups(orderedBy: order).map { group -> CandidateGroupRows in
             let isFirstOfPart = partsSeen.insert(group.part).inserted
@@ -263,7 +310,7 @@ public enum ScoutingPresentation {
             case .answersToday, .answersLater, .wouldStartElsewhere, .couldPassElsewhere: isRest = false
             case .rest: isRest = true
             }
-            let rows = group.candidates.map { row($0, money: money) }
+            let rows = group.candidates.map { row($0, money: money, wages: wages) }
             // The rest is closed behind its own line and whole when opened; every other group shows its best few.
             let shown = isRest ? rows.count : shownInGroup
             return CandidateGroupRows(id: id, partTitle: isFirstOfPart ? AdvisorText.name(group.part) : nil,
@@ -274,14 +321,50 @@ public enum ScoutingPresentation {
         let hidden = report.hidden.map {
             ScoutingHiddenRow(id: $0.id, name: $0.name, detailsText: details(of: $0, money: money))
         }
+        let anyWage = groups.contains { group in (group.rows + group.moreRows).contains { !$0.wageLines.isEmpty } }
         return CandidatesSheet(readLine: AdvisorText.playersRead(pasted),
                                leftOutLine: AdvisorText.leftOutAlreadyYours(report.leftOut), groups: groups,
-                               hidden: hidden, evidenceNote: report.basis.flatMap(AdvisorText.note(for:)))
+                               hidden: hidden, evidenceNote: report.basis.flatMap(AdvisorText.note(for:)),
+                               wageEvidenceNote: anyWage ? AdvisorText.wageEvidenceSentence : nil)
     }
 
-    static func row(_ candidate: LineupEngine.Candidate, money: MoneyStyle) -> ScoutingCandidateRow {
+    /// His wage lines and the closed row's caution (`ScoutingCandidateRow.wageLines` and `wageCaution`): his best
+    /// level's tier at its slot, with the range in the squads' money style; his wage now set beside it only when the
+    /// paste's currency is the squads'. Nothing without `basis`, for a player who can play no slot, or while the
+    /// parameters have problems, which the advice reports itself.
+    static func wageLines(_ candidate: LineupEngine.Candidate, pasteMoney: MoneyStyle,
+                          basis: CandidateWageBasis?) -> (lines: [String], caution: String?) {
+        guard let basis,
+              let found = try? WageRange.candidateGuide(candidate, wages: basis.wages, limits: basis.limits,
+                                                        parameters: basis.parameters) else { return ([], nil) }
+        let money = basis.money
+        var lines = [AdvisorText.candidateWageLead(level: found.level, slot: found.slot)]
+            + AdvisorText.wageGuideLines(found.guide, money: money)
+        var caution: String?
+        if pasteMoney.symbol == money.symbol {
+            // A candidate's wage is kept by the week, so a paste in another period is compared as it is.
+            let wage = candidate.player.wagePerWeek
+            lines.append(AdvisorText.candidatePresentWage(perWeek: wage, money: money))
+            if wage > 0 {
+                let verdicts = WageRange.verdict(figurePerWeek: wage, guide: found.guide, presentWagePerWeek: nil)
+                func line(_ verdict: WageVerdict) -> String {
+                    AdvisorText.wageVerdictLine(verdict, figure: .presentWage, guide: found.guide, money: money)
+                }
+                lines += verdicts.map(line)
+                caution = WageRange.caution(in: verdicts).map(line)
+            }
+        } else {
+            lines.append(AdvisorText.candidateWageOtherCurrency)
+        }
+        lines.append(AdvisorText.candidateAskNotKnown)
+        return (lines, caution)
+    }
+
+    static func row(_ candidate: LineupEngine.Candidate, money: MoneyStyle,
+                    wages: CandidateWageBasis? = nil) -> ScoutingCandidateRow {
         let player = candidate.player
         let headline = candidate.headline.flatMap { slot in candidate.slots.first { $0.slot == slot } }
+        let wage = wageLines(candidate, pasteMoney: money, basis: wages)
         return ScoutingCandidateRow(
             id: candidate.id, name: player.name, age: player.age, positions: player.positionsText,
             club: AdvisorText.club(of: player), onLoan: player.loanedTo.map(AdvisorText.onLoan(at:)),
@@ -293,6 +376,7 @@ public enum ScoutingPresentation {
             cautions: candidate.cautions.map(AdvisorText.caution),
             otherSlots: candidate.slots.filter { $0.slot != headline?.slot }.map {
                 ScoutingOtherSlot(slot: $0.slot, lines: AdvisorText.otherSlotLines($0))
-            })
+            },
+            wageLines: wage.lines, wageCaution: wage.caution)
     }
 }

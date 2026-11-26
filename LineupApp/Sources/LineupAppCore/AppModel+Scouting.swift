@@ -118,14 +118,14 @@ extension AppModel {
     /// no candidates are judged.
     public func allCandidateRowIDs(for chosen: UUID?) -> Set<PlayerID> {
         guard case .ready(let report) = candidates(for: chosen) else { return [] }
-        return candidatesSheet(report, order: .today)?.rowIDs ?? []
+        return candidatesSheet(report, order: .today, for: chosen)?.rowIDs ?? []
     }
 
     /// Every group with a "more players" line for the tactic the Scouting screen shows, so all can be opened at once;
     /// none while no candidates are judged. The groups with a line are the same in either order.
     public func allCandidateGroupIDs(for chosen: UUID?) -> Set<String> {
         guard case .ready(let report) = candidates(for: chosen) else { return [] }
-        return candidatesSheet(report, order: .today)?.groupIDs ?? []
+        return candidatesSheet(report, order: .today, for: chosen)?.groupIDs ?? []
     }
 
     /// The tactic the Scouting screen shows for the owner's choice: that tactic while it is saved, else the primary.
@@ -139,10 +139,24 @@ extension AppModel {
     }
 
     /// What the Candidates tab shows for `report` in `order`, counting the held players and writing money as their
-    /// paste did; nil while no players are held.
-    public func candidatesSheet(_ report: CandidatesReport, order: CandidateOrder) -> CandidatesSheet? {
+    /// paste did; nil while no players are held. Each row's wage is set beside what the whole squad's elevens for the
+    /// tactic the screen shows (`chosen`, the primary for nil) are paid, with the club's figures as typed now, so a
+    /// figure typed on Contracts shows the next time the rows are read, with no paste and no replan; while those
+    /// elevens are not ready, no row has wage lines.
+    public func candidatesSheet(_ report: CandidatesReport, order: CandidateOrder,
+                                for chosen: UUID? = nil) -> CandidatesSheet? {
         guard let paste = scoutingPaste else { return nil }
-        return ScoutingPresentation.candidatesSheet(report, order: order, pasted: paste.players.count, money: paste.money)
+        return ScoutingPresentation.candidatesSheet(report, order: order, pasted: paste.players.count, money: paste.money,
+                                                    wages: candidateWageBasis(for: chosen))
+    }
+
+    /// What a pasted player's wage is set beside for the tactic the Scouting screen shows; nil while its elevens are not
+    /// ready.
+    func candidateWageBasis(for chosen: UUID?) -> CandidateWageBasis? {
+        guard case .ready(let elevens, _) = elevens(for: scoutingTacticShown(chosen)) else { return nil }
+        return CandidateWageBasis(
+            wages: WageRange.tierWages(tiers: elevens.tiers, players: squad.book.allPlayers, ownClub: ownClub),
+            limits: contracts.limits, money: squad.book.moneyStyle, parameters: planParameters)
     }
 
     // MARK: Working it out

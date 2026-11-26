@@ -231,6 +231,18 @@ public enum WageRange {
                          budgetLeftPerWeek: budgetLeft, countsHisWageBack: countsBack, shown: shown, basis: evidence)
     }
 
+    /// A pasted player's best level at any slot he is judged at (`bestLevel`, by his margin over the first choice), and
+    /// the guide for that level's tier at that slot; nil when he can play no slot. Nothing is left out of the tier's
+    /// wages and nothing is added back to the budget left, since he is not one of the club's own. Throws as `guide`.
+    public static func candidateGuide(_ candidate: Candidate, wages: [WageTier: [PlayerWage]], limits: WageLimits,
+                                      parameters: EngineParameters) throws
+        -> (level: CandidateLevel, slot: SlotID, guide: WageGuide)? {
+        guard let best = bestLevel(candidate.slots.map { ($0.slot, $0.level, $0.marginOverFirst) }) else { return nil }
+        let guide = try guide(tier: tier(of: best.level), slot: best.slot, wages: wages, excluding: nil,
+                              presentWagePerWeek: nil, limits: limits, parameters: parameters)
+        return (best.level, best.slot, guide)
+    }
+
     public static func verdict(figurePerWeek: Double, guide: WageGuide, presentWagePerWeek: Double?) -> [WageVerdict] {
         var found: [WageVerdict] = []
         if let limit = guide.highestWagePerWeek, figurePerWeek > limit + noise { found.append(.overHighestWage(limit: limit)) }

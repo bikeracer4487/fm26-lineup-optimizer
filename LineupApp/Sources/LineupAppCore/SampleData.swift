@@ -520,16 +520,29 @@ public enum SampleData {
     /// A second starter where the sample needs a better player: the first one's row at 27 and one point higher, so
     /// he rates higher today and has no reach, and the Today and Later orders put the two the other way round.
     static let candidateOlderStarterName = "Dan Whitfield"
+    /// The sample candidate paid above anything his tier is paid in the sample squad, whose highest wage is £800 a
+    /// week, so his closed row carries the wage caution.
+    static let candidatePaidAboveTierName = "Owen Pryce"
+    /// What he is paid a week.
+    static let candidatePaidAboveTierWage = 1_500.0
 
     /// The sample model holding the sample candidates: the U21 capture's rows at another club, all but one under other
     /// names, read through the importer, with two edited so that one answers a better-player need today (every
     /// attribute but the hidden ones and his personality raised by two) and one has cautions (Injury Proneness 17 and
     /// Controversy 18), and a seventh, an older copy of the first, beside him. The one left under his own name is the
-    /// sample's own U21 and is left out as already the club's. The clipboard keeps what the sample's last import left
-    /// on it.
+    /// sample's own U21 and is left out as already the club's. One, `candidatePaidAboveTierName`, is paid above
+    /// anything his tier is paid, so his closed row alone carries the wage caution. The clipboard keeps what the
+    /// sample's last import left on it.
     @MainActor public static func modelWithCandidates(repositoryRoot: URL) throws -> AppModel {
         let model = try build(repositoryRoot: repositoryRoot).model
         model.hold(try sampleCandidates(repositoryRoot: repositoryRoot))
+        guard case .ready(let report) = model.candidates(for: nil),
+              let sheet = model.candidatesSheet(report, order: .today),
+              sheet.groups.flatMap({ $0.rows + $0.moreRows }).filter({ $0.wageCaution != nil }).map(\.name)
+                == [candidatePaidAboveTierName] else {
+            throw SampleDataError(description: "The sample candidates do not have \(candidatePaidAboveTierName) alone "
+                                  + "with a caution on his wage.")
+        }
         return model
     }
 
@@ -824,6 +837,8 @@ public enum SampleData {
             case candidateWithCautionsName:
                 player.attributes[.injuryProneness] = 17
                 player.attributes[.controversy] = 18
+            case candidatePaidAboveTierName:
+                player.wagePerWeek = candidatePaidAboveTierWage
             default: break
             }
             return player

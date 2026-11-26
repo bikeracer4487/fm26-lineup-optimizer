@@ -706,11 +706,14 @@ let narrowWindow = CGSize(width: 800, height: 700)
     try ScreenPictures.write(model: sampleModel(root), to: directory, size: size, variant: "candidates-empty",
                              screens: [.scouting], scoutingStart: candidates)
     let held = sampleModel(root, .candidates)
-    try ScreenPictures.write(model: held, to: directory, size: tall, variant: "candidates", screens: [.scouting],
+    // Tall enough for the evidence note's last line, on a wage range, under the closed rest.
+    let heldTall = CGSize(width: size.width, height: size.height * 2.15)
+    try ScreenPictures.write(model: held, to: directory, size: heldTall, variant: "candidates", screens: [.scouting],
                              scoutingStart: candidates)
-    try ScreenPictures.write(model: held, to: directory, size: tall, variant: "candidates-later", screens: [.scouting],
-                             scoutingStart: ScoutingStart(view: .candidates, order: .later))
-    try ScreenPictures.write(model: held, to: directory, size: CGSize(width: size.width, height: size.height * 3),
+    try ScreenPictures.write(model: held, to: directory, size: heldTall, variant: "candidates-later",
+                             screens: [.scouting], scoutingStart: ScoutingStart(view: .candidates, order: .later))
+    // Every row open, each with its wage lines, and the rest open under them.
+    try ScreenPictures.write(model: held, to: directory, size: CGSize(width: size.width, height: size.height * 4),
                              variant: "candidates-open", screens: [.scouting],
                              scoutingStart: ScoutingStart(view: .candidates, allOpen: true))
     try ScreenPictures.write(model: held, to: directory, size: small, variant: "candidates-small", screens: [.scouting],

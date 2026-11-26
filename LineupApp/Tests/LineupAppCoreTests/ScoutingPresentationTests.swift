@@ -249,7 +249,10 @@ import LineupEngine
         let basis = try #require(report.basis)
         #expect(sheet.evidenceNote == AdvisorText.note(for: basis))
         #expect(sheet.evidenceNote != nil, "a reach is this tool's estimate")
-        #expect(t.model.candidatesSheet(report, order: .today) == sheet)
+        // The model's sheet also sets each wage beside what the squad's elevens are paid.
+        #expect(t.model.candidatesSheet(report, order: .today)
+                == ScoutingPresentation.candidatesSheet(report, order: .today, pasted: 6, money: paste.money,
+                                                        wages: t.model.candidateWageBasis(for: nil)))
 
         try t.importU21()
         let after = try ScoutingSetup.report(t.model)

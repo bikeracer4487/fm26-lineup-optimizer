@@ -25,7 +25,8 @@ struct ScoutingCandidatesTab: View {
                 EmptyState(ScoutingPresentation.nothingPasted)
             }
         case .ready(let report):
-            if let sheet = model.candidatesSheet(report, order: navigation.scoutingOrder) {
+            if let sheet = model.candidatesSheet(report, order: navigation.scoutingOrder,
+                                                 for: navigation.scoutingTacticID) {
                 VStack(alignment: .leading, spacing: Theme.Scouting.partGap) {
                     VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                         pasteRow(ordered: true)
@@ -39,8 +40,12 @@ struct ScoutingCandidatesTab: View {
                     }
                     CandidateGroups(sheet: sheet, model: model, navigation: navigation)
                     HiddenCandidates(sheet: sheet, model: model, navigation: navigation)
-                    if let note = sheet.evidenceNote {
-                        ScoutingMutedLine(text: note, size: Theme.TypeSize.small)
+                    if !sheet.evidenceLines.isEmpty {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                            ForEach(Array(sheet.evidenceLines.enumerated()), id: \.offset) { _, line in
+                                ScoutingMutedLine(text: line, size: Theme.TypeSize.small)
+                            }
+                        }
                     }
                 }
             }
@@ -246,9 +251,10 @@ private struct Disclosure: View {
     }
 }
 
-/// One candidate: his name with any stamp, what the paste says of him, and "Hide" at the trailing end; then his lines
-/// and his cautions by label, and, while open, each other slot's lines together. A click on his name opens the row,
-/// when he has more to show; "Hide" stands beside that button, never inside it.
+/// One candidate: his name with any stamp, what the paste says of him, and "Hide" at the trailing end; then his lines,
+/// his cautions and, while closed, the caution on his wage, by label, and, while open, each other slot's lines together
+/// and his wage lines. A click on his name opens the row, when he has more to show; "Hide" stands beside that button,
+/// never inside it.
 private struct ScoutingCandidateRowView: View {
     let row: ScoutingCandidateRow
     let inRest: Bool
@@ -290,6 +296,11 @@ private struct ScoutingCandidateRowView: View {
                         }
                     }
                 }
+                if let caution = lines.wageCaution {
+                    Labelled(label: ScoutingPresentation.wageLabel) {
+                        CautionLine(caution)
+                    }
+                }
                 if !lines.otherSlots.isEmpty {
                     Labelled(label: ScoutingPresentation.otherSlotsLabel) {
                         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
@@ -299,6 +310,7 @@ private struct ScoutingCandidateRowView: View {
                         }
                     }
                 }
+                LabelledLines(label: ScoutingPresentation.wageLabel, lines: lines.wage)
             }
             .padding(.leading, Theme.Scouting.disclosureColumn)
             .textSelection(.enabled)
