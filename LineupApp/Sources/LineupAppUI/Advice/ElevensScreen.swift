@@ -176,15 +176,16 @@ struct ListHeadings: View {
     }
 }
 
-/// The eleven's places in the tactic's order: magnet, name, slot and squad, stamps, rating and familiarity.
+/// The eleven's places in the tactic's order: magnet, name, slot and squad, stamps, ability, rating and familiarity.
 private struct ElevenList: View {
     let rows: [ElevenRow]
 
     var body: some View {
         let columns = ElevensPresentation.elevenColumns
         VStack(alignment: .leading, spacing: 0) {
-            ListHeadings(first: columns[0], others: [(columns[1], Theme.Elevens.ratingColumn),
-                                                     (columns[2], Theme.Elevens.familiarityColumn)])
+            ListHeadings(first: columns[0], others: [(columns[1], Theme.Elevens.abilityColumn),
+                                                     (columns[2], Theme.Elevens.ratingColumn),
+                                                     (columns[3], Theme.Elevens.familiarityColumn)])
             ForEach(rows) { row in
                 ElevenListRow(row: row)
                 FaintRule()
@@ -223,6 +224,9 @@ private struct ElevenListRow: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            Text(row.abilityText ?? "")
+                .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .semibold))
+                .frame(width: Theme.Elevens.abilityColumn, alignment: .trailing)
             Text(row.ratingText ?? "")
                 .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .extraBold))
                 .frame(width: Theme.Elevens.ratingColumn, alignment: .trailing)

@@ -30,6 +30,8 @@ public struct ElevenRow: Identifiable, Equatable, Sendable {
     /// His name, or "Nobody".
     public let name: String
     public let squadText: String?
+    /// His current ability as a whole number: "92". Nil for an unfilled slot.
+    public let abilityText: String?
     public let ratingText: String?
     /// His familiarity in possession, then out of possession: "20 / 14".
     public let familiarityText: String?
@@ -42,9 +44,10 @@ public struct ElevenRow: Identifiable, Equatable, Sendable {
         ([ElevensPresentation.sentenceCase(slotText)] + [squadText].compactMap { $0 }).joined(separator: ", ")
     }
 
-    /// The row as said to assistive technology: "left back, Evan Humphries, 124.4".
+    /// The row as said to assistive technology: "left back, Evan Humphries, CA 92, 124.4".
     public var spokenText: String {
-        ([slotText, name, ratingText].compactMap { $0 } + stamps.map(\.text)).joined(separator: ", ")
+        ([slotText, name, abilityText.map { "CA \($0)" }, ratingText].compactMap { $0 } + stamps.map(\.text))
+            .joined(separator: ", ")
     }
 }
 
@@ -125,7 +128,7 @@ public enum ElevensPresentation {
     public static let thinStamp = StatusStamp(text: "Thin", isOut: true)
 
     /// The headings over the list of an eleven and over a slot's options.
-    public static let elevenColumns = ["Player", "Rating", "Familiarity in / out of possession"]
+    public static let elevenColumns = ["Player", "CA", "Rating", "Familiarity in / out of possession"]
     public static let optionColumns = ["Player", "Rating", "Familiarity in / out of possession", "Cover"]
 
     /// What each mark on an eleven's magnets means, in the order a token shows them.
@@ -146,7 +149,7 @@ public enum ElevensPresentation {
     /// One of the elevens: a magnet for each place, a row for every slot of the tactic in `depth`'s order (the
     /// tactic's), "Nobody" in each unfilled one.
     public static func sheet(_ eleven: Eleven, report: ElevensReport, depth: DepthReport,
-                             squads: [PlayerID: Squad]) -> ElevenSheet {
+                             squads: [PlayerID: Squad], abilities: [PlayerID: Int]) -> ElevenSheet {
         let places: [ElevenPlace], unfilled: [SlotID], average: Double?
         switch eleven {
         case .first: (places, unfilled, average) = (report.first, report.unfilledFirst, report.firstAverage)
@@ -162,13 +165,14 @@ public enum ElevensPresentation {
         let rows = depth.slots.map(\.slot).map { slot -> ElevenRow in
             guard let place = bySlot[slot] else {
                 return ElevenRow(slot: slot, slotText: slot.longName, player: nil, name: nobody, squadText: nil,
-                                 ratingText: nil, familiarityText: nil, stamps: [])
+                                 abilityText: nil, ratingText: nil, familiarityText: nil, stamps: [])
             }
             var stamps: [StatusStamp] = []
             if place.isInjured { stamps.append(injuredStamp) }
             if place.isOutOfPosition { stamps.append(outOfPositionStamp) }
             return ElevenRow(slot: slot, slotText: slot.longName, player: place.player, name: place.name,
-                             squadText: squads[place.player]?.displayName, ratingText: MatchText.oneDecimal(place.rating.value),
+                             squadText: squads[place.player]?.displayName,
+                             abilityText: abilities[place.player].map(String.init), ratingText: MatchText.oneDecimal(place.rating.value),
                              familiarityText: familiarityText(ip: place.ipFamiliarity, oop: place.oopFamiliarity),
                              stamps: stamps)
         }
@@ -237,7 +241,7 @@ public enum ElevensPresentation {
 extension AppModel {
     /// One of the elevens of `report`, with each player's squad as imported.
     public func elevenSheet(_ eleven: Eleven, report: ElevensReport, depth: DepthReport) -> ElevenSheet {
-        ElevensPresentation.sheet(eleven, report: report, depth: depth, squads: elevensSquads)
+        ElevensPresentation.sheet(eleven, report: report, depth: depth, squads: elevensSquads, abilities: elevensAbilities)
     }
 
     /// The detail Depth shows for `slot`, with the plan's parameters; nil when the tactic has no such slot.
@@ -277,6 +281,10 @@ extension AppModel {
     /// primary when it changes.
     public func elevensTacticChoice(_ picked: UUID) -> UUID? {
         picked == settings.primaryTacticID ? nil : picked
+    }
+
+    private var elevensAbilities: [PlayerID: Int] {
+        Dictionary(squad.book.allPlayers.map { ($0.id, $0.currentAbility) }, uniquingKeysWith: { first, _ in first })
     }
 
     private var elevensSquads: [PlayerID: Squad] {

@@ -583,6 +583,7 @@ public enum Theme {
     public enum Elevens {
         /// The columns of the lists beside the pitch: a rating, the familiarity in each phase under a heading that
         /// wraps to two lines, and the cover tick.
+        public static let abilityColumn: CGFloat = 48
         public static let ratingColumn: CGFloat = 64
         public static let familiarityColumn: CGFloat = 132
         public static let coverColumn: CGFloat = 56

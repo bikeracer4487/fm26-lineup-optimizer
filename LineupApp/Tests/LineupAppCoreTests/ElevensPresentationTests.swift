@@ -67,6 +67,27 @@ import LineupEngine
         #expect(sheet.averageText == MatchText.oneDecimal(try #require(elevens.firstAverage)))
     }
 
+    @Test func eachFilledRowCarriesHisCurrentAbilityAndAnUnfilledOneNone() throws {
+        let t = try TestModel()
+        let model = try squad(t)
+        let (elevens, depth) = try ready(model)
+        for (eleven, places) in [(Eleven.first, elevens.first), (Eleven.second, elevens.second)] {
+            let sheet = model.elevenSheet(eleven, report: elevens, depth: depth)
+            for place in places {
+                let row = try #require(sheet.rows.first { $0.slot == place.slot })
+                #expect(row.abilityText == String(try player(model, place.player).currentAbility))
+                #expect(row.spokenText == "\(row.slotText), \(row.name), CA \(row.abilityText ?? ""), \(row.ratingText ?? "")"
+                        + row.stamps.map { ", " + $0.text }.joined())
+            }
+        }
+        let bare = try squad(try TestModel(), u21: false)
+        let (e2, d2) = try ready(bare)
+        let sheet = bare.elevenSheet(.second, report: e2, depth: d2)
+        for slot in e2.unfilledSecond {
+            #expect(try #require(sheet.rows.first { $0.slot == slot }).abilityText == nil)
+        }
+    }
+
     @Test func eachPlaceIsAMagnetWithHisSurnameAndRating() throws {
         let t = try TestModel()
         let model = try squad(t)
@@ -297,7 +318,7 @@ import LineupEngine
 
     @Test func theOptionsTableNamesItsColumns() {
         #expect(ElevensPresentation.optionColumns == ["Player", "Rating", "Familiarity in / out of possession", "Cover"])
-        #expect(ElevensPresentation.elevenColumns == ["Player", "Rating", "Familiarity in / out of possession"])
+        #expect(ElevensPresentation.elevenColumns == ["Player", "CA", "Rating", "Familiarity in / out of possession"])
     }
 
     // MARK: The tactic menu
