@@ -50,6 +50,15 @@ import Foundation
         #expect([c, a, b].sorted() == [a, b, c])
     }
 
+    @Test func addingMonthsKeepsTheDayOrTakesTheLastOfAShorterMonth() throws {
+        #expect(Day(iso: "2026-08-31")!.adding(months: 6) == Day(iso: "2027-02-28"))
+        #expect(Day(iso: "2027-06-30")!.adding(months: -6) == Day(iso: "2026-12-30"))
+        #expect(Day(iso: "2027-01-15")!.adding(months: 12) == Day(iso: "2028-01-15"))
+        #expect(Day(iso: "2027-08-31")!.adding(months: 6) == Day(iso: "2028-02-29"))
+        #expect(Day(iso: "2026-11-25")!.adding(months: 0) == Day(iso: "2026-11-25"))
+        #expect(Day(iso: "2026-03-31")!.adding(months: -13) == Day(iso: "2025-02-28"))
+    }
+
     @Test func encodesAsTheISOString() throws {
         let day = try #require(Day(iso: "2026-11-14"))
         let data = try JSONEncoder().encode([day])

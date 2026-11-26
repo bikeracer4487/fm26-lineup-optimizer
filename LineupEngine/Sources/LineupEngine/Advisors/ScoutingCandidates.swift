@@ -144,23 +144,9 @@ extension Scouting {
             let slot = assignment.slot
             let rivals = try Development.rivals(at: slot, tiers: needs.elevens.tiers, squad: squad, ownClub: ownClub,
                                                 parameters: parameters)
-            let secondPlace = needs.elevens.second.first { $0.slot == slot }
-
-            let level: CandidateLevel
-            if let first = rivals.first {
-                if rating + roundingNoise >= first.rating {
-                    level = .wouldStart
-                } else if secondPlace == nil || secondPlace?.isOutOfPosition == true
-                            || rivals.second.map({ rating + roundingNoise >= $0.rating }) == true {
-                    level = .wouldMakeSecond
-                } else if Depth.isWithinCoverShare(rating: rating, firstChoiceRating: first.rating, parameters: parameters) {
-                    level = .wouldCountAsCover
-                } else {
-                    level = .belowCover
-                }
-            } else {
-                level = .wouldStart
-            }
+            let level = Self.level(rating: rating, first: rivals.first, second: rivals.second,
+                                   secondPlaceIsOpen: secondPlaceIsOpen(at: slot, in: needs.elevens),
+                                   parameters: parameters)
 
             var answers: Set<NeedAnswer> = []
             var stillWeakBy: WeakGap?
@@ -190,6 +176,27 @@ extension Scouting {
                 laterAgainstWeakLine: nil, answers: answers))
         }
         return slots
+    }
+
+    /// Where a player rated `rating` at a slot would stand against its first and second choice: he would start at or
+    /// over the first choice's rating, or with no first choice; else he would make the second eleven when the second
+    /// place is open or he rates at or over the second choice; else he would count as cover within `depthCoverShare`
+    /// of the first choice; else he is below cover.
+    static func level(rating: Double, first: Rival?, second: Rival?, secondPlaceIsOpen: Bool,
+                      parameters: EngineParameters) -> CandidateLevel {
+        guard let first else { return .wouldStart }
+        if rating + roundingNoise >= first.rating { return .wouldStart }
+        if secondPlaceIsOpen || second.map({ rating + roundingNoise >= $0.rating }) == true { return .wouldMakeSecond }
+        if Depth.isWithinCoverShare(rating: rating, firstChoiceRating: first.rating, parameters: parameters) {
+            return .wouldCountAsCover
+        }
+        return .belowCover
+    }
+
+    /// The second eleven has nobody at `slot`, or its player there is out of position.
+    static func secondPlaceIsOpen(at slot: SlotID, in elevens: ElevensReport) -> Bool {
+        let place = elevens.second.first { $0.slot == slot }
+        return place == nil || place?.isOutOfPosition == true
     }
 
     /// One caution for each line he is on the wrong side of, in this order: Consistency, Important Matches, Injury

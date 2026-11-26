@@ -47,6 +47,16 @@ public struct Day: Hashable, Comparable, Codable, Sendable {
 
     public func adding(days: Int) -> Day { Day(epochDays: epochDays + days) }
 
+    /// The same day of the month `months` later (earlier when negative), or that month's last day when it is shorter:
+    /// 31 August and 6 months is 28 February.
+    public func adding(months: Int) -> Day {
+        let (y, m, d) = Day.civil(fromDays: epochDays)
+        let index = y * 12 + (m - 1) + months
+        let year = Day.floorDiv(index, 12), month = index - year * 12 + 1
+        let day = min(d, Day.daysIn(month: month, year: year))
+        return Day(epochDays: Day.daysFromCivil(year: year, month: month, day: day))
+    }
+
     public static func < (lhs: Day, rhs: Day) -> Bool { lhs.epochDays < rhs.epochDays }
 
     public init(from decoder: any Decoder) throws {
