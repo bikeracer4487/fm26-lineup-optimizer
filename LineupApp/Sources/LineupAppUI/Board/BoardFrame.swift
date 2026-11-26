@@ -157,7 +157,7 @@ struct MorePill: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
-        .accessibilityLabel("More screens")
+        .accessibilityLabel(Screen.moreAccessibilityLabel)
         .accessibilityValue(isCurrent ? (navigation.screen?.title ?? "") : "")
         .accessibilityAddTraits(isCurrent ? .isSelected : [])
     }

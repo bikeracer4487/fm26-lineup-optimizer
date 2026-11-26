@@ -18,6 +18,7 @@ import Testing
         #expect(Screen.morePillTitle(current: .settings) == "Settings")
         #expect(Screen.morePillTitle(current: .squad) == "More")
         #expect(Screen.morePillTitle(current: nil) == "More")
+        #expect(Screen.moreAccessibilityLabel == "More screens")
     }
 
     @Test func eachScreenHasItsTitle() {

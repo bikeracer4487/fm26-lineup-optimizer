@@ -24,7 +24,7 @@ extension AppModel {
                 catalog: catalog, profile: profile, parameters: parameters)
             let wages = WageRange.tierWages(tiers: advice.elevens.tiers, players: players, ownClub: club)
             let byID = Dictionary(players.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            return .ready(try ContractsPresentation.sheet(report, players: byID, ownClub: club, wages: wages,
+            return .ready(try ContractsPresentation.sheet(report, players: byID, wages: wages,
                                                           state: contracts, money: squad.book.moneyStyle,
                                                           parameters: parameters))
         } catch {
@@ -99,11 +99,12 @@ extension AppModel {
         if action() { lastContractsAction = environment.now() }
     }
 
-    /// Drops the dismissals and figures that have done their work. Called after `target` is imported. A player's
+    /// Drops the dismissals and figures that have done their work. Called after `target` is imported, and only then:
+    /// unlike a mark, no entry turns on the club's name, since neither rule below reads who is on loan. A player's
     /// entries go when he is held and his contract no longer puts him in any part of the list (he was renewed), or
     /// when he is in no squad, once every squad held has been imported without him. A player with no contract is in
     /// the list, so he stays. Saves only when something is dropped; the caller plans.
-    func dropSpentContractEntries(imported target: Squad? = nil) {
+    func dropSpentContractEntries(imported target: Squad) {
         let players = Dictionary(squad.book.allPlayers.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let held = Set(squad.importedOn.keys)
         let today = settings.currentDate
@@ -111,7 +112,7 @@ extension AppModel {
         var state = contracts
         for id in Set(contracts.dismissed.keys).union(contracts.figures.keys) {
             guard let player = players[id] else {
-                if let target { contractsAbsentFrom[id, default: []].insert(target) }
+                contractsAbsentFrom[id, default: []].insert(target)
                 if let seen = contractsAbsentFrom[id], seen.isSuperset(of: held) {
                     state.dismissed[id] = nil
                     state.figures[id] = nil

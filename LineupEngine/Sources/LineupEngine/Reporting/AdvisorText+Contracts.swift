@@ -89,9 +89,6 @@ extension AdvisorText {
         Display.wageAmount(perWeek: a, money) == Display.wageAmount(perWeek: b, money)
     }
 
-    /// "is" or "are" after "your <tier>" in "above anything your second eleven is paid".
-    private static func isPaid(_ guide: WageGuide) -> String { guide.tier == .neither ? "are paid" : "is paid" }
-
     private static func rangeText(low: Double, high: Double, _ money: MoneyStyle) -> String {
         "\(Display.wageAmount(perWeek: low, money)) to \(Display.wage(perWeek: high, money))"
     }
@@ -108,33 +105,38 @@ extension AdvisorText {
                 if sameText(low, high, money) {
                     lines.append("\(capitalised(who)) are all paid \(Display.wage(perWeek: high, money)) (this tool's estimate of a reasonable wage).")
                 } else {
-                    lines.append("\(capitalised(who)) are paid \(rangeText(low: low, high: high, money)) (this tool's estimate of a reasonable range).")
+                    lines.append("Most of \(who) are paid \(rangeText(low: low, high: high, money)) (this tool's estimate of a reasonable range).")
                 }
             case .ceiling where sameText(low, high, money):
                 lines.append("A reasonable wage is about \(Display.wage(perWeek: high, money)): what \(who) are paid at the low end is also \(shareName(guide)) of your wage budget \(estimate).")
             case .highestWage where sameText(low, high, money):
                 lines.append("A reasonable wage is about \(Display.wage(perWeek: high, money)): what \(who) are paid at the low end is also the most you can offer one player \(estimate).")
             case .ceiling:
-                lines.append("A reasonable range is \(rangeText(low: low, high: high, money)): from what \(who) are paid up to \(shareName(guide)) of your wage budget \(estimate).")
+                lines.append("A reasonable range is \(rangeText(low: low, high: high, money)): from what most of \(who) are paid up to \(shareName(guide)) of your wage budget \(estimate).")
             case .highestWage:
-                lines.append("A reasonable range is \(rangeText(low: low, high: high, money)): from what \(who) are paid up to the most you can offer one player \(estimate).")
+                lines.append("A reasonable range is \(rangeText(low: low, high: high, money)): from what most of \(who) are paid up to the most you can offer one player \(estimate).")
             }
         case .upTo(let top, let setBy):
             let figure = Display.wage(perWeek: top, money)
             if let paid = guide.paid {
+                // "what your second eleven are all paid, $3,269" or "what most of your second eleven are paid, $2,786
+                // to $3,905": the lower quartile is not the least any of them is paid.
+                let whatPaid = sameText(paid.lowerQuartile, paid.highest, money)
+                    ? "\(who) are all paid, \(paidText(paid, money))" : "most of \(who) are paid, \(paidText(paid, money))"
                 switch setBy {
                 case .ceiling, .tierHighest:
-                    lines.append("Up to \(figure): \(shareName(guide)) of your wage budget is below what \(who) are \(sameText(paid.lowerQuartile, paid.highest, money) ? "all " : "")paid, \(paidText(paid, money)) \(estimate).")
+                    lines.append("Up to \(figure): \(shareName(guide)) of your wage budget is below what \(whatPaid) \(estimate).")
                 case .highestWage:
-                    lines.append("Up to \(figure): the most you can offer one player is below what \(who) are \(sameText(paid.lowerQuartile, paid.highest, money) ? "all " : "")paid, \(paidText(paid, money)).")
+                    lines.append("Up to \(figure): the most you can offer one player is below what \(whatPaid).")
                 }
             } else {
-                let source: String
+                // The highest wage and too few wages are both facts; a share of the budget is the rule of thumb's.
                 switch setBy {
-                case .ceiling, .tierHighest: source = shareName(guide) + " of your wage budget"
-                case .highestWage: source = "the most you can offer one player"
+                case .ceiling, .tierHighest:
+                    lines.append("Up to \(figure), \(shareName(guide)) of your wage budget; too few of \(who) are paid a wage to read a range from them \(estimate).")
+                case .highestWage:
+                    lines.append("Up to \(figure), the most you can offer one player; too few of \(who) are paid a wage to read a range from them.")
                 }
-                lines.append("Up to \(figure), \(source); too few of \(who) are paid a wage to read a range from them \(estimate).")
             }
         case .none:
             lines.append("No range can be given: too few of \(who) are paid a wage to read one from. Enter your wage budget for a ceiling.")
@@ -176,7 +178,7 @@ extension AdvisorText {
         case .overCeiling(let ceiling):
             return "\(subject) is above \(shareName(guide)) of your wage budget, \(Display.wage(perWeek: ceiling, money)) (this tool's estimate)."
         case .aboveTier(let highest):
-            return "\(subject) is above anything \(who) \(isPaid(guide)); the highest is \(Display.wage(perWeek: highest, money))."
+            return "\(subject) is above anything \(who) are paid; the highest is \(Display.wage(perWeek: highest, money))."
         case .withinTier:
             return "\(subject) is within what \(who) are paid."
         case .underTier:
@@ -215,7 +217,7 @@ extension AdvisorText {
         return [
             wageEvidenceSentence,
             "The shares of the wage budget are one author's rule of thumb for FM23: \(percent(rules.keyPlayerShare)) for each of four key players, \(percent(rules.starterShare)) for a starter and \(percent(rules.backupShare)) for a backup.",
-            "The most you can offer one player and the budget left are FMRTE's own figures for your club.",
+            "The wage budget, the wages spent and the most you can offer one player are the figures you typed from FMRTE.",
             "Other clubs can approach a player in his last \(rules.approachMonths) months; that is the game's rule (carried over from FM26).",
         ]
     }

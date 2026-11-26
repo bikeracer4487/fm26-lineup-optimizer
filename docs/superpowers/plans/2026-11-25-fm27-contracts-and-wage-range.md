@@ -964,6 +964,54 @@ On 26 November 2026, with no build warnings: `cd LineupEngine && swift test`, 1,
   put its sources aside to see one).
 - The plan's calls beyond the design all stood.
 
+## What the whole-branch review found
+
+The review of f4ed5ae..5fd8c78 found no critical issue, three important findings and seven small ones, all fixed in
+one round on 26 November 2026, with tests; the design marks each passage they changed "revised after the
+whole-branch review".
+
+- **Important: a youth contract at 0 months left passed the gate.** `Removal.isOnYouthContract` is false at 0 months
+  (Player Removal reads 0 as no contract), and FMRTE rounds months down, so for the whole last month every
+  youth-contract player was listed and counted on the pill, and his wage entered the tier's range. The gate in
+  `Contracts.report` and `WageRange.tierWages` now test `contractType == .youth`, whatever the months;
+  `Removal.isOnYouthContract` is as it was. The two cases on that line no test had pinned now have tests: a player
+  the gate leaves out who is marked is not counted as going, and one out on loan with no contract at cover is not
+  listed.
+- **Important: "are paid X to Y" was false for the quarter paid less.** X is the lower quartile; on the capture "The
+  rest of your second eleven are paid $2,661 to $7,483 a month" stood beside a player in it paid $1,912. Every line
+  that gives the lower quartile to the highest as what a tier is paid now says "most of" ("Most of your second eleven
+  are paid …", "from what most of your second eleven are paid up to …", "below what most of your second eleven are
+  paid, $2,786 to $3,905 a month"). The amounts-written-alike forms ("are all paid $3,269 a month") stay. The ranges
+  quoted under "What the list and the ranges showed on the capture" above are as they read then.
+- **Important: "Out on loan at …" was said twice on a Contracts row.** It is dropped from the details line, and the
+  engine's standing line says it with where he would stand, on listed and dismissed rows alike;
+  `ContractsPresentation.outOnLoanText` and the sheet's unused club parameter are gone.
+- With too few wages and the highest wage the cap, "Up to X, the most you can offer one player; too few of … are paid
+  a wage to read a range from them" carries no "(this tool's estimate)": both clauses are facts.
+- The evidence note's third line is "The wage budget, the wages spent and the most you can offer one player are the
+  figures you typed from FMRTE.", since the budget left is worked out, not FMRTE's own.
+- One rule for the part and the day named: with an end day he is approachable once today is on or after the end day
+  less 6 months, and in his last year once it is on or after the end day less 12, so a contract ending on 31 Aug 2027
+  is in its last year on 27 Feb 2027 and approachable on 28 Feb 2027, the day "can approach him from" names (it had
+  been up to three days early for an end on the 29th to 31st).
+- One verb for a tier: "above anything your second eleven are paid", like every other sentence; the helper that chose
+  "is" or "are" is gone.
+- "More screens" is `Screen.moreAccessibilityLabel` in Core, with a line in ScreenTests.
+- `dropSpentContractEntries(imported:)` lost its default and takes a squad. It is not called when the club's name
+  changes, as `dropSpentMarks()` is: a mark goes when its player reads as on loan here, which the name decides, but
+  neither rule that drops a contract entry reads who is on loan (his contract's part and whether he is in a squad),
+  so a change of name cannot make an entry spent.
+- ScoutingWageTests gained a candidate paid above the highest wage the owner can offer (the over-the-highest-wage
+  sentence with "His wage now" as the closed row's caution) and one above the ceiling but not the highest wage (the
+  over-the-ceiling sentence).
+
+Left recorded, not fixed: the parameter check runs once per candidate in `WageRange.guide`, and "in his last year" in
+the left-out line also counts a marked player with no contract.
+
+The test runs after the round, with no build warnings: `cd LineupEngine && swift test`, 1,790 tests in 69 suites in 60
+seconds; `tools/test_app.sh`, 1,154 tests in 67 suites in 48 seconds. The unoptimized `cd LineupApp && swift test` was
+not run in this round.
+
 ## Limits left
 
 The design's section 10, as built:
@@ -993,16 +1041,16 @@ Also left:
 
 ## Small faults left
 
-Found by the task reviews and deferred; the whole-branch review that follows decides them.
+Found by the task reviews and deferred; those the whole-branch review fixed are listed under "What the whole-branch
+review found" and taken out of this list.
 
 - The More pill has an empty VoiceOver value while a row screen is shown. The comment on `Screen` still says the top
   row lists the screens in their order.
 - `WageRange.share(of:_:)` rounds to a millionth, beyond the plan.
-- `ContractsReport.basis` takes in the advice of players the gate or the going check then leaves out. No test pins a
-  player gated out who is also marked (not counted as going), nor a player out on loan with no contract being gated.
+- `ContractsReport.basis` takes in the advice of players the gate or the going check then leaves out.
 - Retyping an unchanged wage limit on a later day leaves `limitsEntered` at the old day, while an agent's figure
   retyped takes the new day. An action that changes nothing does not start the clock, where Scouting's may. No test
-  drops entries with `imported: nil`, or clears `contractsAbsentFrom` for a player who comes back.
+  clears `contractsAbsentFrom` for a player who comes back.
 - A test hard-codes 130_000 × 0.027 in place of reading the rules. A listed player missing from the book would get an
   empty details line (`?? ""`, a silent default; it cannot happen today). Ready advice with no primary tactic gives
   `.notReady(.ready(…))`, probably unreachable. `contractsCount` builds the sheet again, so the screen and the pill
@@ -1010,13 +1058,12 @@ Found by the task reviews and deferred; the whole-branch review that follows dec
 - The dismissed rows are indented with `Theme.Scouting.disclosureColumn`, not a Contracts measure of their own. A
   "Not renewing" heading stands over "1 player you are not renewing". The parts are listed by heading, and putting
   `.overHighestWage` first relies on the engine's order without a comment saying so.
-- "Out on loan at …" is said twice, once at the end of the details line and again at the start of the engine's
-  standing line; the controller's ruling is to drop it from the details line.
 - On Scouting, `try?` on `candidateGuide` gives no wage lines when the wage rules have problems, with no test; the
-  opened row shows the flagged sentence in plain ink, not the caution style; no test covers `overHighestWage` or
-  `overCeiling` on a candidate's wage.
+  opened row shows the flagged sentence in plain ink, not the caution style.
 - On Elevens, the `spokenText` test builds its expectation from the row's own fields, the unfilled-slot loop does not
   check its list is not empty, and `elevensAbilities` and `elevensSquads` are near-identical builders.
+- From the whole-branch review: the parameter check runs once per candidate in `WageRange.guide`, and "in his last
+  year" in the left-out line also counts a marked player with no contract.
 
 ## Left to the owner
 

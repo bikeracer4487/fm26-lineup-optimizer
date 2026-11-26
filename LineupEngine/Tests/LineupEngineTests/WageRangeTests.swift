@@ -264,6 +264,18 @@ import Testing
         #expect(reversed == wages)
     }
 
+    /// FMRTE rounds months down, so a youth contract in its last month reads 0 months left; his wage is still left out.
+    @Test func aYouthContractAtNoMonthsLeftIsInNoTiersWages() {
+        let first = owned("First", wage: 900)
+        var youth = owned("Youth", wage: 400); youth.contractType = .youth; youth.monthsLeft = 0
+        let tiers = SquadTiers(first: [.GK: youth.id], second: [.GK: first.id],
+                               ratings: [youth.id: [.GK: 1.0], first.id: [.GK: 1.0]])
+        let wages = WageRange.tierWages(tiers: tiers, players: [first, youth], ownClub: "Oxford City")
+        #expect(wages[.firstEleven] == [])
+        #expect(wages[.secondEleven] == [PlayerWage(player: first.id, perWeek: 900)])
+        #expect(wages[.neither] == [])
+    }
+
     @Test func aPlayerTheTiersDidNotRateIsInNoTier() {
         let rated = owned("Rated"), unrated = owned("Unrated")
         let tiers = SquadTiers(first: [:], second: [:], ratings: [rated.id: [.GK: 1.0]])

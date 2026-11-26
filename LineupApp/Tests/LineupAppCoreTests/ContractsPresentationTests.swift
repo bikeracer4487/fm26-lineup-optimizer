@@ -69,15 +69,20 @@ import LineupEngine
         #expect(ContractsSample.listed(sheet).map(\.timingLine) == report.listed.map(AdvisorText.timingLine))
     }
 
-    @Test func aRowsDetailsAreHisAgePositionsAndFactsWithWhereHeIsOutOnLoanLast() throws {
+    /// Where a player out on loan is says the engine's standing line alone, with where he would stand.
+    @Test func aRowsDetailsAreHisAgePositionsAndFactsAndTheStandingLineSaysWhereHeIsOutOnLoan() throws {
         let model = try ContractsSample.plain()
         let rows = ContractsSample.listed(try ContractsSample.sheet(model))
         let humphries = try #require(rows.first { $0.name == SampleData.contractsFigureName })
         #expect(humphries.detailsText == "Age 22 · D L · CA 83 · PA 95 · $39,228 a year · contract ends 30 Jun 2028")
         let clark = try #require(rows.first { $0.name == "Ewan Clark" })
-        #expect(clark.detailsText == "Age 24 · AM RL · CA 69 · PA 85 · $39,228 a year · contract ends 30 Jun 2028 · "
-                + "Out on loan at Hemel Hempstead")
+        #expect(clark.detailsText == "Age 24 · AM RL · CA 69 · PA 85 · $39,228 a year · contract ends 30 Jun 2028")
         #expect(clark.standingLine.hasPrefix("Out on loan at Hemel Hempstead; "))
+        #expect(!clark.detailsText.contains("Hemel Hempstead"))
+        // Not being renewed: the same.
+        model.dismissContract(clark.id)
+        let set = try #require(try ContractsSample.sheet(model).dismissed.first { $0.id == clark.id })
+        #expect(set.detailsText == clark.detailsText && set.standingLine == clark.standingLine)
     }
 
     // MARK: The range and the verdict
@@ -102,7 +107,7 @@ import LineupEngine
         #expect(guide.paid?.lowerQuartile == quartile)
         #expect(guide.paid?.highest == wages.last)
         #expect(row.guideLines == AdvisorText.wageGuideLines(guide, money: model.squad.book.moneyStyle))
-        #expect(row.guideLines.first?.hasPrefix("The rest of your second eleven are paid ") == true)
+        #expect(row.guideLines.first?.hasPrefix("Most of the rest of your second eleven are paid ") == true)
         #expect(row.verdictLines.isEmpty && row.figureText.isEmpty && row.figureReading == nil
                 && row.figureEnteredText == nil, "no figure typed")
     }

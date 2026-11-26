@@ -50,16 +50,17 @@ public struct ContractsReport: Equatable, Sendable {
 /// are not going and, on a youth contract or with no contract, are in an eleven or worth developing. A function of the
 /// data it is handed.
 public enum Contracts {
-    /// The first that holds: no contract to run down (out of contract, or months left below zero); with an end day, on
-    /// or before `approachMonths` from today (a day already past included), then on or before `lastYearMonths`; with
-    /// none and months left known, `approachMonths` or fewer, then `lastYearMonths` or fewer. nil otherwise.
+    /// The first that holds: no contract to run down (out of contract, or months left below zero); with an end day,
+    /// today on or after the end day less `approachMonths` (a day already past included), then on or after the end day
+    /// less `lastYearMonths`, each clamped to its month as `approachableFrom` is, so the day named is the day he moves;
+    /// with none and months left known, `approachMonths` or fewer, then `lastYearMonths` or fewer. nil otherwise.
     public static func part(of player: Player, today: Day, parameters: EngineParameters) -> ContractPart? {
         let rules = parameters.wageRangeRules.value
         if player.contractType == .outOfContract { return .noContract }
         if let months = player.monthsLeft, months < 0 { return .noContract }
         if let ends = player.contractEnds {
-            if ends <= today.adding(months: rules.approachMonths) { return .approachable }
-            if ends <= today.adding(months: rules.lastYearMonths) { return .lastYear }
+            if today >= ends.adding(months: -rules.approachMonths) { return .approachable }
+            if today >= ends.adding(months: -rules.lastYearMonths) { return .lastYear }
             return nil
         }
         guard let months = player.monthsLeft else { return nil }
@@ -130,7 +131,9 @@ public enum Contracts {
                 passesGate = tier != .neither || advice?.outlook.map(Removal.isWorthDeveloping) == true
             }
 
-            if Removal.isOnYouthContract(player) || part == .noContract, !passesGate { continue }
+            // A youth contract whatever the months: FMRTE rounds them down, so one in its last month reads 0, which
+            // Player Removal reads as no contract.
+            if player.contractType == .youth || part == .noContract, !passesGate { continue }
             if marks[player.id] != nil || removal.advisedToLeave.contains(player.id) {
                 going += 1
                 continue

@@ -106,6 +106,28 @@ import Testing
         #expect(part(ends: nil, months: 0, type: .youth) == .approachable)
     }
 
+    /// One rule for the part and the day "can approach him from": an end day on the 29th to 31st is approachable on the
+    /// day six months before it, clamped to the month, and not before.
+    @Test func aContractEndingLateInTheMonthIsApproachableOnTheDayNamed() throws {
+        var p = Player.fixture()
+        p.contractEnds = day("2027-08-31"); p.monthsLeft = 9
+        #expect(Contracts.part(of: p, today: day("2027-02-27"), parameters: parameters) == .lastYear)
+        #expect(p.contractEnds?.adding(months: -parameters.wageRangeRules.value.approachMonths) == day("2027-02-28"))
+        #expect(Contracts.part(of: p, today: day("2027-02-28"), parameters: parameters) == .approachable)
+        // In his last year from the day twelve months before the end.
+        #expect(Contracts.part(of: p, today: day("2026-08-30"), parameters: parameters) == nil)
+        #expect(Contracts.part(of: p, today: day("2026-08-31"), parameters: parameters) == .lastYear)
+        // The day named on a report made on 27 Feb 2027 is the day he moves.
+        let target = id(.D_L, "first")
+        let players = try squad(changing: target) { $0.contractEnds = day("2027-08-31"); $0.monthsLeft = 6 }
+        let r = try Contracts.report(players: players, ownClub: ownClub, marks: [:], removal: try removal(players),
+                                     elevens: try elevens(players), tactic: tactic, dismissed: [],
+                                     today: day("2027-02-27"), catalog: catalog, profile: profile,
+                                     parameters: parameters)
+        let e = try #require(entry(target, in: r))
+        #expect(e.part == .lastYear && e.approachableFrom == day("2027-02-28"))
+    }
+
     @Test func approachableFromIsSixMonthsBeforeTheEnd() throws {
         let target = id(.D_L, "first")
         let ends = try report(try squad(changing: target) { $0.contractEnds = day("2027-06-30"); $0.monthsLeft = 7 })
@@ -211,6 +233,37 @@ import Testing
         #expect(e.standing == .neither && e.tier == .neither && e.slot == nil && e.action == secondAdvice.action)
     }
 
+    /// FMRTE rounds months down, so a youth contract in its last month reads 0 months left; the gate still holds.
+    @Test func aYouthContractAtNoMonthsLeftPassesTheGateOnlyInAnEleven() throws {
+        let making = try makingPotential()
+        var last = youngster(potentialAbility: making - 1)
+        last.monthsLeft = 0
+        let players = try squad([last])
+        let advice = try #require(try removal(players).advice.first { $0.player == last.id })
+        try #require(advice.tier == .backup && advice.outlook.map(Removal.isWorthDeveloping) != true)
+        for keepingAll in [true, false] {
+            let r = try report(players, keepingAll: keepingAll)
+            #expect(entry(last.id, in: r) == nil && r.dismissed.isEmpty && r.leftOutAsGoing == 0)
+        }
+        // In the second eleven at 0 months left: listed.
+        let target = id(.D_L, "second")
+        let second = try #require(entry(target, in: try report(try squad(changing: target) {
+            $0.contractType = .youth; $0.monthsLeft = 0
+        })))
+        #expect(second.part == .approachable && second.standing == .second(.D_L))
+    }
+
+    @Test func aPlayerTheGateLeavesOutIsNotCountedAsGoing() throws {
+        func outOfContract(_ p: inout Player) { p.contractType = .outOfContract; p.monthsLeft = nil; p.wagePerWeek = 0 }
+        let backup = player("Backup", change: outOfContract)
+        let players = try squad([backup])
+        for mark in SaleMark.allCases {
+            let r = try report(players, marks: [backup.id: mark])
+            #expect(entry(backup.id, in: r) == nil && r.leftOutAsGoing == 0)
+        }
+        #expect(try report(players, leaving: [backup.id]).leftOutAsGoing == 0)
+    }
+
     @Test func aFullTimeBackupIsListedWhateverHisStanding() throws {
         let backup = player("Backup")
         let players = try squad([backup])
@@ -265,6 +318,18 @@ import Testing
         // On a youth contract at a level that would start: listed.
         let starter = loanedOut(all: 18) { $0.contractType = .youth }
         #expect(entry(starter.id, in: try report(try squad([starter])))?.tier == .firstEleven)
+    }
+
+    @Test func aPlayerOutOnLoanWithNoContractIsListedOnlyInAnEleven() throws {
+        func outOfContract(_ p: inout Player) { p.contractType = .outOfContract; p.monthsLeft = nil; p.wagePerWeek = 0 }
+        let cover = loanedOut(all: 11, change: outOfContract)
+        let players = try squad([cover])
+        let r = try report(players)
+        #expect(entry(cover.id, in: r) == nil && r.dismissed.isEmpty && r.leftOutAsGoing == 0)
+        // At a level that would start: listed, in the part with no contract.
+        let starter = loanedOut(all: 18, change: outOfContract)
+        let e = try #require(entry(starter.id, in: try report(try squad([starter]))))
+        #expect(e.part == .noContract && e.tier == .firstEleven)
     }
 
     // MARK: Order

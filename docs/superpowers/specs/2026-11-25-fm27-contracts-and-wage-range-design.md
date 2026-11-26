@@ -90,8 +90,15 @@ A player is listed when all of these hold. Each is this design's call unless mar
   so those players are listed.
 - He is in his last year: with a contract end day, that day is within 12 months of today in the game (so the
   list moves with the date); without one, his months left at the import are 12 or fewer. A player with no
-  contract to run down (out of contract, or months left below zero) is listed in a part of his own.
-- A player on a youth contract (`Removal.isOnYouthContract`) or with no contract to run down is listed only
+  contract to run down (out of contract, or months left below zero) is listed in a part of his own. With an end
+  day, one rule sets both the part and the day the timing line names: he is in his last year from the end day
+  less 12 months, and approachable from the end day less 6 months, each clamped to the end of a shorter month
+  (revised after the whole-branch review: the part had been read from today plus the months, so for a contract
+  ending on the 29th to 31st "can approach him from" named a day up to three days before he moved).
+- A player on a youth contract (his contract type, whatever his months left; revised after the whole-branch
+  review: `Removal.isOnYouthContract` is false at 0 months, which Player Removal reads as no contract, and FMRTE
+  rounds months down, so for the whole last month every youth-contract player was listed and counted on the
+  pill) or with no contract to run down is listed only
   when he is in the first or second eleven for the primary tactic or Player Removal calls him worth
   developing (`Removal.isWorthDeveloping`). The owner's choice of 25 November 2026: without it the count
   would be mostly youth-team players. One of them out on loan, who has no advice, is listed only when his
@@ -120,7 +127,9 @@ count: the dismissed players, each with "Show again".
 - His name, with "Not renewing" at the trailing end of the name's line, as "Hide" stands on Scouting. It
   dismisses him at once with no question.
 - The Player Removal facts on one line: age, positions, current and potential ability, salary by the year, and
-  the day his contract ends or his months left (`PlayerFacts`). "Out on loan at Wallingford" when he is.
+  the day his contract ends or his months left (`PlayerFacts`). Where a player out on loan is, the standing
+  line below says, with where he would stand (revised after the whole-branch review: "Out on loan at
+  Wallingford" had ended the facts line too, so it was said twice).
 - Why he is listed, one engine sentence from his tier and Player Removal's action: "First choice at left back.",
   "Second choice at striker.", "In neither eleven; Player Removal says keep and develop."
 - The timing, one engine sentence: "Other clubs can approach him from Thu 31 Dec." before his last six months
@@ -155,8 +164,8 @@ blank one is simply not used.
 
 **The tier's wages** are always read from the whole squad's elevens for the tactic, on Contracts and on
 Scouting alike ("what your first eleven are paid now"), whoever is going. They are the wages of the club's
-own players in that tier who are paid a wage above 0 and are not on a youth contract, the player himself
-left out. Players on loan here are left out (the
+own players in that tier who are paid a wage above 0 and are not on a youth contract (whatever its months
+left, 0 included; revised after the whole-branch review), the player himself left out. Players on loan here are left out (the
 wage pasted is not the owner's cost). With fewer than 3 such wages the squad gives no range for the tier.
 
 **The range** is from the lower quartile of the tier's wages (the median of the lower half, the middle value
@@ -182,11 +191,17 @@ can offer, when typed, is still given on its own line and makes no range by itse
 
 The lines, in the engine's words, with money through the squad book's `moneyStyle`:
 
-    Your second eleven are paid $2,786 to $3,905 a month. (this tool's estimate of a reasonable range)
+    Most of your second eleven are paid $2,786 to $3,905 a month. (this tool's estimate of a reasonable range)
     A backup's share of your wage budget is $1,870 a month by one rule of thumb. (this tool's estimate)
     The most you can offer one player is $6,500 a month, and $2,140 a month of your wage budget is left.
 
-The wording is the builder's to settle within those facts; each line names its source.
+The wording is the builder's to settle within those facts; each line names its source. Since the range starts
+at the lower quartile, a line that gives it as what the tier is paid says "most of" ("Most of the rest of your
+second eleven are paid …", "from what most of your second eleven are paid up to …", "below what most of your
+second eleven are paid, $2,786 to $3,905 a month"), and every sentence says "are paid" of a tier (revised after
+the whole-branch review: "Your second eleven are paid $2,661 to $7,483" was false for the quarter paid less, a
+player in it being paid $1,912). Where both ends are written alike, "are all paid $3,269 a month" stays, since
+it is true.
 
 ## 5. The verdict on a figure
 
@@ -223,7 +238,8 @@ evidence note on the Candidates tab gains the wage note's sentence. A hidden can
 Every sentence is the engine's (`Reporting/AdvisorText+Contracts.swift`), shown as written. An evidence note
 stands at the foot of Contracts: the range is what the owner's own players are paid, not what a player will
 ask; no test in any version says what a player asks; the shares are a rule of thumb for FM23; the limits are
-FMRTE's own figures for his club; the six months are the game's rule.
+the figures he typed from FMRTE (revised after the whole-branch review: the budget left is worked out, not
+FMRTE's own); the six months are the game's rule.
 
 Every number is one entry in `EngineParameters` (`wageRangeRules`), labelled derived, with a source saying
 which rests on what: 12 months, 6 months, the three shares, the fewest wages for a range (3). Its problems are

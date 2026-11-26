@@ -50,6 +50,9 @@ public enum Screen: String, CaseIterable, Identifiable, Sendable {
     /// The name on the pill that opens the menu.
     public static let moreTitle = "More"
 
+    /// What the "More" pill says to assistive technology.
+    public static let moreAccessibilityLabel = "More screens"
+
     /// What the "More" pill reads: the title of the screen shown when it is in the menu, else "More".
     public static func morePillTitle(current: Screen?) -> String {
         if let current, current.isInMenu { current.title } else { moreTitle }

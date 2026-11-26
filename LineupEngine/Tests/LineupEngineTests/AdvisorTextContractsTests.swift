@@ -59,23 +59,23 @@ import Testing
     @Test func rangeLines() {
         let tierRange = guide(paid: paid, shown: .range(low: week(2786), high: week(3905), setBy: .tierHighest))
         #expect(AdvisorText.wageGuideLines(tierRange, money: money)
-                == ["Your second eleven are paid $2,786 to $3,905 a month (this tool's estimate of a reasonable range)."])
+                == ["Most of your second eleven are paid $2,786 to $3,905 a month (this tool's estimate of a reasonable range)."])
         let all = guide(paid: PaidRange(lowerQuartile: week(3269), highest: week(3269), count: 3),
                         shown: .range(low: week(3269), high: week(3269), setBy: .tierHighest))
         #expect(AdvisorText.wageGuideLines(all, money: money)
                 == ["Your second eleven are all paid $3,269 a month (this tool's estimate of a reasonable wage)."])
         let ceiling = guide(paid: paid, shown: .range(low: week(2786), high: week(3400), setBy: .ceiling))
         #expect(AdvisorText.wageGuideLines(ceiling, money: money).first
-                == "A reasonable range is $2,786 to $3,400 a month: from what your second eleven are paid up to a backup's share of your wage budget (this tool's estimate).")
+                == "A reasonable range is $2,786 to $3,400 a month: from what most of your second eleven are paid up to a backup's share of your wage budget (this tool's estimate).")
         let top = guide(paid: paid, shown: .range(low: week(2786), high: week(3400), setBy: .highestWage))
         #expect(AdvisorText.wageGuideLines(top, money: money).first
-                == "A reasonable range is $2,786 to $3,400 a month: from what your second eleven are paid up to the most you can offer one player (this tool's estimate).")
+                == "A reasonable range is $2,786 to $3,400 a month: from what most of your second eleven are paid up to the most you can offer one player (this tool's estimate).")
         let upCeiling = guide(paid: paid, shown: .upTo(week(1870), setBy: .ceiling))
         #expect(AdvisorText.wageGuideLines(upCeiling, money: money).first
-                == "Up to $1,870 a month: a backup's share of your wage budget is below what your second eleven are paid, $2,786 to $3,905 a month (this tool's estimate).")
+                == "Up to $1,870 a month: a backup's share of your wage budget is below what most of your second eleven are paid, $2,786 to $3,905 a month (this tool's estimate).")
         let upHighest = guide(paid: paid, shown: .upTo(week(1500), setBy: .highestWage))
         #expect(AdvisorText.wageGuideLines(upHighest, money: money).first
-                == "Up to $1,500 a month: the most you can offer one player is below what your second eleven are paid, $2,786 to $3,905 a month.")
+                == "Up to $1,500 a month: the most you can offer one player is below what most of your second eleven are paid, $2,786 to $3,905 a month.")
         let unpaid = guide(shown: .upTo(week(1870), setBy: .ceiling))
         #expect(AdvisorText.wageGuideLines(unpaid, money: money).first
                 == "Up to $1,870 a month, a backup's share of your wage budget; too few of your second eleven are paid a wage to read a range from them (this tool's estimate).")
@@ -107,9 +107,16 @@ import Testing
     @Test func theTiersAndThePlayerWhoIsLeftOut() {
         let rest = guide(tier: .firstEleven, leavesHimOut: true, paid: paid, shown: .range(low: week(2786), high: week(3905), setBy: .tierHighest))
         #expect(AdvisorText.wageGuideLines(rest, money: money)
-                == ["The rest of your first eleven are paid $2,786 to $3,905 a month (this tool's estimate of a reasonable range)."])
+                == ["Most of the rest of your first eleven are paid $2,786 to $3,905 a month (this tool's estimate of a reasonable range)."])
         #expect(AdvisorText.wageVerdictLine(.aboveTier(highest: week(3905)), figure: .agents, guide: rest, money: money)
-                == "The agent's figure is above anything the rest of your first eleven is paid; the highest is $3,905 a month.")
+                == "The agent's figure is above anything the rest of your first eleven are paid; the highest is $3,905 a month.")
+        let restCeiling = guide(tier: .secondEleven, leavesHimOut: true, paid: paid,
+                                shown: .range(low: week(2786), high: week(3400), setBy: .ceiling))
+        #expect(AdvisorText.wageGuideLines(restCeiling, money: money).first
+                == "A reasonable range is $2,786 to $3,400 a month: from what most of the rest of your second eleven are paid up to a backup's share of your wage budget (this tool's estimate).")
+        let restUpTo = guide(tier: .secondEleven, leavesHimOut: true, paid: paid, shown: .upTo(week(1500), setBy: .highestWage))
+        #expect(AdvisorText.wageGuideLines(restUpTo, money: money).first
+                == "Up to $1,500 a month: the most you can offer one player is below what most of the rest of your second eleven are paid, $2,786 to $3,905 a month.")
         let neither = guide(tier: .neither, shown: .none)
         #expect(AdvisorText.wageGuideLines(neither, money: money)
                 == ["No range can be given: too few of your players in neither eleven are paid a wage to read one from. Enter your wage budget for a ceiling."])
@@ -121,7 +128,7 @@ import Testing
         #expect(AdvisorText.wageVerdictLine(.underTier, figure: .agents, guide: rest, money: money)
                 == "The agent's figure is under what most of the rest of your first eleven are paid.")
         let firstGuide = guide(tier: .firstEleven, shown: .none)
-        #expect(AdvisorText.wageGuideLines(guide(tier: .firstEleven, paid: paid, shown: .range(low: week(2786), high: week(3905), setBy: .tierHighest)), money: money).first?.hasPrefix("Your first eleven are paid") == true)
+        #expect(AdvisorText.wageGuideLines(guide(tier: .firstEleven, paid: paid, shown: .range(low: week(2786), high: week(3905), setBy: .tierHighest)), money: money).first?.hasPrefix("Most of your first eleven are paid") == true)
         #expect(AdvisorText.wageVerdictLine(.overCeiling(ceiling: week(5200)), figure: .agents, guide: firstGuide, money: money)
                 == "The agent's figure is above a key player's share of your wage budget, $5,200 a month (this tool's estimate).")
     }
@@ -133,7 +140,7 @@ import Testing
         }
         #expect(line(.overHighestWage(limit: week(6500))) == "The agent's figure is above the most you can offer one player, $6,500 a month.")
         #expect(line(.overCeiling(ceiling: week(1870))) == "The agent's figure is above a backup's share of your wage budget, $1,870 a month (this tool's estimate).")
-        #expect(line(.aboveTier(highest: week(3905))) == "The agent's figure is above anything your second eleven is paid; the highest is $3,905 a month.")
+        #expect(line(.aboveTier(highest: week(3905))) == "The agent's figure is above anything your second eleven are paid; the highest is $3,905 a month.")
         #expect(line(.withinTier, .presentWage) == "His wage now is within what your second eleven are paid.")
         #expect(line(.underTier, .presentWage) == "His wage now is under what most of your second eleven are paid.")
         #expect(line(.overBudgetLeft(by: week(860))) == "The agent's figure is $860 a month more than your wage budget has left; money or wages would have to move.")
@@ -158,7 +165,7 @@ import Testing
         #expect(AdvisorText.contractsEvidenceNote(rules) == [
             AdvisorText.wageEvidenceSentence,
             "The shares of the wage budget are one author's rule of thumb for FM23: 7.5% for each of four key players, 4.3% for a starter and 2.7% for a backup.",
-            "The most you can offer one player and the budget left are FMRTE's own figures for your club.",
+            "The wage budget, the wages spent and the most you can offer one player are the figures you typed from FMRTE.",
             "Other clubs can approach a player in his last 6 months; that is the game's rule (carried over from FM26).",
         ])
     }
@@ -186,6 +193,6 @@ import Testing
         #expect(AdvisorText.wageGuideLines(first, money: money)[1]
                 == "By one rule of thumb a key player's share of your wage budget is $5,200 a month, kept for four players (this tool's estimate).")
         #expect(AdvisorText.wageGuideLines(guide(shown: .upTo(week(1500), setBy: .highestWage)), money: money)
-                == ["Up to $1,500 a month, the most you can offer one player; too few of your second eleven are paid a wage to read a range from them (this tool's estimate)."])
+                == ["Up to $1,500 a month, the most you can offer one player; too few of your second eleven are paid a wage to read a range from them."])
     }
 }

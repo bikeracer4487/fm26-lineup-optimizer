@@ -19,8 +19,8 @@ public struct WageLimitRow: Equatable, Sendable {
 public struct ContractRow: Equatable, Identifiable, Sendable {
     public let id: PlayerID
     public let name: String
-    /// "Age 27 · D L · CA 92 · PA 120 · $68,820 a year · contract ends 30 Jun 2027", with "Out on loan at Merthyr"
-    /// last for a player who is.
+    /// "Age 27 · D L · CA 92 · PA 120 · $68,820 a year · contract ends 30 Jun 2027". Where a player out on loan is,
+    /// the standing line says, with where he would stand.
     public let detailsText: String
     /// The engine's sentence on where he stands: "First choice at left back."
     public let standingLine: String
@@ -119,22 +119,15 @@ public enum ContractsPresentation {
     /// Over the engine's sentences when the list cannot be worked out.
     public static let failedLead = "Contracts cannot be worked out."
 
-    /// "Out on loan at Merthyr".
-    static func outOnLoanText(_ club: String) -> String { "Out on loan at \(club)" }
-
     /// A weekly figure in plain digits in FMRTE's period, rounded to a whole unit; blank for none.
     static func text(perWeek: Double?, period: WagePeriod) -> String {
         perWeek.map { String(Int(period.amount(perWeek: $0).rounded())) } ?? ""
     }
 
-    /// His age, positions and Player Removal's facts on one line, then where he is out on loan when he is.
-    static func details(of player: Player, ownClub: String?, money: MoneyStyle) -> String {
-        var parts = ["Age \(player.age)", player.positionsText, PlayerFacts(player, money: money).line]
-        switch LoanStatus.of(player, ownClub: ownClub) {
-        case .loanedOut(let club): parts.append(outOnLoanText(club))
-        case .own, .loanedIn: break
-        }
-        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+    /// His age, positions and Player Removal's facts on one line.
+    static func details(of player: Player, money: MoneyStyle) -> String {
+        ["Age \(player.age)", player.positionsText, PlayerFacts(player, money: money).line]
+            .filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     static func limitRows(_ limits: WageLimits, money: MoneyStyle) -> [WageLimitRow] {
@@ -153,12 +146,12 @@ public enum ContractsPresentation {
 
     /// The sheet for `report`: each listed player with the range for his tier from `wages` and `state`'s limits, and
     /// the agent's figure kept for him; each player not being renewed with his facts and standing.
-    static func sheet(_ report: ContractsReport, players: [PlayerID: Player], ownClub: String?,
+    static func sheet(_ report: ContractsReport, players: [PlayerID: Player],
                       wages: [WageTier: [PlayerWage]], state: ContractsState, money: MoneyStyle,
                       parameters: EngineParameters) throws -> ContractsSheet {
         let figureLabel = figureLabel(period: money.period)
         func details(_ entry: ContractEntry) -> String {
-            players[entry.player].map { Self.details(of: $0, ownClub: ownClub, money: money) } ?? ""
+            players[entry.player].map { Self.details(of: $0, money: money) } ?? ""
         }
         func row(_ entry: ContractEntry) throws -> ContractRow {
             let guide = try WageRange.guide(tier: entry.tier, slot: entry.slot, wages: wages, excluding: entry.player,

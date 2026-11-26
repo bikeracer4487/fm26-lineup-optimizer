@@ -111,6 +111,36 @@ import LineupEngine
         #expect(row.opens(inRest: false))
     }
 
+    @Test func aPlayerPaidAboveTheHighestWageIsCautionedWithThatFirst() throws {
+        let t = try pasted()
+        typeLimits(t)
+        let found = try repaid(t) { guide in guide.highestWagePerWeek.map { $0 + 100 } }
+        let row = try #require(rows(try sheet(t)).first { $0.id == found.id })
+        let limit = try #require(found.guide.guide.highestWagePerWeek)
+        let expected = AdvisorText.wageVerdictLine(.overHighestWage(limit: limit), figure: .presentWage,
+                                                   guide: found.guide.guide, money: money)
+        #expect(row.wageCaution == expected)
+        #expect(expected == "His wage now is above the most you can offer one player, \(Display.wage(perWeek: limit, money)).")
+    }
+
+    @Test func aPlayerPaidAboveTheCeilingButNotTheHighestWageIsCautionedWithTheCeiling() throws {
+        let t = try pasted()
+        // A highest wage above every tier's share of the budget, so a wage can sit between the two.
+        typeLimits(t, highest: "100000")
+        let found = try repaid(t) { guide in
+            guard let ceiling = guide.ceilingPerWeek, let highest = guide.highestWagePerWeek,
+                  ceiling + 100 < highest else { return nil }
+            return ceiling + 100
+        }
+        let row = try #require(rows(try sheet(t)).first { $0.id == found.id })
+        let ceiling = try #require(found.guide.guide.ceilingPerWeek)
+        let expected = AdvisorText.wageVerdictLine(.overCeiling(ceiling: ceiling), figure: .presentWage,
+                                                   guide: found.guide.guide, money: money)
+        #expect(row.wageCaution == expected)
+        #expect(expected.hasPrefix("His wage now is above a "))
+        #expect(expected.hasSuffix("of your wage budget, \(Display.wage(perWeek: ceiling, money)) (this tool's estimate)."))
+    }
+
     @Test func aPlayerPaidWithinTheRangeHasNoCautionAndAWithinLine() throws {
         let t = try pasted()
         typeLimits(t)

@@ -129,13 +129,13 @@ public enum WageRange {
         return found
     }
 
-    /// The wages of the club's own players the tiers rate, with a wage above 0 and not on a youth contract, by tier;
-    /// each list sorted by wage then key. Every tier has an entry.
+    /// The wages of the club's own players the tiers rate, with a wage above 0 and not on a youth contract (whatever
+    /// its months left, 0 included), by tier; each list sorted by wage then key. Every tier has an entry.
     public static func tierWages(tiers: SquadTiers, players: [Player], ownClub: String?) -> [WageTier: [PlayerWage]] {
         var result: [WageTier: [PlayerWage]] = Dictionary(uniqueKeysWithValues: WageTier.allCases.map { ($0, []) })
         for player in players {
             guard case .own = LoanStatus.of(player, ownClub: ownClub), player.wagePerWeek > 0,
-                  !Removal.isOnYouthContract(player), let found = tier(of: player.id, in: tiers) else { continue }
+                  player.contractType != .youth, let found = tier(of: player.id, in: tiers) else { continue }
             result[found.tier, default: []].append(PlayerWage(player: player.id, perWeek: player.wagePerWeek))
         }
         return result.mapValues { list in
