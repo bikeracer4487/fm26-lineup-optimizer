@@ -51,6 +51,7 @@ extension AppModel {
         recordFamiliarity(after: target, on: date)
         recordPersonality(after: target, on: date)
         dropSpentMarks(imported: target)
+        dropSpentContractEntries(imported: target)
         replan()
 
         let onLoan = (state.book.current[target] ?? []).filter { player in

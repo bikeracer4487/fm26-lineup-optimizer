@@ -20,6 +20,8 @@ public enum StoreFile: String, CaseIterable, Sendable {
     /// Each marked player's value and what his loan is for, the clubs' figures, the asks and deals recorded, and the day
     /// to measure them from.
     case offers
+    /// The club's wage figures, the figures agents asked and the players not being renewed.
+    case contracts
 
     /// How a notice refers to the file, in the owner's words.
     var description: String {
@@ -37,6 +39,7 @@ public enum StoreFile: String, CaseIterable, Sendable {
         case .fitness: "your fitness readings"
         case .scouting: "your hidden candidates"
         case .offers: "your recorded offers"
+        case .contracts: "your contract figures"
         }
     }
 
@@ -56,6 +59,7 @@ public enum StoreFile: String, CaseIterable, Sendable {
         case .fitness: "the readings start empty"
         case .scouting: "the list starts empty"
         case .offers: "the record starts empty"
+        case .contracts: "nothing is entered"
         }
     }
 
@@ -74,17 +78,18 @@ public enum StoreFile: String, CaseIterable, Sendable {
         case .fitness: "fitness readings"
         case .scouting: "hidden candidates"
         case .offers: "recorded offers"
+        case .contracts: "contract figures"
         }
     }
 
     /// Whether the file not being there beside the others is worth a notice. Without the drafts file there are simply
     /// no unsaved changes, without the training file no retraining choices, and without the marks file nobody marked, without the mentoring file nothing is recorded,
     /// without the league file no table, without the fitness file no reading, without the scouting file nobody hidden,
-    /// and without the offers file nothing recorded, as for an app saved before the file existed.
+    /// without the offers file nothing recorded, and without the contracts file nothing entered, as for an app saved before the file existed.
     var isNoticedWhenMissing: Bool {
         switch self {
         case .settings, .tactics, .fixtures, .history, .squad: true
-        case .drafts, .training, .marks, .mentoring, .league, .fitness, .scouting, .offers: false
+        case .drafts, .training, .marks, .mentoring, .league, .fitness, .scouting, .offers, .contracts: false
         }
     }
 }
