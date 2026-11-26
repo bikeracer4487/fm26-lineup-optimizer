@@ -735,6 +735,8 @@ public struct EngineParameters: Sendable {
     public var jadednessTrendRules: Parameter<JadednessTrendRules>
     /// The numbers behind the terms suggested for a sale or a loan out.
     public var offerRules: Parameter<OfferRules>
+    /// The numbers behind the wage range shown for a player's contract.
+    public var wageRangeRules: Parameter<WageRangeRules>
     /// Multiplies each day's condition recovery, by the player's jadedness (x is a jadedness).
     public var conditionRecoveryByJadedness: Parameter<[CurvePoint]>
     /// Jadedness does not rise above this.
@@ -1251,6 +1253,15 @@ public struct EngineParameters: Sendable {
                     + "version's manual and a guide), noInterestBidLow and noInterestBidHigh (FM24, one poster, about three "
                     + "players) are carried over. instalmentMonths, stepDown, stepsDownAtMost, fewestEachWay, "
                     + "fewestCounterDeals and significantFigures are the design's choice of 22 November 2026"),
+            wageRangeRules: Parameter(
+                WageRangeRules(lastYearMonths: 12, approachMonths: 6, keyPlayerShare: 0.075, starterShare: 0.043,
+                               backupShare: 0.027, fewestWages: 3),
+                .derived,
+                source: "docs/Research/fm27-contract-wage-demands.md: no test in any version says what a player asks. "
+                    + "approachMonths is the game's rule (carried over from FM26, official). keyPlayerShare, starterShare "
+                    + "and backupShare are one author's rule of thumb on Sports Interactive's site for FM23 (30% of the "
+                    + "wage budget to each of 4 key players, 7 starters and 11 backups). lastYearMonths and fewestWages "
+                    + "are the design's choice of 25 November 2026"),
             conditionRecoveryByJadedness: Parameter(
                 [CurvePoint(x: -500, factor: 1), CurvePoint(x: 0, factor: 1), CurvePoint(x: 500, factor: 0.832),
                  CurvePoint(x: 1_000, factor: 0.574)],
