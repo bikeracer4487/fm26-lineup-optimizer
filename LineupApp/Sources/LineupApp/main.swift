@@ -846,6 +846,10 @@ let narrowWindow = CGSize(width: 800, height: 700)
             try drawMatchSelection(root, to: directory, size: size)
             try drawElevens(root, to: directory, size: size)
             try drawRest(root, to: directory, size: size)
+            // Rest is under the "More" pill, which then reads "Rest" and is drawn as the current screen.
+            try ScreenPictures.write(model: sampleModel(root), to: directory, size: size, variant: "more", screens: [.rest])
+            try ScreenPictures.write(model: sampleModel(root), to: directory, size: Theme.Layout.minimumWindow,
+                                     variant: "more-small", screens: [.rest])
             try drawTraining(root, to: directory, size: size)
             try drawRemoval(root, to: directory, size: size)
             try drawScouting(root, to: directory, size: size)

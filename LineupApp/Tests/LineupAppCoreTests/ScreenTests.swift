@@ -7,6 +7,19 @@ import Testing
                                     .scouting, .offers, .settings])
     }
 
+    @Test func theRowAndTheMenuSplitTheScreens() {
+        #expect(Screen.menuScreens == [.tactics, .elevens, .rest, .offers, .settings])
+        #expect(Screen.rowScreens == [.squad, .fixtures, .league, .matchSelection, .training, .removal, .scouting])
+        #expect(Set(Screen.rowScreens + Screen.menuScreens) == Set(Screen.allCases))
+    }
+
+    @Test func theMorePillNamesAMenuScreenAndNothingElse() {
+        #expect(Screen.morePillTitle(current: .rest) == "Rest")
+        #expect(Screen.morePillTitle(current: .settings) == "Settings")
+        #expect(Screen.morePillTitle(current: .squad) == "More")
+        #expect(Screen.morePillTitle(current: nil) == "More")
+    }
+
     @Test func eachScreenHasItsTitle() {
         #expect(Screen.allCases.map(\.title) == ["Squad", "Tactics", "Fixtures", "League", "Match Selection", "Elevens", "Rest",
                                                  "Training", "Player Removal", "Scouting", "Offers", "Settings"])

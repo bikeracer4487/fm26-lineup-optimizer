@@ -54,9 +54,10 @@ struct TopRow: View {
 
     private func pills(_ layout: FlowLayout) -> some View {
         layout {
-            ForEach(Screen.allCases) { screen in
+            ForEach(Screen.rowScreens) { screen in
                 ScreenPill(title: screen.pillTitle, isCurrent: navigation.screen == screen) { navigation.screen = screen }
             }
+            MorePill(navigation: navigation)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Screens")
@@ -85,32 +86,72 @@ struct ClubTitle: View {
     }
 }
 
-/// One screen's pill: filled with ink when it is the screen shown, else outlined faintly.
-struct ScreenPill: View {
+/// How a pill is drawn: filled with ink when it is the screen shown, else outlined faintly. Shared by the pills that
+/// press and the one that opens a menu.
+struct PillLabel: View {
     let title: String
     let isCurrent: Bool
-    let action: () -> Void
+    var showsChevron = false
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: Theme.Pill.height / 2, style: .circular)
     }
 
     var body: some View {
-        Button(action: action) {
+        HStack(spacing: Theme.Pill.chevronGap) {
             Text(title)
-                .font(Theme.Typeface.text(Theme.TypeSize.button, weight: .bold))
-                .foregroundStyle(isCurrent ? Theme.Colour.onMarker : Theme.Colour.ink)
-                .padding(.horizontal, Theme.Pill.horizontalPadding)
-                .frame(height: Theme.Pill.height)
-                .background(isCurrent ? Theme.Colour.ink : Color.clear, in: shape)
-                .overlay {
-                    shape.strokeBorder(isCurrent ? Theme.Colour.ink : Theme.Colour.pillOutline,
-                                       lineWidth: Theme.Pill.lineWidth)
-                }
-                .contentShape(shape)
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(Theme.Typeface.text(Theme.TypeSize.small, weight: .bold))
+                    .accessibilityHidden(true)
+            }
         }
+        .font(Theme.Typeface.text(Theme.TypeSize.button, weight: .bold))
+        .foregroundStyle(isCurrent ? Theme.Colour.onMarker : Theme.Colour.ink)
+        .padding(.horizontal, Theme.Pill.horizontalPadding)
+        .frame(height: Theme.Pill.height)
+        .background(isCurrent ? Theme.Colour.ink : Color.clear, in: shape)
+        .overlay {
+            shape.strokeBorder(isCurrent ? Theme.Colour.ink : Theme.Colour.pillOutline, lineWidth: Theme.Pill.lineWidth)
+        }
+        .contentShape(shape)
+    }
+}
+
+/// One screen's pill.
+struct ScreenPill: View {
+    let title: String
+    let isCurrent: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) { PillLabel(title: title, isCurrent: isCurrent) }
+            .buttonStyle(.plain)
+            .fixedSize()
+            .accessibilityAddTraits(isCurrent ? .isSelected : [])
+    }
+}
+
+/// The pill that opens the menu of the screens visited less often; it reads the screen's name while one of them is shown.
+struct MorePill: View {
+    @Bindable var navigation: Navigation
+
+    private var isCurrent: Bool { navigation.screen?.isInMenu == true }
+
+    var body: some View {
+        Menu {
+            ForEach(Screen.menuScreens) { screen in
+                Button(screen.title) { navigation.screen = screen }
+            }
+        } label: {
+            PillLabel(title: Screen.morePillTitle(current: navigation.screen), isCurrent: isCurrent, showsChevron: true)
+        }
+        .menuStyle(.button)
         .buttonStyle(.plain)
+        .menuIndicator(.hidden)
         .fixedSize()
+        .accessibilityLabel("More screens")
+        .accessibilityValue(isCurrent ? (navigation.screen?.title ?? "") : "")
         .accessibilityAddTraits(isCurrent ? .isSelected : [])
     }
 }

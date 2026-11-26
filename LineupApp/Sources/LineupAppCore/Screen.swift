@@ -30,4 +30,26 @@ public enum Screen: String, CaseIterable, Identifiable, Sendable {
              .settings: title
         }
     }
+
+    /// Whether the screen is under the "More" pill rather than on the top row: the ones the owner visits less often.
+    public var isInMenu: Bool {
+        switch self {
+        case .tactics, .elevens, .rest, .offers, .settings: true
+        case .squad, .fixtures, .league, .matchSelection, .training, .removal, .scouting: false
+        }
+    }
+
+    /// The screens with a pill of their own, in the order of `allCases`.
+    public static var rowScreens: [Screen] { allCases.filter { !$0.isInMenu } }
+
+    /// The screens in the "More" menu, in the order of `allCases`.
+    public static var menuScreens: [Screen] { allCases.filter(\.isInMenu) }
+
+    /// The name on the pill that opens the menu.
+    public static let moreTitle = "More"
+
+    /// What the "More" pill reads: the title of the screen shown when it is in the menu, else "More".
+    public static func morePillTitle(current: Screen?) -> String {
+        if let current, current.isInMenu { current.title } else { moreTitle }
+    }
 }

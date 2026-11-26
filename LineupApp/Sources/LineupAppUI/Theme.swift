@@ -319,6 +319,8 @@ public enum Theme {
         public static let horizontalPadding: CGFloat = 16
         public static let lineWidth: CGFloat = 2
         public static let gap: CGFloat = 6
+        /// Between a pill's name and the chevron of the one that opens a menu.
+        public static let chevronGap: CGFloat = 6
     }
 
     /// Buttons: primary is ink, secondary an ink outline, the main action marker blue.
