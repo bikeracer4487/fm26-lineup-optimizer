@@ -131,6 +131,58 @@ import Testing
         let notEased = try #require(try needs(players(potential: 101)).betterPlayers.first)
         #expect(notEased.kind == .weak && notEased.easedBy == nil)
     }
+    @Test func aReachClearsTheWeakLineByRatingAndByAbility() {
+        // Lines of 95 by rating and 0.95 × 170 − 70 = 91.5 by ability.
+        let averages = WeakLineAverages(rating: 100, ability: 170)
+        func against(_ rating: Double, _ reach: Double, keeper: Bool = false) -> WeakLineReach? {
+            averages.reachAgainstLine(isGoalkeeper: keeper, reachRating: rating, reach: reach, parameters: .fm27)
+        }
+        let short = against(96, 91)
+        #expect(short?.clears == false && short?.reach == .rating(96))
+        #expect(short?.shortByAbility?.reach == 91 && abs((short?.shortByAbility?.line ?? 0) - 91.5) < 1e-9)
+        #expect(against(96, 92) == WeakLineReach(reach: .rating(96), clears: true, shortByAbility: nil))
+        // Under by rating: not cleared, and nothing said of ability.
+        #expect(against(94, 92) == WeakLineReach(reach: .rating(94), clears: false, shortByAbility: nil))
+        // The goalkeeper's slot is measured by ability alone, as before.
+        #expect(against(0, 92, keeper: true) == WeakLineReach(reach: .ability(92), clears: true, shortByAbility: nil))
+        #expect(against(200, 91, keeper: true) == WeakLineReach(reach: .ability(91), clears: false, shortByAbility: nil))
+        #expect(WeakLineAverages(rating: nil, ability: nil).reachAgainstLine(isGoalkeeper: false, reachRating: 96, reach: 92,
+                                                                             parameters: .fm27) == nil)
+    }
+    /// Left back made weak (its first choice at level 12, of ability 100); its second choice is a young player of 19 at
+    /// level 11, ability 60 and potential `potential`.
+    func weakLeftBackBehind(potential: Int) throws -> BetterPlayerNeed? {
+        let young = named(.D_L, "second")
+        let players = try squad(levels: [named(.D_L, "first"): 12, young: 11]) {
+            if $0.name == young { $0.age = 19; $0.currentAbility = 60; $0.potentialAbility = potential }
+        }
+        return try needs(players).betterPlayers.first { $0.slot == .D_L }
+    }
+    @Test func aWeakNeedIsNotEasedByAReachBelowTheFirstChoicesAbility() throws {
+        // A potential of 100 reaches the first choice's ability; 95 clears the line by ability (about 91.5) but would not
+        // pass him (the owner's rule of 25 November 2026).
+        let reached = try #require(try weakLeftBackBehind(potential: 100))
+        #expect(reached.kind == .weak && reached.easedBy?.name == named(.D_L, "second"))
+        let short = try #require(try weakLeftBackBehind(potential: 95))
+        #expect(short.kind == .weak && short.easedBy == nil)
+    }
+    @Test func aWeakNeedIsNotEasedByAReachUnderTheLineByAbility() throws {
+        // As the young first choice of `aWeakNeedIsEasedByAYoungPlayerWhoseReachClearsTheLine`, but of ability 60: a
+        // potential of 85 lifts his rating over the line (by 155 ÷ 130) and leaves his ability under it.
+        let young = named(.D_L, "first")
+        func need(potential: Int) throws -> (need: BetterPlayerNeed, needs: ScoutingNeeds) {
+            let r = try needs(try squad(levels: [young: 12, named(.D_L, "second"): 10]) {
+                if $0.name == young { $0.age = 19; $0.currentAbility = 60; $0.potentialAbility = potential }
+            })
+            return (try #require(r.betterPlayers.first { $0.slot == .D_L }), r)
+        }
+        let (short, r) = try need(potential: 85)
+        let line = 0.95 * (try #require(r.outfieldAverageAbility)) - 70
+        #expect(85 < line && short.kind == .weak && short.easedBy == nil)
+        let rating = try #require(r.elevens.first.first { $0.slot == .D_L }?.rating.value)
+        #expect(Scouting.clearsWeakLine(rating * 155 / 130, average: try #require(r.outfieldAverageRating), parameters: .fm27))
+        #expect(try need(potential: 130).need.easedBy?.name == young)
+    }
     @Test func ageingIsNotRaisedWhenAYoungPlayerIsOnCourse() throws {
         let old = named(.AM_C, "first"), young = named(.AM_C, "second")
         let alone = try needs(squad { if $0.name == old { $0.age = 32 } })

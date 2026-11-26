@@ -243,14 +243,21 @@ public enum Scouting {
             return false
         }
 
-        // A young player whose reach clears the weak line at the slot, the highest reach first.
-        func easedBy(_ assignment: SlotAssignment) -> NamedPlayer? {
+        // A young player whose reach clears the weak line at the slot, by rating and by ability
+        // (`WeakLineAverages.reachAgainstLine`), and is not below the ability of a first choice in position there
+        // (`Development.fallsShort`: he would not pass him), the highest reach first.
+        func easedBy(_ assignment: SlotAssignment, firstChoiceInPosition: Bool) -> NamedPlayer? {
             var best: (reach: Double, prospect: Prospect)?
             for prospect in prospects where !isFirstChoiceElsewhere(prospect.player.id, not: assignment.slot) {
+                let isKeeper = isGoalkeeperSlot(assignment)
                 guard let slot = prospect.slots.first(where: { $0.slot == assignment.slot }),
-                      let measured = averages.measure(isGoalkeeper: isGoalkeeperSlot(assignment), rating: slot.reachRating,
+                      let measured = averages.measure(isGoalkeeper: isKeeper, rating: slot.reachRating,
                                                       ability: prospect.estimate.reach, parameters: parameters),
-                      clearsWeakLine(measured.value, average: measured.average, parameters: parameters) else { continue }
+                      averages.reachAgainstLine(isGoalkeeper: isKeeper, reachRating: slot.reachRating,
+                                                reach: prospect.estimate.reach, parameters: parameters)?.clears == true
+                else { continue }
+                if firstChoiceInPosition, let first = slot.firstChoice,
+                   Development.fallsShort(prospect.estimate.reach, of: first) { continue }
                 if let current = best, measured.value <= current.reach { continue }
                 best = (measured.value, prospect)
             }
@@ -281,7 +288,7 @@ public enum Scouting {
             let basis: Evidence
             switch finding {
             case .nobody, .weak:
-                eased = easedBy(assignment)
+                eased = easedBy(assignment, firstChoiceInPosition: place.map { !$0.isOutOfPosition } ?? false)
                 basis = Evidence.weakest([parameters.scoutingWeakShare.evidence, parameters.ratingAbilityOffset.evidence]
                                          + outlookEvidence)!
             case .ageing:
@@ -460,6 +467,26 @@ struct WeakLineAverages {
             return self.ability.map { (parameters.ratingAbilityOffset.value + ability, $0) }
         }
         return self.rating.map { (rating, $0) }
+    }
+
+    /// A young player's reach set against the weak line at a slot, by `measure` at the goalkeeper's (as ability); at an
+    /// outfield slot by rating and by ability too, (offset + reach) against the outfield first choices' average (offset +
+    /// ability), since a rating scaled up to a reach can clear the line on a potential no first choice is near (the
+    /// owner's rule of 25 November 2026: a player of potential 72 was called a successor to one of ability 83). nil with
+    /// no average.
+    func reachAgainstLine(isGoalkeeper: Bool, reachRating: Double, reach: Double,
+                          parameters: EngineParameters) -> WeakLineReach? {
+        let offset = parameters.ratingAbilityOffset.value
+        guard let measured = measure(isGoalkeeper: isGoalkeeper, rating: reachRating, ability: reach,
+                                     parameters: parameters) else { return nil }
+        let byMeasure = Scouting.clearsWeakLine(measured.value, average: measured.average, parameters: parameters)
+        if isGoalkeeper { return WeakLineReach(reach: .ability(reach), clears: byMeasure, shortByAbility: nil) }
+        let byAbility = self.ability.map {
+            Scouting.clearsWeakLine(offset + reach, average: $0, parameters: parameters)
+        } ?? true
+        let short = byMeasure && !byAbility
+            ? self.ability.map { (reach: reach, line: parameters.scoutingWeakShare.value * $0 - offset) } : nil
+        return WeakLineReach(reach: .rating(reachRating), clears: byMeasure && byAbility, shortByAbility: short)
     }
 
     /// His gap under the average and what it was measured by; nil with no average.

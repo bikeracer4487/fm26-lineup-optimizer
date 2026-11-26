@@ -239,9 +239,16 @@ extension AdvisorText {
     }
 
     /// "His reach would rate about 112 at left back, which clears the line for a weak slot"; at the goalkeeper's slot,
-    /// "His reach of about 100 ability at goalkeeper clears the line for a weak slot".
+    /// "His reach of about 100 ability at goalkeeper clears the line for a weak slot"; and where the rating clears it and
+    /// his ability does not, "His reach would rate about 112 at left back, which clears the line for a weak slot by
+    /// rating, but his reach of about 72 ability is under it, about 83".
     static func reachAgainst(_ weakLine: WeakLineReach, at slot: SlotID) -> String {
         let position = PositionText.plain(slot)
+        if case .rating(let reach) = weakLine.reach, let short = weakLine.shortByAbility {
+            return "His reach would rate about \(Int(reach.rounded())) at \(position), which clears the line for a weak "
+                + "slot by rating, but his reach of about \(Int(short.reach.rounded())) ability is under it, about "
+                + "\(Int(short.line.rounded()))"
+        }
         switch weakLine.reach {
         case .rating(let reach):
             return "His reach would rate about \(Int(reach.rounded())) at \(position), which "

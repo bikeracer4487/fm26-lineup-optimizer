@@ -14,10 +14,25 @@ public enum ReachFigure: Equatable, Sendable {
     case ability(Double)
 }
 
-/// Whether his reach clears the weak line at a slot with no first choice to compare him with.
+/// Whether a young player's reach clears the weak line at a slot (`WeakLineAverages.reachAgainstLine`).
 public struct WeakLineReach: Equatable, Sendable {
     public let reach: ReachFigure
+    /// By rating and by ability at an outfield slot; by ability at the goalkeeper's.
     public let clears: Bool
+    /// At an outfield slot where his reach rating clears the line and his reach as ability does not: that reach and the
+    /// line as ability (`scoutingWeakShare` × the outfield first choices' average (offset + ability), less the offset).
+    public let shortByAbility: (reach: Double, line: Double)?
+
+    public init(reach: ReachFigure, clears: Bool, shortByAbility: (reach: Double, line: Double)?) {
+        self.reach = reach
+        self.clears = clears
+        self.shortByAbility = shortByAbility
+    }
+
+    public static func == (a: WeakLineReach, b: WeakLineReach) -> Bool {
+        a.reach == b.reach && a.clears == b.clears
+            && a.shortByAbility?.reach == b.shortByAbility?.reach && a.shortByAbility?.line == b.shortByAbility?.line
+    }
 }
 
 /// A pasted player at one slot he can play.
@@ -363,13 +378,9 @@ extension Scouting {
                     if betterSlots.contains(slot.slot), later.level == .couldPassFirst { answers.insert(.betterPlayerLater) }
                     var weakLine: WeakLineReach?
                     if later.firstChoice == nil, let assignment = assignments.first(where: { $0.slot == slot.slot }) {
-                        let isKeeper = isGoalkeeperSlot(assignment)
-                        if let measured = averages.measure(isGoalkeeper: isKeeper, rating: later.reachRating,
-                                                           ability: reach.reach, parameters: parameters) {
-                            weakLine = WeakLineReach(
-                                reach: isKeeper ? .ability(reach.reach) : .rating(later.reachRating),
-                                clears: clearsWeakLine(measured.value, average: measured.average, parameters: parameters))
-                        }
+                        weakLine = averages.reachAgainstLine(isGoalkeeper: isGoalkeeperSlot(assignment),
+                                                             reachRating: later.reachRating, reach: reach.reach,
+                                                             parameters: parameters)
                     }
                     return slot.with(later: later, against: weakLine, answers: answers)
                 }

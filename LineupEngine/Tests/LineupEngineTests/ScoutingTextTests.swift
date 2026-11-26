@@ -234,7 +234,7 @@ import Testing
                    clearsWeakLine: Bool? = nil, headline: Bool = true) -> Candidate {
         var slot = slot
         if let clearsWeakLine, let later = slot.later {
-            slot = slot.with(later: later, against: WeakLineReach(reach: .rating(112), clears: clearsWeakLine), answers: [])
+            slot = slot.with(later: later, against: WeakLineReach(reach: .rating(112), clears: clearsWeakLine, shortByAbility: nil), answers: [])
         }
         var outlook: Outlook?
         if young {
@@ -334,7 +334,7 @@ import Testing
     @Test func laterLinesWithNoFirstChoice() {
         let later = slotOutlook(level: nil, first: nil)
         func lines(_ slot: SlotID, _ reach: ReachFigure, clears: Bool) -> [String] {
-            let s = candidateSlot(slot, margin: nil, later: later, weakLine: WeakLineReach(reach: reach, clears: clears))
+            let s = candidateSlot(slot, margin: nil, later: later, weakLine: WeakLineReach(reach: reach, clears: clears, shortByAbility: nil))
             return AdvisorText.laterLines(candidate(s, young: true, level: nil))
         }
         let working = AdvisorText.reachWorking(estimate())
@@ -378,11 +378,11 @@ import Testing
         let open = SlotOutlook(slot: .D_R, rating: 50, reachRating: 112, isFirstChoice: false, firstChoice: nil,
                                secondChoice: nil, band: nil, pointsNeeded: nil, level: nil)
         let lines = AdvisorText.otherSlotLines(candidateSlot(.D_R, margin: nil, later: open,
-                                                             weakLine: WeakLineReach(reach: .rating(112), clears: true)))
+                                                             weakLine: WeakLineReach(reach: .rating(112), clears: true, shortByAbility: nil)))
         #expect(lines == ["Would start: nobody who stays can play at right back.",
                           "Later: his reach would rate about 112 at right back, which clears the line for a weak slot."])
         let keeper = AdvisorText.otherSlotLines(candidateSlot(.GK, margin: nil, later: open,
-                                                              weakLine: WeakLineReach(reach: .ability(100), clears: false)))
+                                                              weakLine: WeakLineReach(reach: .ability(100), clears: false, shortByAbility: nil)))
         #expect(keeper.last == "Later: his reach of about 100 ability at goalkeeper is still under the line for a weak slot.")
     }
 
@@ -407,5 +407,12 @@ import Testing
         #expect(AdvisorText.leftOutAlreadyYours(["Keegan Bloom"]) == "Left out, already yours: Keegan Bloom.")
         #expect(AdvisorText.everyPastedPlayerIsYours == "Every pasted player is already yours, so there is nobody to judge.")
         #expect(AdvisorText.playsNoSlot == "He can play no slot of this tactic.")
+    }
+
+    @Test func aReachThatClearsTheWeakLineByRatingAloneSaysSo() {
+        let short = WeakLineReach(reach: .rating(112), clears: false, shortByAbility: (reach: 72, line: 82.6))
+        #expect(AdvisorText.reachAgainst(short, at: .D_L)
+                == "His reach would rate about 112 at left back, which clears the line for a weak slot by rating, but his "
+                    + "reach of about 72 ability is under it, about 83")
     }
 }
