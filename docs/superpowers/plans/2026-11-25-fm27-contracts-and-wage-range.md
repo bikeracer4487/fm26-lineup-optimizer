@@ -71,7 +71,7 @@ every sentence in `AdvisorText+Contracts.swift`. The app's Core keeps what the o
   - `public static func morePillTitle(current: Screen?) -> String` — the current screen's `title` when it is in
     the menu, else `moreTitle`.
 
-- [ ] **Step 1: Write the failing tests** in `ScreenTests.swift`
+- [x] **Step 1: Write the failing tests** in `ScreenTests.swift`
 
 ```swift
 @Test func theRowAndTheMenuSplitTheScreens() {
@@ -87,22 +87,22 @@ every sentence in `AdvisorText+Contracts.swift`. The app's Core keeps what the o
 }
 ```
 
-- [ ] **Step 2: Run** `tools/test_app.sh --filter ScreenTests`. Expected: fails to build, `menuScreens` not found.
-- [ ] **Step 3: Implement** the five members on `Screen`. `isInMenu` is an exhaustive `switch`, no `default`.
-- [ ] **Step 4: Run** the same filter. Expected: pass.
-- [ ] **Step 5: Draw the row.** In `TopRow.pills`, `ForEach(Screen.rowScreens)` as today, then a `MorePill`: a
+- [x] **Step 2: Run** `tools/test_app.sh --filter ScreenTests`. Expected: fails to build, `menuScreens` not found.
+- [x] **Step 3: Implement** the five members on `Screen`. `isInMenu` is an exhaustive `switch`, no `default`.
+- [x] **Step 4: Run** the same filter. Expected: pass.
+- [x] **Step 5: Draw the row.** In `TopRow.pills`, `ForEach(Screen.rowScreens)` as today, then a `MorePill`: a
   SwiftUI `Menu` whose entries are `Screen.menuScreens` by `title` (each sets `navigation.screen`), whose label
   is drawn as `ScreenPill` draws its own (same shape, padding, typeface, current and plain colours) with
   `Screen.morePillTitle(current: navigation.screen)` and a small downward chevron after it, current style when
   `navigation.screen?.isInMenu == true`. Share the pill's drawing between `ScreenPill` and `MorePill`; do not
   copy it. The menu's own indicator is hidden so only the chevron shows. VoiceOver: label "More screens", value
   the current menu screen's title when one is shown.
-- [ ] **Step 6: Add a picture** to `main.swift`: the Rest screen drawn as `more-rest-…`, so the pill reads
+- [x] **Step 6: Add a picture** to `main.swift`: the Rest screen drawn as `more-rest-…`, so the pill reads
   "Rest". Run the picture command with `.build/pictures-contracts`; look at `squad-*` (pill reads "More") and
   `more-rest-*` (pill reads "Rest", drawn as current), light and dark, and at the smallest window.
   Expected: one row of eight pills where twelve fitted.
-- [ ] **Step 7: Run** `tools/test_app.sh`. Expected: all pass. Fix any test that counted twelve pills.
-- [ ] **Step 8: Commit.** "Move Tactics, Elevens, Rest, Offers and Settings into a More menu" with the owner's
+- [x] **Step 7: Run** `tools/test_app.sh`. Expected: all pass. Fix any test that counted twelve pills.
+- [x] **Step 8: Commit.** "Move Tactics, Elevens, Rest, Offers and Settings into a More menu" with the owner's
   reason (he visits them less often).
 
 ---
@@ -224,7 +224,7 @@ public enum WageRange {
   5. `.timesPresentWage(figure / present)` when a present wage above 0 is handed in.
 - `caution`: the first of `.overHighestWage`, `.overCeiling`, `.aboveTier` in the list, else nil.
 
-- [ ] **Step 1: Write the failing tests** in `WageRangeTests.swift`. Build wages directly as
+- [x] **Step 1: Write the failing tests** in `WageRangeTests.swift`. Build wages directly as
   `[WageTier: [PlayerWage]]`; no squad is needed except for `tierWages` (use the player helper the neighbouring
   `DevelopmentTests` uses). Cover, with these exact values:
 
@@ -256,11 +256,11 @@ public enum WageRange {
 //   EngineParameters.standard's give none
 ```
 
-- [ ] **Step 2: Run** `cd LineupEngine && swift test --filter WageRangeTests`. Expected: fails to build.
-- [ ] **Step 3: Implement** the types, the entry and the functions; add the problems to `FitnessModel.problems`.
-- [ ] **Step 4: Run** the filter, then `swift test --filter EngineParameters` (the size test: the entry is one
+- [x] **Step 2: Run** `cd LineupEngine && swift test --filter WageRangeTests`. Expected: fails to build.
+- [x] **Step 3: Implement** the types, the entry and the functions; add the problems to `FitnessModel.problems`.
+- [x] **Step 4: Run** the filter, then `swift test --filter EngineParameters` (the size test: the entry is one
   pointer, so it holds). Expected: pass.
-- [ ] **Step 5: Commit.** "Work out a wage range from what a tier is paid and the club's limits", saying that
+- [x] **Step 5: Commit.** "Work out a wage range from what a tier is paid and the club's limits", saying that
   the research found no formula and why the range is the squad's own.
 
 ---
@@ -345,7 +345,7 @@ public enum Contracts {
 - `approachableFrom` is `ends.adding(months: -approachMonths)`.
 - `basis` is the weakest of `wageRangeRules`' evidence and `removal`'s advice it read.
 
-- [ ] **Step 1: Write the failing tests.** `DayTests`: 31 Aug 2026 plus 6 months is 28 Feb 2027; 30 Jun 2027
+- [x] **Step 1: Write the failing tests.** `DayTests`: 31 Aug 2026 plus 6 months is 28 Feb 2027; 30 Jun 2027
   minus 6 is 30 Dec 2026; 15 Jan 2027 plus 12 is 15 Jan 2028. `ContractsTests`, on a squad built with the
   helper `RemovalTests` uses, today 25 Nov 2026:
 
@@ -370,13 +370,13 @@ public enum Contracts {
 //   two with the same day keep the order of `players`; shuffling `players` changes only that tie
 ```
 
-- [ ] **Step 2: Run** `swift test --filter ContractsTests` and `--filter DayTests`. Expected: fail to build.
-- [ ] **Step 3: Implement** `Day.adding(months:)`.
-- [ ] **Step 4: Extract** `Scouting.level` from `slotsToday` and call it there. Run `swift test --filter
+- [x] **Step 2: Run** `swift test --filter ContractsTests` and `--filter DayTests`. Expected: fail to build.
+- [x] **Step 3: Implement** `Day.adding(months:)`.
+- [x] **Step 4: Extract** `Scouting.level` from `slotsToday` and call it there. Run `swift test --filter
   Scouting`. Expected: every existing Scouting test passes unchanged.
-- [ ] **Step 5: Implement** `Contracts.part` and `Contracts.report`.
-- [ ] **Step 6: Run** both filters. Expected: pass.
-- [ ] **Step 7: Commit.** "List the players worth renewing who are in their last year".
+- [x] **Step 5: Implement** `Contracts.part` and `Contracts.report`.
+- [x] **Step 6: Run** both filters. Expected: pass.
+- [x] **Step 7: Commit.** "List the players worth renewing who are in their last year".
 
 ---
 
@@ -460,15 +460,15 @@ rest of your T". Money is `Display.wage(perWeek:money)`.
 
 `wageGuideLines` returns line 1, then line 2 when there is a ceiling, then line 3 when either limit is known.
 
-- [ ] **Step 1: Write the failing tests**: one `#expect` per row of the table, with the sentence as written
+- [x] **Step 1: Write the failing tests**: one `#expect` per row of the table, with the sentence as written
   there and a `MoneyStyle(symbol: "$", period: .monthly)`; plus Review Focus 1 (`leavesHimOut` gives "The rest
   of your first eleven are paid …" and, in a verdict, "… above anything the rest of your first eleven is
   paid"), Review Focus 2 (the "are all paid" row), and that a guide with no limits and no ceiling gives
   exactly one line.
-- [ ] **Step 2: Run** `swift test --filter AdvisorTextContractsTests`. Expected: fails to build.
-- [ ] **Step 3: Implement.** Every `switch` exhaustive, no `default`.
-- [ ] **Step 4: Run** the filter. Expected: pass.
-- [ ] **Step 5: Commit.** "Word the contracts list and the wage range in the engine".
+- [x] **Step 2: Run** `swift test --filter AdvisorTextContractsTests`. Expected: fails to build.
+- [x] **Step 3: Implement.** Every `switch` exhaustive, no `default`.
+- [x] **Step 4: Run** the filter. Expected: pass.
+- [x] **Step 5: Commit.** "Word the contracts list and the wage range in the engine".
 
 ---
 
@@ -525,7 +525,7 @@ extension AppModel {
 - The file: versioned JSON through `Store`; absent is no notice; unreadable gives a notice and a fresh start
   and is kept aside; a file with keys missing reads as the defaults.
 
-- [ ] **Step 1: Write the failing tests** (the model from the sample data in a temporary directory, as
+- [x] **Step 1: Write the failing tests** (the model from the sample data in a temporary directory, as
   `ScoutingHiddenTests` builds it):
 
 ```swift
@@ -544,10 +544,10 @@ extension AppModel {
 // state saved without the file opens with no notice and ContractsState(); a corrupt file gives a notice and is kept aside
 ```
 
-- [ ] **Step 2: Run** `tools/test_app.sh --filter ContractsStateTests`. Expected: fails to build.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** the filter, then `--filter StoreTests`. Expected: pass.
-- [ ] **Step 5: Commit.** "Keep the club's wage figures, the agents' figures and the players not being renewed".
+- [x] **Step 2: Run** `tools/test_app.sh --filter ContractsStateTests`. Expected: fails to build.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** the filter, then `--filter StoreTests`. Expected: pass.
+- [x] **Step 5: Commit.** "Keep the club's wage figures, the agents' figures and the players not being renewed".
 
 ---
 
@@ -629,7 +629,7 @@ extension AppModel {
   highest wage 9,000, in the capture's dollars a month; its 27 full-time players are paid $1,912 to $8,724) and one agent's figure typed above the highest wage.
   `modelWithContractsNoFigures` is the same with nothing typed.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
 
 ```swift
 // the sample: parts' headings in the engine's order and words; every row's player is in his last year or has no contract
@@ -644,13 +644,13 @@ extension AppModel {
 // moving today in the game one year on moves a player with an end day into the list without an import
 ```
 
-- [ ] **Step 2: Run** `tools/test_app.sh --filter ContractsPresentationTests`. Expected: fails to build.
-- [ ] **Step 3: Implement.** Add `.contracts` to every exhaustive `switch` over `Screen`; in `RootView` it may
+- [x] **Step 2: Run** `tools/test_app.sh --filter ContractsPresentationTests`. Expected: fails to build.
+- [x] **Step 3: Implement.** Add `.contracts` to every exhaustive `switch` over `Screen`; in `RootView` it may
   show an empty view until Task 7. The sheet and the count are worked out on every read, and the top row reads
   the count: time `contractsSheet` on the sample in the optimized test build, and if it takes more than about
   5 milliseconds keep it in `adviceCache` and clear it when `contracts`, the marks or today change.
-- [ ] **Step 4: Run** `tools/test_app.sh`. Expected: all pass.
-- [ ] **Step 5: Commit.** "Build the Contracts screen's rows and the count for its pill".
+- [x] **Step 4: Run** `tools/test_app.sh`. Expected: all pass.
+- [x] **Step 5: Commit.** "Build the Contracts screen's rows and the count for its pill".
 
 ---
 
@@ -681,18 +681,18 @@ extension AppModel {
    rows, each with "Show again".
 7. The evidence note.
 
-- [ ] **Step 1: Build the view** and wire `RootView`. `cd LineupApp && swift build`. Expected: no warnings.
-- [ ] **Step 2: Draw the pill's count.** The pill's text is `AppModel.pillTitle(screen, count:)` for
+- [x] **Step 1: Build the view** and wire `RootView`. `cd LineupApp && swift build`. Expected: no warnings.
+- [x] **Step 2: Draw the pill's count.** The pill's text is `AppModel.pillTitle(screen, count:)` for
   `.contracts` and the plain pill title for the rest; the count is part of the text, in the same face.
-- [ ] **Step 3: Add `drawContracts`** to `main.swift`, writing: `contracts-*` (the sample), `contracts-nofigures-*`,
+- [x] **Step 3: Add `drawContracts`** to `main.swift`, writing: `contracts-*` (the sample), `contracts-nofigures-*`,
   `contracts-empty-*` (the plain sample with today such that nobody is listed), `contracts-dismissed-open-*`,
   `contracts-notready-*`, `contracts-small-*` (the smallest window) and `contracts-tall-*` (tall enough for
   every part).
-- [ ] **Step 4: Run the picture command and look at every `contracts-*` picture**, light and dark, and at the
+- [x] **Step 4: Run the picture command and look at every `contracts-*` picture**, light and dark, and at the
   top row in each. Check: the count is on the pill and absent on `contracts-empty-*`; nothing is clipped at
   the smallest window; no line reads as a forecast; no id or slot code shows.
-- [ ] **Step 5: Run** `tools/test_app.sh`. Expected: all pass.
-- [ ] **Step 6: Commit.** "Show the Contracts screen and its count on the top row".
+- [x] **Step 5: Run** `tools/test_app.sh`. Expected: all pass.
+- [x] **Step 6: Commit.** "Show the Contracts screen and its count on the top row".
 
 ---
 
@@ -742,7 +742,7 @@ public let wageCaution: String?     // on the closed row
   other slots in the opened row, under the plain label "Wage".
 - Sample data: one of the sample candidates is given a wage above the top of his tier, so the caution shows.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
 
 ```swift
 // engine: a candidate headlined as cover at one slot who would start at another gets tier .firstEleven and that slot
@@ -759,14 +759,14 @@ public let wageCaution: String?     // on the closed row
 //   typing a limit changes the rows the next time they are read, with no paste and no replan
 ```
 
-- [ ] **Step 2: Run** both filters. Expected: fail to build.
-- [ ] **Step 3: Implement** the engine function, the row's two fields, the view's two places.
-- [ ] **Step 4: Run** `cd LineupEngine && swift test --filter WageRange` and `tools/test_app.sh --filter
+- [x] **Step 2: Run** both filters. Expected: fail to build.
+- [x] **Step 3: Implement** the engine function, the row's two fields, the view's two places.
+- [x] **Step 4: Run** `cd LineupEngine && swift test --filter WageRange` and `tools/test_app.sh --filter
   Scouting`. Expected: pass, the existing Scouting suites unchanged.
-- [ ] **Step 5: Draw** `scouting-candidates-*`, `scouting-candidates-open-*` and `scouting-candidates-small-*`
+- [x] **Step 5: Draw** `scouting-candidates-*`, `scouting-candidates-open-*` and `scouting-candidates-small-*`
   into `.build/pictures-contracts` and look at them: the caution on one closed row only, the "Wage" lines in
   the opened row, the evidence note's new last line.
-- [ ] **Step 6: Commit.** "Set a pasted player's wage beside what his tier is paid here".
+- [x] **Step 6: Commit.** "Set a pasted player's wage beside what his tier is paid here".
 
 ---
 
@@ -786,7 +786,7 @@ Second XI tables on the Elevens screen". It changes no advice.
   book's player with the row's key; nil for an unfilled slot. `ElevensPresentation.elevenColumns` gains "CA"
   between the player's column and the rating's, the name Player Removal's table uses.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
 
 ```swift
 // every filled row of the sample's first and second eleven has abilityText == String(his currentAbility)
@@ -795,15 +795,15 @@ Second XI tables on the Elevens screen". It changes no advice.
 // spokenText reads "left back, Evan Humphries, CA 92, 124.4": the ability after the name, said with its label
 ```
 
-- [ ] **Step 2: Run** `tools/test_app.sh --filter ElevensPresentationTests`. Expected: fails to build.
-- [ ] **Step 3: Implement** in Core, then draw the column in `ElevensScreen` between the name and the rating,
+- [x] **Step 2: Run** `tools/test_app.sh --filter ElevensPresentationTests`. Expected: fails to build.
+- [x] **Step 3: Implement** in Core, then draw the column in `ElevensScreen` between the name and the rating,
   in the body face like the other numbers, its width from `Theme.Elevens.abilityColumn`. The Depth view is
   left as it is.
-- [ ] **Step 4: Run** the filter. Expected: pass.
-- [ ] **Step 5: Draw** `elevens-*` into `.build/pictures-contracts` and look at the First XI and Second XI
+- [x] **Step 4: Run** the filter. Expected: pass.
+- [x] **Step 5: Draw** `elevens-*` into `.build/pictures-contracts` and look at the First XI and Second XI
   pictures, light and dark and at the smallest window: the column lines up under its heading and no name is
   cut short that was whole before.
-- [ ] **Step 6: Commit.** "Show current ability on the First XI and Second XI tables", with the owner's request.
+- [x] **Step 6: Commit.** "Show current ability on the First XI and Second XI tables", with the owner's request.
 
 ---
 
@@ -812,23 +812,23 @@ Second XI tables on the Elevens screen". It changes no advice.
 **Files:**
 - Modify: `CLAUDE.md`, this plan (closing sections), the spec (mark anything revised during the build)
 
-- [ ] **Step 1: Run** `cd LineupEngine && swift test` and `tools/test_app.sh`. Expected: every test passes
+- [x] **Step 1: Run** `cd LineupEngine && swift test` and `tools/test_app.sh`. Expected: every test passes
   with no warnings. Record the counts and times.
-- [ ] **Step 2: Run** `cd LineupApp && swift test` in the background (it takes eight to twelve minutes).
+- [x] **Step 2: Run** `cd LineupApp && swift test` in the background (it takes eight to twelve minutes).
   Expected: every test passes.
-- [ ] **Step 3: Run the engine on the capture** to see what the list and the ranges say on the owner's real
+- [x] **Step 3: Run the engine on the capture** to see what the list and the ranges say on the owner's real
   squad of 23 November: a scratch test or a few lines in a test marked for the purpose that print
   `Contracts.report` and each listed player's guide lines for `first-team-with-expiry`. Read the output for
   sense: who is listed, whether any range is "too few", whether the first eleven's range is below the
   second's. Record what it showed.
-- [ ] **Step 4: Write the plan's closing sections**: what the list and ranges showed on the capture, what
+- [x] **Step 4: Write the plan's closing sections**: what the list and ranges showed on the capture, what
   changed during the build, the limits left (the spec's section 10 as it stands), and the small faults left.
-- [ ] **Step 5: Update `CLAUDE.md`**: an entry for this plan in the list at the top, `Advisors` and
+- [x] **Step 5: Update `CLAUDE.md`**: an entry for this plan in the list at the top, `Advisors` and
   `LineupApp` notes for Contracts and the wage range in the style of the others, the nav row's new shape, the
   test counts, and the pictures checked in `.build/pictures-contracts`. Say that the install, the three
   figures typed against FMRTE, whether FMRTE shows them in its wage period, and the look of the menu and the
   buttons in a live window are left to the owner.
-- [ ] **Step 6: Commit.** "Record the Contracts screen, the wage range and the More menu".
+- [x] **Step 6: Commit.** "Record the Contracts screen, the wage range and the More menu".
 
 ## Calls this plan makes beyond the design
 
@@ -845,3 +845,183 @@ Each is the tool's and the owner's to change.
 6. The count is written in the pill's text ("Contracts 3").
 7. The command line prints no Contracts part.
 8. An agent's figure is typed in FMRTE's wage period, like every wage in the app.
+
+---
+
+## What the list and the ranges showed on the capture
+
+A scratch test, run and then removed, printed `Contracts.report` and each listed player's
+`AdvisorText.wageGuideLines` for the capture `first-team-with-expiry` (30 players, dollars a month) with the sample
+4-2-3-1, the club as Oxford City, Player Removal worked out on it with no history, nobody marked and nobody dismissed;
+with no wage figures typed, then with a wage budget of $130,000 a month and nothing else. Four days were read.
+
+- **The tiers' wages.** First eleven, 10 wages, $2,786 (Jack Thompson, the goalkeeper) to $5,735 (Caelan Avenell).
+  Second eleven, 10 wages, $1,912 (Mark Tomlinson, 17) to $7,483 (Iestyn Hughes, second choice at right back and the
+  best-paid player in the squad). Neither eleven, 3 wages: Rafiq Khaleel $3,269, Desmond Charles $3,741 and Ayman
+  Benarous $6,236, of whom Player Removal advises Khaleel and Benarous to leave.
+- **23 November 2026, the day the paste was taken: nobody is listed** ("Nobody you are keeping is in the last year of
+  his contract."). Every contract ends on 30 June 2028 or later. That day is the real one, not the game's: the
+  paste's months left (4 to 30 June 2028, 16 to 2029, 28 to 2030) put the game's date in February 2028.
+- **15 February 2028, about the game's date: seven listed**, all under "Other clubs can approach them now": Christian
+  N'Guessan, Ciaran O'Connor, Evan Humphries, Ewan Clark (out on loan at Hemel Hempstead, would make the second
+  eleven at left attacking midfield), Iestyn Hughes, Ruban Khan (out on loan at Tamworth, below cover at left
+  defensive midfield) and Zack Clarke; "2 other players in their last year are marked or advised to go." (Benarous
+  and Khaleel). So on the owner's own date the pill would read "Contracts 7".
+- **1 July 2027**: the same seven, under "In their last year", each "Other clubs can approach him from Thu 30 Dec."
+- **30 June 2028**: eighteen: the seven, now approachable on the day their contracts end, and eleven whose contracts end
+  on 30 June 2029 (Darnell Johnson, out on loan at Merthyr; Deago Nelson, Dejan Tetek, Jack Thompson, Josh Lewis, Kai
+  Payne, Kieran Petrie, Laolu Omobolaji, Mark Tomlinson, Sammy Henia-Kamau, Samuel Onyekachukwu), each "Other clubs
+  can approach him from Sat 30 Dec."
+- **No range read "too few".** Each listed player's tier had at least 3 other wages. The neither tier has exactly 3,
+  so a player of the club's own in neither eleven would have 2 left once his own is taken out, and no range; none was
+  listed. Ruban Khan, out on loan, is in no tier's wages and is priced from all three: "Your players in neither eleven
+  are paid $3,269 to $6,236 a month", a range read from two players the tool advises to move on (the design's call
+  12: the wages are the whole squad's, whoever is going).
+- **The first eleven's range is not below the second's at the top.** The second eleven's lower quartile ($2,661 with
+  the player himself out, $2,786 for a player out on loan) is below the first's ($3,296, or $3,614 for a first-choice
+  player in its lower half), but its top, Iestyn Hughes's $7,483, is above anything the first eleven is paid, and the
+  neither tier's top, Benarous's $6,236, is too. So with no budget typed, every listed second-eleven player but Hughes
+  is shown a range up to $7,483 a month, more than the first eleven's best-paid player. Hughes himself, his own wage
+  out, is shown $2,661 to $5,653.
+- **With a wage budget of $130,000 a month** a key player's share is $9,750 and a starter's $5,590 (line 2 on every
+  first-eleven row), both above the first eleven's top, so its range is unchanged. A backup's share, $3,510, caps
+  every second-eleven and neither range: "A reasonable range is $2,661 to $3,510 a month: from what the rest of your
+  second eleven are paid up to a backup's share of your wage budget (this tool's estimate)." That puts Hughes's
+  reasonable range at under half his present wage, a second-eleven range whose top is only a little above the first
+  eleven's lower quartile, and Ruban Khan at $3,269 to $3,510. The starter's share is below what N'Guessan ($5,653)
+  and Avenell ($5,735) are paid now. The $130,000 is the sample's figure, not the owner's budget, which is not known.
+- **Reads oddly, beyond the above.** Mark Tomlinson, 17 and second choice at right centre-back on $1,912, is shown
+  $3,028 to $7,483: his own wage is the lowest in the tier, so the whole range is above it. The months left beside each
+  player stay as pasted (4 and 16) whatever the date, since the list reads the end day; Player Removal still reads the
+  months.
+
+## What the count on the pill costs
+
+The top row reads `contractsCount` on every screen, so the advice is worked out after any change that clears it
+wherever the owner is. Measured in a scratch test, run in the optimized test build (`tools/test_app.sh`) and removed,
+ten runs each, setting and clearing a mark to sell on one listed player:
+
+| | `modelWithContracts` | the standard sample ("Contracts 22") |
+|---|---|---|
+| the change itself (`setMark`, which plans again) | 0.6 ms | 44 ms |
+| the first read of `contractsCount` after it | 6.4 ms | 5.6 ms |
+| of which the advice alone (`adviceState` after a replan) | 5.9 ms | 5.1 ms |
+| a second read with nothing changed | 0.62 ms | 0.38 ms |
+
+So the count costs about 6 ms once after each change, nearly all of it the advice, which an advisor screen or Fixtures
+would have worked out anyway, and about half a millisecond on each later drawing of the top row, since the sheet is
+built again on every read and not kept. Nobody would notice either beside a plan. The release app was not built or
+installed for this (`tools/build_app.sh` replaces the owner's app), so the time in it is not measured.
+
+## The test runs at close-out
+
+On 26 November 2026, with no build warnings: `cd LineupEngine && swift test`, 1,785 tests in 69 suites in 59 seconds;
+`tools/test_app.sh`, 1,152 tests in 67 suites in 48 seconds; `cd LineupApp && swift test`, unoptimized, the same
+1,152 in 524 seconds.
+
+## What changed during the build
+
+- **The More pill's pictures are `rest-more-*` and `rest-more-small-*`**, not `more-rest-*`: the picture run names
+  files by screen, then variant. `ScreenPill` and `MorePill` share one `PillLabel`; `Theme.Pill.chevronGap` was added.
+  At the default window the row is one line; at the smallest it wraps to two rows and fits.
+- **The range's arithmetic.** A budget share is rounded to a millionth (`WageRange.share(of:_:)`), so 20,000 × 0.043
+  is 860 and not 859.999…, which the plan's exact figures needed. With `fewestWages` at 1 and one wage, the lower
+  half is empty: the lower quartile is that wage (found by Task 2's review; it crashed). `WageRangeRules` and
+  `WageLimits` have public memberwise inits, since Core builds them.
+- **Who is listed.** The plan's order example ("30 Apr before 31 May" in one part, today 25 November 2026) was wrong,
+  since 31 May 2027 is past the approach line of 25 May 2027; the tests use 31 Mar before 30 Apr, and 31 May before 30
+  Jun. `Contracts.report` throws `PlanError.badParameters` while the parameters have problems; `ContractEntry.action`
+  is nil also for a player of the club's own whom Player Removal gave no advice; the open second place is read by an
+  internal `Scouting.secondPlaceIsOpen(at:in:)`.
+- **The sentences.** Wordings for cases the plan's table lacked: an "up to" set by the highest wage with no squad
+  range ("Up to X, the most you can offer one player; too few of …"), a first-eleven ceiling with no starter's share
+  (the starter's clause left out) and the under-tier verdict with his wage left out ("under what most of the rest of
+  your T are paid"). After Task 4's review the neither tier's above-tier verdict says "are paid", and the two ends of a
+  range are compared as written, so ends that read alike are written once: "are all paid $3,269 a month" for the
+  tier, "A reasonable wage is about …" for a cap, and "are all paid, $3,269 a month" inside an "up to" line.
+- **The Contracts state.** A "Not renewing" or "Show again" that changes nothing does not start the half-second clock.
+- **The sample** (`SampleData.modelWithContracts`, `modelWithContractsNoFigures`) is the capture with today at 30 June
+  2028, the only day that puts players in both of the first two parts with no contract already past its end: Iestyn
+  Hughes is made out of contract (Dejan Tetek was tried first, but Player Removal then advises releasing him, so he
+  would be left out as going), Dejan Tetek is dismissed, and Evan Humphries's agent asks $9,500 a month. The standard
+  sample, the `first-team` capture of 13 November 2026 with months left only, shows "Contracts 22".
+- **The rows' cautions.** The plan's interface could not tell the view which lines take the caution style, so
+  `ContractRow` gained `timingIsCaution` (the approachable part) and `cautionVerdictLine` (the over-the-highest-wage
+  sentence, taken out of `verdictLines` so it is shown once), with tests. `contracts-empty-*` is drawn by setting
+  every listed player aside, since no date empties either sample: the standard sample has no end days and the
+  contracts sample always lists Iestyn Hughes, who has no contract. The sheet is not kept: it took about 0.5 ms a
+  read in Task 6. Offers' `FieldLabel` is shared with the screen, and `Theme.Contracts` takes Offers' measures.
+- **Scouting's wage lines.** `candidatesSheet(_:order:for:)` takes the tactic shown, with a default, and the
+  candidates' tier wages come in a `CandidateWageBasis` worked out each time the rows are built, so a typed limit
+  shows at the next read with no paste or replan. The closed row's caution is a line of its own labelled "Wage" after
+  the Cautions line, and is not repeated once the row is opened, where the same sentence is among the wage lines; the
+  row's tooltip is now "Show more", since a row can open with wage lines and no other slots. The sample's Owen Pryce
+  is paid £1,500 a week against the sample squad's highest of £800. With wage rules that have problems the rows carry
+  no wage lines, and the advice reports the problems.
+- **CA on the Elevens tables** (Task 9, added at the owner's request when he approved the plan): `Theme.Elevens
+  .abilityColumn` is 48 points, and VoiceOver reads "left back, Evan Humphries, CA 92, 124.4". Depth is unchanged.
+- Several tasks wrote their tests with or after the code and saw no failing run first (Tasks 1, 2, 4 and 9; Task 6
+  put its sources aside to see one).
+- The plan's calls beyond the design all stood.
+
+## Limits left
+
+The design's section 10, as built:
+
+- The range is what his club pays now. After a promotion it runs low until wages are renewed or the budget is typed
+  again; the ceiling moves with the budget, the squad's range does not.
+- A tier has at most eleven wages, fewer once youth contracts and the player himself are left out; on the capture the
+  neither tier has three, so a player of the club's own in it would get no range.
+- Whether FMRTE shows the club's wage figures in the period of its wage setting is not known (the same doubt as on
+  Offers).
+- Whether the wage budget also covers youth and non-playing staff is not known, so the shares may be generous. On the
+  capture with the sample's budget the backup's share is the tighter worry: it caps the second eleven well below what
+  some of it is paid.
+- Without the expiry-date column the last year is counted from months left at the import, rounded down by FMRTE.
+- A player out on loan is listed without Player Removal's judgement of him.
+- The count on the pill reads the advice, so the advice is worked out whenever the top row is drawn after a change;
+  measured above at about 6 ms once after a change in the optimized test build, not in the release app.
+
+Also left:
+
+- The tier's wages come from whoever is in it, those advised to leave included, so a range can rest on players the
+  tool says to move on (Ruban Khan's, above), and one well-paid second choice lifts the second eleven's top above the
+  first's.
+- The open menu, its arrow keys, and the look of "Not renewing", "Show again", "Go to Player Removal" and the fields
+  in a live window are not checked: the pictures draw an inactive window. The Elevens tables at the narrow and
+  smallest windows show only the pitch in a picture.
+
+## Small faults left
+
+Found by the task reviews and deferred; the whole-branch review that follows decides them.
+
+- The More pill has an empty VoiceOver value while a row screen is shown. The comment on `Screen` still says the top
+  row lists the screens in their order.
+- `WageRange.share(of:_:)` rounds to a millionth, beyond the plan.
+- `ContractsReport.basis` takes in the advice of players the gate or the going check then leaves out. No test pins a
+  player gated out who is also marked (not counted as going), nor a player out on loan with no contract being gated.
+- Retyping an unchanged wage limit on a later day leaves `limitsEntered` at the old day, while an agent's figure
+  retyped takes the new day. An action that changes nothing does not start the clock, where Scouting's may. No test
+  drops entries with `imported: nil`, or clears `contractsAbsentFrom` for a player who comes back.
+- A test hard-codes 130_000 × 0.027 in place of reading the rules. A listed player missing from the book would get an
+  empty details line (`?? ""`, a silent default; it cannot happen today). Ready advice with no primary tactic gives
+  `.notReady(.ready(…))`, probably unreachable. `contractsCount` builds the sheet again, so the screen and the pill
+  each build it. `ContractsSheetState.failed` has no test and no data reaches it today.
+- The dismissed rows are indented with `Theme.Scouting.disclosureColumn`, not a Contracts measure of their own. A
+  "Not renewing" heading stands over "1 player you are not renewing". The parts are listed by heading, and putting
+  `.overHighestWage` first relies on the engine's order without a comment saying so.
+- "Out on loan at …" is said twice, once at the end of the details line and again at the start of the engine's
+  standing line; the controller's ruling is to drop it from the details line.
+- On Scouting, `try?` on `candidateGuide` gives no wage lines when the wage rules have problems, with no test; the
+  opened row shows the flagged sentence in plain ink, not the caution style; no test covers `overHighestWage` or
+  `overCeiling` on a candidate's wage.
+- On Elevens, the `spokenText` test builds its expectation from the row's own fields, the unfilled-slot loop does not
+  check its list is not empty, and `elevensAbilities` and `elevensSquads` are near-identical builders.
+
+## Left to the owner
+
+- The install (`tools/build_app.sh`).
+- The three club figures typed against FMRTE's club Finances page, and whether FMRTE shows them in its wage period.
+- Whether the list and the ranges read right on his own save and date, where the capture suggests seven players and
+  ranges that one well-paid second choice stretches.
+- The look of the More menu, the count on the pill and the buttons in a live window.

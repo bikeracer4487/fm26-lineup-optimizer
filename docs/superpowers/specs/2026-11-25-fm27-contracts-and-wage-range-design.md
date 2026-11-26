@@ -29,7 +29,8 @@ approach below on 25 November 2026.
 
 ## Goals
 
-- A top row of nine pills and a "More" pill, on one line wherever twelve fit today.
+- A top row of eight pills and a "More" pill, on one line wherever twelve fit today (revised during the build: the
+  first text said nine, against the eight that section 1 lists).
 - A count on the Contracts pill that he sees from every screen.
 - A list of the players worth renewing, soonest first, each with the facts he weighs a renewal on.
 - For each of them and for each pasted candidate, a range that says where it comes from, and a plain verdict on
@@ -159,7 +160,8 @@ left out. Players on loan here are left out (the
 wage pasted is not the owner's cost). With fewer than 3 such wages the squad gives no range for the tier.
 
 **The range** is from the lower quartile of the tier's wages (the median of the lower half, the middle value
-left out of both halves when the count is odd) to the highest of them.
+left out of both halves when the count is odd) to the highest of them. With a single wage, possible only when the
+fewest wages is set to 1, the lower quartile is that wage (revised during the build: the lower half is then empty).
 
 **The ceiling**, when the wage budget is typed, is the tier's share of it: 7.5% for the first eleven, 2.7% for
 the second eleven and for neither. For the first eleven the line also gives 4.3%, since the rule keeps 7.5%
@@ -249,7 +251,8 @@ figure typed. Pictures, looked at before the screen is called done: the top row 
 "More" pill naming a menu screen; Contracts empty (nobody in his last year), filled, with no figures typed,
 with a figure that cannot be met, with "Not renewing" open, at the smallest window; Scouting's candidates with
 the wage line on a closed row and in an opened one. The open menu and the look of the buttons are left to the
-owner in the running app.
+owner in the running app. (Revised during the build: no date empties either sample, so the empty picture is drawn
+with every listed player set aside.)
 
 ## 10. Limits to say in the plan's closing sections
 
