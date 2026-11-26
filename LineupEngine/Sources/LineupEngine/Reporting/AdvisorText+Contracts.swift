@@ -78,9 +78,19 @@ extension AdvisorText {
         guide.tier == .firstEleven ? "a key player's share" : "a backup's share"
     }
 
+    /// What the tier is paid, written once when the two ends are written alike.
     private static func paidText(_ paid: PaidRange, _ money: MoneyStyle) -> String {
-        "\(Display.wageAmount(perWeek: paid.lowerQuartile, money)) to \(Display.wage(perWeek: paid.highest, money))"
+        sameText(paid.lowerQuartile, paid.highest, money) ? Display.wage(perWeek: paid.highest, money)
+            : "\(Display.wageAmount(perWeek: paid.lowerQuartile, money)) to \(Display.wage(perWeek: paid.highest, money))"
     }
+
+    /// True when two weekly amounts are written as the same amount in this style.
+    private static func sameText(_ a: Double, _ b: Double, _ money: MoneyStyle) -> Bool {
+        Display.wageAmount(perWeek: a, money) == Display.wageAmount(perWeek: b, money)
+    }
+
+    /// "is" or "are" after "your <tier>" in "above anything your second eleven is paid".
+    private static func isPaid(_ guide: WageGuide) -> String { guide.tier == .neither ? "are paid" : "is paid" }
 
     private static func rangeText(low: Double, high: Double, _ money: MoneyStyle) -> String {
         "\(Display.wageAmount(perWeek: low, money)) to \(Display.wage(perWeek: high, money))"
@@ -95,11 +105,15 @@ extension AdvisorText {
         case .range(let low, let high, let setBy):
             switch setBy {
             case .tierHighest:
-                if low == high {
+                if sameText(low, high, money) {
                     lines.append("\(capitalised(who)) are all paid \(Display.wage(perWeek: high, money)) (this tool's estimate of a reasonable wage).")
                 } else {
                     lines.append("\(capitalised(who)) are paid \(rangeText(low: low, high: high, money)) (this tool's estimate of a reasonable range).")
                 }
+            case .ceiling where sameText(low, high, money):
+                lines.append("A reasonable wage is about \(Display.wage(perWeek: high, money)): what \(who) are paid at the low end is also \(shareName(guide)) of your wage budget \(estimate).")
+            case .highestWage where sameText(low, high, money):
+                lines.append("A reasonable wage is about \(Display.wage(perWeek: high, money)): what \(who) are paid at the low end is also the most you can offer one player \(estimate).")
             case .ceiling:
                 lines.append("A reasonable range is \(rangeText(low: low, high: high, money)): from what \(who) are paid up to \(shareName(guide)) of your wage budget \(estimate).")
             case .highestWage:
@@ -110,9 +124,9 @@ extension AdvisorText {
             if let paid = guide.paid {
                 switch setBy {
                 case .ceiling, .tierHighest:
-                    lines.append("Up to \(figure): \(shareName(guide)) of your wage budget is below what \(who) are paid, \(paidText(paid, money)) \(estimate).")
+                    lines.append("Up to \(figure): \(shareName(guide)) of your wage budget is below what \(who) are \(sameText(paid.lowerQuartile, paid.highest, money) ? "all " : "")paid, \(paidText(paid, money)) \(estimate).")
                 case .highestWage:
-                    lines.append("Up to \(figure): the most you can offer one player is below what \(who) are paid, \(paidText(paid, money)).")
+                    lines.append("Up to \(figure): the most you can offer one player is below what \(who) are \(sameText(paid.lowerQuartile, paid.highest, money) ? "all " : "")paid, \(paidText(paid, money)).")
                 }
             } else {
                 let source: String
@@ -162,7 +176,7 @@ extension AdvisorText {
         case .overCeiling(let ceiling):
             return "\(subject) is above \(shareName(guide)) of your wage budget, \(Display.wage(perWeek: ceiling, money)) (this tool's estimate)."
         case .aboveTier(let highest):
-            return "\(subject) is above anything \(who) is paid; the highest is \(Display.wage(perWeek: highest, money))."
+            return "\(subject) is above anything \(who) \(isPaid(guide)); the highest is \(Display.wage(perWeek: highest, money))."
         case .withinTier:
             return "\(subject) is within what \(who) are paid."
         case .underTier:
