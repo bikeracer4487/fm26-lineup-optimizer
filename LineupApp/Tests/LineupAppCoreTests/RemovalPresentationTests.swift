@@ -479,7 +479,7 @@ import Testing
         let best = slot.map { slot in
             SlotOutlook(slot: slot, rating: 50, reachRating: 75, isFirstChoice: false,
                         firstChoice: Rival(player: PlayerID(key: "smith"), name: "Smith", age: 31, rating: 70,
-                                           compared: 70, isAgeNamed: true),
+                                           compared: 70, ability: 70, comparedAbility: 70, isAgeNamed: true),
                         secondChoice: nil, band: .onCourse, pointsNeeded: 14, level: .couldPassFirst)
         }
         // Slots he is first choice at, then his best, as given: the tests give them in the tactic's order.

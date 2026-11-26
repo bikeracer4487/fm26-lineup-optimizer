@@ -82,7 +82,10 @@ extension AdvisorText {
     /// Where he stands at his best slot: "Needs about 14 more ability points to match Smith at left back; this tool
     /// expects about 12 a season. On course.", with " Smith is 31." for a first choice the engine names with his age
     /// (`Rival.isAgeNamed`) and " Smith is 20 and
-    /// still growing." for one compared at his own reach. Begins "First choice at striker." at a slot he is first choice
+    /// still growing." for one compared at his own reach. It then says why he cannot pass the first choice when his
+    /// ability decides it (`fallsShortLine`: " His potential, 72, is below Matthew Lusty's ability, 83."), or else, when
+    /// he would pass the first choice but a second choice who overtakes them both stays ahead of him, " Billie Tourle is
+    /// 17 and expected to pass Matthew Lusty there first." Begins "First choice at striker." at a slot he is first choice
     /// at; when that slot's words are his best slot's (two defensive midfield slots), that is all it says. nil when he
     /// is first choice nowhere and has no slot with a first choice to pass.
     public static func standing(_ outlook: Outlook, names: (SlotID) -> String) -> String? {
@@ -100,9 +103,30 @@ extension AdvisorText {
             } else if first.isAgeNamed {
                 sentence += " \(first.name) is \(first.age)."
             }
+            if let short = fallsShortLine(outlook.estimate, of: first) {
+                sentence += " " + short
+            } else if let second = best.secondChoice, Development.overtakes(second, first),
+                      best.reachRating >= first.compared, best.level != .couldPassFirst {
+                // He would pass the first choice, but the second choice gets there first and stays ahead of him.
+                sentence += " \(second.name) is \(second.age) and expected to pass \(first.name) there first."
+            }
             parts.append(sentence)
         }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
+
+    /// Why his reach cannot pass `rival` whatever the ratings say, when it cannot (`Development.fallsShort`): "His
+    /// potential, 72, is below Matthew Lusty's ability, 83.", with "His reach, about 68," when his reach stops short of
+    /// his potential, and "below the ability Smith could reach, about 95" for a rival who is developing too.
+    static func fallsShortLine(_ estimate: ReachEstimate, of rival: Rival) -> String? {
+        guard Development.fallsShort(estimate.reach, of: rival) else { return nil }
+        let his = estimate.reachesPotential || Double(estimate.potential) <= estimate.reach
+            ? "His potential, \(estimate.potential),"
+            : "His reach, about \(whole(estimate.reach)),"
+        let theirs = rival.comparedAbility > Double(rival.ability)
+            ? "the ability \(rival.name) could reach, about \(whole(rival.comparedAbility))"
+            : "\(rival.name)'s ability, \(rival.ability)"
+        return "\(his) is below \(theirs)."
     }
 
     /// "He has started 1 of the last 9 matches here."; when they are not counted, or none is confirmed, that too few are.

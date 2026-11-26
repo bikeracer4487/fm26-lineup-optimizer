@@ -426,7 +426,7 @@ import Testing
 
     /// The first choice a young player is compared with: Smith, 30, rated `rating`.
     func smith(rating: Double = 104) -> Rival {
-        Rival(player: PlayerID(key: "smith"), name: "Smith", age: 30, rating: rating, compared: rating, isAgeNamed: true)
+        Rival(player: PlayerID(key: "smith"), name: "Smith", age: 30, rating: rating, compared: rating, ability: 70, comparedAbility: 70, isAgeNamed: true)
     }
 
     /// His outlook at `slot`, rated `rating` there, compared with Smith with the band given; as first choice there, with

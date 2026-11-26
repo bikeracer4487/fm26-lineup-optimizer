@@ -33,8 +33,11 @@ import Testing
                               club: club, loanedTo: loanedTo)
     }
 
-    /// A player of 28 who no longer grows: he is compared at his rating today.
-    func veteran(_ name: String) -> Player { player(name, age: 28, current: 120, potential: 120) }
+    /// A player of 28 who no longer grows: he is compared at his rating today and at his ability, `ability`. Below a
+    /// young player's reach, only the ratings decide.
+    func veteran(_ name: String, ability: Int = 120) -> Player {
+        player(name, age: 28, current: ability, potential: ability)
+    }
 
     func tiers(first: [SlotID: Player] = [:], second: [SlotID: Player] = [:],
                ratings: [(Player, SlotID, Double)] = []) -> SquadTiers {
@@ -78,7 +81,8 @@ import Testing
     // MARK: Levels
 
     @Test func eachLevelAtAndBesideItsBoundary() throws {
-        let first = veteran("First Choice"), second = veteran("Second Choice")
+        // Of ability 30, so the ratings alone decide.
+        let first = veteran("First Choice", ability: 30), second = veteran("Second Choice", ability: 30)
         // Rated 50 at an ability of 30, so his reach rating is (70 + his potential) ÷ 2: the first choice's 100 at 130,
         // the second's 90 at 110, the bar of 80 at 90.
         let cases: [(potential: Int, level: ReachLevel)] = [
@@ -97,9 +101,9 @@ import Testing
         }
         let row = try #require(slot(found[young[0].id], .D_L))
         #expect(row.rating == 50 && !row.isFirstChoice)
-        #expect(row.firstChoice == Rival(player: first.id, name: "First Choice", age: 28, rating: 100, compared: 100,
+        #expect(row.firstChoice == Rival(player: first.id, name: "First Choice", age: 28, rating: 100, compared: 100, ability: 30, comparedAbility: 30,
                                          isAgeNamed: false))
-        #expect(row.secondChoice == Rival(player: second.id, name: "Second Choice", age: 28, rating: 90, compared: 90,
+        #expect(row.secondChoice == Rival(player: second.id, name: "Second Choice", age: 28, rating: 90, compared: 90, ability: 30, comparedAbility: 30,
                                           isAgeNamed: false))
         #expect(found[young[0].id]?.best == row)
         #expect(found[young[0].id]?.average == nil)
@@ -119,9 +123,10 @@ import Testing
     }
 
     /// The levels of two players of `age` rated 50 at an ability of 30 at left back, with potentials `below` and `at`,
-    /// behind a first choice rated 100 and, when `secondRating` is given, a second choice rated that.
+    /// behind a first choice rated 100 and, when `secondRating` is given, a second choice rated that, both of ability 30,
+    /// so the ratings alone decide.
     func levels(age: Int, below: Int, at: Int, secondRating: Double?) throws -> (below: SlotOutlook?, at: SlotOutlook?) {
-        let first = veteran("First Choice"), second = veteran("Second Choice")
+        let first = veteran("First Choice", ability: 30), second = veteran("Second Choice", ability: 30)
         let low = player("Below", age: age, current: 30, potential: below, slots: [.D_L])
         let level = player("At", age: age, current: 30, potential: at, slots: [.D_L])
         var ratings: [(Player, SlotID, Double)] = [(first, .D_L, 100), (low, .D_L, 50), (level, .D_L, 50)]
@@ -288,7 +293,8 @@ import Testing
 
     @Test func eachBand() throws {
         func band(_ young: Player, rating: Double, firstChoiceRating: Double) throws -> ReachBand? {
-            let first = veteran("First Choice")
+            // Of ability 30, so the ratings alone decide.
+            let first = veteran("First Choice", ability: 30)
             let found = try outlooks([first, young], tiers(first: [.D_L: first],
                                                            ratings: [(first, .D_L, firstChoiceRating), (young, .D_L, rating)]))
             return slot(found[young.id], .D_L)?.band
@@ -602,7 +608,7 @@ import Testing
 
     @Test func aFirstChoiceIsNamedWithHisAgeFromTheParameter() throws {
         func standing(firstAge: Int, _ q: EngineParameters? = nil) throws -> (named: Bool?, words: String?) {
-            var first = veteran("First Choice")
+            var first = veteran("First Choice", ability: 30)
             first.age = firstAge
             let young = player("Young", slots: [.D_L])
             let found = try outlooks([first, young], tiers(first: [.D_L: first], ratings: [(first, .D_L, 90), (young, .D_L, 80)]),
@@ -617,5 +623,124 @@ import Testing
         q.firstChoiceAgeNamedFrom = Parameter(31, .derived, source: "test")
         #expect(try standing(firstAge: 30, q).named == false)
         #expect(try standing(firstAge: 31, q).words?.hasSuffix(" First Choice is 31.") == true)
+    }
+
+    // MARK: A reach below a rival's ability (the owner's rule of 25 November 2026)
+
+    /// The young player's outlook at left back, rated 50 at an ability of 30 with `potential`, aged 18, behind `first`
+    /// rated `firstRating` and, when given, `second` rated `secondRating`. His reach rating is (70 + potential) ÷ 2.
+    func outlookBehind(potential: Int, first: Player, firstRating: Double, second: Player? = nil,
+                       secondRating: Double = 0) throws -> SlotOutlook {
+        let young = player("Young", age: 18, current: 30, potential: potential, slots: [.D_L])
+        var ratings: [(Player, SlotID, Double)] = [(first, .D_L, firstRating), (young, .D_L, 50)]
+        var seconds: [SlotID: Player] = [:]
+        if let second {
+            ratings.append((second, .D_L, secondRating))
+            seconds[.D_L] = second
+        }
+        let found = try outlooks([first, young] + (second.map { [$0] } ?? []),
+                                 tiers(first: [.D_L: first], second: seconds, ratings: ratings))
+        return try #require(slot(found[young.id], .D_L))
+    }
+
+    @Test func aReachBelowTheFirstChoicesAbilityDoesNotPassHimWhateverTheRatings() throws {
+        // A reach rating of 80 against a first choice rated 60: the ratings say he passes.
+        let level = try outlookBehind(potential: 90, first: veteran("First Choice", ability: 90), firstRating: 60)
+        #expect(level.reachRating == 80 && level.firstChoice?.comparedAbility == 90)
+        #expect(level.level == .couldPassFirst && level.band != .notExpected)
+        // A first choice one point of ability above his potential: not passed, and not expected to be.
+        let short = try outlookBehind(potential: 90, first: veteran("First Choice", ability: 91), firstRating: 60)
+        #expect(short.reachRating == 80 && short.firstChoice?.ability == 91)
+        #expect(short.level == .couldMakeSecond && short.band == .notExpected)
+    }
+
+    @Test func aReachBelowTheSecondChoicesAbilityDoesNotMakeTheSecondEleven() throws {
+        let first = veteran("First Choice", ability: 95)
+        // Above the bar (48) and the second choice's rating of 55 either way.
+        let weak = try outlookBehind(potential: 90, first: first, firstRating: 60,
+                                     second: veteran("Second Choice", ability: 90), secondRating: 55)
+        #expect(weak.level == .couldMakeSecond)
+        let strong = try outlookBehind(potential: 90, first: first, firstRating: 60,
+                                       second: veteran("Second Choice", ability: 91), secondRating: 55)
+        #expect(strong.level == .couldBeCover)
+    }
+
+    @Test func aRivalWhoIsDevelopingIsComparedAtTheAbilityHeCouldReach() throws {
+        // Ability 50 today, a reach of 95: the young player's potential of 90 falls short of where he could get.
+        let first = player("First Choice", age: 20, current: 50, potential: 95)
+        let found = try outlookBehind(potential: 90, first: first, firstRating: 40)
+        #expect(found.firstChoice?.ability == 50 && found.firstChoice?.comparedAbility == 95)
+        #expect(try #require(found.firstChoice?.compared) < found.reachRating)
+        #expect(found.level == .couldMakeSecond && found.band == .notExpected)
+        // With a reach of 90 he is level, and the ratings decide.
+        let level = try outlookBehind(potential: 90, first: player("First Choice", age: 20, current: 50, potential: 90),
+                                      firstRating: 40)
+        #expect(level.level == .couldPassFirst && level.band != .notExpected)
+    }
+
+    @Test func aPotentialBelowTheFirstChoicesAbilityIsNoSuccessorWhenThatAbilityIsAhead() throws {
+        // As on the owner's squad: Calvin Milburn, 18, ability 54 and potential 72, rated 111.1 at striker behind Matthew
+        // Lusty, 25, ability 83, rated 125.0. With the captured offset of 70 his reach rates 127.3, past Lusty.
+        let lusty = player("Matthew Lusty", age: 25, current: 83, potential: 92, slots: [.ST_C])
+        let milburn = player("Calvin Milburn", age: 18, current: 54, potential: 72, slots: [.ST_C])
+        let found = try outlooks([lusty, milburn], tiers(first: [.ST_C: lusty],
+                                                         ratings: [(lusty, .ST_C, 125.0), (milburn, .ST_C, 111.1)]))
+        let outlook = try #require(found[milburn.id])
+        let striker = try #require(slot(outlook, .ST_C))
+        #expect(striker.reachRating > 125)
+        #expect(striker.level != .couldPassFirst && striker.band == .notExpected)
+        #expect(outlook.level == .couldMakeSecond)
+    }
+
+    // MARK: A second choice who overtakes the first
+
+    /// A second choice of 18 at ability 30 and potential 120, rated 40: compared at 40 × 190 ÷ 100 = 76, above a first
+    /// choice of ability 30 rated 60, so he overtakes him.
+    func risingSecond() -> Player { player("Second Choice", age: 18, current: 30, potential: 120) }
+
+    @Test func aSecondChoiceOvertakesWhenHisReachPassesTheFirstChoicesByRatingAndAbility() throws {
+        let first = veteran("First Choice", ability: 30)
+        let found = try outlookBehind(potential: 120, first: first, firstRating: 60, second: risingSecond(), secondRating: 40)
+        let second = try #require(found.secondChoice), firstChoice = try #require(found.firstChoice)
+        #expect(second.compared == 76 && second.comparedAbility == 120)
+        #expect(Development.overtakes(second, firstChoice))
+        // Not when his reach rates under the first choice's, nor when his reach falls short of the first choice's
+        // ability, nor with no second choice.
+        let behind = try outlookBehind(potential: 120, first: first, firstRating: 80, second: risingSecond(), secondRating: 40)
+        let behindSecond = try #require(behind.secondChoice), behindFirst = try #require(behind.firstChoice)
+        #expect(!Development.overtakes(behindSecond, behindFirst))
+        let able = try outlookBehind(potential: 120, first: veteran("First Choice", ability: 121), firstRating: 60,
+                                     second: risingSecond(), secondRating: 40)
+        let ableSecond = try #require(able.secondChoice), ableFirst = try #require(able.firstChoice)
+        #expect(!Development.overtakes(ableSecond, ableFirst))
+        #expect(!Development.overtakes(nil, firstChoice))
+    }
+
+    @Test func passingTheFirstChoiceBehindASecondChoiceWhoOvertakesHimIsTheSecondEleven() throws {
+        let first = veteran("First Choice", ability: 30)
+        // A reach rating of 80, past the first choice's 60 and the second's 76, but a potential of 90 below the second
+        // choice's reach of 120.
+        let behind = try outlookBehind(potential: 90, first: first, firstRating: 60, second: risingSecond(), secondRating: 40)
+        #expect(behind.reachRating == 80)
+        #expect(behind.level == .couldMakeSecond && behind.band == .notExpected)
+        // A potential of 120 passes both.
+        let both = try outlookBehind(potential: 120, first: first, firstRating: 60, second: risingSecond(), secondRating: 40)
+        #expect(both.level == .couldPassFirst && both.band != .notExpected)
+        // A second choice who stays below the first choice changes nothing: the same player could pass the first.
+        let steady = try outlookBehind(potential: 90, first: first, firstRating: 60,
+                                       second: veteran("Second Choice", ability: 30), secondRating: 55)
+        #expect(steady.level == .couldPassFirst && steady.band != .notExpected)
+    }
+
+    @Test func aReachThatRatesBelowAnOvertakingSecondChoiceIsNotExpected() throws {
+        // A potential of 120 matches the second choice's ability, but rated 30 his reach rates 30 × 190 ÷ 100 = 57, under
+        // the second choice's 76 (and, here, the first choice's 50 is passed).
+        let young = player("Young", age: 18, current: 30, potential: 120, slots: [.D_L])
+        let first = veteran("First Choice", ability: 30), second = risingSecond()
+        let found = try outlooks([first, second, young], tiers(
+            first: [.D_L: first], second: [.D_L: second],
+            ratings: [(first, .D_L, 50), (second, .D_L, 40), (young, .D_L, 30)]))
+        let row = try #require(slot(found[young.id], .D_L))
+        #expect(row.reachRating == 57 && row.band == .notExpected && row.level == .couldMakeSecond)
     }
 }

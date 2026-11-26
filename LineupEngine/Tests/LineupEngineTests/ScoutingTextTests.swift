@@ -205,7 +205,7 @@ import Testing
     // MARK: The candidates
 
     func rival(_ name: String = "Evan Humphries", age: Int = 27) -> Rival {
-        Rival(player: id(name.lowercased()), name: name, age: age, rating: 70, compared: 70, isAgeNamed: age >= 30)
+        Rival(player: id(name.lowercased()), name: name, age: age, rating: 70, compared: 70, ability: 70, comparedAbility: 70, isAgeNamed: age >= 30)
     }
 
     func candidateSlot(_ slot: SlotID = .D_L, level: CandidateLevel = .wouldStart, margin: Double? = 0.06,
@@ -359,7 +359,7 @@ import Testing
     }
 
     @Test func otherSlotLinesAreTheTodayLinesThenOneForLater() {
-        let deago = Rival(player: id("deago nelson"), name: "Deago Nelson", age: 26, rating: 70, compared: 70, isAgeNamed: false)
+        let deago = Rival(player: id("deago nelson"), name: "Deago Nelson", age: 26, rating: 70, compared: 70, ability: 70, comparedAbility: 70, isAgeNamed: false)
         let today = AdvisorText.todayLines(candidateSlot(.D_R, level: .wouldMakeSecond, margin: -0.03, first: deago, solid: false,
                                                          ip: 12, oop: 14))
         #expect(today == ["Would make the second eleven: rates 3.0% under Deago Nelson, your first choice at right back.",

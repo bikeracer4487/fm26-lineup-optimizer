@@ -294,7 +294,7 @@ import Testing
                                      professionalismHoldsBack: false, growthFallsLater: true)
         let best = slot.map { slot in
             SlotOutlook(slot: slot, rating: 50, reachRating: 75, isFirstChoice: false,
-                        firstChoice: Rival(player: PlayerID(key: "smith"), name: "Smith", age: 28, rating: 70, compared: 70,
+                        firstChoice: Rival(player: PlayerID(key: "smith"), name: "Smith", age: 28, rating: 70, compared: 70, ability: 70, comparedAbility: 70,
                                            isAgeNamed: false),
                         secondChoice: nil, band: .onCourse, pointsNeeded: 32, level: level)
         }
@@ -446,7 +446,7 @@ import Testing
 
     /// Smith, named with his age when the engine says so (at 30 or over under the fm27 parameters).
     func smith(age: Int, rating: Double = 70, compared: Double = 70) -> Rival {
-        Rival(player: PlayerID(key: "smith"), name: "Smith", age: age, rating: rating, compared: compared,
+        Rival(player: PlayerID(key: "smith"), name: "Smith", age: age, rating: rating, compared: compared, ability: 70, comparedAbility: 70,
               isAgeNamed: age >= 30)
     }
 
@@ -470,6 +470,57 @@ import Testing
                     .contains("to match Smith at the flank;") == true)
         #expect(AdvisorText.standing(standingOutlook(smith: smith(age: 28), points: 1), names: names)?
                     .hasPrefix("Needs about 1 more ability point to match Smith") == true)
+    }
+
+    @Test func whyAReachCannotPassARivalOfHigherAbility() {
+        func rival(_ name: String, ability: Int, compared: Double) -> Rival {
+            Rival(player: PlayerID(key: name.lowercased()), name: name, age: 25, rating: 70, compared: 70, ability: ability,
+                  comparedAbility: compared, isAgeNamed: false)
+        }
+        // The owner's case: his reach is his potential.
+        let milburn = ReachEstimate(age: 18, current: 54, potential: 72, professionalism: 11, ambition: 3, determination: 5,
+                                    seasonGrowth: 6.2, bySeason: [54, 60.2, 65, 69.8, 72], reachesPotential: true,
+                                    ambitionSlows: true, determinationSlows: true, professionalismHoldsBack: false,
+                                    growthFallsLater: true)
+        #expect(AdvisorText.fallsShortLine(milburn, of: rival("Matthew Lusty", ability: 83, compared: 83))
+                == "His potential, 72, is below Matthew Lusty's ability, 83.")
+        // A rival who is developing is named by where he could get.
+        #expect(AdvisorText.fallsShortLine(milburn, of: rival("Billie Tourle", ability: 82, compared: 162))
+                == "His potential, 72, is below the ability Billie Tourle could reach, about 162.")
+        // Level, or below his reach: nothing to say.
+        #expect(AdvisorText.fallsShortLine(milburn, of: rival("Smith", ability: 72, compared: 72)) == nil)
+        #expect(AdvisorText.fallsShortLine(milburn, of: rival("Smith", ability: 60, compared: 60)) == nil)
+        // A reach that stops short of his potential is named as his reach.
+        let slow = standingOutlook(smith: nil).estimate
+        #expect(AdvisorText.fallsShortLine(slow, of: rival("Smith", ability: 110, compared: 110))
+                == "His reach, about 104, is below Smith's ability, 110.")
+    }
+
+    @Test func theStandingSaysWhenAbilityOrAnOvertakingSecondChoiceDecides() {
+        let names: (SlotID) -> String = { PositionText.plain($0.position) }
+        let able = Rival(player: PlayerID(key: "smith"), name: "Smith", age: 28, rating: 70, compared: 70, ability: 110,
+                         comparedAbility: 110, isAgeNamed: false)
+        #expect(AdvisorText.standing(standingOutlook(smith: able), names: names)
+                == "Needs about 14 more ability points to match Smith at left back; this tool expects about 12 a season. "
+                    + "On course. His reach, about 104, is below Smith's ability, 110.")
+        // A second choice of 17 whose reach rates 90 and reaches 140 passes Smith first: a reach rating of 75 passes
+        // Smith's 70 and not him.
+        func behind(level: ReachLevel, reachRating: Double = 75) -> Outlook {
+            let base = standingOutlook(smith: smith(age: 28))
+            let jones = Rival(player: PlayerID(key: "jones"), name: "Jones", age: 17, rating: 60, compared: 90, ability: 70,
+                              comparedAbility: 140, isAgeNamed: false)
+            let best = SlotOutlook(slot: .D_L, rating: 50, reachRating: reachRating, isFirstChoice: false,
+                                   firstChoice: smith(age: 28), secondChoice: jones, band: .notExpected, pointsNeeded: 14,
+                                   level: level)
+            return Outlook(player: base.player, estimate: base.estimate, slots: [best], best: best, level: level, average: nil)
+        }
+        #expect(AdvisorText.standing(behind(level: .couldMakeSecond), names: names)
+                == "Needs about 14 more ability points to match Smith at left back; this tool expects about 12 a season. "
+                    + "Not expected. Jones is 17 and expected to pass Smith there first.")
+        // Not when he could pass the first choice after all, or when his reach does not rate past Smith anyway.
+        #expect(AdvisorText.standing(behind(level: .couldPassFirst), names: names)?.hasSuffix("Not expected.") == true)
+        #expect(AdvisorText.standing(behind(level: .couldBeCover, reachRating: 69), names: names)?
+                    .hasSuffix("Not expected.") == true)
     }
 
     @Test func theStandingOfAFirstChoice() {
@@ -514,7 +565,7 @@ import Testing
     /// is nil), his matches here on `basis` (none when nil), and `keepReason`.
     func young(_ action: RemovalAction, _ basis: MatchesHereBasis?, keepReason: KeepReason? = nil,
                smith rival: Rival? = Rival(player: PlayerID(key: "smith"), name: "Smith", age: 28, rating: 70,
-                                           compared: 70, isAgeNamed: false)) -> RemovalAdvice {
+                                           compared: 70, ability: 70, comparedAbility: 70, isAgeNamed: false)) -> RemovalAdvice {
         RemovalAdvice(player: PlayerID(key: "young"), name: "Young", level: .keep, action: action, score: 0, reasons: [],
                       tier: nil, outlook: standingOutlook(smith: rival),
                       matchesHere: basis.map { MatchesHere(starts: 1, matches: 9, basis: $0) }, keepReason: keepReason,

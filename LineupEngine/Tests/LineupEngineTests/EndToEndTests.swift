@@ -386,8 +386,10 @@ import Testing
 
     @Test func theCapturedSquadsHaveScoutingNeeds() throws {
         let needs = try checkScoutingNeeds(keeperAbility: nil)
-        // Max Treml, a goalkeeper of 18 out on loan, is on course to pass Jonny Maxted (32): no ageing need.
-        #expect(!needs.betterPlayers.contains { $0.slot == .GK })
+        // Max Treml, a goalkeeper of 18 out on loan, has a potential of 53, below Jonny Maxted's ability of 63, so he
+        // is no successor to Maxted (32), whatever the ratings say: the slot has an ageing need.
+        let ageing = try #require(needs.betterPlayers.first { $0.slot == .GK })
+        #expect(ageing.kind == .ageing && ageing.firstChoice?.name == "Jonny Maxted")
         // Jonny Maxted is injured and the goalkeeper's slot has nobody else: the need would stay when he is back.
         let keeper = try #require(needs.moreDepth.first { $0.depth.slot == .GK })
         #expect(keeper.injured.map(\.name) == ["Jonny Maxted"] && !keeper.lastsOnlyWhileInjured)
@@ -500,13 +502,15 @@ import Testing
         let expectedParts: [String: (part: CandidatePart, headline: SlotID, answer: NeedAnswer?)] = [
             "Max Treml": (.answersToday, .GK, .moreDepth),
             "Kauan Bitencourt de Oliveira": (.answersToday, .AM_L, .moreDepth),
-            "Brayden Daniel": (.answersLater, .AM_R, .betterPlayerLater),
+            // His reach would rate past Alfie Potter (ability 58) at right attacking midfield, but Ewan Clark, whose
+            // own reach is 85, is expected to pass Potter first, and Daniel's potential of 70 is below that.
+            "Brayden Daniel": (.rest, .AM_R, nil),
             "Tyrae Njogu": (.rest, .DM_L, nil),
             "Caleb Moir": (.rest, .D_CR, nil),
             "Aydin Ulas": (.rest, .D_CR, nil),
         ]
         #expect(Set(strangers.candidates.map(\.player.name)) == Set(expectedParts.keys))
-        #expect(strangers.groups(orderedBy: .today).map(\.part) == [.answersToday, .answersToday, .answersLater, .rest])
+        #expect(strangers.groups(orderedBy: .today).map(\.part) == [.answersToday, .answersToday, .rest])
         let words = SlotID.allCases.map(\.rawValue).filter { $0.contains("_") }
         for candidate in strangers.candidates {
             let name = candidate.player.name

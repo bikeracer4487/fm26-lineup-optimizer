@@ -8,7 +8,8 @@ public enum ReachBand: String, CaseIterable, Sendable {
     case onCourse
     /// His potential is high enough, but he gets there later, or his reach falls short.
     case possible
-    /// His potential, as a rating, is below what the first choice is compared at.
+    /// His potential, as a rating, is below what the first choice is compared at, or his potential is below the first
+    /// choice's compared ability; or so against a second choice who overtakes the first.
     case notExpected
 }
 
@@ -27,6 +28,13 @@ public struct Rival: Equatable, Sendable {
     /// What the young player must reach: when the rival is developing too, his own reach rating (`rating` scaled from
     /// his ability to his reach, as `SlotOutlook.reachRating` is); `rating` otherwise.
     public let compared: Double
+    /// His current ability.
+    public let ability: Int
+    /// The ability the young player must reach, beside `compared`: when the rival is developing too, his own reach;
+    /// `ability` otherwise. A young player whose reach falls below it is not counted as passing him, whatever the
+    /// ratings say (the owner's rule of 25 November 2026: a player of ability 54 and potential 72 was called on course
+    /// to pass a first choice of ability 83).
+    public let comparedAbility: Double
     /// He is at least `firstChoiceAgeNamedFrom`, so the words name his age.
     public let isAgeNamed: Bool
 }
@@ -167,7 +175,7 @@ public enum Development {
                     player, estimate, assignment.slot, rating: rating, isFirstChoice: first == player.id,
                     firstChoice: first == player.id ? nil : pair.first,
                     secondChoice: second == player.id ? nil : pair.second,
-                    firstChoiceEstimate: pair.firstEstimate, parameters: parameters))
+                    estimates: (pair.firstEstimate, pair.secondEstimate), parameters: parameters))
             }
             found[player.id] = outlook(player, estimate, slots, average: average, parameters: parameters)
         }
@@ -175,11 +183,11 @@ public enum Development {
     }
 
     /// The first and second choice at `slot` by `tiers`, as the outlooks name them (a rival who is developing is
-    /// compared at his own reach), and the first choice's estimate when he is developing. `squad` are the players
-    /// the tiers were worked out from; a choice who is not among them, or not rated there, is nil.
+    /// compared at his own reach), and the estimate of each who is developing. `squad` are the players the tiers were
+    /// worked out from; a choice who is not among them, or not rated there, is nil.
     /// Throws `RatingError.missingAttribute` for a developing choice without Professionalism, Ambition or Determination.
     static func rivals(at slot: SlotID, tiers: SquadTiers, squad: [Player], ownClub: String?,
-                       parameters: EngineParameters) throws -> (first: Rival?, second: Rival?, firstEstimate: ReachEstimate?) {
+                       parameters: EngineParameters) throws -> Rivals {
         let byID = Dictionary(squad.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var estimates: [PlayerID: ReachEstimate] = [:]
         for id in [tiers.first[slot], tiers.second[slot]].compactMap({ $0 }) {
@@ -193,15 +201,36 @@ public enum Development {
     /// What `outlooks` and the public `rivals` share, with the estimates already worked out.
     private static func rivals(at slot: SlotID, tiers: SquadTiers, byID: [PlayerID: Player],
                                estimates: [PlayerID: ReachEstimate],
-                               parameters: EngineParameters) -> (first: Rival?, second: Rival?, firstEstimate: ReachEstimate?) {
+                               parameters: EngineParameters) -> Rivals {
         func rival(_ id: PlayerID?) -> Rival? {
             guard let id, let player = byID[id], let rating = tiers.ratings[id]?[slot] else { return nil }
-            let compared = estimates[id].map { scaled(rating, from: Double($0.current), to: $0.reach, parameters) } ?? rating
+            let estimate = estimates[id]
+            let compared = estimate.map { scaled(rating, from: Double($0.current), to: $0.reach, parameters) } ?? rating
             return Rival(player: id, name: player.name, age: player.age, rating: rating, compared: compared,
+                         ability: player.currentAbility,
+                         comparedAbility: estimate?.reach ?? Double(player.currentAbility),
                          isAgeNamed: player.age >= parameters.firstChoiceAgeNamedFrom.value)
         }
-        let first = tiers.first[slot]
-        return (rival(first), rival(tiers.second[slot]), first.flatMap { estimates[$0] })
+        let first = tiers.first[slot], second = tiers.second[slot]
+        return (rival(first), rival(second), first.flatMap { estimates[$0] }, second.flatMap { estimates[$0] })
+    }
+
+    /// The first and second choice at a slot, and the estimate of each who is developing.
+    typealias Rivals = (first: Rival?, second: Rival?, firstEstimate: ReachEstimate?, secondEstimate: ReachEstimate?)
+
+    /// A young player whose ability `ability` is below `rival.comparedAbility` cannot be counted as passing him, whatever
+    /// the ratings say.
+    static func fallsShort(_ ability: Double, of rival: Rival) -> Bool {
+        ability + roundingNoise < rival.comparedAbility
+    }
+
+    /// The second choice is expected to pass the first choice himself, by the same tests a young player must meet: his
+    /// compared rating above the first choice's, and his compared ability not below the first choice's. A young player
+    /// must then pass the second choice too before he is counted as passing the first, since the second choice gets
+    /// there first.
+    static func overtakes(_ second: Rival?, _ first: Rival) -> Bool {
+        guard let second else { return false }
+        return second.compared > first.compared + roundingNoise && !fallsShort(second.comparedAbility, of: first)
     }
 
     /// A first choice at any slot has enough, whatever he has started. Otherwise, with at least
@@ -264,15 +293,16 @@ public enum Development {
     /// The outlook at one slot of a player who need not be in the squad, from his rating there and the rivals
     /// `rivals(at:)` gave: what `outlooks` works out for a squad player, by the same code.
     static func slotOutlook(for player: Player, estimate: ReachEstimate, rating: Double, at slot: SlotID,
-                            rivals: (first: Rival?, second: Rival?, firstEstimate: ReachEstimate?),
-                            parameters: EngineParameters) -> SlotOutlook {
+                            rivals: Rivals, parameters: EngineParameters) -> SlotOutlook {
         slotOutlook(player, estimate, slot, rating: rating, isFirstChoice: false, firstChoice: rivals.first,
-                    secondChoice: rivals.second, firstChoiceEstimate: rivals.firstEstimate, parameters: parameters)
+                    secondChoice: rivals.second, estimates: (rivals.firstEstimate, rivals.secondEstimate),
+                    parameters: parameters)
     }
 
     private static func slotOutlook(_ player: Player, _ estimate: ReachEstimate, _ slot: SlotID, rating: Double,
                                     isFirstChoice: Bool, firstChoice: Rival?, secondChoice: Rival?,
-                                    firstChoiceEstimate: ReachEstimate?, parameters: EngineParameters) -> SlotOutlook {
+                                    estimates: (first: ReachEstimate?, second: ReachEstimate?),
+                                    parameters: EngineParameters) -> SlotOutlook {
         let current = Double(estimate.current)
         let reachRating = scaled(rating, from: current, to: estimate.reach, parameters)
         guard let firstChoice else {
@@ -286,10 +316,10 @@ public enum Development {
         return SlotOutlook(
             slot: slot, rating: rating, reachRating: reachRating, isFirstChoice: isFirstChoice,
             firstChoice: firstChoice, secondChoice: secondChoice,
-            band: band(player, estimate, rating: rating, firstChoice: firstChoice, firstChoiceEstimate: firstChoiceEstimate,
-                       parameters: parameters),
+            band: band(player, estimate, rating: rating, firstChoice: firstChoice, secondChoice: secondChoice,
+                       estimates: estimates, parameters: parameters),
             pointsNeeded: pointsNeeded,
-            level: level(player, reachRating: reachRating, firstChoice: firstChoice, secondChoice: secondChoice,
+            level: level(player, estimate, reachRating: reachRating, firstChoice: firstChoice, secondChoice: secondChoice,
                          parameters: parameters))
     }
 
@@ -301,37 +331,66 @@ public enum Development {
         return rating * (offset + ability) / (offset + current)
     }
 
-    /// Below the bar (a share of the first choice's compared rating) he is markedly lower whoever the second choice is,
-    /// so a weak second choice, or none, does not lift a weak young player; at or above it, he could make the second
-    /// eleven when he reaches the second choice or there is none, and could become cover otherwise.
-    private static func level(_ player: Player, reachRating: Double, firstChoice: Rival, secondChoice: Rival?,
-                              parameters: EngineParameters) -> ReachLevel {
-        if reachRating + roundingNoise >= firstChoice.compared { return .couldPassFirst }
+    /// He reaches a rival when his reach rating is at least the rival's compared rating and his reach is not below the
+    /// rival's compared ability (`fallsShort`). He could pass the first choice when he reaches him and, if the second
+    /// choice overtakes the first (`overtakes`), the second choice too. Below the bar (a share of the first choice's
+    /// compared rating) he is markedly lower whoever the second choice is, so a weak second choice, or none, does not
+    /// lift a weak young player; at or above it, he could make the second eleven when he reaches the second choice or
+    /// there is none, or reaches the first choice behind a second choice who overtakes them both, and could become
+    /// cover otherwise.
+    private static func level(_ player: Player, _ estimate: ReachEstimate, reachRating: Double, firstChoice: Rival,
+                              secondChoice: Rival?, parameters: EngineParameters) -> ReachLevel {
+        func reaches(_ rival: Rival) -> Bool {
+            reachRating + roundingNoise >= rival.compared && !fallsShort(estimate.reach, of: rival)
+        }
+        let passesFirst = reaches(firstChoice)
+        // No second choice, or he is the second choice himself: there is nobody else to make the second eleven past.
+        let passesSecond = secondChoice.map(reaches) ?? true
+        if passesFirst && (passesSecond || !overtakes(secondChoice, firstChoice)) { return .couldPassFirst }
         let bar = player.age <= parameters.youngestUpToAge.value
             ? parameters.markedlyLowerShareYoungest.value : parameters.markedlyLowerShare.value
         if reachRating + roundingNoise < bar * firstChoice.compared { return .markedlyLower }
-        // No second choice, or he is the second choice himself: there is nobody else to make the second eleven past.
-        return secondChoice.map({ reachRating + roundingNoise >= $0.compared }) ?? true ? .couldMakeSecond : .couldBeCover
+        return passesFirst || passesSecond ? .couldMakeSecond : .couldBeCover
     }
 
-    /// Walks both players forward a season at a time: index k of `bySeason` is k seasons on. A first choice who is
-    /// developing too grows as his own estimate says and holds his last value once his seasons run out.
+    /// Walks the players forward a season at a time: index k of `bySeason` is k seasons on. The rivals are the first
+    /// choice and, when he overtakes the first choice (`overtakes`), the second choice too. A potential below a rival's
+    /// compared ability (`fallsShort`) never passes him, and nor does a potential that rates below the compared rating
+    /// of a second choice who overtakes the first, since that rival ends ahead whenever the young player might draw
+    /// level: either is not expected. Otherwise he is ahead in a season when, against each rival, his rating is at least
+    /// the rival's and his ability not below the rival's. A rival who is developing too grows as his own estimate says
+    /// and holds his last value once his seasons run out.
     private static func band(_ player: Player, _ estimate: ReachEstimate, rating: Double, firstChoice: Rival,
-                             firstChoiceEstimate: ReachEstimate?, parameters: EngineParameters) -> ReachBand {
+                             secondChoice: Rival?, estimates: (first: ReachEstimate?, second: ReachEstimate?),
+                             parameters: EngineParameters) -> ReachBand {
         let current = Double(estimate.current)
-        func theirs(_ k: Int) -> Double {
-            guard let rivalEstimate = firstChoiceEstimate else { return firstChoice.rating }
-            let ability = rivalEstimate.bySeason[min(k, rivalEstimate.bySeason.count - 1)]
-            return scaled(firstChoice.rating, from: Double(rivalEstimate.current), to: ability, parameters)
+        let potential = Double(estimate.potential)
+        let atPotential = scaled(rating, from: current, to: potential, parameters)
+        var rivals: [(rival: Rival, estimate: ReachEstimate?)] = [(firstChoice, estimates.first)]
+        if let secondChoice, overtakes(secondChoice, firstChoice) {
+            if atPotential + roundingNoise < secondChoice.compared { return .notExpected }
+            rivals.append((secondChoice, estimates.second))
         }
-        let ahead = estimate.bySeason.indices.first { k in
-            scaled(rating, from: current, to: estimate.bySeason[k], parameters) + roundingNoise >= theirs(k)
+        if rivals.contains(where: { fallsShort(potential, of: $0.rival) }) { return .notExpected }
+        func ability(of rival: Rival, _ rivalEstimate: ReachEstimate?, season k: Int) -> Double {
+            guard let rivalEstimate else { return Double(rival.ability) }
+            return rivalEstimate.bySeason[min(k, rivalEstimate.bySeason.count - 1)]
         }
-        if let ahead {
+        func isAhead(_ k: Int) -> Bool {
+            let mine = estimate.bySeason[k]
+            let myRating = scaled(rating, from: current, to: mine, parameters)
+            return rivals.allSatisfy { rival, rivalEstimate in
+                let theirAbility = ability(of: rival, rivalEstimate, season: k)
+                let theirRating = rivalEstimate.map {
+                    scaled(rival.rating, from: Double($0.current), to: theirAbility, parameters)
+                } ?? rival.rating
+                return myRating + roundingNoise >= theirRating && mine + roundingNoise >= theirAbility
+            }
+        }
+        if let ahead = estimate.bySeason.indices.first(where: isAhead) {
             if ahead <= 1 { return .close }
             if player.age + ahead < parameters.onCourseBeforeAge.value { return .onCourse }
         }
-        let atPotential = scaled(rating, from: current, to: Double(estimate.potential), parameters)
         return atPotential + roundingNoise >= firstChoice.compared ? .possible : .notExpected
     }
 

@@ -1342,10 +1342,10 @@ import Testing
         let older = try second(age: 24)
         #expect(older.outlook == nil && older.keepReason == nil)
         #expect(older.action == .keep && older.watchReason == nil)
-        // A backup worth developing at 23 (ability 40, so four seasons' growth takes him past the second choice) is
-        // loaned for matches; at 24 he has no outlook and the old actions.
+        // A backup worth developing at 23 (ability 64, so three seasons' growth takes him past the second choice, and
+        // to the squad's ability of 100) is loaned for matches; at 24 he has no outlook and the old actions.
         func backup(age: Int) -> Player {
-            youngster(age: age, all: 11, potentialAbility: 200) { $0.currentAbility = 40; $0.monthsLeft = 24 }
+            youngster(age: age, all: 12, potentialAbility: 200) { $0.currentAbility = 64; $0.monthsLeft = 24 }
         }
         let backup23 = try advice(backup(age: 23))
         try #require(backup23.tier == .backup)
