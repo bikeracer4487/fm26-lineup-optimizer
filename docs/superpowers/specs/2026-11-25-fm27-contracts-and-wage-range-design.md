@@ -90,6 +90,12 @@ A player is listed when all of these hold. Each is this design's call unless mar
 - He is in his last year: with a contract end day, that day is within 12 months of today in the game (so the
   list moves with the date); without one, his months left at the import are 12 or fewer. A player with no
   contract to run down (out of contract, or months left below zero) is listed in a part of his own.
+- A player on a youth contract (`Removal.isOnYouthContract`) or with no contract to run down is listed only
+  when he is in the first or second eleven for the primary tactic or Player Removal calls him worth
+  developing (`Removal.isWorthDeveloping`). The owner's choice of 25 November 2026: without it the count
+  would be mostly youth-team players. One of them out on loan, who has no advice, is listed only when his
+  best level (section 4) is would start or would make the second eleven. Everyone on any other contract is
+  listed whatever his standing.
 - The owner has not dismissed him.
 
 The advice is worked out for the primary tactic, as Player Removal's is, and Contracts stands behind the same
@@ -270,7 +276,8 @@ owner in the running app.
 ## This design's calls, for the owner to check
 
 1. "Last year" is 12 months, by the end day when the grid has it, else by months left.
-2. Players with no contract are listed, in a part of their own, and counted.
+2. Players with no contract are listed, in a part of their own, and counted, under the owner's rule for them
+   and for youth contracts (in an eleven or worth developing).
 3. A player out on loan is listed; one Player Removal says to watch is listed.
 4. A dismissal and a typed figure are dropped once he is renewed or gone.
 5. The range runs from the lower quartile to the top of what the tier is paid, and needs 3 wages.
