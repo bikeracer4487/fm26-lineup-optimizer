@@ -4,7 +4,8 @@ import SwiftUI
 
 /// The card on the board that adds a fixture or changes one: its date, opponent, the competition and how strong the
 /// opponent is, with "Paste their squad" beside the strength and, under the two menus, what the last paste read or why
-/// it was refused; importance and tactic. Under the importance, the importance the advice suggests for the fixture as it
+/// it was refused (for a new league fixture against a club with a saved squad reading, the reading carried from it);
+/// importance and tactic. Under the importance, the importance the advice suggests for the fixture as it
 /// is being edited, its reasons and evidence note, and "Use it" when it differs from the importance chosen.
 struct FixtureEditor: View {
     let model: AppModel
@@ -117,6 +118,9 @@ struct FixtureEditor: View {
         .padding(Theme.Card.padding + Theme.Spacing.xs)
         .frame(width: Theme.Layout.fixtureEditorWidth, alignment: .topLeading)
         .boardCard()
+        // A new league fixture against a club with a saved squad reading takes it; Core says when.
+        .onChange(of: draft.opponent) { model.carryEarlierReading(into: &draft) }
+        .onChange(of: draft.competition) { model.carryEarlierReading(into: &draft) }
     }
 
     /// The league's teams to pick the opponent from, with the entries and the one chosen as Core gives them. A saved

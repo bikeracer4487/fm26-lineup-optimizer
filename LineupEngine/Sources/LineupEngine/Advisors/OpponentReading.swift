@@ -13,13 +13,18 @@ public struct OpponentReading: Equatable, Codable, Sendable {
     public let strength: OpponentStrength
     /// The clubs their left-out players are at: each once, as first spelt, A to Z.
     public let awayOnLoanAt: [String]
+    /// The day the owner's side was measured when the reading was carried to another fixture from an earlier paste of
+    /// their squad (`OpponentAdvisor.carry`); nil when both sides were measured at the paste. Absent in readings saved
+    /// before it, which were all pasted.
+    public let ownDay: Day?
 
     public var theirAverage: Double { Double(theirTotal) / 11 }
     public var ownAverage: Double { Double(ownTotal) / 11 }
 
-    public init(club: String, day: Day, theirTotal: Int, ownTotal: Int, strength: OpponentStrength, awayOnLoanAt: [String]) {
+    public init(club: String, day: Day, theirTotal: Int, ownTotal: Int, strength: OpponentStrength, awayOnLoanAt: [String],
+                ownDay: Day? = nil) {
         self.club = club; self.day = day; self.theirTotal = theirTotal; self.ownTotal = ownTotal
-        self.strength = strength; self.awayOnLoanAt = awayOnLoanAt
+        self.strength = strength; self.awayOnLoanAt = awayOnLoanAt; self.ownDay = ownDay
     }
 }
 
@@ -48,12 +53,7 @@ public enum OpponentAdvisor {
     /// `PlanError.badParameters` when the strength lines are not `0 < stronger < much stronger < 100`.
     public static func read(theirs: [Player], named: String, own: [Player], ownClub: String?, on day: Day,
                             parameters: EngineParameters) throws -> OpponentReading {
-        let lines = parameters.opponentStrengthLines.value
-        let s = lines.strongerFromPercent, m = lines.muchStrongerFromPercent
-        guard 0 < s, s < m, m < 100 else {
-            throw PlanError.badParameters([
-                "opponentStrengthLines has lines of \(s) and \(m) percent, which are not 0 < stronger < much stronger < 100"])
-        }
+        let lines = try checkedLines(parameters)
         guard !own.isEmpty else { throw OpponentReadingError.noOwnSquad }
         let ownIDs = Set(own.map(\.id))
         let shared = theirs.filter { ownIDs.contains($0.id) }.count
@@ -77,12 +77,7 @@ public enum OpponentAdvisor {
         let theirTotal = try bestElevenTotal(theirs, club: club, side: .theirs(club: club))
         let ownTotal = try bestElevenTotal(own, club: ownClub, side: .own)
 
-        let strength: OpponentStrength
-        if theirTotal * 100 >= ownTotal * (100 + m) { strength = .muchStronger }
-        else if theirTotal * 100 >= ownTotal * (100 + s) { strength = .stronger }
-        else if theirTotal * 100 <= ownTotal * (100 - m) { strength = .muchWeaker }
-        else if theirTotal * 100 <= ownTotal * (100 - s) { strength = .weaker }
-        else { strength = .similar }
+        let strength = Self.strength(theirTotal: theirTotal, ownTotal: ownTotal, lines: lines)
 
         var firstSpelt: [String: String] = [:]
         for player in theirs {
@@ -94,6 +89,40 @@ public enum OpponentAdvisor {
         let away = firstSpelt.values.sorted()
         return OpponentReading(club: club, day: day, theirTotal: theirTotal, ownTotal: ownTotal,
                                strength: strength, awayOnLoanAt: away)
+    }
+
+    /// An earlier reading carried to another fixture against the same club: their side as it was pasted, the owner's
+    /// measured again from `own` on `day`, and the strength from the two. The reading keeps the day their squad was
+    /// pasted and says the day the owner's was measured (`ownDay`). Throws as `read` does for the owner's side and
+    /// the lines.
+    public static func carry(_ earlier: OpponentReading, own: [Player], ownClub: String?, on day: Day,
+                             parameters: EngineParameters) throws -> OpponentReading {
+        let lines = try checkedLines(parameters)
+        guard !own.isEmpty else { throw OpponentReadingError.noOwnSquad }
+        let ownTotal = try bestElevenTotal(own, club: ownClub, side: .own)
+        return OpponentReading(club: earlier.club, day: earlier.day, theirTotal: earlier.theirTotal, ownTotal: ownTotal,
+                               strength: strength(theirTotal: earlier.theirTotal, ownTotal: ownTotal, lines: lines),
+                               awayOnLoanAt: earlier.awayOnLoanAt, ownDay: day)
+    }
+
+    /// The strength lines, when they are `0 < stronger < much stronger < 100`.
+    private static func checkedLines(_ parameters: EngineParameters) throws -> OpponentStrengthLines {
+        let lines = parameters.opponentStrengthLines.value
+        let s = lines.strongerFromPercent, m = lines.muchStrongerFromPercent
+        guard 0 < s, s < m, m < 100 else {
+            throw PlanError.badParameters([
+                "opponentStrengthLines has lines of \(s) and \(m) percent, which are not 0 < stronger < much stronger < 100"])
+        }
+        return lines
+    }
+
+    private static func strength(theirTotal: Int, ownTotal: Int, lines: OpponentStrengthLines) -> OpponentStrength {
+        let s = lines.strongerFromPercent, m = lines.muchStrongerFromPercent
+        if theirTotal * 100 >= ownTotal * (100 + m) { return .muchStronger }
+        if theirTotal * 100 >= ownTotal * (100 + s) { return .stronger }
+        if theirTotal * 100 <= ownTotal * (100 - m) { return .muchWeaker }
+        if theirTotal * 100 <= ownTotal * (100 - s) { return .weaker }
+        return .similar
     }
 
     /// Current ability summed over the eleven highest among the players who are not injured and not out on loan.

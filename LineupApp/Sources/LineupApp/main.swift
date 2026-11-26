@@ -473,10 +473,12 @@ let narrowWindow = CGSize(width: 800, height: 700)
     try ScreenPictures.write(model: sampleModel(root, .summer), to: directory, size: size, variant: "summer",
                              screens: [.fixtures])
 
-    // The editor after the opponent's squad was pasted, and after the owner's own squad was pasted and refused.
+    // The editor after the opponent's squad was pasted, after the owner's own squad was pasted and refused, and for a
+    // new league fixture that carries a saved reading.
     let url = URL(fileURLWithPath: root, isDirectory: true)
     for (name, make) in [("fixtures-editor-reading", { try SampleData.draftWithOpponentReading(repositoryRoot: $0) }),
-                         ("fixtures-editor-refused", { try SampleData.draftWithRefusedPaste(repositoryRoot: $0) })] {
+                         ("fixtures-editor-refused", { try SampleData.draftWithRefusedPaste(repositoryRoot: $0) }),
+                         ("fixtures-editor-carried", { try SampleData.draftWithCarriedReading(repositoryRoot: $0) })] {
         let pasted: (model: AppModel, draft: FixtureDraft)
         do { pasted = try make(url) } catch { fail("\(error)") }
         try ScreenPictures.writeFixtureEditor(model: pasted.model, draft: pasted.draft, to: directory, name: name,

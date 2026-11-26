@@ -358,6 +358,24 @@ public enum SampleData {
         return (model, draft)
     }
 
+    /// The sample model with its second fixture saved with a squad reading, and a new league fixture's draft against the
+    /// same club, which carries that reading with the owner's side measured again.
+    @MainActor public static func draftWithCarriedReading(repositoryRoot: URL) throws -> (model: AppModel, draft: FixtureDraft) {
+        let (model, pasted) = try draftWithOpponentReading(repositoryRoot: repositoryRoot)
+        guard model.save(pasted) != nil else {
+            throw SampleDataError(description: "The sample fixture with a squad reading could not be saved.")
+        }
+        var draft = model.newFixtureDraft()
+        draft.competition = .league
+        model.carryEarlierReading(into: &draft)
+        draft.opponent = pasted.opponent
+        model.carryEarlierReading(into: &draft)
+        guard draft.opponentReading?.ownDay != nil else {
+            throw SampleDataError(description: "The sample reading was not carried: \(draft.pasteProblem ?? "no reason given")")
+        }
+        return (model, draft)
+    }
+
     /// The sample model and a draft of its second fixture after the owner's own first team was pasted as the opponent's,
     /// which is refused: the draft says why and has no reading. With `importance`, the draft is set to it before the paste.
     @MainActor public static func draftWithRefusedPaste(repositoryRoot: URL, importance: Importance? = nil) throws

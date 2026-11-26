@@ -959,4 +959,23 @@ import Testing
         #expect(AdvisorText.opponentReading(reading(["Marlow", "Reading", "Wallingford"]), on: "Sun 15 Nov")
                 == plain + " Left out as away on loan: players at Marlow, Reading and Wallingford.")
     }
+
+    @Test func aCarriedReadingNamesTheDayYoursWasMeasuredAndAsksForTheSquadIfItHasChanged() {
+        let day = Day(year: 2026, month: 11, day: 15)!
+        func reading(_ away: [String]) -> OpponentReading {
+            OpponentReading(club: "Banbury United", day: day, theirTotal: 816, ownTotal: 754, strength: .stronger,
+                            awayOnLoanAt: away, ownDay: Day(year: 2026, month: 11, day: 25)!)
+        }
+        let text = "Squad pasted for Banbury United on Sun 15 Nov, against yours on Wed 25 Nov: their best eleven "
+            + "averages 74.2 ability, yours 68.5, which reads as Stronger (this tool's estimate)."
+        let ask = " Paste their squad again if it has changed."
+        #expect(AdvisorText.opponentReading(reading([]), on: "Sun 15 Nov") == text + ask)
+        #expect(AdvisorText.opponentReading(reading(["Wallingford"]), on: "Sun 15 Nov")
+                == text + " Left out as away on loan: players at Wallingford." + ask)
+        let sameDay = OpponentReading(club: "Banbury United", day: day, theirTotal: 816, ownTotal: 754, strength: .stronger,
+                                      awayOnLoanAt: [], ownDay: day)
+        #expect(AdvisorText.opponentReading(sameDay, on: "Sun 15 Nov")
+                == "Squad pasted for Banbury United on Sun 15 Nov, against yours that day: their best eleven averages "
+                    + "74.2 ability, yours 68.5, which reads as Stronger (this tool's estimate)." + ask)
+    }
 }

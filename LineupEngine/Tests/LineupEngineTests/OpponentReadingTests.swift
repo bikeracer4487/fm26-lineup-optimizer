@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import LineupEngine
 
@@ -51,6 +52,50 @@ import Testing
                                            strength: .stronger, awayOnLoanAt: []))
         #expect(reading.ownAverage == 100)
         #expect(reading.theirAverage == 105)
+    }
+
+    @Test func aCarriedReadingKeepsTheirSideAndMeasuresTheOwnersAgain() throws {
+        let earlier = try read(theirs: eleven(all: 105) + side(loanedTo: "Wallingford", abilities: [120], prefix: "Away"))
+        #expect(earlier.strength == .stronger)
+        #expect(earlier.ownDay == nil)
+        let later = Day(year: 2026, month: 11, day: 25)!
+        // The owner's side has grown to 110 a man: the same 105 now reads as similar.
+        let grown = side(abilities: Array(repeating: 110, count: 11), prefix: "Own")
+        let carried = try OpponentAdvisor.carry(earlier, own: grown, ownClub: "Oxford City", on: later,
+                                                parameters: parameters)
+        #expect(carried == OpponentReading(club: earlier.club, day: today, theirTotal: earlier.theirTotal, ownTotal: 1210,
+                                           strength: .similar, awayOnLoanAt: earlier.awayOnLoanAt, ownDay: later))
+        // With the owner's side as it was, only the day measured changes.
+        let same = try OpponentAdvisor.carry(earlier, own: own, ownClub: "Oxford City", on: later, parameters: parameters)
+        #expect(same.strength == earlier.strength)
+        #expect(same.ownTotal == earlier.ownTotal)
+        #expect(same.ownDay == later)
+        #expect(same.day == today)
+    }
+
+    @Test func carryingRefusesAsReadingDoesForTheOwnersSideAndTheLines() throws {
+        let earlier = try read(theirs: eleven(all: 105))
+        #expect(throws: OpponentReadingError.noOwnSquad) {
+            try OpponentAdvisor.carry(earlier, own: [], ownClub: nil, on: today, parameters: parameters)
+        }
+        #expect(throws: OpponentReadingError.tooFewPlayers(.own, found: 10)) {
+            try OpponentAdvisor.carry(earlier, own: Array(own.prefix(10)), ownClub: nil, on: today, parameters: parameters)
+        }
+        var bad = parameters
+        bad.opponentStrengthLines = Parameter(
+            OpponentStrengthLines(strongerFromPercent: 20, muchStrongerFromPercent: 10), .derived, source: "test")
+        #expect(throws: PlanError.self) {
+            try OpponentAdvisor.carry(earlier, own: own, ownClub: nil, on: today, parameters: bad)
+        }
+    }
+
+    @Test func aReadingSavedBeforeTheDayMeasuredOpensAsPasted() throws {
+        let json = #"{"club":"Banbury United","day":"2026-11-15","theirTotal":816,"ownTotal":754,"strength":"stronger","awayOnLoanAt":[]}"#
+        let reading = try JSONDecoder().decode(OpponentReading.self, from: Data(json.utf8))
+        #expect(reading.ownDay == nil)
+        let carried = OpponentReading(club: "B", day: today, theirTotal: 1, ownTotal: 1, strength: .similar,
+                                      awayOnLoanAt: [], ownDay: today)
+        #expect(try JSONDecoder().decode(OpponentReading.self, from: JSONEncoder().encode(carried)) == carried)
     }
 
     @Test func onlyTheBestElevenCount() throws {

@@ -492,9 +492,11 @@ public enum AdvisorText {
     }
 
     /// One sentence on what a pasted opponent squad was found to be worth, with the clubs of the players left out as away
-    /// on loan when there are any. `day` is the date as the owner reads it.
+    /// on loan when there are any. `day` is the date as the owner reads it. A reading carried from an earlier paste names
+    /// the day the owner's side was measured and asks for the squad again if it has changed.
     public static func opponentReading(_ reading: OpponentReading, on day: String) -> String {
-        var text = "Squad pasted for \(reading.club) on \(day): their best eleven averages "
+        let yours = reading.ownDay.map { $0 == reading.day ? ", against yours that day" : ", against yours on \(shortDay($0))" } ?? ""
+        var text = "Squad pasted for \(reading.club) on \(day)\(yours): their best eleven averages "
             + "\(String(format: "%.1f", reading.theirAverage)) ability, yours \(String(format: "%.1f", reading.ownAverage)), "
             + "which reads as \(name(reading.strength)) (this tool's estimate)."
         if !reading.awayOnLoanAt.isEmpty {
@@ -502,6 +504,7 @@ public enum AdvisorText {
             let list = clubs.count == 1 ? clubs[0] : clubs.dropLast().joined(separator: ", ") + " and " + clubs[clubs.count - 1]
             text += " Left out as away on loan: players at \(list)."
         }
+        if reading.ownDay != nil { text += " Paste their squad again if it has changed." }
         return text
     }
 }
