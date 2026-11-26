@@ -33,10 +33,12 @@ struct TopRow: View {
     @Bindable var navigation: Navigation
 
     var body: some View {
+        // Worked out on every read, so read once for the row: only the Contracts pill carries it.
+        let count = model.contractsCount
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .center, spacing: Theme.Board.topRowGap) {
                 ClubTitle(text: model.boardTitle)
-                pills(FlowLayout()).fixedSize()
+                pills(FlowLayout(), count: count).fixedSize()
                 Spacer(minLength: 0)
                 TodayNote(model: model)
             }
@@ -47,15 +49,18 @@ struct TopRow: View {
                     Spacer(minLength: 0)
                     TodayNote(model: model)
                 }
-                pills(FlowLayout())
+                pills(FlowLayout(), count: count)
             }
         }
     }
 
-    private func pills(_ layout: FlowLayout) -> some View {
+    /// The row's pills; `count` is the Contracts pill's, nil for none.
+    private func pills(_ layout: FlowLayout, count: Int?) -> some View {
         layout {
             ForEach(Screen.rowScreens) { screen in
-                ScreenPill(title: screen.pillTitle, isCurrent: navigation.screen == screen) { navigation.screen = screen }
+                ScreenPill(title: AppModel.pillTitle(screen, count: count),
+                           accessibilityLabel: AppModel.pillAccessibilityLabel(screen, count: count),
+                           isCurrent: navigation.screen == screen) { navigation.screen = screen }
             }
             MorePill(navigation: navigation)
         }
@@ -118,9 +123,10 @@ struct PillLabel: View {
     }
 }
 
-/// One screen's pill.
+/// One screen's pill, with the count of players on the Contracts pill as part of its text.
 struct ScreenPill: View {
     let title: String
+    let accessibilityLabel: String
     let isCurrent: Bool
     let action: () -> Void
 
@@ -128,6 +134,7 @@ struct ScreenPill: View {
         Button(action: action) { PillLabel(title: title, isCurrent: isCurrent) }
             .buttonStyle(.plain)
             .fixedSize()
+            .accessibilityLabel(accessibilityLabel)
             .accessibilityAddTraits(isCurrent ? .isSelected : [])
     }
 }

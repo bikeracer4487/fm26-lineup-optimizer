@@ -26,6 +26,9 @@ public struct ContractRow: Equatable, Identifiable, Sendable {
     public let standingLine: String
     /// The engine's sentence on when other clubs can approach him; nil when there is none, or he is not being renewed.
     public let timingLine: String?
+    /// Whether the timing line is drawn as a caution: true in the part "Other clubs can approach them now", false in the
+    /// other parts and for a player not being renewed.
+    public let timingIsCaution: Bool
     /// The engine's lines on the wage range for his tier; none for a player not being renewed.
     public let guideLines: [String]
     /// "The agent's figure, a month", in FMRTE's wage period.
@@ -36,7 +39,11 @@ public struct ContractRow: Equatable, Identifiable, Sendable {
     public let figureReading: String?
     /// "entered Wed 25 Nov": when the agent's figure was typed; nil when none is kept.
     public let figureEnteredText: String?
-    /// The engine's lines on the agent's figure against the range; none without a figure.
+    /// The engine's sentence that the agent's figure is above the most the club can offer one player, drawn as a
+    /// caution before the other verdicts; nil when that is not the first verdict, or there is no figure.
+    public let cautionVerdictLine: String?
+    /// The engine's other lines on the agent's figure against the range, in its order, the caution's sentence left out;
+    /// none without a figure.
     public let verdictLines: [String]
 }
 
@@ -100,6 +107,18 @@ public enum ContractsPresentation {
     /// "The agent's figure, a month".
     public static func figureLabel(period: WagePeriod) -> String { "The agent's figure, \(per(period))" }
 
+    /// The button at the trailing end of a listed player's name, which sets him aside at once.
+    public static let notRenewingButton = "Not renewing"
+    /// What VoiceOver says for it: "Not renewing Evan Humphries".
+    public static func notRenewingLabel(_ name: String) -> String { "Not renewing \(name)" }
+    /// Over the line the players not being renewed are closed behind.
+    public static let notRenewingHeading = "Not renewing"
+    public static let showAgainButton = "Show again"
+    /// What VoiceOver says for a set-aside player's "Show again": "Show Dejan Tetek again".
+    public static func showAgainLabel(_ name: String) -> String { "Show \(name) again" }
+    /// Over the engine's sentences when the list cannot be worked out.
+    public static let failedLead = "Contracts cannot be worked out."
+
     /// "Out on loan at Merthyr".
     static func outOnLoanText(_ club: String) -> String { "Out on loan at \(club)" }
 
@@ -146,23 +165,34 @@ public enum ContractsPresentation {
                                             presentWagePerWeek: entry.presentWagePerWeek, limits: state.limits,
                                             parameters: parameters)
             let figure = state.figures[entry.player]
-            let verdicts = figure.map {
+            var verdicts = figure.map {
                 WageRange.verdict(figurePerWeek: $0.perWeek, guide: guide, presentWagePerWeek: entry.presentWagePerWeek)
             } ?? []
+            func line(_ verdict: WageVerdict) -> String {
+                AdvisorText.wageVerdictLine(verdict, figure: .agents, guide: guide, money: money)
+            }
+            var caution: String?
+            if case .overHighestWage? = verdicts.first { caution = line(verdicts.removeFirst()) }
+            let timingIsCaution: Bool
+            switch entry.part {
+            case .approachable: timingIsCaution = true
+            case .lastYear, .noContract: timingIsCaution = false
+            }
             return ContractRow(
                 id: entry.player, name: entry.name, detailsText: details(entry),
                 standingLine: AdvisorText.standingLine(entry), timingLine: AdvisorText.timingLine(entry),
+                timingIsCaution: timingIsCaution,
                 guideLines: AdvisorText.wageGuideLines(guide, money: money), figureLabel: figureLabel,
                 figureText: text(perWeek: figure?.perWeek, period: money.period),
                 figureReading: figure.map { Display.wage(perWeek: $0.perWeek, money) },
                 figureEnteredText: figure.map { AdvisorText.enteredOn($0.entered) },
-                verdictLines: verdicts.map { AdvisorText.wageVerdictLine($0, figure: .agents, guide: guide, money: money) })
+                cautionVerdictLine: caution, verdictLines: verdicts.map(line))
         }
         func dismissedRow(_ entry: ContractEntry) -> ContractRow {
             ContractRow(id: entry.player, name: entry.name, detailsText: details(entry),
-                        standingLine: AdvisorText.standingLine(entry), timingLine: nil, guideLines: [],
-                        figureLabel: figureLabel, figureText: "", figureReading: nil, figureEnteredText: nil,
-                        verdictLines: [])
+                        standingLine: AdvisorText.standingLine(entry), timingLine: nil, timingIsCaution: false,
+                        guideLines: [], figureLabel: figureLabel, figureText: "", figureReading: nil,
+                        figureEnteredText: nil, cautionVerdictLine: nil, verdictLines: [])
         }
 
         var parts: [ContractsPartRows] = []

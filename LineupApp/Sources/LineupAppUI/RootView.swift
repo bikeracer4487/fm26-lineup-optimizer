@@ -36,11 +36,12 @@ public struct RootView: View {
     ///   - scoutingStart: the tab and the order the Scouting screen opens with, and whether every candidate's row, the
     ///     rest part, every group's "more players" line and the hidden players' list are open.
     ///   - offersStart: the clubs typed in the Offers screen's "To a club" rows, and whether "Earlier offers" is open.
+    ///   - contractsStart: whether the Contracts screen's players not being renewed are open.
     public init(model: AppModel, showing screen: Screen = .squad, tacticSlot: TacticSlot? = nil,
                 matchStart: MatchStart = MatchStart(), elevensStart: ElevensStart = ElevensStart(),
                 removalStart: RemovalStart = RemovalStart(), fixturesStart: FixturesStart = FixturesStart(),
                 trainingStart: TrainingStart = TrainingStart(), scoutingStart: ScoutingStart = ScoutingStart(),
-                offersStart: OffersStart = OffersStart()) {
+                offersStart: OffersStart = OffersStart(), contractsStart: ContractsStart = ContractsStart()) {
         self.model = model
         self.tacticSlot = tacticSlot
         var selection: PickSelection?
@@ -74,6 +75,7 @@ public struct RootView: View {
         }
         navigation.offerClub = offersStart.clubs
         navigation.offersEarlierOpen = offersStart.earlierOpen
+        navigation.contractsDismissedOpen = contractsStart.dismissedOpen
         _navigation = State(initialValue: navigation)
     }
 
@@ -126,7 +128,7 @@ struct ScreenView: View {
         case .rest: RestScreen(model: model)
         case .training: TrainingScreen(model: model, navigation: navigation)
         case .removal: RemovalScreen(model: model, navigation: navigation)
-        case .contracts: EmptyView()   // the Contracts screen comes in the plan's next task
+        case .contracts: ContractsScreen(model: model, navigation: navigation)
         case .scouting: ScoutingScreen(model: model, navigation: navigation)
         case .offers: OffersScreen(model: model, navigation: navigation)
         case .settings: SettingsScreen(model: model)

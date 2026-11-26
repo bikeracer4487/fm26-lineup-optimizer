@@ -774,6 +774,23 @@ public enum Theme {
         public static let editorPicture = CGSize(width: 600, height: 520)
     }
 
+    // MARK: Contracts
+
+    /// The Contracts screen: the club's three figures, the parts and each player's row.
+    public enum Contracts {
+        /// The space between the screen's parts: the club's figures, each list, the line on those left out, those not
+        /// being renewed and the evidence note.
+        public static let partGap: CGFloat = Offers.partGap
+        /// The screen is no wider than this, so a row's button stays near its name on a wide window.
+        public static let columnMaximumWidth: CGFloat = Offers.columnMaximumWidth
+        /// How far a player's lines sit in from his name, so they read as his.
+        public static let rowIndent: CGFloat = Offers.partIndent
+        /// The most lines a player's name wraps to.
+        public static let nameLines = 2
+        /// Between one club figure, with its label, and the next on their row.
+        public static let figureGap: CGFloat = Offers.figureGap
+    }
+
     // MARK: League
 
     /// The League screen: the three numbers, and the table's columns and rules.

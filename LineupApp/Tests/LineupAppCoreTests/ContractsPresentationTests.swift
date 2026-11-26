@@ -115,17 +115,42 @@ import LineupEngine
         #expect(row.figureText == "9500")
         #expect(row.figureReading == "$9,500 a month")
         #expect(row.figureEnteredText == AdvisorText.enteredOn(SampleData.contractsDate))
-        #expect(row.verdictLines.first == "The agent's figure is above the most you can offer one player, $9,000 a month.")
+        // The over-the-highest-wage sentence stands apart, for the caution style, and is not repeated in the rest.
+        let highest = "The agent's figure is above the most you can offer one player, $9,000 a month."
+        #expect(row.cautionVerdictLine == highest)
+        #expect(!row.verdictLines.contains(highest))
+        #expect(row.verdictLines.count == 3)
         // The guide the verdict is read against carries the typed limits.
         let ceiling = Display.wage(perWeek: WagePeriod.monthly.perWeek(130_000 * 0.027), model.squad.book.moneyStyle)
         #expect(row.verdictLines.contains("The agent's figure is above a backup's share of your wage budget, \(ceiling) (this tool's estimate)."))
         #expect(row.guideLines.contains { $0.hasPrefix("The most you can offer one player is $9,000 a month") })
     }
 
+    @Test func aFigureUnderTheHighestWageHasNoCautionLineAndKeepsEveryVerdict() throws {
+        let model = try ContractsSample.filled()
+        let humphries = try ContractsSample.player(SampleData.contractsFigureName, in: model)
+        model.setAgentFigure(text: "3000", for: humphries.id)
+        let row = try #require(ContractsSample.listed(try ContractsSample.sheet(model)).first { $0.id == humphries.id })
+        #expect(row.cautionVerdictLine == nil)
+        #expect(row.verdictLines.first == "The agent's figure is within what the rest of your second eleven are paid.")
+        #expect(!row.verdictLines.contains { $0.contains("the most you can offer one player") })
+    }
+
+    @Test func onlyTheRowsOtherClubsCanApproachNowHaveTheirTimingAsACaution() throws {
+        let sheet = try ContractsSample.sheet(try ContractsSample.filled())
+        let heading = AdvisorText.contractPartHeading(.approachable)
+        for part in sheet.parts {
+            #expect(!part.rows.isEmpty)
+            #expect(part.rows.allSatisfy { $0.timingIsCaution == (part.heading == heading) }, "\(part.heading)")
+        }
+        #expect(!sheet.dismissed.isEmpty && sheet.dismissed.allSatisfy { !$0.timingIsCaution && $0.cautionVerdictLine == nil })
+    }
+
     @Test func aRowWithNoFigureHasNoVerdict() throws {
         let model = try ContractsSample.filled()
         let rows = ContractsSample.listed(try ContractsSample.sheet(model)).filter { $0.name != SampleData.contractsFigureName }
-        #expect(!rows.isEmpty && rows.allSatisfy { $0.verdictLines.isEmpty && $0.figureReading == nil })
+        #expect(!rows.isEmpty && rows.allSatisfy { $0.verdictLines.isEmpty && $0.cautionVerdictLine == nil
+                                                    && $0.figureReading == nil })
     }
 
     // MARK: The players not being renewed
@@ -284,5 +309,12 @@ import LineupEngine
 
     @Test func theNotRenewingPartStartsClosed() {
         #expect(Navigation().contractsDismissedOpen == false)
+    }
+
+    @Test func theButtonsSayWhoTheyAreForToAssistiveTechnology() {
+        #expect(ContractsPresentation.notRenewingButton == "Not renewing")
+        #expect(ContractsPresentation.notRenewingLabel("Evan Humphries") == "Not renewing Evan Humphries")
+        #expect(ContractsPresentation.showAgainButton == "Show again")
+        #expect(ContractsPresentation.showAgainLabel("Dejan Tetek") == "Show Dejan Tetek again")
     }
 }

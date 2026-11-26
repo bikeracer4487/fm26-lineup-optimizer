@@ -198,6 +198,19 @@
 //                                              window ("offers-small-…"). Its sheet is drawn on its own, for a
 //                                              proposal in the Barnet deal ("offers-editor-sale-…") and for the
 //                                              loan's ask ("offers-editor-loan-…").
+//                                              The Contracts screen is drawn on the contracts sample, with the
+//                                              club's three figures and one agent's figure typed
+//                                              ("contracts-…"), tall enough for every part, the line on those
+//                                              left out and the evidence note ("contracts-tall-…"), the same
+//                                              with the players not being renewed open
+//                                              ("contracts-dismissed-open-…"), with nothing typed
+//                                              ("contracts-nofigures-…", as tall), with everyone listed set
+//                                              aside, so nobody is listed and the pill has no count
+//                                              ("contracts-empty-…"; no date empties the list, since the plain
+//                                              sample has no contract end days and the contracts sample's
+//                                              player with no contract is listed on any day), with no squad
+//                                              ("contracts-notready-…") and
+//                                              in the smallest window ("contracts-small-…").
 //                                              Every screen is drawn again in a narrow window, 800 by 700
 //                                              ("<screen>-narrow-…"), and Match Selection, Tactics, Fixtures
 //                                              and the advisor screens in the smallest window
@@ -802,6 +815,35 @@ let narrowWindow = CGSize(width: 800, height: 700)
     try ScreenPictures.writeOfferEditor(model: offers, draft: loan, to: directory, name: "offers-editor-loan")
 }
 
+/// The Contracts screen: see the usage at the top.
+@MainActor func drawContracts(_ root: String, to directory: URL, size: CGSize) throws {
+    let url = URL(fileURLWithPath: root, isDirectory: true)
+    func sample(_ make: (URL) throws -> AppModel) -> AppModel {
+        do { return try make(url) } catch { fail("\(error)") }
+    }
+    let filled = sample(SampleData.modelWithContracts)
+    try ScreenPictures.write(model: filled, to: directory, size: size, variant: nil, screens: [.contracts])
+    // Tall enough for every part, the line on those left out, those not being renewed and the evidence note.
+    let tall = CGSize(width: size.width, height: size.height * 7.5)
+    try ScreenPictures.write(model: filled, to: directory, size: tall, variant: "tall", screens: [.contracts])
+    try ScreenPictures.write(model: filled, to: directory, size: tall, variant: "dismissed-open", screens: [.contracts],
+                             contractsStart: ContractsStart(dismissedOpen: true))
+    try ScreenPictures.write(model: sample(SampleData.modelWithContractsNoFigures), to: directory, size: tall,
+                             variant: "nofigures", screens: [.contracts])
+    try ScreenPictures.write(model: filled, to: directory, size: Theme.Layout.minimumWindow, variant: "small",
+                             screens: [.contracts])
+    // Nobody listed. The plain sample's squads have no contract end days, so their months left do not move with the
+    // date, and the contracts sample's player with no contract is listed on any day: so everyone listed is set aside.
+    let empty = sample(SampleData.modelWithContractsNoFigures)
+    if case .ready(let sheet) = empty.contractsSheet {
+        for row in sheet.parts.flatMap(\.rows) { empty.dismissContract(row.id) }
+    }
+    guard empty.contractsCount == nil else { fail("The contracts sample still lists players after all were set aside.") }
+    try ScreenPictures.write(model: empty, to: directory, size: size, variant: "empty", screens: [.contracts])
+    try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size, variant: "notready",
+                             screens: [.contracts])
+}
+
 /// Draws the pictures and returns the process's exit status.
 @MainActor func drawPictures(to path: String, sampleDataRoot: String?) -> Int32 {
     do {
@@ -820,7 +862,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
         if let root = sampleDataRoot {
             // The left back has the most reasons in the first fixture.
             try ScreenPictures.write(model: sampleModel(root), to: directory, size: size,
-                                     screens: Screen.allCases.filter { ![.tactics, .training, .fixtures, .scouting, .offers].contains($0) },
+                                     screens: Screen.allCases.filter { ![.tactics, .training, .fixtures, .scouting, .offers, .contracts].contains($0) },
                                      matchStart: MatchStart(slot: .D_L))
             // With an unsaved change, the left inside forward made a winger and selected, so the role menu,
             // "Remove", what he becomes and the marks for unsaved changes are all shown.
@@ -855,6 +897,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
             try drawScouting(root, to: directory, size: size)
             try drawLeague(root, to: directory, size: size)
             try drawOffers(root, to: directory, size: size)
+            try drawContracts(root, to: directory, size: size)
         } else {
             try ScreenPictures.write(model: SampleData.emptyModel(), to: directory, size: size)
         }

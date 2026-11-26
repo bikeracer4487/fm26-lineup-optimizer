@@ -347,8 +347,9 @@ private struct ClubFigureFields: View {
     }
 }
 
-/// A field's label: bold in ink beside a field of the block, small and muted beside a club's figure.
-private struct FieldLabel: View {
+/// A field's label: bold in ink beside a field of the block, small and muted beside a club's figure. Contracts' fields
+/// use it too.
+struct FieldLabel: View {
     let text: String
     var small = false
 
