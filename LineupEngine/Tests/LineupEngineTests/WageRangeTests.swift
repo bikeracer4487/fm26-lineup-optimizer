@@ -95,6 +95,25 @@ import Testing
         #expect(try guide(five, limits: WageLimits(wageBudgetPerWeek: 20_000)).budgetLeftPerWeek == nil)
     }
 
+    @Test func aSingleWageIsItsOwnRangeWhenOneWageIsEnough() throws {
+        var one = parameters
+        var rules = one.wageRangeRules.value
+        rules.fewestWages = 1
+        one.wageRangeRules = Parameter(rules, .derived, source: "test")
+        let wages: [WageTier: [PlayerWage]] = [.secondEleven: [wage("Only", 600)]]
+        let g = try WageRange.guide(tier: .secondEleven, slot: nil, wages: wages, excluding: nil,
+                                    presentWagePerWeek: nil, limits: .none, parameters: one)
+        #expect(g.paid == PaidRange(lowerQuartile: 600, highest: 600, count: 1))
+        #expect(g.shown == .range(low: 600, high: 600, setBy: .tierHighest))
+        #expect(try guide(wages).paid == nil)
+    }
+
+    @Test func excludingAnEarnerCanTakeTheTierBelowTheFewest() throws {
+        let g = try guide(three, excluding: wage("One", 0).player)
+        #expect(g.leavesHimOut)
+        #expect(g.paid == nil)
+    }
+
     @Test func badParametersThrow() {
         var bad = parameters
         bad.wageRangeRules = Parameter(WageRangeRules(lastYearMonths: 12, approachMonths: 6, keyPlayerShare: 0.075,

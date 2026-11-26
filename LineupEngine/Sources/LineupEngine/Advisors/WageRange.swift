@@ -15,6 +15,13 @@ public struct WageRangeRules: Equatable, Sendable {
     public var backupShare: Double
     /// The fewest wages a tier needs before its own range is given.
     public var fewestWages: Int
+
+    public init(lastYearMonths: Int, approachMonths: Int, keyPlayerShare: Double, starterShare: Double,
+                backupShare: Double, fewestWages: Int) {
+        self.lastYearMonths = lastYearMonths; self.approachMonths = approachMonths
+        self.keyPlayerShare = keyPlayerShare; self.starterShare = starterShare
+        self.backupShare = backupShare; self.fewestWages = fewestWages
+    }
 }
 
 /// Where a player stands for his wage: the first eleven, the second, or neither.
@@ -185,7 +192,9 @@ public enum WageRange {
         if values.count >= rules.fewestWages, let highest = values.last {
             let lower = Array(values.prefix(values.count / 2))
             let middle = lower.count / 2
-            let quartile = lower.count % 2 == 1 ? lower[middle] : (lower[middle - 1] + lower[middle]) / 2
+            // A single wage has an empty lower half: the quartile is that wage.
+            let quartile = lower.isEmpty ? highest
+                : lower.count % 2 == 1 ? lower[middle] : (lower[middle - 1] + lower[middle]) / 2
             paid = PaidRange(lowerQuartile: quartile, highest: highest, count: values.count)
         }
 
