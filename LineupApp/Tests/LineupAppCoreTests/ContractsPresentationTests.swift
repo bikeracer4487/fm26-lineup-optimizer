@@ -28,45 +28,146 @@ import LineupEngine
         try #require(model.squad.book.allPlayers.first { $0.name == name })
     }
 
-    static func listed(_ sheet: ContractsSheet) -> [ContractRow] { sheet.parts.flatMap(\.rows) }
+    static func listed(_ sheet: ContractsSheet) -> [ContractRow] { sheet.rows }
+
+    /// The engine's report for the sample, worked out by hand from what the model holds.
+    static func report(_ model: AppModel) throws -> ContractsReport {
+        let advice = try advice(model)
+        return try Contracts.report(
+            players: model.squad.book.allPlayers, ownClub: model.ownClub, marks: model.marks, removal: advice.removal,
+            elevens: advice.elevens, depth: advice.depth, tactic: try #require(model.primaryTactic).tactic,
+            dismissed: Set(model.contracts.dismissed.keys), wanted: Set(model.contracts.wanted.keys),
+            today: model.settings.currentDate, catalog: model.catalog, profile: model.profile,
+            parameters: model.planParameters)
+    }
+
+    /// The first-team player the sample does not recommend renewing who is first choice at central attacking
+    /// midfield, at 31, by the decline his age is expected to bring.
+    static let notRecommendedName = "Ciaran O'Connor"
 }
 
 @MainActor @Suite struct ContractsPresentationTests {
     // MARK: Who is listed
 
-    @Test func theSampleListsEachPartInTheEnginesOrderAndWordsAndOnlyPlayersRunningDown() throws {
+    @Test func theSampleListsOnlyPlayersRunningDownWithTheEnginesIntro() throws {
         let model = try ContractsSample.filled()
         let sheet = try ContractsSample.sheet(model)
-        #expect(sheet.parts.map(\.heading) == ["Other clubs can approach them now", "In their last year", "No contract"])
-        #expect(sheet.parts.map(\.heading) == ContractPart.allCases.map(AdvisorText.contractPartHeading))
         let players = Dictionary(model.squad.book.allPlayers.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        for (part, rows) in zip(ContractPart.allCases, sheet.parts.map(\.rows)) {
-            #expect(!rows.isEmpty)
-            for row in rows {
-                let player = try #require(players[row.id])
-                #expect(Contracts.part(of: player, today: model.settings.currentDate, parameters: model.planParameters) == part,
-                        "\(row.name)")
+        #expect(!sheet.rows.isEmpty && !sheet.notRecommended.isEmpty && !sheet.dismissed.isEmpty)
+        for row in sheet.rows + sheet.notRecommended + sheet.dismissed {
+            let player = try #require(players[row.id])
+            #expect(Contracts.part(of: player, today: model.settings.currentDate, parameters: model.planParameters) != nil,
+                    "\(row.name)")
+        }
+        // Every part has a player in the list, and they are not grouped by it.
+        let parts = sheet.rows.compactMap { row in
+            players[row.id].flatMap {
+                Contracts.part(of: $0, today: model.settings.currentDate, parameters: model.planParameters)
             }
         }
+        #expect(parts.count == sheet.rows.count)
+        #expect(Set(parts) == Set(ContractPart.allCases))
+        #expect(parts != parts.sorted { ContractPart.allCases.firstIndex(of: $0)! < ContractPart.allCases.firstIndex(of: $1)! })
         #expect(sheet.intro == AdvisorText.contractsIntro)
         #expect(sheet.emptyLine == nil)
         #expect(sheet.evidenceNote == AdvisorText.contractsEvidenceNote(model.planParameters.wageRangeRules.value))
     }
 
-    @Test func theSheetIsTheEnginesListForTheBooksPlayersMarksAdviceTacticDismissalsAndToday() throws {
+    @Test func theListIsInTheEnginesOrderWithEachRowsWorthLine() throws {
         let model = try ContractsSample.filled()
-        let advice = try ContractsSample.advice(model)
-        let tactic = try #require(model.primaryTactic).tactic
-        let report = try Contracts.report(
-            players: model.squad.book.allPlayers, ownClub: model.ownClub, marks: model.marks, removal: advice.removal,
-            elevens: advice.elevens, tactic: tactic, dismissed: Set(model.contracts.dismissed.keys),
-            today: model.settings.currentDate, catalog: model.catalog, profile: model.profile,
-            parameters: model.planParameters)
+        let report = try ContractsSample.report(model)
         let sheet = try ContractsSample.sheet(model)
-        #expect(ContractsSample.listed(sheet).map(\.id) == report.listed.map(\.player))
+        #expect(sheet.rows.map(\.id) == report.listed.map(\.player))
+        #expect(sheet.notRecommended.map(\.id) == report.notRecommended.map(\.player))
         #expect(sheet.dismissed.map(\.id) == report.dismissed.map(\.player))
-        #expect(ContractsSample.listed(sheet).map(\.standingLine) == report.listed.map(AdvisorText.standingLine))
-        #expect(ContractsSample.listed(sheet).map(\.timingLine) == report.listed.map(AdvisorText.timingLine))
+        #expect(sheet.rows.map(\.standingLine) == report.listed.map(AdvisorText.standingLine))
+        #expect(sheet.rows.map(\.timingLine) == report.listed.map(AdvisorText.timingLine))
+        // The higher worth first.
+        let shares = report.listed.compactMap { $0.worth?.share }
+        #expect(shares.count == report.listed.count && shares == shares.sorted(by: >))
+        // Each recommended row carries the engine's worth line and no reasons.
+        for (row, entry) in zip(sheet.rows, report.listed) where entry.reasons.isEmpty {
+            #expect(row.worthLine == entry.worth.map(AdvisorText.worthLine), "\(row.name)")
+            #expect(row.reasonLines.isEmpty && row.wantedLine == nil, "\(row.name)")
+        }
+        #expect(sheet.rows.first?.name == "Jack Thompson")
+        #expect(sheet.rows.first?.worthLine == "Ability 109, could reach about 119 (this tool's estimate): that would rate 24.6% above the average of your first eleven by ability, at goalkeeper.")
+    }
+
+    @Test func theNotRecommendedRowsCarryTheirReasonsAndNoWageLines() throws {
+        let model = try ContractsSample.filled()
+        let report = try ContractsSample.report(model)
+        let sheet = try ContractsSample.sheet(model)
+        for (row, entry) in zip(sheet.notRecommended, report.notRecommended) {
+            #expect(!entry.reasons.isEmpty)
+            #expect(row.reasonLines == entry.reasons.map(AdvisorText.contractReasonLine), "\(row.name)")
+            #expect(row.standingLine == AdvisorText.standingLine(entry))
+            #expect(!row.detailsText.isEmpty)
+            #expect(row.worthLine == nil && row.wantedLine == nil && row.timingLine == nil && !row.timingIsCaution)
+            #expect(row.guideLines.isEmpty && row.figureText.isEmpty && row.figureEnteredText == nil)
+            #expect(row.cautionVerdictLine == nil && row.verdictLines.isEmpty)
+        }
+        let oConnor = try #require(sheet.notRecommended.first { $0.name == ContractsSample.notRecommendedName })
+        #expect(oConnor.standingLine == "First choice at central attacking midfield.")
+        #expect(oConnor.reasonLines == [
+            "He is 31. This tool expects him to lose about 9 points of ability over the next two seasons, from 71 to about 62 (its own estimate: no test measures decline): that would rate 6.0% under the average of your first eleven, at central attacking midfield. Rates 0.4% above it today.",
+            "He is first choice at central attacking midfield: sign a replacement before he goes.",
+        ])
+        let khaleel = try #require(sheet.notRecommended.first { $0.name == "Rafiq Khaleel" })
+        #expect(khaleel.reasonLines.first == "Player Removal advises ending his contract by agreement.")
+    }
+
+    @Test func theClosedLineCountsThem() throws {
+        let model = try ContractsSample.filled()
+        let sheet = try ContractsSample.sheet(model)
+        #expect(sheet.notRecommended.count == 5)
+        #expect(sheet.notRecommendedLine == "5 players not recommended for renewal")
+        #expect(sheet.notRecommendedLine == AdvisorText.notRecommendedLine(sheet.notRecommended.count))
+        // Setting one aside changes nothing: he is not recommended whatever the owner set aside.
+        let oConnor = try #require(sheet.notRecommended.first { $0.name == ContractsSample.notRecommendedName })
+        model.dismissContract(oConnor.id)
+        #expect(try ContractsSample.sheet(model).notRecommendedLine == sheet.notRecommendedLine)
+        // With every one of them renewed anyway there is no line.
+        for row in try ContractsSample.sheet(model).notRecommended { model.renewAnyway(row.id) }
+        let after = try ContractsSample.sheet(model)
+        #expect(after.notRecommended.isEmpty && after.notRecommendedLine == nil)
+    }
+
+    @Test func aWantedRowSaysSoAndKeepsItsReasons() throws {
+        let model = try ContractsSample.filled()
+        let tetek = try ContractsSample.player(SampleData.contractsWantedName, in: model)
+        let sheet = try ContractsSample.sheet(model)
+        #expect(!sheet.notRecommended.contains { $0.id == tetek.id })
+        let row = try #require(sheet.rows.first { $0.id == tetek.id })
+        #expect(row.wantedLine == AdvisorText.listedAtYourChoice)
+        #expect(row.reasonLines == [
+            "Rates 5.3% under the average of your first eleven, at left defensive midfield.",
+            "He is second choice at right defensive midfield: sign a replacement before he goes.",
+        ])
+        // His worth is under the standard, so it is said once, among the reasons.
+        #expect(row.worthLine == nil)
+        // A full row: his timing, his range and the figure field.
+        #expect(row.timingLine == "Other clubs can approach him from Sat 30 Dec.")
+        #expect(!row.guideLines.isEmpty && row.figureLabel == "The agent's figure, a year")
+        // Last, by his worth.
+        #expect(sheet.rows.last?.id == tetek.id)
+
+        // "Follow the advice" takes him back, with the same reasons.
+        model.followAdvice(tetek.id)
+        let back = try ContractsSample.sheet(model)
+        #expect(!back.rows.contains { $0.id == tetek.id })
+        let notRecommended = try #require(back.notRecommended.first { $0.id == tetek.id })
+        #expect(notRecommended.reasonLines == row.reasonLines && notRecommended.wantedLine == nil)
+
+        // A player renewed anyway whose worth meets the standard keeps his worth line beside his reason.
+        let humphries = try ContractsSample.player(SampleData.contractsFigureName, in: model)
+        model.setMark(.toSell, for: humphries.id)
+        model.renewAnyway(humphries.id)
+        let marked = try #require(try ContractsSample.sheet(model).rows.first { $0.id == humphries.id })
+        #expect(marked.wantedLine == AdvisorText.listedAtYourChoice)
+        #expect(marked.reasonLines == ["You have marked him to sell.",
+                                       "He is second choice at left back: sign a replacement before he goes."])
+        #expect(marked.worthLine == "Ability 83, could reach about 95 (this tool's estimate): that would rate 6.2% above the average of your first eleven, at left back.")
     }
 
     /// Where a player out on loan is says the engine's standing line alone, with where he would stand.
@@ -75,14 +176,18 @@ import LineupEngine
         let rows = ContractsSample.listed(try ContractsSample.sheet(model))
         let humphries = try #require(rows.first { $0.name == SampleData.contractsFigureName })
         #expect(humphries.detailsText == "Age 22 · D L · CA 83 · PA 95 · $39,228 a year · contract ends 30 Jun 2028")
-        let clark = try #require(rows.first { $0.name == "Ewan Clark" })
+        let johnson = try #require(rows.first { $0.name == "Darnell Johnson" })
+        #expect(johnson.standingLine == "Out on loan at Merthyr; he would make the second eleven at right centre-back.")
+        #expect(!johnson.detailsText.contains("Merthyr"))
+        // Not being renewed: the same.
+        model.dismissContract(johnson.id)
+        let set = try #require(try ContractsSample.sheet(model).dismissed.first { $0.id == johnson.id })
+        #expect(set.detailsText == johnson.detailsText && set.standingLine == johnson.standingLine)
+        // Not recommended: the same.
+        let clark = try #require(try ContractsSample.sheet(model).notRecommended.first { $0.name == "Ewan Clark" })
         #expect(clark.detailsText == "Age 24 · AM RL · CA 69 · PA 85 · $39,228 a year · contract ends 30 Jun 2028")
         #expect(clark.standingLine.hasPrefix("Out on loan at Hemel Hempstead; "))
         #expect(!clark.detailsText.contains("Hemel Hempstead"))
-        // Not being renewed: the same.
-        model.dismissContract(clark.id)
-        let set = try #require(try ContractsSample.sheet(model).dismissed.first { $0.id == clark.id })
-        #expect(set.detailsText == clark.detailsText && set.standingLine == clark.standingLine)
     }
 
     // MARK: The range and the verdict
@@ -141,13 +246,16 @@ import LineupEngine
     }
 
     @Test func onlyTheRowsOtherClubsCanApproachNowHaveTheirTimingAsACaution() throws {
-        let sheet = try ContractsSample.sheet(try ContractsSample.filled())
-        let heading = AdvisorText.contractPartHeading(.approachable)
-        for part in sheet.parts {
-            #expect(!part.rows.isEmpty)
-            #expect(part.rows.allSatisfy { $0.timingIsCaution == (part.heading == heading) }, "\(part.heading)")
+        let model = try ContractsSample.filled()
+        let report = try ContractsSample.report(model)
+        let sheet = try ContractsSample.sheet(model)
+        #expect(Set(report.listed.map(\.part)) == Set(ContractPart.allCases))
+        for (row, entry) in zip(sheet.rows, report.listed) {
+            #expect(row.timingIsCaution == (entry.part == .approachable), "\(row.name)")
+            #expect(row.timingLine == AdvisorText.timingLine(entry))
         }
         #expect(!sheet.dismissed.isEmpty && sheet.dismissed.allSatisfy { !$0.timingIsCaution && $0.cautionVerdictLine == nil })
+        #expect(!sheet.notRecommended.isEmpty && sheet.notRecommended.allSatisfy { !$0.timingIsCaution && $0.timingLine == nil })
     }
 
     @Test func aRowWithNoFigureHasNoVerdict() throws {
@@ -162,44 +270,64 @@ import LineupEngine
     @Test func aDismissedPlayerIsBehindTheNotRenewingLineWithHisFactsAndStandingOnly() throws {
         let model = try ContractsSample.filled()
         let sheet = try ContractsSample.sheet(model)
-        let tetek = try ContractsSample.player(SampleData.contractsDismissedName, in: model)
-        #expect(!ContractsSample.listed(sheet).contains { $0.id == tetek.id })
-        #expect(sheet.dismissed.map(\.id) == [tetek.id])
+        let set = try ContractsSample.player(SampleData.contractsDismissedName, in: model)
+        #expect(!ContractsSample.listed(sheet).contains { $0.id == set.id })
+        #expect(sheet.dismissed.map(\.id) == [set.id])
         #expect(sheet.dismissedLine == "1 player you are not renewing")
         let row = try #require(sheet.dismissed.first)
-        #expect(row.detailsText == "Age 25 · DM/M C · CA 74 · PA 113 · $47,064 a year · contract ends 30 Jun 2029")
-        #expect(row.standingLine == "Second choice at right defensive midfield.")
+        #expect(row.detailsText == "Age 22 · M/AM/ST RL · CA 69 · PA 80 · $33,432 a year · contract ends 30 Jun 2029")
+        #expect(row.standingLine == "Second choice at right attacking midfield.")
         #expect(row.timingLine == nil && row.guideLines.isEmpty && row.figureText.isEmpty
                 && row.figureEnteredText == nil && row.verdictLines.isEmpty)
-        model.showContractAgain(tetek.id)
+        #expect(row.worthLine == nil && row.reasonLines.isEmpty && row.wantedLine == nil)
+        model.showContractAgain(set.id)
         let shown = try ContractsSample.sheet(model)
         #expect(shown.dismissed.isEmpty && shown.dismissedLine == nil)
-        #expect(ContractsSample.listed(shown).contains { $0.id == tetek.id })
+        #expect(ContractsSample.listed(shown).contains { $0.id == set.id })
+    }
+
+    @Test func renewingAnywayAPlayerSetAsideListsHimAgain() throws {
+        let model = try ContractsSample.filled()
+        let tetek = try ContractsSample.player(SampleData.contractsWantedName, in: model)
+        model.followAdvice(tetek.id)
+        model.dismissContract(tetek.id)
+        #expect(model.contracts.dismissed[tetek.id] != nil)
+        // Not recommended whatever was set aside, so "Renew anyway" is offered and takes the setting aside away.
+        #expect(try ContractsSample.sheet(model).notRecommended.contains { $0.id == tetek.id })
+        model.renewAnyway(tetek.id)
+        #expect(model.contracts.dismissed[tetek.id] == nil)
+        #expect(try ContractsSample.sheet(model).rows.contains { $0.id == tetek.id && $0.wantedLine != nil })
     }
 
     // MARK: The count
 
-    @Test func theCountIsTheRowsInThePartsAndAMarkToSellTakesOneOut() throws {
+    @Test func thePillCountsTheListOnly() throws {
         let model = try ContractsSample.filled()
         let sheet = try ContractsSample.sheet(model)
-        let rows = ContractsSample.listed(sheet)
-        #expect(model.contractsCount == rows.count)
-        // Player Removal advises two players in their last six months to go: Ayman Benarous and Rafiq Khaleel.
-        let going = 2
-        #expect(sheet.leftOutLine == AdvisorText.leftOutAsGoingLine(going))
-        let marked = try #require(rows.first { $0.name == SampleData.contractsFigureName })
+        // The players renewed anyway among them; not those not recommended, nor those set aside.
+        #expect(model.contractsCount == sheet.rows.count)
+        #expect(sheet.rows.contains { $0.wantedLine != nil })
+        #expect(!sheet.notRecommended.isEmpty && !sheet.dismissed.isEmpty)
+        // A mark to sell takes a player out of the list and puts him among those not recommended, saying so first.
+        let marked = try #require(sheet.rows.first { $0.name == SampleData.contractsFigureName })
         model.setMark(.toSell, for: marked.id)
-        #expect(model.contractsCount == rows.count - 1)
+        #expect(model.contractsCount == sheet.rows.count - 1)
         let after = try ContractsSample.sheet(model)
-        #expect(!ContractsSample.listed(after).contains { $0.id == marked.id })
-        #expect(after.leftOutLine == AdvisorText.leftOutAsGoingLine(going + 1))
+        #expect(!after.rows.contains { $0.id == marked.id })
+        #expect(after.notRecommended.first { $0.id == marked.id }?.reasonLines.first == "You have marked him to sell.")
+        #expect(after.notRecommendedLine == AdvisorText.notRecommendedLine(sheet.notRecommended.count + 1))
+        // "Renew anyway" puts one back in the count, and "Follow the advice" takes him out again.
+        model.renewAnyway(marked.id)
+        #expect(model.contractsCount == sheet.rows.count)
+        model.followAdvice(marked.id)
+        #expect(model.contractsCount == sheet.rows.count - 1)
     }
 
     @Test func withNobodyListedThePartsAreEmptyTheEnginesLineShowsAndThereIsNoCount() throws {
         let model = try ContractsSample.plain()
         for row in ContractsSample.listed(try ContractsSample.sheet(model)) { model.dismissContract(row.id) }
         let sheet = try ContractsSample.sheet(model)
-        #expect(sheet.parts.isEmpty)
+        #expect(sheet.rows.isEmpty)
         #expect(sheet.emptyLine == AdvisorText.nobodyInLastYear)
         #expect(model.contractsCount == nil)
         #expect(!sheet.dismissed.isEmpty)
@@ -224,6 +352,7 @@ import LineupEngine
         let model = SampleData.emptyModel()
         #expect(model.contractsSheet == .notReady(.needsSquad))
         #expect(model.contractsCount == nil)
+        #expect(model.notBeingRenewed.isEmpty)
     }
 
     @Test func withNoTacticTheListWaitsAndThereIsNoCount() throws {
@@ -247,6 +376,7 @@ import LineupEngine
         }
         #expect(model.contractsSheet == .notReady(model.adviceState))
         #expect(model.contractsCount == nil)
+        #expect(model.notBeingRenewed.isEmpty)
     }
 
     // MARK: The pill
@@ -313,19 +443,47 @@ import LineupEngine
 
     // MARK: The sample and the navigation
 
-    @Test func theSampleMakesASecondElevenPlayerOutOfContractAndListsHimUnderNoContract() throws {
+    @Test func theSampleMakesASecondElevenPlayerOutOfContractAndListsHim() throws {
         let model = try ContractsSample.plain()
         let sheet = try ContractsSample.sheet(model)
         let hughes = try ContractsSample.player(SampleData.contractsOutOfContractName, in: model)
         #expect(hughes.contractType == .outOfContract)
-        let row = try #require(sheet.parts.last?.rows.first { $0.id == hughes.id })
+        let row = try #require(sheet.rows.first { $0.id == hughes.id })
         #expect(row.standingLine == "Second choice at right back.")
         #expect(row.detailsText == "Age 25 · D/WB R · CA 76 · PA 93 · no contract")
         #expect(row.timingLine == "He has no contract and can leave at any time.")
+        #expect(row.worthLine == "Rates 0.8% above the average of your first eleven, at right back.")
     }
 
-    @Test func theNotRenewingPartStartsClosed() {
+    /// The names the sample's own check holds it to.
+    @Test func theSamplesNamesAreAPlayerSetAsideAPlayerRenewedAnywayAndAPlayerWithAFigure() throws {
+        for model in [try ContractsSample.plain(), try ContractsSample.filled()] {
+            let sheet = try ContractsSample.sheet(model)
+            let set = try ContractsSample.player(SampleData.contractsDismissedName, in: model)
+            let wanted = try ContractsSample.player(SampleData.contractsWantedName, in: model)
+            let figure = try ContractsSample.player(SampleData.contractsFigureName, in: model)
+            let report = try ContractsSample.report(model)
+            // The one set aside and the one with a figure are players the tool recommends.
+            #expect(report.dismissed.first { $0.player == set.id }?.reasons == [])
+            #expect(report.listed.first { $0.player == figure.id }?.reasons == [])
+            // The one renewed anyway is one it does not.
+            #expect(report.listed.first { $0.player == wanted.id }?.isWanted == true)
+            #expect(model.contracts.wanted[wanted.id] == SampleData.contractsDate)
+            #expect(sheet.rows.map(\.name) == [
+                "Jack Thompson", "Mark Tomlinson", "Laolu Omobolaji", "Samuel Onyekachukwu", "Josh Lewis", "Deago Nelson",
+                "Kai Payne", "Evan Humphries", "Kieran Petrie", "Iestyn Hughes", "Zack Clarke", "Darnell Johnson",
+                "Christian N'Guessan", "Dejan Tetek",
+            ])
+            #expect(sheet.notRecommended.map(\.name) == [
+                "Ciaran O'Connor", "Rafiq Khaleel", "Ewan Clark", "Ayman Benarous", "Ruban Khan",
+            ])
+            #expect(sheet.dismissed.map(\.name) == ["Sammy Henia-Kamau"])
+        }
+    }
+
+    @Test func theNotRenewingAndNotRecommendedPartsStartClosed() {
         #expect(Navigation().contractsDismissedOpen == false)
+        #expect(Navigation().contractsNotRecommendedOpen == false)
     }
 
     @Test func theButtonsSayWhoTheyAreForToAssistiveTechnology() {
@@ -333,5 +491,10 @@ import LineupEngine
         #expect(ContractsPresentation.notRenewingLabel("Evan Humphries") == "Not renewing Evan Humphries")
         #expect(ContractsPresentation.showAgainButton == "Show again")
         #expect(ContractsPresentation.showAgainLabel("Dejan Tetek") == "Show Dejan Tetek again")
+        #expect(ContractsPresentation.renewAnywayButton == "Renew anyway")
+        #expect(ContractsPresentation.renewAnywayLabel("Dejan Tetek") == "Renew Dejan Tetek anyway")
+        #expect(ContractsPresentation.followAdviceButton == "Follow the advice")
+        #expect(ContractsPresentation.followAdviceLabel("Dejan Tetek") == "Follow the advice on Dejan Tetek")
+        #expect(ContractsPresentation.notRecommendedHeading == "Not recommended for renewal")
     }
 }

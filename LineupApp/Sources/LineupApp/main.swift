@@ -828,7 +828,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
     }
     let filled = sample(SampleData.modelWithContracts)
     try ScreenPictures.write(model: filled, to: directory, size: size, variant: nil, screens: [.contracts])
-    // Tall enough for every part, the line on those left out, those not being renewed and the evidence note.
+    // Tall enough for the whole list, those not being renewed and the evidence note.
     let tall = CGSize(width: size.width, height: size.height * 7.5)
     try ScreenPictures.write(model: filled, to: directory, size: tall, variant: "tall", screens: [.contracts])
     try ScreenPictures.write(model: filled, to: directory, size: tall, variant: "dismissed-open", screens: [.contracts],
@@ -841,7 +841,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
     // date, and the contracts sample's player with no contract is listed on any day: so everyone listed is set aside.
     let empty = sample(SampleData.modelWithContractsNoFigures)
     if case .ready(let sheet) = empty.contractsSheet {
-        for row in sheet.parts.flatMap(\.rows) { empty.dismissContract(row.id) }
+        for row in sheet.rows { empty.dismissContract(row.id) }
     }
     guard empty.contractsCount == nil else { fail("The contracts sample still lists players after all were set aside.") }
     try ScreenPictures.write(model: empty, to: directory, size: size, variant: "empty", screens: [.contracts])

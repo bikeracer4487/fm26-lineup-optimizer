@@ -8,17 +8,19 @@ import Testing
 @MainActor @Suite struct RemovalPresentationTests {
     private func advice(_ key: String, name: String, level: RemovalLevel = .high, action: RemovalAction = .sell,
                         score: Int = 60, reasons: [RemovalReason] = [RemovalReason(text: "In neither eleven", points: 25)],
-                        release: Int? = 26_000, mutual: Int? = 14_300, basis: Evidence = .derived) -> RemovalAdvice {
+                        release: Int? = 26_000, mutual: Int? = 14_300, basis: Evidence = .derived,
+                        neededAt: RemovalNeed? = nil) -> RemovalAdvice {
         RemovalAdvice(player: PlayerID(key: key), name: name, level: level, action: action, score: score, reasons: reasons,
-                      tier: nil, neededAt: nil, worth: nil, outlook: nil, matchesHere: nil, keepReason: nil, watchReason: nil,
+                      tier: nil, neededAt: neededAt, worth: nil, outlook: nil, matchesHere: nil, keepReason: nil, watchReason: nil,
                       loanOnlyToStart: false, onYouthContract: false,
                       isFalseProspect: false, isMentor: false, releaseCost: release, mutualCost: mutual, basis: basis)
     }
 
     private func loan(_ key: String, name: String, verdict: LoanVerdict = .keepToEnd, score: Int = 10,
                       reasons: [RemovalReason] = [RemovalReason(text: "In the first eleven at left back", points: -30)],
-                      basis: Evidence = .carriedOverFM26) -> LoanReview {
-        LoanReview(player: PlayerID(key: key), name: name, verdict: verdict, score: score, reasons: reasons, neededAt: nil, basis: basis)
+                      basis: Evidence = .carriedOverFM26, neededAt: RemovalNeed? = nil) -> LoanReview {
+        LoanReview(player: PlayerID(key: key), name: name, verdict: verdict, score: score, reasons: reasons,
+                   neededAt: neededAt, basis: basis)
     }
 
     private func report(_ advice: [RemovalAdvice], loans: [LoanReview] = [], wages: Double = 600,
@@ -81,6 +83,41 @@ import Testing
             let reason = RemovalReason(text: "R", points: points)
             #expect(PointedReason(reason).pointsText == AdvisorText.points(of: reason))
         }
+    }
+
+    // MARK: A replacement first
+
+    @Test func aRowAdvisedToGoWhoIsNeededCarriesTheReplacementSentence() {
+        let thin = RemovalNeed(slot: .GK, kind: .firstChoiceWhereThin)
+        let row = RemovalRow(advice("g", name: "Only Keeper", level: .high, action: .sell, neededAt: thin),
+                             squad: nil, age: nil, mark: nil, money: .weeklyPounds)
+        #expect(row.replaceFirstText == "Sign a replacement at goalkeeper before he goes: he is first choice there and cover is thin.")
+        #expect(row.replaceFirstText == AdvisorText.replaceFirst(thin))
+        let standIn = RemovalNeed(slot: .D_L, kind: .standIn)
+        let released = RemovalRow(advice("l", name: "Left Back", level: .critical, action: .release, neededAt: standIn),
+                                  squad: nil, age: nil, mark: nil, money: .weeklyPounds)
+        #expect(released.replaceFirstText == "Sign a replacement at left back before he goes: too few players can step in there without him.")
+    }
+
+    @Test func aRowAdvisedToGoWhoIsNotNeededOrNeededAndKeptCarriesNone() {
+        let going = RemovalRow(advice("g", name: "Spare", level: .high, action: .sell),
+                               squad: nil, age: nil, mark: nil, money: .weeklyPounds)
+        #expect(going.replaceFirstText == nil)
+        let need = RemovalNeed(slot: .D_L, kind: .cover)
+        let kept = RemovalRow(advice("k", name: "Kept", level: .keep, action: .keep, neededAt: need),
+                              squad: nil, age: nil, mark: nil, money: .weeklyPounds)
+        #expect(kept.replaceFirstText == nil)
+        let watched = RemovalRow(advice("m", name: "Watched", level: .medium, action: .monitor, neededAt: need),
+                                 squad: nil, age: nil, mark: nil, money: .weeklyPounds)
+        #expect(watched.replaceFirstText == nil)
+    }
+
+    @Test func aLoanToEndEarlyWhosePlayerIsNeededCarriesTheReplacementSentenceAndOneKeptNone() {
+        let need = RemovalNeed(slot: .D_L, kind: .cover)
+        let ending = LoanBlock(loan("e", name: "Loanee", verdict: .endEarly, neededAt: need))
+        #expect(ending.replaceFirstText == "Sign a replacement at left back before he goes: cover there would be thin without him.")
+        #expect(LoanBlock(loan("n", name: "Loanee", verdict: .endEarly)).replaceFirstText == nil)
+        #expect(LoanBlock(loan("k", name: "Loanee", verdict: .keepToEnd, neededAt: need)).replaceFirstText == nil)
     }
 
     // MARK: Rows

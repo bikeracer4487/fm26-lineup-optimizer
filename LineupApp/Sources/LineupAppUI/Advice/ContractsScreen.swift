@@ -12,10 +12,9 @@ public struct ContractsStart: Sendable {
     }
 }
 
-/// The players being kept whose contracts are running down: the engine's intro; the club's three wage figures, each
-/// typed straight into the model; then each part, a row for each player, with "Not
-/// renewing" at the trailing end of his name's line; the line counting those left out as going, with the way to Player
-/// Removal; the players not being renewed, closed behind a line, each with "Show again"; and how far to trust it all.
+/// The players worth renewing whose contracts are running down: the engine's intro; the club's three wage figures, each
+/// typed straight into the model; then the list, a row for each player, with "Not renewing" at the trailing end of his
+/// name's line; the players not being renewed, closed behind a line, each with "Show again"; and how far to trust it all.
 /// It stands behind the same gate as Player Removal, and everything under the heading scrolls.
 public struct ContractsScreen: View {
     let model: AppModel
@@ -62,7 +61,6 @@ private struct ContractsBody: View {
     let sheet: ContractsSheet
     let model: AppModel
     @Bindable var navigation: Navigation
-    @Environment(\.showScreen) private var showScreen
 
     var body: some View {
         ScrollView(.vertical) {
@@ -78,20 +76,7 @@ private struct ContractsBody: View {
                 if let empty = sheet.emptyLine {
                     MutedLines(lines: [empty])
                 }
-                ForEach(sheet.parts, id: \.heading) { part in
-                    ContractsPart(part: part, model: model)
-                }
-                if let leftOut = sheet.leftOutLine {
-                    HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
-                        Text(leftOut)
-                            .font(Theme.Typeface.text())
-                            .foregroundStyle(Theme.Colour.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Button(MatchPresentation.goTo(.removal)) { showScreen(.removal) }
-                            .buttonStyle(.secondary)
-                            .fixedSize()
-                    }
-                }
+                ContractsList(rows: sheet.rows, model: model)
                 if let line = sheet.dismissedLine {
                     NotRenewing(line: line, rows: sheet.dismissed, model: model, navigation: navigation)
                 }
@@ -134,19 +119,16 @@ private struct WageLimitFields: View {
     }
 }
 
-/// One part: its heading in the engine's words, then a row for each of its players, separated by faint rules.
-private struct ContractsPart: View {
-    let part: ContractsPartRows
+/// The list: a row for each player, separated by faint rules.
+private struct ContractsList: View {
+    let rows: [ContractRow]
     let model: AppModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            BoardHeading(part.heading, size: Theme.TypeSize.boardTitle)
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(part.rows) { row in
-                    FaintRule()
-                    ContractRowView(row: row, model: model)
-                }
+        LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(rows) { row in
+                FaintRule()
+                ContractRowView(row: row, model: model)
             }
         }
     }

@@ -78,6 +78,9 @@ public enum MentoringEditing: Identifiable, Equatable, Sendable {
     public var scoutingHiddenOpen = false
     /// Whether the Contracts screen's "Not renewing" part is open. In memory only: closed at every launch.
     public var contractsDismissedOpen = false
+    /// Whether the Contracts screen's "Not recommended for renewal" part is open. In memory only: closed at every
+    /// launch.
+    public var contractsNotRecommendedOpen = false
     /// The Offers screen's club typed in each player's "To a club" row, whether "Earlier offers" is open, and the round
     /// being recorded (nil: none). In memory only: empty and closed at every launch.
     public var offerClub: [PlayerID: String] = [:]

@@ -33,6 +33,34 @@ import LineupEngine
         return t
     }
 
+    /// The first team imported, the club named and the sample 4-2-3-1 its primary tactic, so the list is ready; the clock
+    /// stopped.
+    private func listing() throws -> TestModel {
+        let t = try ready()
+        var settings = t.model.settings
+        settings.clubName = "Oxford City"
+        t.model.update(settings)
+        let url = Captures.repositoryRoot
+            .appendingPathComponent("LineupEngine/Tests/LineupEngineTests/Fixtures/tactics/sample-4231.json")
+        let tactic = try JSONDecoder().decode(Tactic.self, from: Data(contentsOf: url))
+        let id = t.model.addTactic(named: tactic.name)
+        t.model.update(StoredTactic(id: id, tactic: tactic))
+        return t
+    }
+
+    /// The row in the paste of a player the tool does not recommend renewing: Matty Taylor, 36, in his last year.
+    private static let notRecommendedRow = 5
+    /// The row of one it recommends: Deago Nelson, 22.
+    private static let recommendedRow = 16
+
+    private func sheet(_ model: AppModel) throws -> ContractsSheet {
+        guard case .ready(let sheet) = model.contractsSheet else {
+            Issue.record("expected a list, got \(model.contractsSheet)")
+            throw Unlisted()
+        }
+        return sheet
+    }
+
     /// The first team pasted in dollars by the month, the clock stopped.
     private func monthly() throws -> TestModel {
         let t = try TestModel()
@@ -164,9 +192,86 @@ import LineupEngine
         #expect(t.model.contracts.dismissed[held] == day)
     }
 
+    // MARK: Renewing anyway
+
+    @Test func renewAnywayIsSavedWithTodaysDayAndClearsADismissal() throws {
+        let t = try listing()
+        let taylor = try id(of: try name(onRow: Self.notRecommendedRow), t.model)
+        #expect(try sheet(t.model).notRecommended.contains { $0.id == taylor })
+        t.model.dismissContract(taylor)
+        #expect(t.model.contracts.dismissed[taylor] != nil)
+        advance(t)
+        t.model.renewAnyway(taylor)
+        #expect(t.model.contracts.wanted == [taylor: t.model.settings.currentDate])
+        #expect(t.model.contracts.dismissed[taylor] == nil)
+        #expect(t.reopened().contracts.wanted == [taylor: t.model.settings.currentDate])
+        let row = try #require(try sheet(t.model).rows.first { $0.id == taylor })
+        #expect(row.wantedLine == AdvisorText.listedAtYourChoice)
+    }
+
+    @Test func renewAnywayDoesNothingForAPlayerTheToolRecommendsOrNobodyHolds() throws {
+        let t = try listing()
+        let nelson = try id(of: try name(onRow: Self.recommendedRow), t.model)
+        #expect(try sheet(t.model).rows.contains { $0.id == nelson })
+        t.model.renewAnyway(nelson)
+        t.model.renewAnyway(PlayerID(key: "fmrte:nobody"))
+        #expect(t.model.contracts == ContractsState())
+        // Neither started the clock.
+        let taylor = try id(of: try name(onRow: Self.notRecommendedRow), t.model)
+        t.model.renewAnyway(taylor)
+        #expect(t.model.contracts.wanted[taylor] != nil)
+        // Nor does it do anything while the list is not ready.
+        let plain = try ready()
+        plain.model.renewAnyway(try id(of: try name(onRow: Self.notRecommendedRow), plain.model))
+        #expect(plain.model.contracts == ContractsState())
+    }
+
+    @Test func followAdviceRemovesIt() throws {
+        let t = try listing()
+        let taylor = try id(of: try name(onRow: Self.notRecommendedRow), t.model)
+        t.model.renewAnyway(taylor)
+        advance(t)
+        t.model.followAdvice(taylor)
+        #expect(t.model.contracts.wanted.isEmpty)
+        #expect(t.reopened().contracts.wanted.isEmpty)
+        #expect(try sheet(t.model).notRecommended.contains { $0.id == taylor })
+        // Nothing for a player not chosen, and it does not start the clock.
+        let nelson = try id(of: try name(onRow: Self.recommendedRow), t.model)
+        advance(t)
+        t.model.followAdvice(nelson)
+        t.model.renewAnyway(taylor)
+        #expect(t.model.contracts.wanted[taylor] != nil)
+    }
+
+    @Test func theFourActionsShareOneClock() throws {
+        let t = try listing()
+        let taylor = try id(of: try name(onRow: Self.notRecommendedRow), t.model)
+        let nelson = try id(of: try name(onRow: Self.recommendedRow), t.model)
+        t.model.dismissContract(nelson)
+        #expect(t.model.contracts.dismissed[nelson] != nil)
+        t.input.uptime += AppModel.contractsActionInterval / 2
+        t.model.renewAnyway(taylor)
+        #expect(t.model.contracts.wanted.isEmpty, "inside the interval of a dismissal")
+        t.input.uptime += AppModel.contractsActionInterval * 0.6
+        t.model.renewAnyway(taylor)
+        #expect(t.model.contracts.wanted[taylor] != nil)
+        t.input.uptime += AppModel.contractsActionInterval / 2
+        t.model.showContractAgain(nelson)
+        #expect(t.model.contracts.dismissed[nelson] != nil, "inside the interval of a renewal")
+        t.model.followAdvice(taylor)
+        #expect(t.model.contracts.wanted[taylor] != nil)
+        t.input.uptime += AppModel.contractsActionInterval * 0.6
+        t.model.followAdvice(taylor)
+        #expect(t.model.contracts.wanted.isEmpty)
+        t.input.uptime += AppModel.contractsActionInterval / 2
+        t.model.dismissContract(taylor)
+        #expect(t.model.contracts.dismissed[taylor] == nil, "inside the interval of following the advice")
+    }
+
     @Test func everyActionWritesTheContractsFileAndNoOtherAndDoesNotPlan() throws {
-        let t = try ready()
+        let t = try listing()
         let held = try id(of: try name(onRow: 0), t.model)
+        let taylor = try id(of: try name(onRow: Self.notRecommendedRow), t.model)
         let planned = t.model.timesPlanned
         let generation = t.model.adviceGeneration
         let state = t.model.planState
@@ -175,6 +280,8 @@ import LineupEngine
             { t.model.setAgentFigure(text: "700", for: held) },
             { t.model.dismissContract(held) },
             { t.model.showContractAgain(held) },
+            { t.model.renewAnyway(taylor) },
+            { t.model.followAdvice(taylor) },
         ]
         for step in steps {
             let before = try others(t)
@@ -239,6 +346,29 @@ import LineupEngine
         #expect(t.model.contracts.figures[key] == nil)
     }
 
+    @Test func aWantedEntryIsDroppedAtAnImportOnceHeIsRenewedOrGone() throws {
+        let t = try listing()
+        try t.importU21()
+        let row = Self.notRecommendedRow
+        let taylor = try id(of: try name(onRow: row), t.model)
+        t.model.renewAnyway(taylor)
+        try t.importFirstTeam()
+        #expect(t.model.contracts.wanted[taylor] != nil, "still in his last year")
+        try reimportFirstTeam(t) { $0[row][Self.monthsLeftCell] = "\"40\"" }
+        #expect(t.model.contracts.wanted[taylor] == nil, "renewed")
+        #expect(t.reopened().contracts.wanted.isEmpty)
+
+        // Gone: once every squad held has been imported without him.
+        try t.importFirstTeam()
+        advance(t)
+        t.model.renewAnyway(taylor)
+        #expect(t.model.contracts.wanted[taylor] != nil)
+        try reimportFirstTeam(t) { $0.remove(at: row) }
+        #expect(t.model.contracts.wanted[taylor] != nil, "the U21s have not been imported since")
+        try t.importU21()
+        #expect(t.model.contracts.wanted[taylor] == nil)
+    }
+
     @Test func aPlayerWithNoContractSurvivesAnImport() throws {
         let t = try ready()
         let who = try name(onRow: 1)
@@ -271,6 +401,17 @@ import LineupEngine
         #expect(reopened.contracts.limits.wageBudgetPerWeek == 9_000)
         #expect(reopened.contracts.dismissed.isEmpty)
         #expect(reopened.contracts.limitsEntered == nil)
+    }
+
+    @Test func aFileFromBeforeWantedOpensWithNoNoticeAndNobodyWanted() throws {
+        let t = try ready()
+        let held = try id(of: try name(onRow: 0), t.model)
+        let file = "{\"version\":1,\"value\":{\"limits\":{},\"dismissed\":{\"\(held.key)\":\"2026-11-13\"},\"figures\":{}}}"
+        try Data(file.utf8).write(to: t.directory.appendingPathComponent("contracts.json"))
+        let reopened = t.reopened()
+        #expect(reopened.contracts.wanted.isEmpty)
+        #expect(reopened.contracts.dismissed == [held: Day(iso: "2026-11-13")!])
+        #expect(!reopened.notices.contains { $0.text.contains("contract figures") })
     }
 
     @Test func aCorruptFileGivesANoticeAndIsKeptAside() throws {

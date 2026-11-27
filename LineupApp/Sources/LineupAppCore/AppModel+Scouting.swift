@@ -8,9 +8,14 @@ extension AppModel {
     public static let scoutingActionInterval: TimeInterval = 0.5
 
     /// The needs for the tactic the Scouting screen shows (`scoutingTacticShown`), with the players counted as going
-    /// worked out from the ready advice whatever tactic is shown: those on loan here, marked, or advised to leave by
-    /// Player Removal. Worked out when first read after a replan and kept until the next.
+    /// worked out from the ready advice whatever tactic is shown: those on loan here, marked, advised to leave by
+    /// Player Removal, or not being renewed by the Contracts list for the primary tactic (`notBeingRenewed`). Worked out
+    /// when first read after a replan, a change on Contracts or a change of today's date, and kept until the next.
     public func scoutingNeeds(for chosen: UUID?) -> ScoutingNeedsState {
+        // Read first, before anything kept is returned, so whatever shows this is told of a change on Contracts or of
+        // today's date, which decide who is not being renewed.
+        _ = contracts
+        _ = settings.currentDate
         let state = adviceState
         guard case .ready(let report) = state else { return .notReady(state) }
         guard let id = scoutingTacticShown(chosen), let stored = tactics.first(where: { $0.id == id }) else {
@@ -193,7 +198,7 @@ extension AppModel {
         let players = squad.book.allPlayers
         let club = ownClub
         let going = Scouting.going(players: players, ownClub: club, marks: marks,
-                                   advisedToLeave: advice.removal.advisedToLeave)
+                                   advisedToLeave: advice.removal.advisedToLeave, notBeingRenewed: notBeingRenewed)
         do {
             return .ready(try Scouting.needs(tactic: tactic, players: players, ownClub: club, going: going,
                                              retraining: retrainingForPlan, catalog: catalog, profile: profile,

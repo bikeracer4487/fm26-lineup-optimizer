@@ -148,6 +148,9 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
     public let markNote: String?
     /// His abilities, salary and contract end; nil when he is not in the squad book.
     public let facts: PlayerFacts?
+    /// The engine's caution to sign a replacement before he goes (`AdvisorText.replaceFirst`), for a player advised to
+    /// go who is needed at a slot; nil for anyone else.
+    public let replaceFirstText: String?
 
     /// Critical and high rows are open until the owner closes them; medium and keep rows closed until opened.
     public var opensByDefault: Bool {
@@ -183,6 +186,7 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
         markChoices = advice.onYouthContract
             ? RemovalPresentation.markChoices.filter { $0.mark != .toLoanOut } : RemovalPresentation.markChoices
         markNote = advice.onYouthContract ? AdvisorText.youthContractNotLoaned : nil
+        replaceFirstText = advice.replaceBeforeGoing.map(AdvisorText.replaceFirst)
     }
 }
 
@@ -241,6 +245,9 @@ public struct LoanBlock: Identifiable, Equatable, Sendable {
     public let reasons: [PointedReason]
     /// The evidence note in brackets; nil for FM27 evidence.
     public let noteText: String?
+    /// The engine's caution to sign a replacement before the loan ends (`AdvisorText.replaceFirst`), for a loan to end
+    /// early whose player is needed at a slot; nil for any other.
+    public let replaceFirstText: String?
 
     /// The block as said to assistive technology.
     public var spokenText: String {
@@ -258,6 +265,7 @@ public struct LoanBlock: Identifiable, Equatable, Sendable {
         reasons = review.reasons.map(PointedReason.init)
         spokenNote = AdvisorText.note(for: review.basis)
         noteText = spokenNote.map { "(\($0))" }
+        replaceFirstText = review.replaceBeforeGoing.map(AdvisorText.replaceFirst)
     }
 }
 

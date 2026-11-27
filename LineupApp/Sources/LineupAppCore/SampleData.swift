@@ -716,16 +716,19 @@ public enum SampleData {
 
     /// The second-eleven player the contracts sample makes out of contract.
     public static let contractsOutOfContractName = "Iestyn Hughes"
-    /// The player the contracts sample is not renewing.
-    public static let contractsDismissedName = "Dejan Tetek"
-    /// The player the contracts sample types an agent's figure for.
+    /// The player the contracts sample is not renewing, one the tool recommends.
+    public static let contractsDismissedName = "Sammy Henia-Kamau"
+    /// The player the tool does not recommend renewing whom the contracts sample keeps with "Renew anyway".
+    public static let contractsWantedName = "Dejan Tetek"
+    /// The player the contracts sample types an agent's figure for, one the tool recommends.
     public static let contractsFigureName = "Evan Humphries"
 
     /// The contracts sample: the first team as the owner pasted it on 23 November 2026, with FMRTE's expiry-date column
     /// and FMRTE set to dollars a month, alone in a new model with the sample 4-2-3-1, imported with today in the game
     /// `contractsDate` (the paste's months left are as FMRTE wrote them some four months earlier; the list reads the
     /// end days). One player of the second eleven, `contractsOutOfContractName`, is made out of contract, as an
-    /// import would have him; `contractsDismissedName` is not being renewed; the club's three figures are typed
+    /// import would have him; `contractsDismissedName` is not being renewed; `contractsWantedName`, whom the tool does
+    /// not recommend, is renewed anyway; the club's three figures are typed
     /// (a wage budget of $1,560,000, wages spent of $1,416,000 and a highest wage of $108,000, each a year, which is
     /// $130,000, $118,000 and $9,000 a month); and an agent's figure of $114,000 a year, above the highest wage, is
     /// typed for `contractsFigureName`. The scripted clock moves a
@@ -738,15 +741,16 @@ public enum SampleData {
         let figure = try player(named: contractsFigureName, in: model)
         model.setAgentFigure(text: "114000", for: figure)
         guard case .ready(let sheet) = model.contractsSheet,
-              let row = sheet.parts.flatMap(\.rows).first(where: { $0.id == figure }), !row.verdictLines.isEmpty else {
+              let row = sheet.rows.first(where: { $0.id == figure }), !row.verdictLines.isEmpty else {
             throw SampleDataError(description: "The contracts sample does not list \(contractsFigureName) with a verdict.")
         }
         return model
     }
 
     /// The contracts sample with nothing typed: no club figure and no agent's figure. One player is still out of
-    /// contract and one still not being renewed. Fails unless the first two parts each list a player and the third lists
-    /// the player made out of contract.
+    /// contract, one still not being renewed and one still renewed anyway. Fails unless the list holds the player made
+    /// out of contract, the player renewed anyway as wanted and the player for the agent's figure, the player set aside
+    /// is the only one not being renewed, and someone is not recommended.
     @MainActor public static func modelWithContractsNoFigures(repositoryRoot: URL) throws -> AppModel {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("lineup-contracts-\(UUID().uuidString)")
         let input = ScriptedInput(today: contractsDate)
@@ -785,17 +789,21 @@ public enum SampleData {
             player.wagePerWeek = 0
         }
         model.dismissContract(try player(named: contractsDismissedName, in: model))
+        model.renewAnyway(try player(named: contractsWantedName, in: model))
 
         guard case .ready(let sheet) = model.contractsSheet else {
             throw SampleDataError(description: "The contracts sample gives no list: \(model.contractsSheet)")
         }
-        let headings = ContractPart.allCases.map(AdvisorText.contractPartHeading)
+        let listed = Dictionary(sheet.rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let outOfContract = try player(named: contractsOutOfContractName, in: model)
-        guard sheet.parts.map(\.heading) == headings,
-              sheet.parts.last?.rows.contains(where: { $0.id == outOfContract }) == true,
-              sheet.dismissed.count == 1 else {
-            throw SampleDataError(description: "The contracts sample does not list a player in each part and one not "
-                                  + "being renewed: \(sheet.parts.map { ($0.heading, $0.rows.map(\.name)) })")
+        let wanted = try player(named: contractsWantedName, in: model)
+        let figure = try player(named: contractsFigureName, in: model)
+        let dismissed = try player(named: contractsDismissedName, in: model)
+        guard listed[outOfContract] != nil, listed[figure] != nil, listed[wanted]?.wantedLine != nil,
+              sheet.dismissed.map(\.id) == [dismissed], !sheet.notRecommended.isEmpty else {
+            throw SampleDataError(description: "The contracts sample's names no longer fit its list: listed "
+                                  + "\(sheet.rows.map(\.name)), not recommended \(sheet.notRecommended.map(\.name)), "
+                                  + "not being renewed \(sheet.dismissed.map(\.name))")
         }
         return model
     }

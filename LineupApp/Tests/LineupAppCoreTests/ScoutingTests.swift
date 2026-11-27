@@ -77,7 +77,9 @@ import LineupEngine
         #expect(!advice.removal.advisedToLeave.isEmpty, "the captured first team has players advised to leave")
         #expect(Set(needs.going.map(\.player)).isSuperset(of: advice.removal.advisedToLeave))
         let going = Scouting.going(players: players, ownClub: t.model.ownClub, marks: t.model.marks,
-                                   advisedToLeave: advice.removal.advisedToLeave)
+                                   advisedToLeave: advice.removal.advisedToLeave,
+                                   notBeingRenewed: t.model.notBeingRenewed)
+        #expect(!t.model.notBeingRenewed.isEmpty, "the captured first team has players not recommended for renewal")
         #expect(needs.going == going)
         let primary = try #require(t.model.primaryTactic)
         let expected = try Scouting.needs(tactic: primary.tactic, players: players, ownClub: t.model.ownClub, going: going,
@@ -107,6 +109,91 @@ import LineupEngine
         #expect(t.model.candidates(for: nil) == .notReady(.needsSquad))
         try ScoutingSetup.paste(t)
         #expect(t.model.candidates(for: nil) == .notReady(.needsSquad), "held players wait for the squad")
+    }
+
+    // MARK: Not being renewed
+
+    /// The contracts sample: its squad has end days, so a player moves into his last year as the date moves.
+    private func contractsSample() throws -> AppModel {
+        try SampleData.modelWithContractsNoFigures(repositoryRoot: Captures.repositoryRoot)
+    }
+
+    private func going(_ name: String, in needs: ScoutingNeeds) -> GoingReason? {
+        needs.going.first { $0.name == name }?.reason
+    }
+
+    @Test func aPlayerNotBeingRenewedIsCountedAsGoingOnTheNeedsTab() throws {
+        let model = try contractsSample()
+        let needs = try ScoutingSetup.needs(model)
+        guard case .ready(let advice) = model.adviceState else {
+            Issue.record("expected advice, got \(model.adviceState)")
+            return
+        }
+        // Not recommended and not chosen, and set aside by the owner: both not being renewed.
+        #expect(going("Ciaran O'Connor", in: needs) == .notBeingRenewed)
+        #expect(going(SampleData.contractsDismissedName, in: needs) == .notBeingRenewed)
+        // Renewed anyway: staying.
+        #expect(going(SampleData.contractsWantedName, in: needs) == nil)
+        // An earlier reason wins: advised to leave by Player Removal, though not being renewed too.
+        #expect(going("Rafiq Khaleel", in: needs) == .advisedToLeave)
+        #expect(model.notBeingRenewed.contains(try #require(model.players.first { $0.name == "Rafiq Khaleel" }).id))
+        let expected = Scouting.going(players: model.squad.book.allPlayers, ownClub: model.ownClub, marks: model.marks,
+                                      advisedToLeave: advice.removal.advisedToLeave,
+                                      notBeingRenewed: model.notBeingRenewed)
+        #expect(needs.going == expected)
+        #expect(AdvisorText.countedAsGoing(needs.going)?.contains("Ciaran O'Connor (not being renewed)") == true)
+        // The squad is judged without him: he is first choice today and is first choice nowhere among those staying.
+        let oConnor = try #require(model.players.first { $0.name == "Ciaran O'Connor" }).id
+        #expect(advice.elevens.first.contains { $0.player == oConnor })
+        #expect(!needs.elevens.first.contains { $0.player == oConnor })
+    }
+
+    @Test func dismissingAndShowingAgainWorkTheNeedsOutAgain() throws {
+        let model = try contractsSample()
+        let lewis = try #require(model.players.first { $0.name == "Josh Lewis" }).id
+        let oConnor = try #require(model.players.first { $0.name == "Ciaran O'Connor" }).id
+        #expect(going("Josh Lewis", in: try ScoutingSetup.needs(model)) == nil)
+        model.dismissContract(lewis)
+        #expect(going("Josh Lewis", in: try ScoutingSetup.needs(model)) == .notBeingRenewed)
+        model.showContractAgain(lewis)
+        #expect(going("Josh Lewis", in: try ScoutingSetup.needs(model)) == nil)
+        model.renewAnyway(oConnor)
+        #expect(going("Ciaran O'Connor", in: try ScoutingSetup.needs(model)) == nil)
+        model.followAdvice(oConnor)
+        #expect(going("Ciaran O'Connor", in: try ScoutingSetup.needs(model)) == .notBeingRenewed)
+    }
+
+    @Test func theCandidatesAreJudgedAgainAfterAChangeOnContracts() throws {
+        let t = try ScoutingSetup.ready()
+        try ScoutingSetup.paste(t)
+        _ = try ScoutingSetup.report(t.model)
+        let judged = t.model.timesCandidatesJudged
+        _ = try ScoutingSetup.report(t.model)
+        #expect(t.model.timesCandidatesJudged == judged, "kept until something changes")
+        let taylor = try #require(t.model.players.first { $0.name == "Matty Taylor" }).id
+        let needs = try ScoutingSetup.needs(t.model)
+        #expect(needs.going.first { $0.player == taylor }?.reason == .notBeingRenewed)
+        t.model.renewAnyway(taylor)
+        #expect(try ScoutingSetup.needs(t.model).going.first { $0.player == taylor } == nil)
+        _ = try ScoutingSetup.report(t.model)
+        #expect(t.model.timesCandidatesJudged == judged + 1)
+    }
+
+    @Test func movingTheDateWorksTheNeedsOutAgain() throws {
+        let model = try contractsSample()
+        // His contract a year longer than pasted: not in his last year today, so not on Contracts and staying.
+        var players = try #require(model.squad.book.current[.firstTeam])
+        let index = try #require(players.firstIndex { $0.name == "Ciaran O'Connor" })
+        players[index].contractEnds = Day(iso: "2030-06-30")
+        _ = model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: [],
+                                                money: model.squad.book.money ?? .weeklyPounds), to: .firstTeam)
+        model.replan()
+        #expect(going("Ciaran O'Connor", in: try ScoutingSetup.needs(model)) == nil)
+        let imported = model.squad.importedOn
+        model.moveToday(by: 365)
+        // In his last year now, not recommended, and so going, with no import.
+        #expect(going("Ciaran O'Connor", in: try ScoutingSetup.needs(model)) == .notBeingRenewed)
+        #expect(model.squad.importedOn == imported)
     }
 
     // MARK: The paste

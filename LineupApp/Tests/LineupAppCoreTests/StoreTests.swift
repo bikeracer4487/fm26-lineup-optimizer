@@ -451,6 +451,33 @@ import LineupEngine
         }
     }
 
+    @Test func thePlayersRenewedAnywayAreSavedUnderTheirKeysWithTheirDays() throws {
+        try withStore { store, dir in
+            var state = ContractsState()
+            state.wanted[PlayerID(key: "fmrte:7")] = day
+            try store.save(state, to: .contracts)
+            let json = try JSONSerialization.jsonObject(
+                with: Data(contentsOf: dir.appendingPathComponent("contracts.json"))) as! [String: Any]
+            let value = try #require(json["value"] as? [String: Any])
+            #expect(value["wanted"] as? [String: String] == ["fmrte:7": "2026-11-13"])
+            let loaded = store.load(.contracts, as: ContractsState.self, otherwise: ContractsState())
+            #expect(loaded.value == state)
+            #expect(loaded.notice == nil)
+        }
+    }
+
+    @Test func aContractsFileFromBeforeThePlayersRenewedAnywayReadsNobody() throws {
+        try withStore { store, dir in
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data("{\"version\":1,\"value\":{\"dismissed\":{\"fmrte:7\":\"2026-11-13\"},\"figures\":{}}}".utf8)
+                .write(to: dir.appendingPathComponent("contracts.json"))
+            let loaded = store.load(.contracts, as: ContractsState.self, otherwise: ContractsState())
+            #expect(loaded.notice == nil)
+            #expect(loaded.value.wanted.isEmpty)
+            #expect(loaded.value.dismissed == [PlayerID(key: "fmrte:7"): day])
+        }
+    }
+
     @Test func theFitnessFileIsOneOfTheFiles() {
         #expect(StoreFile.allCases.contains(.fitness))
         #expect(StoreFile.fitness.rawValue == "fitness")

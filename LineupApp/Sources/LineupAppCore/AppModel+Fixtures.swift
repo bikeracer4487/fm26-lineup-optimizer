@@ -66,7 +66,8 @@ extension AppModel {
     }
 
     /// Takes the settings as given; the planner reports any plan setting out of range. Replans only when something the
-    /// plan reads has changed: the plan settings, the condition floor, the club or the primary tactic.
+    /// plan reads has changed: the plan settings, the condition floor, the club or the primary tactic. A change of
+    /// today's date leaves Scouting's needs and candidates to be worked out again.
     public func update(_ settings: AppSettings) {
         let before = self.settings
         self.settings = settings
@@ -75,6 +76,11 @@ extension AppModel {
         if before.clubOverride != settings.clubOverride { dropSpentMarks() }
         if before.leagueSituation != settings.leagueSituation || before.clubOverride != settings.clubOverride {
             adviceCache?.suggestions = nil
+        }
+        // Who is in his last year moves with the date, and so who Contracts does not renew and Scouting counts as going.
+        if before.currentDate != settings.currentDate {
+            adviceCache?.scoutingNeeds = [:]
+            adviceCache?.candidates = [:]
         }
         if before.plan != settings.plan || before.conditionFloor != settings.conditionFloor
             || before.clubOverride != settings.clubOverride || before.primaryTacticID != settings.primaryTacticID {

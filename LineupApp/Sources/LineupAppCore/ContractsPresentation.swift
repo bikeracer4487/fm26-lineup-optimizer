@@ -12,8 +12,10 @@ public struct WageLimitRow: Equatable, Sendable {
     public var text: String
 }
 
-/// One player on Contracts: who he is, why he is listed, when other clubs can approach him, the wage range for his tier
-/// and the agent's figure with what it says against the range. A player not being renewed carries his facts and his
+/// One player on Contracts: who he is, where he stands, when other clubs can approach him, his worth against the first
+/// eleven's standard, the wage range for his tier and the agent's figure with what it says against the range. A player
+/// renewed at the owner's choice also carries the engine's line saying so and the reasons the tool gave against it. A
+/// player not recommended carries his facts, his standing and his reasons only; one not being renewed his facts and his
 /// standing only.
 public struct ContractRow: Equatable, Identifiable, Sendable {
     public let id: PlayerID
@@ -23,17 +25,25 @@ public struct ContractRow: Equatable, Identifiable, Sendable {
     public let detailsText: String
     /// The engine's sentence on where he stands: "First choice at left back."
     public let standingLine: String
-    /// The engine's sentence on when other clubs can approach him; nil when there is none, or he is not being renewed.
+    /// The engine's sentence on when other clubs can approach him; nil when there is none, or he is not in the list.
     public let timingLine: String?
-    /// Whether the timing line is drawn as a caution: true in the part "Other clubs can approach them now", false in the
-    /// other parts and for a player not being renewed.
+    /// Whether the timing line is drawn as a caution: true when other clubs can approach him now, false otherwise and
+    /// for a player not in the list.
     public let timingIsCaution: Bool
-    /// The engine's lines on the wage range for his tier; none for a player not being renewed.
+    /// The engine's sentence on his worth against the first eleven's standard (`AdvisorText.worthLine`), for a player
+    /// in the list; nil when he has no worth, when his reasons already say it, and for a player not in the list.
+    public let worthLine: String?
+    /// The engine's sentence for each reason the tool does not recommend renewing him, in its order; empty for a
+    /// player it recommends and for one not being renewed.
+    public let reasonLines: [String]
+    /// The engine's sentence on a row listed at the owner's choice ("Renew anyway"); nil on any other.
+    public let wantedLine: String?
+    /// The engine's lines on the wage range for his tier; none for a player not in the list.
     public let guideLines: [String]
     /// "The agent's figure, a year".
     public let figureLabel: String
     /// The agent's figure as kept, for a year, with a comma between each group of three digits: "114,000"; blank when
-    /// none is.
+    /// none is, and for a player not in the list.
     public let figureText: String
     /// "entered Wed 25 Nov": when the agent's figure was typed; nil when none is kept.
     public let figureEnteredText: String?
@@ -45,12 +55,6 @@ public struct ContractRow: Equatable, Identifiable, Sendable {
     public let verdictLines: [String]
 }
 
-/// One part of Contracts: its heading in the engine's words and its players, soonest end first.
-public struct ContractsPartRows: Equatable, Sendable {
-    public let heading: String
-    public let rows: [ContractRow]
-}
-
 /// Everything the Contracts screen shows.
 public struct ContractsSheet: Equatable, Sendable {
     /// The engine's line under the heading.
@@ -59,12 +63,17 @@ public struct ContractsSheet: Equatable, Sendable {
     public let limitRows: [WageLimitRow]
     /// "entered Wed 25 Nov": when a figure was last changed; nil with none kept.
     public let limitsEnteredText: String?
-    /// In the engine's order, only the parts with players in them.
-    public let parts: [ContractsPartRows]
-    /// The engine's line when no part has a player; nil otherwise.
+    /// The players worth renewing and those renewed at the owner's choice, in the engine's order: the higher worth
+    /// first.
+    public let rows: [ContractRow]
+    /// The engine's line when nobody is in the list; nil otherwise.
     public let emptyLine: String?
-    /// The engine's line counting the players in their last year marked or advised to go; nil for none.
-    public let leftOutLine: String?
+    /// The line the players not recommended for renewal are closed behind, "21 players not recommended for renewal";
+    /// nil for none.
+    public let notRecommendedLine: String?
+    /// The players the tool does not recommend renewing and the owner has not chosen to, in the engine's order, each
+    /// with his facts, standing and reasons.
+    public let notRecommended: [ContractRow]
     /// The line the players not being renewed are closed behind, "1 player you are not renewing"; nil for none.
     public let dismissedLine: String?
     /// The players not being renewed, in the engine's order, each with his facts and standing only.
@@ -105,6 +114,16 @@ public enum ContractsPresentation {
     /// "The agent's figure, a year".
     public static func figureLabel(period: WagePeriod) -> String { "The agent's figure, \(per(period))" }
 
+    /// Over the line the players not recommended for renewal are closed behind.
+    public static let notRecommendedHeading = "Not recommended for renewal"
+    /// The button on a player not recommended, which lists him at once at the owner's choice.
+    public static let renewAnywayButton = "Renew anyway"
+    /// What VoiceOver says for it: "Renew Dejan Tetek anyway".
+    public static func renewAnywayLabel(_ name: String) -> String { "Renew \(name) anyway" }
+    /// The button on a row listed at the owner's choice, which takes him back to those not recommended.
+    public static let followAdviceButton = "Follow the advice"
+    /// What VoiceOver says for it: "Follow the advice on Dejan Tetek".
+    public static func followAdviceLabel(_ name: String) -> String { "Follow the advice on \(name)" }
     /// The button at the trailing end of a listed player's name, which sets him aside at once.
     public static let notRenewingButton = "Not renewing"
     /// What VoiceOver says for it: "Not renewing Evan Humphries".
@@ -142,8 +161,10 @@ public enum ContractsPresentation {
         }
     }
 
-    /// The sheet for `report`: each listed player with the range for his tier from `wages` and `state`'s limits, and
-    /// the agent's figure kept for him; each player not being renewed with his facts and standing.
+    /// The sheet for `report`: each listed player with his worth, the range for his tier from `wages` and `state`'s
+    /// limits, and the agent's figure kept for him, and one renewed at the owner's choice with the engine's line and
+    /// his reasons too; each player not recommended with his facts, standing and reasons; each player not being renewed
+    /// with his facts and standing.
     static func sheet(_ report: ContractsReport, players: [PlayerID: Player],
                       wages: [WageTier: [PlayerWage]], state: ContractsState, money: MoneyStyle,
                       parameters: EngineParameters) throws -> ContractsSheet {
@@ -172,34 +193,50 @@ public enum ContractsPresentation {
             return ContractRow(
                 id: entry.player, name: entry.name, detailsText: details(entry),
                 standingLine: AdvisorText.standingLine(entry), timingLine: AdvisorText.timingLine(entry),
-                timingIsCaution: timingIsCaution,
+                timingIsCaution: timingIsCaution, worthLine: worthLine(entry),
+                reasonLines: entry.reasons.map(AdvisorText.contractReasonLine),
+                wantedLine: entry.isWanted ? AdvisorText.listedAtYourChoice : nil,
                 guideLines: AdvisorText.wageGuideLines(guide, money: money), figureLabel: figureLabel,
                 figureText: text(perWeek: figure?.perWeek, period: money.period),
                 figureEnteredText: figure.map { AdvisorText.enteredOn($0.entered) },
                 cautionVerdictLine: caution, verdictLines: verdicts.map(line))
         }
-        func dismissedRow(_ entry: ContractEntry) -> ContractRow {
+        /// A player not in the list: his facts and standing, and the reasons when they are handed.
+        func shortRow(_ entry: ContractEntry, reasons: [String]) -> ContractRow {
             ContractRow(id: entry.player, name: entry.name, detailsText: details(entry),
                         standingLine: AdvisorText.standingLine(entry), timingLine: nil, timingIsCaution: false,
+                        worthLine: nil, reasonLines: reasons, wantedLine: nil,
                         guideLines: [], figureLabel: figureLabel, figureText: "",
                         figureEnteredText: nil, cautionVerdictLine: nil, verdictLines: [])
         }
 
-        var parts: [ContractsPartRows] = []
-        for part in ContractPart.allCases {
-            let rows = try report.listed.filter { $0.part == part }.map(row)
-            if !rows.isEmpty { parts.append(ContractsPartRows(heading: AdvisorText.contractPartHeading(part), rows: rows)) }
-        }
+        let rows = try report.listed.map(row)
         return ContractsSheet(
             intro: AdvisorText.contractsIntro,
             limitRows: limitRows(state.limits, money: money),
             limitsEnteredText: state.limitsEntered.map(AdvisorText.enteredOn),
-            parts: parts,
-            emptyLine: parts.isEmpty ? AdvisorText.nobodyInLastYear : nil,
-            leftOutLine: report.leftOutAsGoing > 0 ? AdvisorText.leftOutAsGoingLine(report.leftOutAsGoing) : nil,
+            rows: rows,
+            emptyLine: rows.isEmpty ? AdvisorText.nobodyInLastYear : nil,
+            notRecommendedLine: report.notRecommended.isEmpty
+                ? nil : AdvisorText.notRecommendedLine(report.notRecommended.count),
+            notRecommended: report.notRecommended.map {
+                shortRow($0, reasons: $0.reasons.map(AdvisorText.contractReasonLine))
+            },
             dismissedLine: report.dismissed.isEmpty ? nil : AdvisorText.notRenewingLine(report.dismissed.count),
-            dismissed: report.dismissed.map(dismissedRow),
+            dismissed: report.dismissed.map { shortRow($0, reasons: []) },
             evidenceNote: AdvisorText.contractsEvidenceNote(parameters.wageRangeRules.value))
+    }
+
+    /// His worth line, unless his reasons already give it (a player renewed at the owner's choice whose worth is under
+    /// the standard), so the sentence stands once.
+    static func worthLine(_ entry: ContractEntry) -> String? {
+        let saidInReasons = entry.reasons.contains { reason in
+            switch reason {
+            case .underStandard: true
+            case .markedToSell, .advisedToLeave, .noSlot, .noStandard, .replaceFirst: false
+            }
+        }
+        return saidInReasons ? nil : entry.worth.map(AdvisorText.worthLine)
     }
 }
 
