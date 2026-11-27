@@ -19,6 +19,30 @@ import Testing
         #expect(TypedNumber.value("£1,234,567,890,123,456,789") == 123_456_789_012)
     }
 
+    /// What an amount's field shows (27 November 2026: the amount once, with its commas, and nothing beside it).
+    @Test func anAmountIsShownWithACommaBetweenEachGroupOfThreeDigits() {
+        #expect(TypedNumber.grouped("") == "" && TypedNumber.grouped("abc") == "")
+        #expect(TypedNumber.grouped("0") == "0")
+        #expect(TypedNumber.grouped("999") == "999")
+        #expect(TypedNumber.grouped("1000") == "1,000")
+        #expect(TypedNumber.grouped("241757") == "241,757")
+        #expect(TypedNumber.grouped("2901084") == "2,901,084")
+        #expect(TypedNumber.grouped("123456789012") == "123,456,789,012")
+        #expect(TypedNumber.grouped("1234567890123") == "123,456,789,012")              // twelve digits at most
+        #expect(TypedNumber.grouped("40K") == "40")                                     // 40 typed for 40K is seen at once
+        #expect(TypedNumber.grouped(40_000) == "40,000" && TypedNumber.grouped(0) == "0")
+    }
+
+    @Test func whatAFieldShowsIsReadBackAsTheSameNumber() {
+        for text in ["0", "7", "1000", "2901084", "123456789012"] {
+            #expect(TypedNumber.digits(TypedNumber.grouped(text)) == text)
+            // A digit typed at the end of what is shown is read as that digit added.
+            #expect(TypedNumber.digits(TypedNumber.grouped(text) + "5") == TypedNumber.digits(text + "5"))
+        }
+        // The last digit deleted from what is shown.
+        #expect(TypedNumber.grouped(String("1,000".dropLast())) == "100")
+    }
+
     @Test func theLeagueFormatsFieldsReadTheSameWay() {
         var draft = LeagueFormatDraft()
         draft.set(.promoted, text: "1234567890123")

@@ -178,7 +178,7 @@ private func player(
         #expect(report.lines == [
             "Recognised as FMRTE's squad grid.",
             "18 players.",
-            "Wages are in £ a week, as FMRTE shows them.",
+            "Wages were read in £ a week, as FMRTE shows them, and are shown by the year.",
             "No one is out on loan.",
             "This is the first import of this squad.",
         ])
@@ -202,7 +202,8 @@ private func player(
         try t.importFirstTeamInDollarsMonthly()
         let s = try summary(t)
         #expect(s.money == MoneyStyle(symbol: "$", period: .monthly))
-        #expect(t.model.report(of: s).lines[2] == "Wages are in $ a month, as FMRTE shows them.")
+        #expect(t.model.report(of: s).lines[2]
+            == "Wages were read in $ a month, as FMRTE shows them, and are shown by the year.")
         #expect(t.model.report(of: s).lines[2] == Display.wagesRead(s.money))
     }
 

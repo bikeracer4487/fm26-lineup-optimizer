@@ -69,7 +69,8 @@ import LineupEngine
 
     // MARK: Each state
 
-    @Test func theAdviceWritesMoneyAsTheSquadsWereImported() throws {
+    /// In the squads' currency, and by the year whatever period FMRTE pasted them in (27 November 2026).
+    @Test func theAdviceWritesMoneyInTheSquadsCurrencyByTheYear() throws {
         let t = try TestModel()
         try t.importFirstTeamInDollarsMonthly()
         t.importSquad(.u21, paste: Captures.inDollars(try Captures.u21),
@@ -78,14 +79,15 @@ import LineupEngine
         settings.clubName = "Oxford City"
         t.model.update(settings)
         t.model.addTactic(named: "4-2-3-1")
-        let dollars = MoneyStyle(symbol: "$", period: .monthly)
+        let dollars = MoneyStyle(symbol: "$", period: .yearly)
+        #expect(t.model.squad.book.money == MoneyStyle(symbol: "$", period: .monthly))
         #expect(t.model.squad.book.moneyStyle == dollars)
         let r = try #require(report(t.model))
         #expect(r.removal.money == dollars)
         #expect(r == (try engineReport(t.model)))
         let sheet = t.model.removalSheet(r)
         #expect(sheet.figures.last?.figure == Display.wage(perWeek: r.removal.weeklyWagesAtStake, dollars))
-        #expect(sheet.figures.last?.figure.hasPrefix("$") == true && sheet.figures.last?.figure.hasSuffix(" a month") == true)
+        #expect(sheet.figures.last?.figure.hasPrefix("$") == true && sheet.figures.last?.figure.hasSuffix(" a year") == true)
         let costs = sheet.rows.map(\.costsText).filter { $0.hasPrefix("Releasing him costs about") }
         #expect(!costs.isEmpty && costs.allSatisfy { $0.contains("$") && !$0.contains("£") })
     }

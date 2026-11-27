@@ -103,7 +103,7 @@ import LineupEngine
         #expect(loanee.kind == .loan && loanee.purpose == s.model.loanPurpose(for: s.loanee))
         guard case .sale? = seller.general?.terms else { Issue.record("no sale terms"); return }
         guard case .loan? = loanee.general?.terms else { Issue.record("no loan terms"); return }
-        #expect(seller.valueText == "40000")
+        #expect(seller.valueText == "40,000")
         #expect(seller.valueNote == "entered Fri 13 Nov")
         let held = try player(s.seller, s.model)
         let parts = ["Age \(held.age)", held.positionsText, Display.wage(perWeek: held.wagePerWeek, s.model.squad.book.moneyStyle)]
@@ -154,7 +154,7 @@ import LineupEngine
         moveDate(s.t, by: 2)
         let seller = try block(sheet(s.t, clubs: [s.seller: "BARNET"]), s.seller)
         #expect(seller.clubFields[0].field == .transferBudget)
-        #expect(seller.clubFields[0].text == "35000")
+        #expect(seller.clubFields[0].text == "35,000")
         #expect(seller.clubFields.dropFirst().map(\.text) == ["", "", ""])
         #expect(seller.clubNote == "entered Fri 13 Nov")
         let club = try #require(seller.clubBlock)
@@ -163,18 +163,19 @@ import LineupEngine
         #expect(seller.clubProblem == nil)
     }
 
-    @Test func wageFieldsAreLabelledAndShownInFMRTEsPeriod() throws {
+    @Test func wageFieldsAndHisWageAreByTheYearWhateverPeriodFMRTEPasted() throws {
         let s = try ready()
-        #expect(try block(sheet(s.t), s.seller).clubFields.map(\.label)
-                == ["Can spend on transfers", "Wage budget, a week", "Wages spent, a week", "Highest wage it can offer, a week"])
+        let byYear = ["Can spend on transfers", "Wage budget, a year", "Wages spent, a year",
+                      "Highest wage it can offer, a year"]
+        #expect(try block(sheet(s.t), s.seller).clubFields.map(\.label) == byYear)
+        #expect(try block(sheet(s.t), s.seller).details.contains(" a year"))
         try s.t.importFirstTeamInDollarsMonthly()
-        s.model.setClubFigure(.wageBudget, text: "5,200", club: "Barnet")
+        s.model.setClubFigure(.wageBudget, text: "62,400", club: "Barnet")
         #expect(s.model.clubEntry(named: "Barnet")?.figures.wageBudgetPerWeek == 1_200)
         let seller = try block(sheet(s.t, clubs: [s.seller: "Barnet"]), s.seller)
-        #expect(seller.clubFields.map(\.label)
-                == ["Can spend on transfers", "Wage budget, a month", "Wages spent, a month", "Highest wage it can offer, a month"])
-        #expect(seller.clubFields[1].text == "5200")
-        #expect(seller.details.contains("$"))
+        #expect(seller.clubFields.map(\.label) == byYear)
+        #expect(seller.clubFields[1].text == "62,400")
+        #expect(seller.details.contains("$") && seller.details.contains(" a year"))
     }
 
     @Test func aClubWithAnOpenDealPointsToItAndOffersNoSecondProposal() throws {
@@ -574,42 +575,57 @@ import LineupEngine
         #expect((mine.now, mine.later, mine.nextFee) == ("35000", "5000", "20"))
     }
 
-    @Test func eachAmountIsReadBackBesideItsFieldInTheMoneyStyle() throws {
+    /// 27 November 2026: each field shows its amount once, with commas, and nothing beside it; a wage figure is
+    /// typed and shown by the year, as the game shows it, whatever period FMRTE pasted the squad in.
+    @Test func eachAmountsFieldShowsItWithCommasAndAWageFigureByTheYear() throws {
         let s = try ready()
-        #expect(try block(sheet(s.t), s.seller).valueReading == nil)                    // nothing beside a blank field
+        #expect(try block(sheet(s.t), s.seller).valueText == "")
         s.model.setOfferValue(text: "40K", for: s.seller)
-        #expect(try block(sheet(s.t), s.seller).valueReading == "£40")                  // 40 typed for 40K is seen at once
+        #expect(try block(sheet(s.t), s.seller).valueText == "40")                      // 40 typed for 40K is seen at once
         s.model.setOfferValue(text: "40,000", for: s.seller)
-        #expect(try block(sheet(s.t), s.seller).valueReading == "£40,000")
+        #expect(try block(sheet(s.t), s.seller).valueText == "40,000")
+        #expect(s.model.squad.book.money?.period == .weekly, "pasted by the week")
         s.model.setClubFigure(.transferBudget, text: "15000", club: "Barnet")
-        s.model.setClubFigure(.wageBudget, text: "9000", club: "Barnet")
+        s.model.setClubFigure(.wageBudget, text: "468000", club: "Barnet")
+        #expect(s.model.offers.clubs.values.first?.figures.wageBudgetPerWeek == 9_000)
         let fields = try block(sheet(s.t, clubs: [s.seller: "Barnet"]), s.seller).clubFields
-        #expect(fields.map(\.reading) == ["£15,000", "£9,000 a week", nil, nil])
-        // A monthly save reads its wage figures by the month.
+        #expect(fields.map(\.label) == ["Can spend on transfers", "Wage budget, a year", "Wages spent, a year",
+                                        "Highest wage it can offer, a year"])
+        #expect(fields.map(\.text) == ["15,000", "468,000", "", ""])
+        // A squad pasted by the month changes nothing: the figures are still by the year.
         try s.t.importFirstTeamInDollarsMonthly()
-        s.model.setClubFigure(.wagesSpent, text: "5,200", club: "Barnet")
+        #expect(s.model.squad.book.money?.period == .monthly)
+        s.model.setClubFigure(.wagesSpent, text: "62,400", club: "Barnet")
         let monthly = try block(sheet(s.t, clubs: [s.seller: "Barnet"]), s.seller).clubFields
-        #expect(monthly[2].reading == "$5,200 a month")
+        #expect(monthly.map(\.label) == fields.map(\.label))
+        #expect(monthly.map(\.text) == ["15,000", "468,000", "62,400", ""])
+        #expect(s.model.offers.clubs.values.first?.figures.wagesSpentPerWeek == 1_200)
     }
 
-    @Test func theSheetsMoneyFieldsAreReadBackAndItsPercentagesAreNot() throws {
+    @Test func theSheetsMoneyFieldsShowTheirCommasAndItsPercentagesTheirDigits() throws {
         let s = try ready()
         var sale = try #require(s.model.offerDraft(for: s.seller, club: "Barnet", purpose: .mine,
                                                    filledWith: Self.sale(35_000, later: 5_000)))
-        #expect(s.model.offerReading(.feeNow, in: sale) == "£35,000")
-        #expect(s.model.offerReading(.feeLater, in: sale) == "£5,000")
-        #expect(s.model.offerReading(.nextFeePercent, in: sale) == nil)
+        #expect(sale.shown(.feeNow) == "35,000")
+        #expect(sale.shown(.feeLater) == "5,000")
+        #expect(sale.shown(.nextFeePercent) == "20")
         sale.set(.feeNow, text: "")
-        #expect(s.model.offerReading(.feeNow, in: sale) == nil)
+        #expect(sale.shown(.feeNow) == "")
         sale.set(.feeNow, text: "1234567890123")
         #expect(sale.now == "123456789012")                                             // twelve digits at most
+        #expect(sale.shown(.feeNow) == "123,456,789,012")
+        // What the field shows with a digit typed after it is read as that digit added.
+        sale.set(.feeLater, text: sale.shown(.feeLater) + "5")
+        #expect(sale.later == "50005" && sale.shown(.feeLater) == "50,005")
+        #expect(sale.shown(.feePerMonth) == "" && sale.shown(.wagePercent) == "")       // not a sale's fields
         var loan = try #require(s.model.offerDraft(for: s.loanee, club: "Barnet", purpose: .mine, filledWith: Self.loan))
-        #expect(s.model.offerReading(.feePerMonth, in: loan) == "£1,000")
-        #expect(s.model.offerReading(.wagePercent, in: loan) == nil)
-        #expect(s.model.offerReading(.futureFee, in: loan) == nil)
+        #expect(loan.shown(.feePerMonth) == "1,000")
+        #expect(loan.shown(.wagePercent) == loan.wagePercent && !loan.wagePercent.isEmpty)
+        #expect(loan.shown(.futureFee) == "")
         loan.set(.futureFee, text: "100000")
-        #expect(s.model.offerReading(.futureFee, in: loan) == "£100,000")
-        #expect(s.model.offerReading(.feeNow, in: loan) == nil)                          // not a loan's field
+        #expect(loan.shown(.futureFee) == "100,000")
+        #expect(loan.shown(.feeNow) == "" && loan.shown(.nextFeePercent) == "")         // not a loan's fields
+        #expect(loan.shown(.value) == "")                                               // not a field of the sheet
     }
 
     @Test func clubsInGeneralAreShownWithTermsOrWithAsks() throws {

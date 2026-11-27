@@ -127,7 +127,7 @@ import LineupEngine
         #expect(two.hidden.map(\.id) == [first.id, second.id])
         #expect(two.hidden.map(\.name) == [first.name, second.name])
         #expect(two.hiddenLine == "2 hidden players")
-        #expect(two.hidden.map(\.detailsText) == [first, second].map { ScoutingPresentation.details(of: $0, money: paste.money) })
+        #expect(two.hidden.map(\.detailsText) == [first, second].map { ScoutingPresentation.details(of: $0, money: paste.money.byYear) })
         #expect(!two.rowIDs.contains(first.id) && !two.rowIDs.contains(second.id))
         #expect(two.readLine == AdvisorText.playersRead(6))                          // still six read
         #expect(ScoutingPresentation.hiddenLine(1) == "1 hidden player" && ScoutingPresentation.hiddenLine(3) == "3 hidden players")
@@ -159,7 +159,7 @@ import LineupEngine
             let player = try #require(paste.players.first { $0.id == row.id })
             let ability = "CA \(player.currentAbility) · PA \(player.potentialAbility)"
             #expect(row.detailsText.hasPrefix("Age \(player.age) · \(player.positionsText) · \(ability) · "))
-            #expect(row.detailsText == ScoutingPresentation.details(of: player, money: paste.money))
+            #expect(row.detailsText == ScoutingPresentation.details(of: player, money: paste.money.byYear))
         }
         #expect(ScoutingPresentation.abilityText(current: 78, potential: 82) == "CA 78 · PA 82")
     }

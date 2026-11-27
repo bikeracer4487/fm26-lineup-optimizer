@@ -726,16 +726,17 @@ public enum SampleData {
     /// `contractsDate` (the paste's months left are as FMRTE wrote them some four months earlier; the list reads the
     /// end days). One player of the second eleven, `contractsOutOfContractName`, is made out of contract, as an
     /// import would have him; `contractsDismissedName` is not being renewed; the club's three figures are typed
-    /// (a wage budget of $130,000, wages spent of $118,000 and a highest wage of $9,000, each a month); and an agent's
-    /// figure of $9,500 a month, above the highest wage, is typed for `contractsFigureName`. The scripted clock moves a
+    /// (a wage budget of $1,560,000, wages spent of $1,416,000 and a highest wage of $108,000, each a year, which is
+    /// $130,000, $118,000 and $9,000 a month); and an agent's figure of $114,000 a year, above the highest wage, is
+    /// typed for `contractsFigureName`. The scripted clock moves a
     /// second at each reading, so no action is taken for a double click.
     @MainActor public static func modelWithContracts(repositoryRoot: URL) throws -> AppModel {
         let model = try modelWithContractsNoFigures(repositoryRoot: repositoryRoot)
-        model.setWageLimit(.wageBudget, text: "130000")
-        model.setWageLimit(.wagesSpent, text: "118000")
-        model.setWageLimit(.highestWage, text: "9000")
+        model.setWageLimit(.wageBudget, text: "1560000")
+        model.setWageLimit(.wagesSpent, text: "1416000")
+        model.setWageLimit(.highestWage, text: "108000")
         let figure = try player(named: contractsFigureName, in: model)
-        model.setAgentFigure(text: "9500", for: figure)
+        model.setAgentFigure(text: "114000", for: figure)
         guard case .ready(let sheet) = model.contractsSheet,
               let row = sheet.parts.flatMap(\.rows).first(where: { $0.id == figure }), !row.verdictLines.isEmpty else {
             throw SampleDataError(description: "The contracts sample does not list \(contractsFigureName) with a verdict.")
@@ -1095,7 +1096,7 @@ public enum SampleData {
                 players[index].familiarity[accepted.position] = readings.last?.familiarity
             }
             _ = model.squad.book.apply(ImportResult(grid: "sample", players: players, warnings: [],
-                                                    money: model.squad.book.moneyStyle), to: squad)
+                                                    money: model.squad.book.money ?? .weeklyPounds), to: squad)
         }
         model.save(.squad)
         model.replan()
@@ -1136,7 +1137,7 @@ public enum SampleData {
                 players[index].familiarity[accepted.position] = readings.last?.familiarity
             }
             _ = model.squad.book.apply(ImportResult(grid: "sample", players: players, warnings: [],
-                                                    money: model.squad.book.moneyStyle), to: squad)
+                                                    money: model.squad.book.money ?? .weeklyPounds), to: squad)
         }
         model.save(.squad)
         model.replan()
@@ -1499,7 +1500,7 @@ public enum SampleData {
             guard var players = model.squad.book.current[squad] else { continue }
             for index in players.indices { change(&players[index]) }
             _ = model.squad.book.apply(ImportResult(grid: "sample", players: players, warnings: [],
-                                                    money: model.squad.book.moneyStyle), to: squad)
+                                                    money: model.squad.book.money ?? .weeklyPounds), to: squad)
         }
         model.save(.squad)
         model.replan()

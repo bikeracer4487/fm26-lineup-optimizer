@@ -37,7 +37,7 @@ import Testing
             guard var players = model.squad.book.current[squad] else { continue }
             for index in players.indices where players[index].id == player { change(&players[index]) }
             _ = model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: [],
-                                                    money: model.squad.book.moneyStyle), to: squad)
+                                                    money: model.squad.book.money ?? .weeklyPounds), to: squad)
         }
         model.replan()
     }

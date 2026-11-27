@@ -104,9 +104,10 @@ import LineupEngine
         #expect(indices == indices.sorted())
     }
 
-    @Test func moneyIsShownInThePastesOwnStyle() throws {
+    /// In the paste's own currency, and by the year whatever period FMRTE pasted it in (27 November 2026).
+    @Test func moneyIsShownInThePastesOwnCurrencyByTheYear() throws {
         let t = try ScoutingSetup.ready()
-        #expect(t.model.squad.book.moneyStyle == .weeklyPounds)
+        #expect(t.model.squad.book.money == .weeklyPounds)
         try ScoutingSetup.paste(t, paste: Captures.inDollars(try Captures.u21AtAnotherClub),
                                 grids: try Captures.grids(try Captures.u21Grids, wages: "Monthly"))
         let paste = try #require(t.model.scoutingPaste)
@@ -117,7 +118,7 @@ import LineupEngine
         #expect(all.count == 6)
         for row in all {
             #expect(row.wage.hasPrefix("$"))
-            #expect(row.wage.hasSuffix(" a month"))
+            #expect(row.wage.hasSuffix(" a year"))
             if let price = row.askingPrice { #expect(price.hasPrefix("Asking $")) }
         }
         #expect(all.contains { $0.askingPrice != nil })
@@ -251,7 +252,7 @@ import LineupEngine
         #expect(sheet.evidenceNote != nil, "a reach is this tool's estimate")
         // The model's sheet also sets each wage beside what the squad's elevens are paid.
         #expect(t.model.candidatesSheet(report, order: .today)
-                == ScoutingPresentation.candidatesSheet(report, order: .today, pasted: 6, money: paste.money,
+                == ScoutingPresentation.candidatesSheet(report, order: .today, pasted: 6, money: paste.money.byYear,
                                                         wages: t.model.candidateWageBasis(for: nil)))
 
         try t.importU21()

@@ -146,7 +146,7 @@ extension AppModel {
     public func candidatesSheet(_ report: CandidatesReport, order: CandidateOrder,
                                 for chosen: UUID? = nil) -> CandidatesSheet? {
         guard let paste = scoutingPaste else { return nil }
-        return ScoutingPresentation.candidatesSheet(report, order: order, pasted: paste.players.count, money: paste.money,
+        return ScoutingPresentation.candidatesSheet(report, order: order, pasted: paste.players.count, money: paste.money.byYear,
                                                     wages: candidateWageBasis(for: chosen))
     }
 

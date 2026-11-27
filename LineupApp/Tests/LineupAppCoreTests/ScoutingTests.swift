@@ -132,7 +132,7 @@ import LineupEngine
         #expect(rows.count == 109)
         #expect(rows.filter { $0.club == "Free agent" }.count == 15)
         #expect(rows.first { $0.name == "Brad Walker" }?.club == "Darlington, out of contract")
-        #expect(rows.first { $0.name == "George Wilson" }?.wage == "$2,040 a month")
+        #expect(rows.first { $0.name == "George Wilson" }?.wage == "$24,480 a year")                 // pasted as $2,040 a month
     }
 
     @Test func aPasteHoldsThePlayersAndSavesNothing() throws {

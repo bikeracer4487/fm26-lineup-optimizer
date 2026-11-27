@@ -13,13 +13,12 @@ import LineupEngine
         return t
     }
 
-    /// Types the club's three figures, in FMRTE's period (the captures are by the week): a budget so large that no
-    /// share of it caps a range, 10,000 a week of it left, and a highest wage over any tier's.
-    private func typeLimits(_ t: TestModel, budget: String = "1000000", spent: String = "990000",
-                            highest: String? = "50000") {
-        t.model.setWageLimit(.wageBudget, text: budget)
-        t.model.setWageLimit(.wagesSpent, text: spent)
-        if let highest { t.model.setWageLimit(.highestWage, text: highest) }
+    /// Types the club's three figures, each given here by the week and typed for a year, as the fields take them: a
+    /// budget so large that no share of it caps a range, 10,000 a week of it left, and a highest wage over any tier's.
+    private func typeLimits(_ t: TestModel, budget: Int = 1_000_000, spent: Int = 990_000, highest: Int? = 50_000) {
+        t.model.setWageLimit(.wageBudget, text: String(budget * 52))
+        t.model.setWageLimit(.wagesSpent, text: String(spent * 52))
+        if let highest { t.model.setWageLimit(.highestWage, text: String(highest * 52)) }
     }
 
     private func sheet(_ t: TestModel, order: CandidateOrder = .today) throws -> CandidatesSheet {
@@ -64,7 +63,8 @@ import LineupEngine
         throw ScoutingSetup.Unready()
     }
 
-    private var money: MoneyStyle { .weeklyPounds }
+    /// The captures are pounds by the week; every wage is shown by the year.
+    private var money: MoneyStyle { MoneyStyle(symbol: "£", period: .yearly) }
 
     // MARK: The lines
 
@@ -126,7 +126,7 @@ import LineupEngine
     @Test func aPlayerPaidAboveTheCeilingButNotTheHighestWageIsCautionedWithTheCeiling() throws {
         let t = try pasted()
         // A highest wage above every tier's share of the budget, so a wage can sit between the two.
-        typeLimits(t, highest: "100000")
+        typeLimits(t, highest: 100_000)
         let found = try repaid(t) { guide in
             guard let ceiling = guide.ceilingPerWeek, let highest = guide.highestWagePerWeek,
                   ceiling + 100 < highest else { return nil }
@@ -167,7 +167,7 @@ import LineupEngine
 
     @Test func aPasteInAnotherCurrencyGetsTheRangeAndNoComparison() throws {
         let t = try pasted(try Captures.u21AtAnotherClub.replacingOccurrences(of: "£", with: "€"))
-        typeLimits(t, highest: "1")
+        typeLimits(t, highest: 1)
         #expect(t.model.scoutingPaste?.money.symbol == "€")
         let report = try ScoutingSetup.report(t.model)
         let sheet = try sheet(t)
@@ -188,7 +188,7 @@ import LineupEngine
 
     @Test func noBudgetLeftPutsNoCautionOnAnyClosedRow() throws {
         let t = try pasted()
-        typeLimits(t, budget: "1000000", spent: "1000000", highest: nil)
+        typeLimits(t, budget: 1_000_000, spent: 1_000_000, highest: nil)
         let all = rows(try sheet(t))
         let paid = all.filter { row in t.model.scoutingPaste?.players.first { $0.id == row.id }.map { $0.wagePerWeek > 0 } == true }
         #expect(!paid.isEmpty)
@@ -216,13 +216,13 @@ import LineupEngine
         }
         var before: [CandidateOrder: [[String]]] = [:]
         for order in CandidateOrder.allCases { before[order] = shape(try sheet(t, order: order)) }
-        typeLimits(t, budget: "1000", spent: "5000", highest: "1")
+        typeLimits(t, budget: 1_000, spent: 5_000, highest: 1)
         #expect(try ScoutingSetup.report(t.model) == report)
         for order in CandidateOrder.allCases {
             let after = try sheet(t, order: order)
             #expect(shape(after) == before[order])
             #expect(shape(ScoutingPresentation.candidatesSheet(report, order: order, pasted: 6,
-                                                               money: try #require(t.model.scoutingPaste).money))
+                                                               money: try #require(t.model.scoutingPaste).money.byYear))
                     == before[order])
             #expect(rows(after).contains { $0.wageCaution != nil }, "a highest wage of 1 a week is under every wage")
         }
@@ -243,7 +243,7 @@ import LineupEngine
         let paste = try #require(t.model.scoutingPaste)
         let shown = try #require(t.model.candidatesSheet(report, order: .today))
         #expect(shown == ScoutingPresentation.candidatesSheet(report, order: .today, pasted: paste.players.count,
-                                                              money: paste.money))
+                                                              money: paste.money.byYear))
         #expect(rows(shown).allSatisfy { $0.wageLines.isEmpty && $0.wageCaution == nil })
         #expect(shown.wageEvidenceNote == nil)
         #expect(shown.evidenceLines == [shown.evidenceNote].compactMap { $0 })
@@ -256,7 +256,7 @@ import LineupEngine
         let planned = t.model.timesPlanned
         let advised = t.model.timesAdvised
         let pasted = t.model.scoutingPaste
-        t.model.setWageLimit(.highestWage, text: "1")
+        t.model.setWageLimit(.highestWage, text: "52")
         let second = try sheet(t)
         #expect(second != first)
         let line = "The most you can offer one player is \(Display.wage(perWeek: 1, money))."
@@ -297,7 +297,7 @@ import LineupEngine
         let paste = try #require(t.model.scoutingPaste)
         let shown = try #require(t.model.candidatesSheet(report, order: .today, for: second))
         #expect(shown == ScoutingPresentation.candidatesSheet(report, order: .today, pasted: paste.players.count,
-                                                              money: paste.money, wages: basis))
+                                                              money: paste.money.byYear, wages: basis))
         #expect(rows(shown).contains { !$0.wageLines.isEmpty })
     }
 

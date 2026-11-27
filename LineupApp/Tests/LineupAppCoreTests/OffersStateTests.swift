@@ -209,7 +209,7 @@ import LineupEngine
         s.model.setClubFigure(.transferBudget, text: "35,000", club: "Barnet")
         #expect(s.model.clubEntry(named: " barnet ")?.figures.transferBudget == 35_000)
         #expect(s.model.clubEntry(named: "BARNET")?.enteredOn == s.model.settings.currentDate)
-        s.model.setClubFigure(.highestWage, text: "900", club: "BARNET ")
+        s.model.setClubFigure(.highestWage, text: "46,800", club: "BARNET ")
         let entry = try #require(s.model.clubEntry(named: "Barnet"))
         #expect(entry.figures.transferBudget == 35_000 && entry.figures.highestWagePerWeek == 900)
         #expect(entry.figures.name == "BARNET")                                          // as last typed
@@ -221,13 +221,14 @@ import LineupEngine
         #expect(s.model.clubEntry(named: "Barnet")?.figures.transferBudget == nil)
     }
 
-    @Test func aClubsWageFiguresAreSavedByTheWeekFromFMRTEsPeriod() throws {
+    /// Typed for a year, as the game shows them (27 November 2026), whatever period FMRTE pasted the squad in.
+    @Test func aClubsWageFiguresAreReadAsAYearsAndSavedByTheWeek() throws {
         let s = try ready()
         try s.t.importFirstTeamInDollarsMonthly()
-        #expect(s.model.squad.book.moneyStyle.period == .monthly)
-        s.model.setClubFigure(.wageBudget, text: "5,200", club: "Barnet")
-        s.model.setClubFigure(.wagesSpent, text: "2,600", club: "Barnet")
-        s.model.setClubFigure(.highestWage, text: "520", club: "Barnet")
+        #expect(s.model.squad.book.money?.period == .monthly)
+        s.model.setClubFigure(.wageBudget, text: "62,400", club: "Barnet")
+        s.model.setClubFigure(.wagesSpent, text: "31,200", club: "Barnet")
+        s.model.setClubFigure(.highestWage, text: "6,240", club: "Barnet")
         s.model.setClubFigure(.transferBudget, text: "35,000", club: "Barnet")
         let figures = try #require(s.model.clubEntry(named: "Barnet")).figures
         #expect(figures.wageBudgetPerWeek == 1_200)
@@ -588,7 +589,7 @@ import LineupEngine
         s.model.setOfferValue(text: "40000", for: s.seller)
         s.model.setOfferValue(text: "8000", for: s.loanee)
         s.model.setLoanPurpose(.wage, for: s.loanee)
-        s.model.setClubFigure(.wageBudget, text: "5000", club: "Barnet")
+        s.model.setClubFigure(.wageBudget, text: "260000", club: "Barnet")
         s.model.recordAsk(for: s.seller, terms: Self.sale)
         let loans: [LoanTerms] = [
             LoanTerms(wagePercent: 50, feePerMonth: 1_000, playingTime: .startingPlace, recall: true, futureFee: nil),

@@ -423,7 +423,7 @@ do {
                                 AdvisorText.everyPastedPlayerIsYours].joined(separator: "\n"))
                 exit(1)
             }
-            output += Report.candidates(report, read: paste.players.count, money: paste.money).joined(separator: "\n") + "\n"
+            output += Report.candidates(report, read: paste.players.count, money: paste.money.byYear).joined(separator: "\n") + "\n"
         }
     }
 } catch {

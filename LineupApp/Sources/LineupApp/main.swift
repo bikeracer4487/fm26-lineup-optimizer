@@ -755,27 +755,29 @@ let narrowWindow = CGSize(width: 800, height: 700)
     try ScreenPictures.write(model: sampleModel(root, .offers), to: directory, size: tall, variant: nil, screens: [.offers])
 
     // Barnet typed for the player marked to sell with no deal, given a value, with a budget that covers the whole fee,
-    // part of it, and none of it. The club's wage figures are entered too, so all four fields show a figure.
+    // part of it, and none of it. The club's wage figures are entered too, so all four fields show a figure; they are
+    // typed for a year (£9,000, £8,200 and £900 a week).
     for (variant, budget) in [("club-all", "60000"), ("club", "15000"), ("nothing-now", "0")] {
         let model = sampleModel(root, .offers)
         let player = samplePlayer(SampleData.offerNoValueName, in: model)
         model.setOfferValue(text: "25000", for: player)
         let club = SampleData.offerDealClub
         model.setClubFigure(.transferBudget, text: budget, club: club)
-        model.setClubFigure(.wageBudget, text: "9000", club: club)
-        model.setClubFigure(.wagesSpent, text: "8200", club: club)
-        model.setClubFigure(.highestWage, text: "900", club: club)
+        model.setClubFigure(.wageBudget, text: "468000", club: club)
+        model.setClubFigure(.wagesSpent, text: "426400", club: club)
+        model.setClubFigure(.highestWage, text: "46800", club: club)
         try ScreenPictures.write(model: model, to: directory, size: taller, variant: variant, screens: [.offers],
                                  offersStart: OffersStart(clubs: [player: club]))
     }
 
-    // The loan switched to moving his wage, with a club typed for it whose wage figures are entered.
+    // The loan switched to moving his wage, with a club typed for it whose wage figures are entered, for a year
+    // (£6,000, £5,600 and £700 a week).
     let wage = sampleModel(root, .offers)
     let loanee = samplePlayer(SampleData.offerLoaneeName, in: wage)
     wage.setLoanPurpose(.wage, for: loanee)
-    wage.setClubFigure(.wageBudget, text: "6000", club: "Wealdstone")
-    wage.setClubFigure(.wagesSpent, text: "5600", club: "Wealdstone")
-    wage.setClubFigure(.highestWage, text: "700", club: "Wealdstone")
+    wage.setClubFigure(.wageBudget, text: "312000", club: "Wealdstone")
+    wage.setClubFigure(.wagesSpent, text: "291200", club: "Wealdstone")
+    wage.setClubFigure(.highestWage, text: "36400", club: "Wealdstone")
     try ScreenPictures.write(model: wage, to: directory, size: taller, variant: "loan-wage", screens: [.offers],
                              offersStart: OffersStart(clubs: [loanee: "Wealdstone"]))
 

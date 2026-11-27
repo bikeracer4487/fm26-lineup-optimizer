@@ -757,15 +757,13 @@ public enum Theme {
         public static let partIndent: CGFloat = 16
         /// The most lines a player's name wraps to.
         public static let nameLines = 2
-        /// His value, and each of a club's figures: room for seven digits.
-        public static let amountFieldWidth: CGFloat = 112
+        /// His value, and each of a club's figures: room for ten digits with their commas, "1,234,567,890", since a
+        /// wage budget is typed for a year.
+        public static let amountFieldWidth: CGFloat = 148
         /// The club's name in his "To a club" row.
         public static let clubFieldWidth: CGFloat = 220
         /// Between one club figure, with its label, and the next on their row.
         public static let figureGap: CGFloat = 20
-        /// The least room kept for how an amount is read beside its field, "£9,000 a month", so that the fields do not
-        /// move as digits are typed.
-        public static let readingMinimumWidth: CGFloat = 110
         /// A deal's card: room for a round's sentence at the reading width and the card's padding, so its "Delete"
         /// stays near its heading on a wide window.
         public static let cardMaximumWidth: CGFloat = 640

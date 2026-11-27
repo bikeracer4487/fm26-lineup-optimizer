@@ -39,9 +39,19 @@ import Testing
     }
 
     @Test func theImportSaysHowWagesWereRead() {
-        #expect(Display.wagesRead(dollarsMonthly) == "Wages are in $ a month, as FMRTE shows them.")
-        #expect(Display.wagesRead(.weeklyPounds) == "Wages are in £ a week, as FMRTE shows them.")
+        #expect(Display.wagesRead(dollarsMonthly)
+            == "Wages were read in $ a month, as FMRTE shows them, and are shown by the year.")
+        #expect(Display.wagesRead(.weeklyPounds)
+            == "Wages were read in £ a week, as FMRTE shows them, and are shown by the year.")
         #expect(Display.wagesRead(MoneyStyle(symbol: "€", period: .yearly)) == "Wages are in € a year, as FMRTE shows them.")
+    }
+
+    @Test func aStyleByTheYearKeepsItsCurrency() {
+        #expect(dollarsMonthly.byYear == MoneyStyle(symbol: "$", period: .yearly))
+        #expect(MoneyStyle.weeklyPounds.byYear == MoneyStyle(symbol: "£", period: .yearly))
+        #expect(MoneyStyle(symbol: "€", period: .yearly).byYear == MoneyStyle(symbol: "€", period: .yearly))
+        // The same wage reads the same worth: $5,735 a month is $68,820 a year.
+        #expect(Display.wage(perWeek: WagePeriod.monthly.perWeek(5_735), dollarsMonthly.byYear) == "$68,820 a year")
     }
 
     @Test func weeklyPoundsIsThePoundSignAndAWeek() {

@@ -11,7 +11,7 @@ public struct AgentFigure: Equatable, Codable, Sendable {
 }
 
 /// What the Contracts screen keeps: the club's three wage figures, the players the owner is not renewing, and the
-/// figures agents asked. Kept in a file of its own. Every wage is by the week, whatever period FMRTE shows.
+/// figures agents asked. Kept in a file of its own. Every wage is by the week, whatever period it is typed and shown in.
 public struct ContractsState: Equatable, Codable, Sendable {
     public var limits: WageLimits = .none
     /// The day in the game a limit was last changed; nil with none entered.

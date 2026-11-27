@@ -97,7 +97,7 @@ extension AppModel {
     }
 
     /// Sets one of a club's figures from what was typed, read by `TypedNumber` as a value is. The transfer budget is whole units;
-    /// the three wage figures are typed in the period FMRTE shows wages by (the squad book's `moneyStyle`) and kept by
+    /// the three wage figures are typed for a year, as every wage is shown (the squad book's `moneyStyle`), and kept by
     /// the week. The entry keeps the club's name as last typed, trimmed, and today in the game as its day. Saves the
     /// offers file and does not plan; nothing for a blank name, when the figures are unchanged, or for a blank figure
     /// of a club with no entry.

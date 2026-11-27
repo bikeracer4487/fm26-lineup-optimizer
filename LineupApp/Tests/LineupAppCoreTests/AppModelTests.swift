@@ -350,13 +350,16 @@ import LineupEngine
         #expect(t.model.squadWarnings.isEmpty)
     }
 
-    @Test func aSquadFileSavedBeforeMoneyWasReadOpensAsWeeklyPounds() throws {
+    @Test func aSquadFileSavedBeforeMoneyWasReadOpensAsPounds() throws {
+        let poundsByTheYear = MoneyStyle(symbol: "£", period: .yearly)
         let t = try TestModel()
         try t.importFirstTeamInDollarsMonthly()
         try t.importU21()
-        #expect(t.model.squad.book.moneyStyle == .weeklyPounds)
+        #expect(t.model.squad.book.money == .weeklyPounds)
+        #expect(t.model.squad.book.moneyStyle == poundsByTheYear)
         try t.importFirstTeamInDollarsMonthly()
-        #expect(t.model.squad.book.moneyStyle == MoneyStyle(symbol: "$", period: .monthly))
+        #expect(t.model.squad.book.money == MoneyStyle(symbol: "$", period: .monthly))
+        #expect(t.model.squad.book.moneyStyle == MoneyStyle(symbol: "$", period: .yearly))
         // The file as the app wrote it before it read FMRTE's period and currency: no money entries in the book.
         let url = t.directory.appendingPathComponent("squad.json")
         var file = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
@@ -372,7 +375,8 @@ import LineupEngine
         let model = t.reopened()
         #expect(model.notices.isEmpty)
         #expect(model.players == t.model.players)
-        #expect(model.squad.book.moneyStyle == .weeklyPounds)
+        #expect(model.squad.book.money == nil)
+        #expect(model.squad.book.moneyStyle == poundsByTheYear)
         #expect(model.squadWarnings.isEmpty)
         var settings = model.settings
         settings.clubName = "Oxford City"
@@ -382,9 +386,9 @@ import LineupEngine
             Issue.record("expected ready advice, got \(model.adviceState)")
             return
         }
-        #expect(report.removal.money == .weeklyPounds)
+        #expect(report.removal.money == poundsByTheYear)
         let wages = try #require(model.removalSheet(report).figures.last).figure
-        #expect(wages.hasPrefix("£") && wages.hasSuffix(" a week"))
+        #expect(wages.hasPrefix("£") && wages.hasSuffix(" a year"))
     }
 
     // MARK: Tactics

@@ -596,14 +596,21 @@ private func book(_ capture: String, squad: Squad) throws -> SquadBook {
 
     private func mixed(_ symbols: [Squad: String]) -> SquadWarning { .mixedCurrencies(symbols) }
 
-    @Test func theBookShowsMoneyAsTheMostRecentImportWroteIt() {
+    private let dollarsYearly = MoneyStyle(symbol: "$", period: .yearly)
+    private let poundsYearly = MoneyStyle(symbol: "£", period: .yearly)
+
+    /// The owner's rule of 27 November 2026: wages are shown by the year, as the game shows them, whatever period
+    /// FMRTE pasted them in. The book keeps how the import wrote them.
+    @Test func theBookShowsMoneyInTheCurrencyOfTheMostRecentImportByTheYear() {
         var book = SquadBook()
         book.apply(result("A", dollarsMonthly), to: .firstTeam)
-        #expect(book.moneyStyle == dollarsMonthly)
+        #expect(book.moneyStyle == dollarsYearly)
+        #expect(book.money == dollarsMonthly)
         #expect(book.warnings(override: nil).isEmpty)
 
         book.apply(result("B", .weeklyPounds), to: .u21)
-        #expect(book.moneyStyle == .weeklyPounds)
+        #expect(book.moneyStyle == poundsYearly)
+        #expect(book.money == .weeklyPounds)
         #expect(book.warnings(override: nil) == [mixed([.firstTeam: "$", .u21: "£"])])
         #expect(book.warnings(override: nil).map(ErrorDescriptions.describe) == [
             "The first team's wages are in $ and the U21s' are in £. Wages in different currencies cannot be compared: "
@@ -612,7 +619,14 @@ private func book(_ capture: String, squad: Squad) throws -> SquadBook {
 
         book.apply(result("B", MoneyStyle(symbol: "$", period: .weekly)), to: .u21)
         #expect(book.warnings(override: nil).isEmpty)
-        #expect(book.moneyStyle == MoneyStyle(symbol: "$", period: .weekly))
+        #expect(book.moneyStyle == dollarsYearly)
+    }
+
+    @Test func aBookWhoseImportWasYearlyShowsItAsItWas() {
+        var book = SquadBook()
+        book.apply(result("A", dollarsYearly), to: .firstTeam)
+        #expect(book.moneyStyle == dollarsYearly)
+        #expect(book.money == dollarsYearly)
     }
 
     @Test func threeSquadsInThreeCurrenciesAreAllNamed() {
@@ -649,17 +663,18 @@ private func book(_ capture: String, squad: Squad) throws -> SquadBook {
         return try JSONSerialization.data(withJSONObject: object)
     }
 
-    @Test func aBookSavedBeforeMoneyWasReadOpensAsWeeklyPounds() throws {
+    @Test func aBookSavedBeforeMoneyWasReadOpensAsPounds() throws {
         let book = try JSONDecoder().decode(SquadBook.self, from: bookSavedBefore())
         #expect(book.allPlayers.map(\.name) == ["A", "B"])
-        #expect(book.moneyStyle == .weeklyPounds)
+        #expect(book.moneyStyle == poundsYearly)
+        #expect(book.money == nil)
         #expect(book.warnings(override: nil).isEmpty)
     }
 
     @Test func aSquadNotImportedSinceIsTakenAsPounds() throws {
         var book = try JSONDecoder().decode(SquadBook.self, from: bookSavedBefore())
         book.apply(result("A", dollarsMonthly), to: .firstTeam)
-        #expect(book.moneyStyle == dollarsMonthly)
+        #expect(book.moneyStyle == dollarsYearly)
         #expect(book.warnings(override: nil) == [mixed([.firstTeam: "$", .u21: "£"])])
     }
 
@@ -669,7 +684,8 @@ private func book(_ capture: String, squad: Squad) throws -> SquadBook {
         book.apply(result("B", .weeklyPounds), to: .u21)
         let decoded = try JSONDecoder().decode(SquadBook.self, from: JSONEncoder().encode(book))
         #expect(decoded == book)
-        #expect(decoded.moneyStyle == .weeklyPounds)
+        #expect(decoded.money == .weeklyPounds)
+        #expect(decoded.moneyStyle == poundsYearly)
         #expect(decoded.warnings(override: nil) == [mixed([.firstTeam: "$", .u21: "£"])])
     }
 }

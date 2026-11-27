@@ -108,33 +108,32 @@ import LineupEngine
         #expect(guide.paid?.highest == wages.last)
         #expect(row.guideLines == AdvisorText.wageGuideLines(guide, money: model.squad.book.moneyStyle))
         #expect(row.guideLines.first?.hasPrefix("Most of the rest of your second eleven are paid ") == true)
-        #expect(row.verdictLines.isEmpty && row.figureText.isEmpty && row.figureReading == nil
-                && row.figureEnteredText == nil, "no figure typed")
+        #expect(row.verdictLines.isEmpty && row.figureText.isEmpty && row.figureEnteredText == nil, "no figure typed")
     }
 
     @Test func aFigureAboveTheHighestWageIsFirstSaidToBeAboveIt() throws {
         let model = try ContractsSample.filled()
         let humphries = try ContractsSample.player(SampleData.contractsFigureName, in: model)
         let row = try #require(ContractsSample.listed(try ContractsSample.sheet(model)).first { $0.id == humphries.id })
-        #expect(row.figureLabel == "The agent's figure, a month")
-        #expect(row.figureText == "9500")
-        #expect(row.figureReading == "$9,500 a month")
+        #expect(row.figureLabel == "The agent's figure, a year")
+        #expect(row.figureText == "114,000")
         #expect(row.figureEnteredText == AdvisorText.enteredOn(SampleData.contractsDate))
         // The over-the-highest-wage sentence stands apart, for the caution style, and is not repeated in the rest.
-        let highest = "The agent's figure is above the most you can offer one player, $9,000 a month."
+        let highest = "The agent's figure is above the most you can offer one player, $108,000 a year."
         #expect(row.cautionVerdictLine == highest)
         #expect(!row.verdictLines.contains(highest))
         #expect(row.verdictLines.count == 3)
         // The guide the verdict is read against carries the typed limits.
         let ceiling = Display.wage(perWeek: WagePeriod.monthly.perWeek(130_000 * 0.027), model.squad.book.moneyStyle)
         #expect(row.verdictLines.contains("The agent's figure is above a backup's share of your wage budget, \(ceiling) (this tool's estimate)."))
-        #expect(row.guideLines.contains { $0.hasPrefix("The most you can offer one player is $9,000 a month") })
+        #expect(ceiling.hasSuffix(" a year"))
+        #expect(row.guideLines.contains { $0.hasPrefix("The most you can offer one player is $108,000 a year") })
     }
 
     @Test func aFigureUnderTheHighestWageHasNoCautionLineAndKeepsEveryVerdict() throws {
         let model = try ContractsSample.filled()
         let humphries = try ContractsSample.player(SampleData.contractsFigureName, in: model)
-        model.setAgentFigure(text: "3000", for: humphries.id)
+        model.setAgentFigure(text: "36000", for: humphries.id)                      // $3,000 a month
         let row = try #require(ContractsSample.listed(try ContractsSample.sheet(model)).first { $0.id == humphries.id })
         #expect(row.cautionVerdictLine == nil)
         #expect(row.verdictLines.first == "The agent's figure is within what the rest of your second eleven are paid.")
@@ -155,7 +154,7 @@ import LineupEngine
         let model = try ContractsSample.filled()
         let rows = ContractsSample.listed(try ContractsSample.sheet(model)).filter { $0.name != SampleData.contractsFigureName }
         #expect(!rows.isEmpty && rows.allSatisfy { $0.verdictLines.isEmpty && $0.cautionVerdictLine == nil
-                                                    && $0.figureReading == nil })
+                                                    && $0.figureText.isEmpty })
     }
 
     // MARK: The players not being renewed
@@ -170,7 +169,7 @@ import LineupEngine
         let row = try #require(sheet.dismissed.first)
         #expect(row.detailsText == "Age 25 · DM/M C · CA 74 · PA 113 · $47,064 a year · contract ends 30 Jun 2029")
         #expect(row.standingLine == "Second choice at right defensive midfield.")
-        #expect(row.timingLine == nil && row.guideLines.isEmpty && row.figureText.isEmpty && row.figureReading == nil
+        #expect(row.timingLine == nil && row.guideLines.isEmpty && row.figureText.isEmpty
                 && row.figureEnteredText == nil && row.verdictLines.isEmpty)
         model.showContractAgain(tetek.id)
         let shown = try ContractsSample.sheet(model)
@@ -240,7 +239,7 @@ import LineupEngine
         let index = try #require(players.firstIndex { $0.name == "Josh Lewis" })
         players[index].attributes[.consistency] = nil
         _ = model.squad.book.apply(ImportResult(grid: "test", players: players, warnings: [],
-                                                money: model.squad.book.moneyStyle), to: .firstTeam)
+                                                money: model.squad.book.money ?? .weeklyPounds), to: .firstTeam)
         model.replan()
         guard case .failed = model.adviceState else {
             Issue.record("expected the advice to stop, got \(model.adviceState)")
@@ -271,31 +270,44 @@ import LineupEngine
 
     // MARK: The club's figures
 
-    @Test func theClubsFiguresAreLabelledInTheSquadsPeriodAndReadInTheMoneyStyle() throws {
-        let monthly = try ContractsSample.sheet(try ContractsSample.filled())
+    /// The owner's rule of 27 November 2026: the game shows these figures "p/a", so they are typed and shown by the
+    /// year whatever period FMRTE pasted the squad's wages in, and each field shows its amount once, with commas.
+    @Test func theClubsFiguresAreLabelledAndShownByTheYearWhateverPeriodFMRTEPasted() throws {
+        let filled = try ContractsSample.filled()
+        #expect(filled.squad.book.money?.period == .monthly, "the sample's squad was pasted by the month")
+        let monthly = try ContractsSample.sheet(filled)
         #expect(monthly.limitRows.map(\.field) == WageLimitField.allCases)
-        #expect(monthly.limitRows.map(\.label) == ["Wage budget, a month", "Wages spent, a month",
-                                                   "Highest wage you can offer, a month"])
-        #expect(monthly.limitRows.map(\.text) == ["130000", "118000", "9000"])
-        #expect(monthly.limitRows.map(\.reading) == ["$130,000 a month", "$118,000 a month", "$9,000 a month"])
+        #expect(monthly.limitRows.map(\.label) == ["Wage budget, a year", "Wages spent, a year",
+                                                   "Highest wage you can offer, a year"])
+        #expect(monthly.limitRows.map(\.text) == ["1,560,000", "1,416,000", "108,000"])
         #expect(monthly.limitsEnteredText == AdvisorText.enteredOn(SampleData.contractsDate))
 
         let model = try SampleData.model(repositoryRoot: Captures.repositoryRoot)
-        model.setWageLimit(.wageBudget, text: "20000")
+        #expect(model.squad.book.money?.period == .weekly, "the standard sample's squads were pasted by the week")
+        model.setWageLimit(.wageBudget, text: "1040000")
         let weekly = try ContractsSample.sheet(model)
-        #expect(weekly.limitRows.map(\.label) == ["Wage budget, a week", "Wages spent, a week",
-                                                  "Highest wage you can offer, a week"])
-        let kept = try #require(model.contracts.limits.wageBudgetPerWeek)
-        #expect(weekly.limitRows.map(\.text) == ["20000", "", ""])
-        #expect(weekly.limitRows.map(\.reading) == [Display.wage(perWeek: kept, model.squad.book.moneyStyle), nil, nil])
-        #expect(weekly.limitRows.first?.reading == "£20,000 a week")
-        #expect(ContractsSample.listed(weekly).allSatisfy { $0.figureLabel == "The agent's figure, a week" })
+        #expect(weekly.limitRows.map(\.label) == monthly.limitRows.map(\.label))
+        #expect(model.contracts.limits.wageBudgetPerWeek == 20_000)
+        #expect(weekly.limitRows.map(\.text) == ["1,040,000", "", ""])
+        #expect(ContractsSample.listed(weekly).allSatisfy { $0.figureLabel == "The agent's figure, a year" })
+    }
+
+    /// A figure typed before the rule, by the month: it is kept by the week, so it shows as the same worth a year.
+    @Test func aFigureKeptFromAMonthlyEntryShowsAsTheSameWorthAYear() throws {
+        let model = try ContractsSample.plain()
+        model.contracts.limits.wageBudgetPerWeek = WagePeriod.monthly.perWeek(241_757)
+        let row = try #require(try ContractsSample.sheet(model).limitRows.first)
+        #expect(row.text == "2,901,084")
+        // What the field shows, typed back, keeps the same figure.
+        let kept = model.contracts.limits
+        model.setWageLimit(.wageBudget, text: row.text)
+        #expect(try ContractsSample.sheet(model).limitRows.first?.text == "2,901,084")
+        #expect(abs((model.contracts.limits.wageBudgetPerWeek ?? 0) - (kept.wageBudgetPerWeek ?? 0)) < 0.01)
     }
 
     @Test func withNoFigureTypedTheRowsAreBlankAndUndated() throws {
         let sheet = try ContractsSample.sheet(try ContractsSample.plain())
         #expect(sheet.limitRows.map(\.text) == ["", "", ""])
-        #expect(sheet.limitRows.allSatisfy { $0.reading == nil })
         #expect(sheet.limitsEnteredText == nil)
     }
 

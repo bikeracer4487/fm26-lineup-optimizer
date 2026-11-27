@@ -430,7 +430,7 @@ public enum RemovalPresentation {
 
     /// The sheet for `report`, with each player's squad and age from `squads` and `ages`, the owner's mark on him
     /// from `marks`, and his abilities, salary and contract end from `facts`. The average ability is shown to the nearest whole number, and only when the report has one. Money
-    /// is written as the report writes it: the squads' currency, the wages in FMRTE's period. The loans to the club take
+    /// is written as the report writes it: the squads' currency, the wages by the year. The loans to the club take
     /// no mark. Every player with an outlook is also in the Young players part, oldest first, then by name and key.
     public static func sheet(_ report: RemovalReport, squads: [PlayerID: Squad], ages: [PlayerID: Int],
                              marks: [PlayerID: SaleMark] = [:], facts: [PlayerID: PlayerFacts] = [:]) -> RemovalSheet {

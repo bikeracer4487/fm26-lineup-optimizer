@@ -61,10 +61,13 @@ import LineupEngine
 
     // MARK: The club's figures
 
-    @Test func aTypedLimitIsKeptByTheWeekInFMRTEsPeriodWithTodaysDay() throws {
+    /// Typed for a year, as the game shows it (27 November 2026), whatever period FMRTE pasted the squad in.
+    @Test func aTypedLimitIsReadAsAYearsAndKeptByTheWeekWithTodaysDay() throws {
         let t = try monthly()
         let model = t.model
-        model.setWageLimit(.wageBudget, text: "16000")
+        #expect(model.squad.book.money?.period == .monthly)
+        model.setWageLimit(.wageBudget, text: "192000")
+        #expect(model.contracts.limits.wageBudgetPerWeek == WagePeriod.yearly.perWeek(192_000))
         #expect(model.contracts.limits.wageBudgetPerWeek == WagePeriod.monthly.perWeek(16_000))
         #expect(model.contracts.limitsEntered == model.settings.currentDate)
         #expect(t.reopened().contracts == model.contracts)
@@ -75,7 +78,11 @@ import LineupEngine
         t.model.setWageLimit(.wagesSpent, text: "9000")
         let kept = t.model.contracts.limits.wagesSpentPerWeek
         try t.importFirstTeam()                                                    // back to weekly pounds
-        #expect(t.model.squad.book.moneyStyle.period == .weekly)
+        #expect(t.model.squad.book.money?.period == .weekly)
+        #expect(t.model.squad.book.moneyStyle.period == .yearly)
+        #expect(t.model.contracts.limits.wagesSpentPerWeek == kept)
+        // It was typed for a year and is still read as that.
+        t.model.setWageLimit(.wagesSpent, text: "9000")
         #expect(t.model.contracts.limits.wagesSpentPerWeek == kept)
     }
 
@@ -91,7 +98,7 @@ import LineupEngine
     @Test func blankingOneOfTwoKeepsTheDay() throws {
         let t = try ready()
         t.model.setWageLimit(.highestWage, text: "500")
-        t.model.setWageLimit(.wageBudget, text: "9000")
+        t.model.setWageLimit(.wageBudget, text: "468000")
         t.model.setWageLimit(.highestWage, text: "")
         #expect(t.model.contracts.limits.wageBudgetPerWeek == 9_000)
         #expect(t.model.contracts.limitsEntered == t.model.settings.currentDate)
@@ -99,7 +106,7 @@ import LineupEngine
 
     @Test func onlyDigitsAreReadAndZeroIsAValue() throws {
         let t = try ready()
-        t.model.setWageLimit(.wageBudget, text: "12abc34")
+        t.model.setWageLimit(.wageBudget, text: "64abc168")
         #expect(t.model.contracts.limits.wageBudgetPerWeek == 1_234)
         t.model.setWageLimit(.wagesSpent, text: "0")
         #expect(t.model.contracts.limits.wagesSpentPerWeek == 0)
@@ -110,7 +117,7 @@ import LineupEngine
     @Test func anAgentsFigureIsKeptForAHeldPlayerAndRemovedWhenBlank() throws {
         let t = try ready()
         let held = try id(of: try name(onRow: 0), t.model)
-        t.model.setAgentFigure(text: "900", for: held)
+        t.model.setAgentFigure(text: "46,800", for: held)
         #expect(t.model.contracts.figures[held] == AgentFigure(perWeek: 900, entered: t.model.settings.currentDate))
         #expect(t.reopened().contracts.figures[held]?.perWeek == 900)
         t.model.setAgentFigure(text: "", for: held)

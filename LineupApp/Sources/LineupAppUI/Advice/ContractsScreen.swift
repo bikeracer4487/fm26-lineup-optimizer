@@ -13,7 +13,7 @@ public struct ContractsStart: Sendable {
 }
 
 /// The players being kept whose contracts are running down: the engine's intro; the club's three wage figures, each
-/// typed straight into the model with how it is read beside it; then each part, a row for each player, with "Not
+/// typed straight into the model; then each part, a row for each player, with "Not
 /// renewing" at the trailing end of his name's line; the line counting those left out as going, with the way to Player
 /// Removal; the players not being renewed, closed behind a line, each with "Show again"; and how far to trust it all.
 /// It stands behind the same gate as Player Removal, and everything under the heading scrolls.
@@ -104,7 +104,7 @@ private struct ContractsBody: View {
     }
 }
 
-/// The club's three wage figures, each label before its field and how it is read after it, so the fields line up: all
+/// The club's three wage figures, each label before its field, so the fields line up: all
 /// three on a row when they fit across, one under another when not.
 private struct WageLimitFields: View {
     let rows: [WageLimitRow]
@@ -125,7 +125,6 @@ private struct WageLimitFields: View {
                     ForEach(rows[start..<min(start + perRow, rows.count)], id: \.field) { row in
                         FieldLabel(text: row.label, small: true)
                         AmountField(label: row.label, text: row.text) { set(row.field, $0) }
-                        AmountReading(reading: row.reading)
                             .padding(.trailing, Theme.Contracts.figureGap)
                     }
                 }
@@ -155,7 +154,7 @@ private struct ContractsPart: View {
 
 /// One player: his name over his facts, with "Not renewing" at the trailing end, beside them and never inside a button;
 /// then where he stands, when other clubs can approach him (a caution once they can), the wage range for his tier, the
-/// agent's figure typed straight into the model with how it is read and the day it was entered, and what the figure says
+/// agent's figure typed straight into the model with the day it was entered, and what the figure says
 /// against the range, the caution first when it is above the most the club can offer.
 private struct ContractRowView: View {
     let row: ContractRow
@@ -181,7 +180,6 @@ private struct ContractRowView: View {
                     AmountField(label: row.figureLabel, text: row.figureText) {
                         model.setAgentFigure(text: $0, for: row.id)
                     }
-                    AmountReading(reading: row.figureReading)
                     if let entered = row.figureEnteredText {
                         MutedLines(lines: [entered], size: Theme.TypeSize.small)
                     }

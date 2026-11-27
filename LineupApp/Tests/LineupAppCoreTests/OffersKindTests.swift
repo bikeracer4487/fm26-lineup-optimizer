@@ -215,8 +215,8 @@ import LineupEngine
 
     @Test func aLoanDealRecordedUnderLoanTermsStaysInHisBlockUnderSaleTermsAndFollowsItsOwnKind() throws {
         let s = try ready()
-        s.model.setClubFigure(.wageBudget, text: "9000", club: "Barnet")
-        s.model.setClubFigure(.wagesSpent, text: "8000", club: "Barnet")
+        s.model.setClubFigure(.wageBudget, text: "468000", club: "Barnet")
+        s.model.setClubFigure(.wagesSpent, text: "416000", club: "Barnet")
         s.model.setOfferKind(.loan, for: s.seller)
         #expect(s.model.recordRound(for: s.seller, club: "Barnet", by: .club, terms: Self.loan) == nil)
         #expect(s.model.offers.deals.first?.kind == .loan)
@@ -253,8 +253,8 @@ import LineupEngine
     @Test func aSaleDealAndALoanDealWithOneClubCanBothBeOpen() throws {
         let s = try ready()
         s.model.setClubFigure(.transferBudget, text: "35000", club: "Barnet")
-        s.model.setClubFigure(.wageBudget, text: "9000", club: "Barnet")
-        s.model.setClubFigure(.wagesSpent, text: "8000", club: "Barnet")
+        s.model.setClubFigure(.wageBudget, text: "468000", club: "Barnet")
+        s.model.setClubFigure(.wagesSpent, text: "416000", club: "Barnet")
         s.model.recordRound(for: s.seller, club: "Barnet", by: .club, terms: Self.sale)
         #expect(try block(sheet(s.t, clubs: [s.seller: "Barnet"]), s.seller).clubHasOpenDeal != nil)
         s.model.setOfferKind(.loan, for: s.seller)
@@ -445,8 +445,8 @@ import LineupEngine
 
     @Test func aLoanDealOfAPlayerNowOutOnLoanStaysAnswerableInHisBlock() throws {
         let s = try ready()
-        s.model.setClubFigure(.wageBudget, text: "9000", club: "Barnet")
-        s.model.setClubFigure(.wagesSpent, text: "8000", club: "Barnet")
+        s.model.setClubFigure(.wageBudget, text: "468000", club: "Barnet")
+        s.model.setClubFigure(.wagesSpent, text: "416000", club: "Barnet")
         s.model.setOfferKind(.loan, for: s.seller)
         s.model.recordRound(for: s.seller, club: "Barnet", by: .owner, terms: Self.loan)
         advance(s.t)

@@ -66,9 +66,10 @@ public struct SquadBook: Equatable, Codable, Sendable {
         currencies = try container.decodeIfPresent([Squad: String].self, forKey: .currencies) ?? [:]
     }
 
-    /// How to show money: as the most recent import wrote it, or, until a squad is imported after the tool began
-    /// reading FMRTE's period and currency, as weekly pounds, which is how the squads held were read.
-    public var moneyStyle: MoneyStyle { money ?? .weeklyPounds }
+    /// How to show money: in the currency of the most recent import, with wages by the year, as the game shows them,
+    /// whatever period FMRTE pasted them in (`money` keeps that). Until a squad is imported after the tool began
+    /// reading FMRTE's currency the currency is pounds, which is how the squads held were read.
+    public var moneyStyle: MoneyStyle { (money ?? .weeklyPounds).byYear }
 
     /// The symbol each squad with players was imported in; pounds for one imported before the currency was read.
     private var heldCurrencies: [Squad: String] {

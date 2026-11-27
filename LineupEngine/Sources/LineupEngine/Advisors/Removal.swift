@@ -105,7 +105,7 @@ public struct RemovalReport: Equatable, Sendable {
     public let weeklyWagesAtStake: Double
     /// Mean current ability of the club's own first-team players; nil when there are none.
     public let squadAverageAbility: Double?
-    /// How the report's figures and reasons write money: the squads' currency, and wages in FMRTE's period.
+    /// How the report's figures and reasons write money: the squads' currency, and wages by the year (the squad book's `moneyStyle`).
     public let money: MoneyStyle
     /// The players the owner is advised to move on: critical or high, to be released, terminated or sold. A loan for
     /// matches is not among them.

@@ -597,8 +597,15 @@ public enum Display {
         yearlyAmount(perWeek: perWeek, style) + WagePeriod.yearly.suffix
     }
 
-    /// How an import read its wages: "Wages are in $ a month, as FMRTE shows them."
+    /// How an import read its wages, and that the tool shows them by the year: "Wages were read in $ a month, as
+    /// FMRTE shows them, and are shown by the year."; with FMRTE set to a year, "Wages are in $ a year, as FMRTE shows
+    /// them."
     public static func wagesRead(_ style: MoneyStyle) -> String {
-        "Wages are in \(style.symbol)\(style.period.suffix), as FMRTE shows them."
+        switch style.period {
+        case .weekly, .monthly:
+            "Wages were read in \(style.symbol)\(style.period.suffix), as FMRTE shows them, and are shown by the year."
+        case .yearly:
+            "Wages are in \(style.symbol)\(style.period.suffix), as FMRTE shows them."
+        }
     }
 }

@@ -57,10 +57,10 @@ public struct ScoutingCandidateRow: Identifiable, Equatable, Sendable {
     public let onLoan: String?
     /// "Asking £25,250"; nil when the paste carried no price.
     public let askingPrice: String?
-    /// In the paste's currency and FMRTE's period: "£500 a week".
+    /// In the paste's currency, by the year as every wage is shown: "£26,000 a year".
     public let wage: String
     /// What the paste says of him, on one line under his name (`ScoutingPresentation.details`): "Age 19 · D/WB L ·
-    /// CA 112 · PA 140 · Banbury United · On loan at Barnet · Asking £25,250 · £500 a week", leaving out what the paste
+    /// CA 112 · PA 140 · Banbury United · On loan at Barnet · Asking £25,250 · £26,000 a year", leaving out what the paste
     /// did not carry.
     public let detailsText: String
     public let isInjured: Bool

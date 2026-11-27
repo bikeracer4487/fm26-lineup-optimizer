@@ -40,7 +40,7 @@ extension AppModel {
         return count > 0 ? count : nil
     }
 
-    /// Sets one of the club's wage figures from what the owner typed, in the period FMRTE shows wages by, kept by the
+    /// Sets one of the club's wage figures from what the owner typed, for a year as every wage is shown, kept by the
     /// week. Blank clears it and 0 is a value. The day entered is today in the game, or nil once all three are blank.
     /// Saves the contracts file and nothing else; does not plan.
     public func setWageLimit(_ field: WageLimitField, text: String) {
@@ -58,7 +58,7 @@ extension AppModel {
         save(.contracts)
     }
 
-    /// Keeps what an agent asked for a player, typed in FMRTE's wage period; blank removes it. Nothing for a player in
+    /// Keeps what an agent asked for a player, typed for a year as every wage is shown; blank removes it. Nothing for a player in
     /// no squad held.
     public func setAgentFigure(text: String, for player: PlayerID) {
         guard squad.book.allPlayers.contains(where: { $0.id == player }) else { return }

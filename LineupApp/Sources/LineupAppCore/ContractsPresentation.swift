@@ -1,16 +1,15 @@
 import Foundation
 import LineupEngine
 
-/// One of the club's three wage figures at the top of Contracts: its label in FMRTE's wage period, what is kept in it
-/// and how the tool reads it.
+/// One of the club's three wage figures at the top of Contracts: its label, by the year as every wage is shown, and
+/// what is kept in it.
 public struct WageLimitRow: Equatable, Sendable {
     public var field: WageLimitField
-    /// "Wage budget, a month", "Wages spent, a month", "Highest wage you can offer, a month".
+    /// "Wage budget, a year", "Wages spent, a year", "Highest wage you can offer, a year".
     public var label: String
-    /// The figure as kept, in plain digits in FMRTE's period, rounded to a whole unit; blank when none is.
+    /// The figure as kept, for a year, rounded to a whole unit, with a comma between each group of three digits:
+    /// "1,560,000"; blank when none is.
     public var text: String
-    /// The figure in the money style, shown beside the field: "$16,000 a month"; nil when none is kept.
-    public var reading: String?
 }
 
 /// One player on Contracts: who he is, why he is listed, when other clubs can approach him, the wage range for his tier
@@ -31,12 +30,11 @@ public struct ContractRow: Equatable, Identifiable, Sendable {
     public let timingIsCaution: Bool
     /// The engine's lines on the wage range for his tier; none for a player not being renewed.
     public let guideLines: [String]
-    /// "The agent's figure, a month", in FMRTE's wage period.
+    /// "The agent's figure, a year".
     public let figureLabel: String
-    /// The agent's figure as kept, in plain digits in FMRTE's period; blank when none is.
+    /// The agent's figure as kept, for a year, with a comma between each group of three digits: "114,000"; blank when
+    /// none is.
     public let figureText: String
-    /// The agent's figure in the money style: "$9,500 a month"; nil when none is kept.
-    public let figureReading: String?
     /// "entered Wed 25 Nov": when the agent's figure was typed; nil when none is kept.
     public let figureEnteredText: String?
     /// The engine's sentence that the agent's figure is above the most the club can offer one player, drawn as a
@@ -95,7 +93,7 @@ public enum ContractsPresentation {
         }
     }
 
-    /// A club figure's label, in FMRTE's wage period: "Wage budget, a month".
+    /// A club figure's label, in the period wages are shown by, a year: "Wage budget, a year".
     public static func label(_ field: WageLimitField, period: WagePeriod) -> String {
         switch field {
         case .wageBudget: "Wage budget, \(per(period))"
@@ -104,7 +102,7 @@ public enum ContractsPresentation {
         }
     }
 
-    /// "The agent's figure, a month".
+    /// "The agent's figure, a year".
     public static func figureLabel(period: WagePeriod) -> String { "The agent's figure, \(per(period))" }
 
     /// The button at the trailing end of a listed player's name, which sets him aside at once.
@@ -119,9 +117,10 @@ public enum ContractsPresentation {
     /// Over the engine's sentences when the list cannot be worked out.
     public static let failedLead = "Contracts cannot be worked out."
 
-    /// A weekly figure in plain digits in FMRTE's period, rounded to a whole unit; blank for none.
+    /// A weekly figure as its field shows it: for the period, rounded to a whole unit, with a comma between each
+    /// group of three digits; blank for none.
     static func text(perWeek: Double?, period: WagePeriod) -> String {
-        perWeek.map { String(Int(period.amount(perWeek: $0).rounded())) } ?? ""
+        perWeek.map { TypedNumber.grouped(Int(period.amount(perWeek: $0).rounded())) } ?? ""
     }
 
     /// His age, positions and Player Removal's facts on one line.
@@ -139,8 +138,7 @@ public enum ContractsPresentation {
             case .highestWage: perWeek = limits.highestWagePerWeek
             }
             return WageLimitRow(field: field, label: label(field, period: money.period),
-                                text: text(perWeek: perWeek, period: money.period),
-                                reading: perWeek.map { Display.wage(perWeek: $0, money) })
+                                text: text(perWeek: perWeek, period: money.period))
         }
     }
 
@@ -177,14 +175,13 @@ public enum ContractsPresentation {
                 timingIsCaution: timingIsCaution,
                 guideLines: AdvisorText.wageGuideLines(guide, money: money), figureLabel: figureLabel,
                 figureText: text(perWeek: figure?.perWeek, period: money.period),
-                figureReading: figure.map { Display.wage(perWeek: $0.perWeek, money) },
                 figureEnteredText: figure.map { AdvisorText.enteredOn($0.entered) },
                 cautionVerdictLine: caution, verdictLines: verdicts.map(line))
         }
         func dismissedRow(_ entry: ContractEntry) -> ContractRow {
             ContractRow(id: entry.player, name: entry.name, detailsText: details(entry),
                         standingLine: AdvisorText.standingLine(entry), timingLine: nil, timingIsCaution: false,
-                        guideLines: [], figureLabel: figureLabel, figureText: "", figureReading: nil,
+                        guideLines: [], figureLabel: figureLabel, figureText: "",
                         figureEnteredText: nil, cautionVerdictLine: nil, verdictLines: [])
         }
 

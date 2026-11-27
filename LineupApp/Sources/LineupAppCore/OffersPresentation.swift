@@ -1,16 +1,14 @@
 import Foundation
 import LineupEngine
 
-/// One of a club's figures in a player's "To a club" row: its label, with the period on a wage figure, what is entered
-/// for the club named, as plain digits (blank when nothing is), and how the tool reads it.
+/// One of a club's figures in a player's "To a club" row: its label, with the period on a wage figure, and what is
+/// entered for the club named, with a comma between each group of three digits (blank when nothing is).
 public struct OfferFieldRow: Equatable, Sendable {
     public var field: ClubField
-    /// "Can spend on transfers", "Wage budget, a month".
+    /// "Can spend on transfers", "Wage budget, a year".
     public var label: String
+    /// "15,000"; a wage figure for a year, as every wage is shown.
     public var text: String
-    /// What is entered in the money style, shown beside the field: "£15,000", or "£9,000 a week" for a wage figure in
-    /// FMRTE's period; nil when nothing is.
-    public var reading: String?
 }
 
 /// A suggestion as the screen shows it: the engine's lines, the advice first, and the terms its "Record…" button opens
@@ -81,7 +79,7 @@ public struct OfferAskRow: Identifiable, Equatable, Sendable {
 public struct OfferPlayerBlock: Identifiable, Equatable, Sendable {
     public var id: PlayerID
     public var name: String
-    /// "Age 27 · D C · £1,950 a month · 14 months left", leaving out what is not known.
+    /// "Age 27 · D C · £23,400 a year · 14 months left", leaving out what is not known.
     public var details: String
     /// The kind of terms his block works out (`AppModel.offerKind(for:)`).
     public var kind: OfferKind
@@ -89,11 +87,9 @@ public struct OfferPlayerBlock: Identifiable, Equatable, Sendable {
     public var kindChoices: [OfferKindChoice]
     /// The engine's sentence under the control when a loan cannot be worked out for him; nil otherwise.
     public var kindNote: String?
-    /// His value as plain digits; blank with none.
+    /// His value with a comma between each group of three digits, so that 40 typed for "40K" is seen at once:
+    /// "40,000"; blank with none.
     public var valueText: String
-    /// His value in the money style, shown beside the field so that 40 typed for "40K" is seen at once: "£40,000"; nil
-    /// with none.
-    public var valueReading: String?
     /// "entered Sat 21 Nov"; nil with no value.
     public var valueNote: String?
     /// What his loan is for; nil when his block shows sale terms.
@@ -313,6 +309,21 @@ public struct OfferRoundDraft: Equatable, Sendable, Identifiable {
         TypedNumber.value(text)
     }
 
+    /// What the sheet's field shows: a money field of this kind with a comma between each group of three digits
+    /// ("35,000"), a percentage of this kind as its digits, and nothing for a field of the other kind or one the sheet
+    /// does not hold.
+    public func shown(_ field: OfferField) -> String {
+        if let money = moneyText(field) { return TypedNumber.grouped(money) }
+        return switch (field, kind) {
+        case (.nextFeePercent, .sale): nextFee
+        case (.wagePercent, .loan): wagePercent
+        case (.nextFeePercent, .loan), (.wagePercent, .sale), (.feeNow, _), (.feeLater, _), (.feePerMonth, _),
+             (.futureFee, _), (.value, _), (.wage, _), (.transferBudget, _), (.wageBudget, _), (.wagesSpent, _),
+             (.highestWage, _):
+            ""
+        }
+    }
+
     /// The text of a money field of this kind: a sale's money now and later, a loan's fee a month and fee to buy him;
     /// nil for a percentage or a field of the other kind.
     func moneyText(_ field: OfferField) -> String? {
@@ -408,7 +419,7 @@ public enum OffersPresentation {
         }
     }
 
-    /// A club figure's label: a wage figure carries the period FMRTE shows wages by, "Wage budget, a month".
+    /// A club figure's label: a wage figure carries the period wages are shown by, a year, "Wage budget, a year".
     public static func label(_ field: ClubField, period: WagePeriod) -> String {
         let per = switch period {
         case .weekly: "a week"
@@ -423,26 +434,14 @@ public enum OffersPresentation {
         }
     }
 
-    /// A club figure as entered, in plain digits: the transfer budget in whole units, a wage figure in FMRTE's period
-    /// rounded to a whole unit; blank when it is not entered.
+    /// A club figure as its field shows it, with a comma between each group of three digits: the transfer budget in
+    /// whole units, a wage figure for the period rounded to a whole unit; blank when it is not entered.
     static func text(_ field: ClubField, _ figures: ClubFigures?, period: WagePeriod) -> String {
         func wage(_ perWeek: Double?) -> String {
-            perWeek.map { String(Int(period.amount(perWeek: $0).rounded())) } ?? ""
+            perWeek.map { TypedNumber.grouped(Int(period.amount(perWeek: $0).rounded())) } ?? ""
         }
         return switch field {
-        case .transferBudget: figures?.transferBudget.map(String.init) ?? ""
-        case .wageBudget: wage(figures?.wageBudgetPerWeek)
-        case .wagesSpent: wage(figures?.wagesSpentPerWeek)
-        case .highestWage: wage(figures?.highestWagePerWeek)
-        }
-    }
-
-    /// A club figure as the tool reads it, in the money style: the transfer budget as money, "£15,000", a wage figure
-    /// in FMRTE's period, "£9,000 a week"; nil when it is not entered.
-    static func reading(_ field: ClubField, _ figures: ClubFigures?, money: MoneyStyle) -> String? {
-        func wage(_ perWeek: Double?) -> String? { perWeek.map { Display.wage(perWeek: $0, money) } }
-        return switch field {
-        case .transferBudget: figures?.transferBudget.map { Display.money($0, symbol: money.symbol) }
+        case .transferBudget: figures?.transferBudget.map { TypedNumber.grouped($0) } ?? ""
         case .wageBudget: wage(figures?.wageBudgetPerWeek)
         case .wagesSpent: wage(figures?.wagesSpentPerWeek)
         case .highestWage: wage(figures?.highestWagePerWeek)
@@ -459,7 +458,7 @@ public enum OffersPresentation {
     /// "14 months left", "1 month left".
     static func monthsLeftText(_ months: Int) -> String { "\(months) \(months == 1 ? "month" : "months") left" }
 
-    /// "Age 27 · D C · £1,950 a month · 14 months left": his age, positions, wage in FMRTE's period and the months left
+    /// "Age 27 · D C · £23,400 a year · 14 months left": his age, positions, wage by the year and the months left
     /// on his contract, leaving out the positions and the months when they are not known.
     static func details(of player: Player, money: MoneyStyle) -> String {
         let positions = player.positionsText.isEmpty ? nil : player.positionsText
@@ -558,12 +557,6 @@ extension AppModel {
         }
         return OfferRoundDraft(player: player, kind: kind, club: club, purpose: purpose,
                                loanPurpose: kind == .loan ? loanPurpose(for: player) : nil, filledWith: filling)
-    }
-
-    /// How the sheet reads a money field, shown beside it in the money style: "£35,000"; nil for a percentage, a field
-    /// of the other kind or a blank field.
-    public func offerReading(_ field: OfferField, in draft: OfferRoundDraft) -> String? {
-        draft.moneyText(field).flatMap(TypedNumber.value).map { Display.money($0, symbol: squad.book.moneyStyle.symbol) }
     }
 
     /// The line under the sheet's title saying whose round it is: "Josh Ashby · Barnet", or his name alone for an ask;
@@ -679,15 +672,13 @@ extension AppModel {
             kindChoices: loanRefusal == nil ? OffersPresentation.kindChoices
                 : OffersPresentation.kindChoices.filter { $0.kind == .sale },
             kindNote: loanRefusal,
-            valueText: entry?.value.map(String.init) ?? "",
-            valueReading: entry?.value.map { Display.money($0, symbol: context.money.symbol) },
+            valueText: entry?.value.map { TypedNumber.grouped($0) } ?? "",
             valueNote: entry?.value == nil ? nil : entry?.valueDay.map(AdvisorText.enteredOn),
             purpose: kind == .loan ? purpose : nil, needsValue: needsValue, general: general, asks: askRows,
             clubName: typed,
             clubFields: ClubField.allCases.map {
                 OfferFieldRow(field: $0, label: OffersPresentation.label($0, period: period),
-                              text: OffersPresentation.text($0, entered?.figures, period: period),
-                              reading: OffersPresentation.reading($0, entered?.figures, money: context.money))
+                              text: OffersPresentation.text($0, entered?.figures, period: period))
             },
             clubNote: entered.map { AdvisorText.enteredOn($0.enteredOn) },
             clubBlock: clubBlock, clubProblem: clubProblem, clubHasOpenDeal: clubHasOpenDeal, deals: deals)

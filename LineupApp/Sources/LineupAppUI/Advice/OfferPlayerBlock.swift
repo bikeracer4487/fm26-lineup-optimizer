@@ -89,7 +89,7 @@ struct OfferPlayerBlockView: View {
         }
     }
 
-    /// "His value", its field and how it is read, the hint and the day it was entered after it; the caution under them.
+    /// "His value", its field, the hint and the day it was entered after it; the caution under them.
     private var value: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
@@ -97,7 +97,6 @@ struct OfferPlayerBlockView: View {
                 AmountField(label: OffersPresentation.valueLabel, text: block.valueText) {
                     model.setOfferValue(text: $0, for: block.id)
                 }
-                AmountReading(reading: block.valueReading)
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                     MutedLines(lines: [valueHint] + [block.valueNote].compactMap { $0 }, size: Theme.TypeSize.small)
                 }
@@ -316,7 +315,7 @@ struct OfferAskRowView: View {
     }
 }
 
-/// A club's four figures, each label in a column before its field and how it is read after it, so the fields line up:
+/// A club's four figures, each label in a column before its field, so the fields line up:
 /// two to a row when they fit across, one under another when not.
 private struct ClubFigureFields: View {
     let rows: [OfferFieldRow]
@@ -337,7 +336,6 @@ private struct ClubFigureFields: View {
                     ForEach(rows[start..<min(start + perRow, rows.count)], id: \.field) { row in
                         FieldLabel(text: row.label, small: true)
                         AmountField(label: row.label, text: row.text) { set(row.field, $0) }
-                        AmountReading(reading: row.reading)
                             .padding(.trailing, Theme.Offers.figureGap)
                     }
                 }
@@ -361,22 +359,8 @@ struct FieldLabel: View {
     }
 }
 
-/// How the tool reads an amount, beside its field in the muted ink: "£40,000"; nothing beside a blank field. It keeps
-/// its least width either way, so the fields do not move as digits are typed.
-struct AmountReading: View {
-    let reading: String?
-
-    var body: some View {
-        Text(reading ?? "")
-            .font(Theme.Typeface.text())
-            .foregroundStyle(Theme.Colour.mutedInk)
-            .fixedSize()
-            .frame(minWidth: Theme.Offers.readingMinimumWidth, alignment: .leading)
-    }
-}
-
 /// An amount typed as digits, each keystroke handed on, as the League screen's numbers are; the model keeps the digits
-/// and gives them back.
+/// and gives the amount back with a comma between each group of three, so the field shows how it was read.
 struct AmountField: View {
     let label: String
     let text: String
