@@ -200,10 +200,14 @@
 //                                              loan's ask ("offers-editor-loan-…").
 //                                              The Contracts screen is drawn on the contracts sample, with the
 //                                              club's three figures and one agent's figure typed
-//                                              ("contracts-…"), tall enough for every part, the line on those
-//                                              left out and the evidence note ("contracts-tall-…"), the same
-//                                              with the players not being renewed open
-//                                              ("contracts-dismissed-open-…"), with nothing typed
+//                                              ("contracts-…"), tall enough for the whole list, the lines on
+//                                              those not recommended and not being renewed and the evidence
+//                                              note ("contracts-tall-…"), the same with the players not
+//                                              recommended open ("contracts-notrecommended-open-…") and with
+//                                              the players not being renewed open
+//                                              ("contracts-dismissed-open-…"), with every listed player set
+//                                              aside but the one renewed at the owner's choice, so his row is
+//                                              first ("contracts-wanted-…"), with nothing typed
 //                                              ("contracts-nofigures-…", as tall), with everyone listed set
 //                                              aside, so nobody is listed and the pill has no count
 //                                              ("contracts-empty-…"; no date empties the list, since the plain
@@ -661,7 +665,7 @@ let narrowWindow = CGSize(width: 800, height: 700)
                              variant: "all-open", screens: [.removal], removalStart: RemovalStart(allOpen: true))
     // Tall enough for the Young players part above the loans.
     try ScreenPictures.write(model: sampleModel(root, .loanee), to: directory,
-                             size: CGSize(width: size.width, height: size.height * 5), variant: "loanee", screens: [.removal])
+                             size: CGSize(width: size.width, height: size.height * 6), variant: "loanee", screens: [.removal])
     let marked = sampleModel(root)
     if case .ready(let report) = marked.adviceState {
         for (player, mark) in zip(report.removal.advice.map(\.player), SaleMark.allCases) {
@@ -831,8 +835,24 @@ let narrowWindow = CGSize(width: 800, height: 700)
     // Tall enough for the whole list, those not being renewed and the evidence note.
     let tall = CGSize(width: size.width, height: size.height * 7.5)
     try ScreenPictures.write(model: filled, to: directory, size: tall, variant: "tall", screens: [.contracts])
+    // Taller still, for the players not recommended with their reasons.
+    try ScreenPictures.write(model: filled, to: directory, size: CGSize(width: size.width, height: size.height * 8),
+                             variant: "notrecommended-open", screens: [.contracts],
+                             contractsStart: ContractsStart(notRecommendedOpen: true))
     try ScreenPictures.write(model: filled, to: directory, size: tall, variant: "dismissed-open", screens: [.contracts],
                              contractsStart: ContractsStart(dismissedOpen: true))
+    // The player renewed at the owner's choice is last in the list, by his worth: everyone else listed is set aside,
+    // so his row is the first on the screen.
+    let wanted = sample(SampleData.modelWithContracts)
+    let wantedID = samplePlayer(SampleData.contractsWantedName, in: wanted)
+    if case .ready(let sheet) = wanted.contractsSheet {
+        for row in sheet.rows where row.id != wantedID { wanted.dismissContract(row.id) }
+    }
+    guard case .ready(let wantedSheet) = wanted.contractsSheet, wantedSheet.rows.map(\.id) == [wantedID],
+          wantedSheet.rows.first?.wantedLine != nil else {
+        fail("The contracts sample does not list \(SampleData.contractsWantedName) alone, at the owner's choice.")
+    }
+    try ScreenPictures.write(model: wanted, to: directory, size: size, variant: "wanted", screens: [.contracts])
     try ScreenPictures.write(model: sample(SampleData.modelWithContractsNoFigures), to: directory, size: tall,
                              variant: "nofigures", screens: [.contracts])
     try ScreenPictures.write(model: filled, to: directory, size: Theme.Layout.minimumWindow, variant: "small",

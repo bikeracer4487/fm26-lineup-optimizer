@@ -33,9 +33,13 @@ public struct ContractRow: Equatable, Identifiable, Sendable {
     /// The engine's sentence on his worth against the first eleven's standard (`AdvisorText.worthLine`), for a player
     /// in the list; nil when he has no worth, when his reasons already say it, and for a player not in the list.
     public let worthLine: String?
-    /// The engine's sentence for each reason the tool does not recommend renewing him, in its order; empty for a
-    /// player it recommends and for one not being renewed.
+    /// The engine's sentence for each reason the tool does not recommend renewing him, in its order, the one that says
+    /// to sign a replacement first left out; empty for a player it recommends and for one not being renewed.
     public let reasonLines: [String]
+    /// The engine's sentence that he is needed until he is replaced ("He is first choice at central attacking midfield:
+    /// sign a replacement before he goes."), the last of his reasons, drawn as a caution under the others; nil when he
+    /// has no such reason.
+    public let replaceFirstText: String?
     /// The engine's sentence on a row listed at the owner's choice ("Renew anyway"); nil on any other.
     public let wantedLine: String?
     /// The engine's lines on the wage range for his tier; none for a player not in the list.
@@ -185,6 +189,7 @@ public enum ContractsPresentation {
             }
             var caution: String?
             if case .overHighestWage? = verdicts.first { caution = line(verdicts.removeFirst()) }
+            let reasons = reasonLines(entry)
             let timingIsCaution: Bool
             switch entry.part {
             case .approachable: timingIsCaution = true
@@ -194,20 +199,21 @@ public enum ContractsPresentation {
                 id: entry.player, name: entry.name, detailsText: details(entry),
                 standingLine: AdvisorText.standingLine(entry), timingLine: AdvisorText.timingLine(entry),
                 timingIsCaution: timingIsCaution, worthLine: worthLine(entry),
-                reasonLines: entry.reasons.map(AdvisorText.contractReasonLine),
+                reasonLines: reasons.lines, replaceFirstText: reasons.replaceFirst,
                 wantedLine: entry.isWanted ? AdvisorText.listedAtYourChoice : nil,
                 guideLines: AdvisorText.wageGuideLines(guide, money: money), figureLabel: figureLabel,
                 figureText: text(perWeek: figure?.perWeek, period: money.period),
                 figureEnteredText: figure.map { AdvisorText.enteredOn($0.entered) },
                 cautionVerdictLine: caution, verdictLines: verdicts.map(line))
         }
-        /// A player not in the list: his facts and standing, and the reasons when they are handed.
-        func shortRow(_ entry: ContractEntry, reasons: [String]) -> ContractRow {
-            ContractRow(id: entry.player, name: entry.name, detailsText: details(entry),
-                        standingLine: AdvisorText.standingLine(entry), timingLine: nil, timingIsCaution: false,
-                        worthLine: nil, reasonLines: reasons, wantedLine: nil,
-                        guideLines: [], figureLabel: figureLabel, figureText: "",
-                        figureEnteredText: nil, cautionVerdictLine: nil, verdictLines: [])
+        /// A player not in the list: his facts and standing, and his reasons when `withReasons`.
+        func shortRow(_ entry: ContractEntry, withReasons: Bool) -> ContractRow {
+            let reasons = withReasons ? reasonLines(entry) : (lines: [], replaceFirst: nil)
+            return ContractRow(id: entry.player, name: entry.name, detailsText: details(entry),
+                               standingLine: AdvisorText.standingLine(entry), timingLine: nil, timingIsCaution: false,
+                               worthLine: nil, reasonLines: reasons.lines, replaceFirstText: reasons.replaceFirst,
+                               wantedLine: nil, guideLines: [], figureLabel: figureLabel, figureText: "",
+                               figureEnteredText: nil, cautionVerdictLine: nil, verdictLines: [])
         }
 
         let rows = try report.listed.map(row)
@@ -219,12 +225,25 @@ public enum ContractsPresentation {
             emptyLine: rows.isEmpty ? AdvisorText.nobodyInLastYear : nil,
             notRecommendedLine: report.notRecommended.isEmpty
                 ? nil : AdvisorText.notRecommendedLine(report.notRecommended.count),
-            notRecommended: report.notRecommended.map {
-                shortRow($0, reasons: $0.reasons.map(AdvisorText.contractReasonLine))
-            },
+            notRecommended: report.notRecommended.map { shortRow($0, withReasons: true) },
             dismissedLine: report.dismissed.isEmpty ? nil : AdvisorText.notRenewingLine(report.dismissed.count),
-            dismissed: report.dismissed.map { shortRow($0, reasons: []) },
+            dismissed: report.dismissed.map { shortRow($0, withReasons: false) },
             evidenceNote: AdvisorText.contractsEvidenceNote(parameters.wageRangeRules.value))
+    }
+
+    /// The engine's sentence for each of his reasons, in its order, with the one that says to sign a replacement first
+    /// apart from the rest.
+    static func reasonLines(_ entry: ContractEntry) -> (lines: [String], replaceFirst: String?) {
+        var lines: [String] = []
+        var replaceFirst: String?
+        for reason in entry.reasons {
+            switch reason {
+            case .replaceFirst: replaceFirst = AdvisorText.contractReasonLine(reason)
+            case .markedToSell, .advisedToLeave, .underStandard, .noSlot, .noStandard:
+                lines.append(AdvisorText.contractReasonLine(reason))
+            }
+        }
+        return (lines, replaceFirst)
     }
 
     /// His worth line, unless his reasons already give it (a player renewed at the owner's choice whose worth is under

@@ -780,8 +780,8 @@ public enum Theme {
 
     /// The Contracts screen: the club's three figures, the parts and each player's row.
     public enum Contracts {
-        /// The space between the screen's parts: the club's figures, each list, the line on those left out, those not
-        /// being renewed and the evidence note.
+        /// The space between the screen's parts: the club's figures, the list, those not recommended for renewal,
+        /// those not being renewed and the evidence note.
         public static let partGap: CGFloat = Offers.partGap
         /// The screen is no wider than this, so a row's button stays near its name on a wide window.
         public static let columnMaximumWidth: CGFloat = Offers.columnMaximumWidth

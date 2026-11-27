@@ -163,7 +163,8 @@ public struct RemovalRow: Identifiable, Equatable, Sendable {
     /// The row as said to assistive technology.
     public var spokenText: String {
         let parts: [String?] = [stamp.text, actionText, markText, name, squadText, ageText.map { "Age \($0)" },
-                                facts?.spokenText, "\(RemovalPresentation.scoreLabel) \(scoreText)", costsText]
+                                facts?.spokenText, "\(RemovalPresentation.scoreLabel) \(scoreText)", costsText,
+                                replaceFirstText]
         return parts.compactMap { $0 }.joined(separator: ", ")
     }
 
@@ -251,8 +252,8 @@ public struct LoanBlock: Identifiable, Equatable, Sendable {
 
     /// The block as said to assistive technology.
     public var spokenText: String {
-        ([stamp.text, name, "\(RemovalPresentation.scoreLabel) \(scoreText)"] + reasons.map(\.spokenText)
-         + [spokenNote].compactMap { $0 }).joined(separator: ", ")
+        ([stamp.text, name, "\(RemovalPresentation.scoreLabel) \(scoreText)"] + [replaceFirstText].compactMap { $0 }
+         + reasons.map(\.spokenText) + [spokenNote].compactMap { $0 }).joined(separator: ", ")
     }
 
     private let spokenNote: String?

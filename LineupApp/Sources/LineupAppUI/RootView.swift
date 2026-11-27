@@ -36,7 +36,8 @@ public struct RootView: View {
     ///   - scoutingStart: the tab and the order the Scouting screen opens with, and whether every candidate's row, the
     ///     rest part, every group's "more players" line and the hidden players' list are open.
     ///   - offersStart: the clubs typed in the Offers screen's "To a club" rows, and whether "Earlier offers" is open.
-    ///   - contractsStart: whether the Contracts screen's players not being renewed are open.
+    ///   - contractsStart: whether the Contracts screen's players not recommended for renewal and those not being
+    ///     renewed are open.
     public init(model: AppModel, showing screen: Screen = .squad, tacticSlot: TacticSlot? = nil,
                 matchStart: MatchStart = MatchStart(), elevensStart: ElevensStart = ElevensStart(),
                 removalStart: RemovalStart = RemovalStart(), fixturesStart: FixturesStart = FixturesStart(),
@@ -75,6 +76,7 @@ public struct RootView: View {
         }
         navigation.offerClub = offersStart.clubs
         navigation.offersEarlierOpen = offersStart.earlierOpen
+        navigation.contractsNotRecommendedOpen = contractsStart.notRecommendedOpen
         navigation.contractsDismissedOpen = contractsStart.dismissedOpen
         _navigation = State(initialValue: navigation)
     }

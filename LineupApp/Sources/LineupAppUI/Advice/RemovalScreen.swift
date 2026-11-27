@@ -257,8 +257,8 @@ private struct RemovalRowView: View {
     }
 }
 
-/// An open row's sentence on what releasing him costs, his reasons with their points, the sentence for why that action,
-/// the evidence note, and the control that
+/// An open row's sentence on what releasing him costs, the engine's caution to sign a replacement before he goes when
+/// he is needed, his reasons with their points, the sentence for why that action, the evidence note, and the control that
 /// marks him, with the row's own choices and, under it, the row's note when it has one (a player on a youth contract
 /// cannot be marked to loan out).
 private struct RemovalDetail: View {
@@ -273,6 +273,11 @@ private struct RemovalDetail: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.leading, Theme.Removal.pointsColumn + Theme.Spacing.m)
                 .padding(.bottom, Theme.Spacing.xs)
+            if let replaceFirst = row.replaceFirstText {
+                CautionLine(replaceFirst)
+                    .padding(.leading, Theme.Removal.pointsColumn + Theme.Spacing.m)
+                    .padding(.bottom, Theme.Spacing.xs)
+            }
             PointedReasons(reasons: row.reasons)
             Text(row.whyText)
                 .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .semibold))
@@ -419,7 +424,8 @@ private struct LoansToTheClub: View {
     }
 }
 
-/// One loanee: the verdict's stamp, his name and score, then his reasons with their points in line with his name.
+/// One loanee: the verdict's stamp, his name and score, then, when the loan is to end early and he is needed, the
+/// engine's caution to sign a replacement first, and his reasons with their points in line with his name.
 private struct LoanBlockView: View {
     let block: LoanBlock
 
@@ -443,6 +449,11 @@ private struct LoanBlockView: View {
                     .foregroundStyle(Theme.Colour.ink)
             }
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                if let replaceFirst = block.replaceFirstText {
+                    CautionLine(replaceFirst)
+                        .padding(.leading, Theme.Removal.pointsColumn + Theme.Spacing.m)
+                        .padding(.bottom, Theme.Spacing.xs)
+                }
                 PointedReasons(reasons: block.reasons)
                 if let note = block.noteText {
                     Text(note)

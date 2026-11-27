@@ -120,6 +120,22 @@ import Testing
         #expect(LoanBlock(loan("k", name: "Loanee", verdict: .keepToEnd, neededAt: need)).replaceFirstText == nil)
     }
 
+    @Test func theReplacementSentenceIsSpokenWithTheRowAndTheLoan() {
+        let thin = RemovalNeed(slot: .GK, kind: .firstChoiceWhereThin)
+        let row = RemovalRow(advice("g", name: "Only Keeper", level: .high, action: .sell, neededAt: thin),
+                             squad: nil, age: nil, mark: nil, money: .weeklyPounds)
+        #expect(row.spokenText.hasSuffix(", Sign a replacement at goalkeeper before he goes: he is first choice there and cover is thin."))
+        let spare = RemovalRow(advice("s", name: "Spare", level: .high, action: .sell),
+                               squad: nil, age: nil, mark: nil, money: .weeklyPounds)
+        #expect(!spare.spokenText.contains("replacement"))
+        let need = RemovalNeed(slot: .D_L, kind: .cover)
+        let ending = LoanBlock(loan("e", name: "Loanee", verdict: .endEarly, score: 55, neededAt: need))
+        #expect(ending.spokenText == "End early, Loanee, Score 55, "
+                + "Sign a replacement at left back before he goes: cover there would be thin without him., "
+                + "\u{2212}30 In the first eleven at left back, FM26-era numbers")
+        #expect(!LoanBlock(loan("n", name: "Loanee", verdict: .endEarly)).spokenText.contains("replacement"))
+    }
+
     // MARK: Rows
 
     @Test func aRowHasEveryFigureInTheEnginesWords() throws {
