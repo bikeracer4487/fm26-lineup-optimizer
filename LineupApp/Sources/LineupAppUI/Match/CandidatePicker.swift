@@ -2,9 +2,10 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// Everyone who could be chosen for a slot: for a planned lineup with his full-fitness rating, those who can play best
-/// first, then those who cannot, greyed with the engine's reason, who cannot be chosen; for a missed fixture's
-/// remembered eleven, the squad by name with the eleven last. Choosing one puts him in the slot.
+/// Everyone who could be chosen for a slot: for a planned lineup with the match-day value he would show there, and under
+/// his name how it comes from his rating; those who can play best first, then those a rule leaves out, with the engine's
+/// reason; for a missed fixture's remembered eleven, the squad by name with the eleven last. Choosing one puts him in
+/// the slot.
 public struct CandidatePicker: View {
     let text: PickerText
     let rows: [CandidateRow]
@@ -24,7 +25,7 @@ public struct CandidatePicker: View {
                     .foregroundStyle(Theme.Colour.mutedInk)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let heading = text.ratingHeading, !rows.isEmpty {
+            if let heading = text.valueHeading, !rows.isEmpty {
                 HStack {
                     Spacer()
                     Text(heading)
@@ -95,10 +96,15 @@ struct CandidateRowView: View {
                         .foregroundStyle(Theme.Colour.redText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                if let working = row.workingText {
+                    Text(working)
+                        .foregroundStyle(Theme.Colour.mutedInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: Theme.Spacing.m)
-            if let rating = row.ratingText {
-                Text(rating)
+            if let value = row.valueText {
+                Text(value)
                     .font(Theme.Typeface.text(Theme.TypeSize.button, weight: .extraBold))
             }
         }

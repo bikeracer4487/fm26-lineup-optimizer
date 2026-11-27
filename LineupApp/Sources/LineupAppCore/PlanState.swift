@@ -27,6 +27,9 @@ public struct FixturePlan: Identifiable, Equatable, Sendable {
     public let fitnessIsProjected: Bool
     /// Each override the engine did not use, in slot order.
     public let ignoredOverrides: [IgnoredOverride]
+    /// For a planned lineup, everything the engine's selector was told for the fixture, from which the engine says what
+    /// any player would be worth in a slot of it; nil for any other.
+    public let selection: SelectionRequest?
 
     /// For a missed fixture, what that means and what to do about it; nil for any other.
     public var missedNote: String? {
@@ -40,10 +43,11 @@ public struct FixturePlan: Identifiable, Equatable, Sendable {
     }
 
     public init(fixture: StoredFixture, tacticName: String, usesPrimaryBecauseItsTacticWasDeleted: Bool, body: Body,
-                fitnessIsProjected: Bool, ignoredOverrides: [IgnoredOverride]) {
+                fitnessIsProjected: Bool, ignoredOverrides: [IgnoredOverride], selection: SelectionRequest? = nil) {
         self.fixture = fixture; self.tacticName = tacticName
         self.usesPrimaryBecauseItsTacticWasDeleted = usesPrimaryBecauseItsTacticWasDeleted
         self.body = body; self.fitnessIsProjected = fitnessIsProjected; self.ignoredOverrides = ignoredOverrides
+        self.selection = selection
     }
 }
 
@@ -79,16 +83,32 @@ public struct Candidate: Identifiable, Equatable, Sendable {
     public let squad: Squad
     /// His full-fitness rating in the slot; nil when it cannot be worked out, and `unavailable` then says why.
     public let rating: Double?
+    /// What he would be worth in the slot on the day, by the engine: the match-day value his token shows once he is
+    /// chosen for it. Nil when `rating` is.
+    public let value: Double?
+    /// What takes his value from his rating, in the engine's lines as written: his fitness on the day, then each of the
+    /// planner's adjustments. Empty when his value is his rating.
+    public let working: [String]
     /// Why a rule leaves him out of the fixture, or why he cannot be rated, in the engine's words; nil when he can play.
     public let unavailable: String?
     /// Whether choosing him would stand: he can play, or the engine lets the owner's choice overrule the reason against
     /// him (`RiskRules.canBeOverridden`: every rule but being out on loan). Never for a player who cannot be rated.
     public let canBeChosen: Bool
 
-    /// With no word on `canBeChosen`, he can be chosen only when nothing stands against him.
-    public init(player: PlayerID, name: String, squad: Squad, rating: Double?, unavailable: String?,
-                canBeChosen: Bool? = nil) {
-        self.player = player; self.name = name; self.squad = squad; self.rating = rating; self.unavailable = unavailable
+    /// With no word on `value`, he is worth his rating; with none on `canBeChosen`, he can be chosen only when nothing
+    /// stands against him.
+    public init(player: PlayerID, name: String, squad: Squad, rating: Double?, value: Double? = nil, working: [String] = [],
+                unavailable: String?, canBeChosen: Bool? = nil) {
+        self.player = player; self.name = name; self.squad = squad; self.rating = rating
+        self.value = value ?? rating; self.working = working; self.unavailable = unavailable
         self.canBeChosen = canBeChosen ?? (unavailable == nil)
     }
+}
+
+/// What a player would be worth in a slot of a fixture: his full-fitness rating there, his match-day value, and the
+/// engine's lines for what takes the one to the other.
+struct CandidateWorth: Equatable, Sendable {
+    let rating: Double
+    let value: Double
+    let working: [String]
 }

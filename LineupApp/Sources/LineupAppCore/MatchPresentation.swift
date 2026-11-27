@@ -232,9 +232,14 @@ public struct CandidateRow: Identifiable, Equatable, Sendable {
     public let player: PlayerID
     public let name: String
     public let squadText: String
-    /// His full-fitness rating to one decimal place, or a dash when it cannot be worked out; nil when the picker shows
-    /// no ratings, as for a missed fixture's remembered eleven.
-    public let ratingText: String?
+    /// What he would be worth in the slot on the day, to one decimal place: the match-day value his token shows once he
+    /// is chosen. A dash when it cannot be worked out; nil when the picker shows no figures, as for a missed fixture's
+    /// remembered eleven.
+    public let valueText: String?
+    /// How that value comes from his full-fitness rating, on one line: "Rating 117.2 · Condition 93% (×0.96) · Has
+    /// started the last 2 matches in quick succession (×0.90)", the lines after the rating the engine's as written. Nil
+    /// when his value is his rating, or is not known.
+    public let workingText: String?
     /// Why a rule leaves him out, or why he cannot be rated, in the engine's words.
     public let unavailable: String?
     /// He is the pick in the slot now.
@@ -244,9 +249,10 @@ public struct CandidateRow: Identifiable, Equatable, Sendable {
     /// Whether the row is a button: he can play, or the owner's choice of him would overrule the reason shown.
     public let canChoose: Bool
 
-    public init(player: PlayerID, name: String, squadText: String, ratingText: String?, unavailable: String?,
-                isCurrent: Bool, note: String? = nil, canChoose: Bool? = nil) {
-        self.player = player; self.name = name; self.squadText = squadText; self.ratingText = ratingText
+    public init(player: PlayerID, name: String, squadText: String, valueText: String?, workingText: String? = nil,
+                unavailable: String?, isCurrent: Bool, note: String? = nil, canChoose: Bool? = nil) {
+        self.player = player; self.name = name; self.squadText = squadText; self.valueText = valueText
+        self.workingText = workingText
         self.unavailable = unavailable; self.isCurrent = isCurrent; self.note = note
         self.canChoose = canChoose ?? (unavailable == nil)
     }
@@ -254,10 +260,17 @@ public struct CandidateRow: Identifiable, Equatable, Sendable {
     public static func rows(_ candidates: [Candidate], current: PlayerID?) -> [CandidateRow] {
         candidates.map { candidate in
             CandidateRow(player: candidate.player, name: candidate.name, squadText: candidate.squad.displayName,
-                         ratingText: candidate.rating.map(MatchText.oneDecimal) ?? "—",
+                         valueText: candidate.value.map(MatchText.oneDecimal) ?? MatchText.noFigure,
+                         workingText: workingText(candidate),
                          unavailable: candidate.unavailable, isCurrent: candidate.player == current,
                          canChoose: candidate.canBeChosen)
         }
+    }
+
+    /// His rating, then the engine's lines for what takes his value from it; nil when nothing does.
+    static func workingText(_ candidate: Candidate) -> String? {
+        guard let rating = candidate.rating, !candidate.working.isEmpty else { return nil }
+        return (["Rating \(MatchText.oneDecimal(rating))"] + candidate.working).joined(separator: " · ")
     }
 
     /// Rows for a remembered eleven: no ratings; the one in `slot` marked, and those elsewhere in the eleven saying where.
@@ -266,7 +279,7 @@ public struct CandidateRow: Identifiable, Equatable, Sendable {
         return candidates.map { candidate in
             let at = slotOf[candidate.player]
             return CandidateRow(player: candidate.player, name: candidate.name, squadText: candidate.squad.displayName,
-                                ratingText: nil, unavailable: nil, isCurrent: at == slot,
+                                valueText: nil, unavailable: nil, isCurrent: at == slot,
                                 note: at.flatMap { $0 == slot ? nil : "At \($0.longName) in this eleven" })
         }
     }
@@ -276,23 +289,24 @@ public struct CandidateRow: Identifiable, Equatable, Sendable {
 public struct PickerText: Equatable, Sendable {
     public let title: String
     public let explanation: String
-    /// The heading over the ratings; nil when the picker shows none.
-    public let ratingHeading: String?
+    /// The heading over the figures; nil when the picker shows none.
+    public let valueHeading: String?
 
-    /// For a planned lineup: who can play, best first at full fitness, then those a rule leaves out, whom the owner
-    /// can still choose.
+    /// For a planned lineup: who can play, best first by what each would be worth in the slot on the day, then those a
+    /// rule leaves out, whom the owner can still choose.
     public static func planned(_ slot: SlotID) -> PickerText {
         PickerText(title: MatchPresentation.pickerTitle(slot),
-                   explanation: "Those who can play, best first at full fitness; then those a rule leaves out, with the "
-                       + "reason. Choosing a player fixes him here for this match, over the rule.",
-                   ratingHeading: "Rating at full fitness")
+                   explanation: "Those who can play, best first by match-day value: what each would show here if chosen. "
+                       + "Then those a rule leaves out, with the reason. Choosing a player fixes him here for this match, "
+                       + "over the rule.",
+                   valueHeading: "Match-day value")
     }
 
     /// For a missed fixture's remembered eleven: who really started there.
     public static func remembered(_ slot: SlotID) -> PickerText {
         PickerText(title: "Who started at \(slot.longName)?",
                    explanation: "Choose who played here. If he is elsewhere in this eleven, the two swap.",
-                   ratingHeading: nil)
+                   valueHeading: nil)
     }
 }
 

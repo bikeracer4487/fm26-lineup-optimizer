@@ -1,7 +1,7 @@
 import Foundation
 
 /// Everything needed to choose the starting eleven for one fixture.
-public struct SelectionRequest: Sendable {
+public struct SelectionRequest: Equatable, Sendable {
     public var tactic: Tactic
     public var players: [Player]
     public var ownClub: String?
@@ -61,6 +61,24 @@ public struct Pick: Equatable, Sendable {
         self.value = value; self.isOverride = isOverride; self.warnings = warnings; self.reasons = reasons
         self.adjustments = adjustments
     }
+}
+
+/// What one player would be worth in one slot of a fixture, whoever holds it: what his pick there would show if he
+/// were chosen for it.
+public struct SlotWorth: Equatable, Sendable {
+    public let player: PlayerID
+    public let name: String
+    public let rating: SlotRating
+    public let fitness: FitnessFactors
+    /// The adjustments to his value in the slot, in `Adjustment.Kind` order.
+    public let adjustments: [Adjustment]
+    /// As `Pick.value`: `rating.value × fitness.product × (product of the adjustments' factors) − (sum of their costs)`.
+    public let value: Double
+    /// What takes his value from his rating, as a pick's reasons word it: the fitness lines, then each adjustment's
+    /// reason. Empty when his value is his rating.
+    public let working: [String]
+    /// Why the selector leaves him out of the fixture whatever his value; nil when he can be picked.
+    public let exclusion: Exclusion?
 }
 
 public enum OmissionCause: Equatable, Sendable {
@@ -242,6 +260,33 @@ public struct LineupSelector: Sendable {
         return Lineup(picks: picks, unfilled: unfilled, omissions: omissions, ignoredOverrides: ignored)
     }
 
+    /// What `player` would be worth in the slot of `assignment`, one of the request's tactic's, valued as `select`
+    /// values him there: on the fitness he is handed with, with the request's adjustments for him in that slot. It is the
+    /// value his pick shows when the manager chooses him for the slot, since a choice changes nobody's value. He carries
+    /// the rule that leaves him out of the fixture, if one does; a player out on loan carries that one, though `select`
+    /// never rates him. Throws `RatingError` for a player with missing data.
+    public func worth(of player: Player, in assignment: SlotAssignment, _ request: SelectionRequest) throws -> SlotWorth {
+        let rating = try engine.rating(for: player, in: assignment)
+        let fitness = FitnessModel.factors(condition: player.condition, sharpness: player.sharpness,
+                                           jadedness: player.jadedness, parameters: parameters)
+        let applied = adjustments(for: player.id, in: assignment.slot, request)
+        return SlotWorth(player: player.id, name: player.name, rating: rating, fitness: fitness, adjustments: applied,
+                         value: adjustedValue(matchDayValue(rating, fitness), applied),
+                         working: working(player, fitness: fitness, adjustments: applied, projected: request.fitnessIsProjected),
+                         exclusion: exclusion(for: player, request))
+    }
+
+    /// What takes a player's value from his rating, in sentences: each fitness factor below 1, then each adjustment's
+    /// reason. With `projected`, the fitness figures are called projected.
+    private func working(_ player: Player, fitness: FitnessFactors, adjustments: [Adjustment], projected: Bool) -> [String] {
+        var lines: [String] = []
+        func label(_ name: String) -> String { projected ? "Projected " + name.lowercased() : name }
+        if fitness.condition < 1 { lines.append("\(label("Condition")) \(percent(player.condition)) (×\(twoDecimals(fitness.condition)))") }
+        if fitness.sharpness < 1 { lines.append("\(label("Sharpness")) \(percent(player.sharpness)) (×\(twoDecimals(fitness.sharpness)))") }
+        if fitness.jadedness < 1 { lines.append("\(label("Jadedness")) \(player.jadedness) (×\(twoDecimals(fitness.jadedness)))") }
+        return lines + adjustments.map(\.reason)
+    }
+
     /// What the solver maximises and every explanation reports: the slot rating scaled by condition,
     /// sharpness and jadedness on the day.
     private func matchDayValue(_ rating: SlotRating, _ fitness: FitnessFactors) -> Double {
@@ -301,11 +346,7 @@ public struct LineupSelector: Sendable {
         var reasons = ["Rating \(oneDecimal(rating.value)): "
             + "\(PositionText.plain(assignment.ipPosition)) familiarity \(rating.inPossession.familiarity) in possession, "
             + "\(PositionText.plain(assignment.oopPosition)) familiarity \(rating.outOfPossession.familiarity) out of possession"]
-        func label(_ name: String) -> String { projected ? "Projected " + name.lowercased() : name }
-        if fitness.condition < 1 { reasons.append("\(label("Condition")) \(percent(player.condition)) (×\(twoDecimals(fitness.condition)))") }
-        if fitness.sharpness < 1 { reasons.append("\(label("Sharpness")) \(percent(player.sharpness)) (×\(twoDecimals(fitness.sharpness)))") }
-        if fitness.jadedness < 1 { reasons.append("\(label("Jadedness")) \(player.jadedness) (×\(twoDecimals(fitness.jadedness)))") }
-        reasons += adjustments.map(\.reason)
+        reasons += working(player, fitness: fitness, adjustments: adjustments, projected: projected)
         if isOverride { reasons.append("Chosen by you" + (broken.map { ", overriding: \(rule($0, projected: projected))" } ?? "")) }
 
         return Pick(slot: assignment.slot, player: player.id, name: player.name, rating: rating, fitness: fitness,

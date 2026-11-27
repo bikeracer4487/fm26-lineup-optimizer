@@ -44,6 +44,10 @@ public struct PlannedFixture: Equatable, Sendable {
     /// What the selector was told: true once a day has passed since the import or a match, played or planned, comes
     /// before this fixture; false when the fitness is the imported figures.
     public let fitnessIsProjected: Bool
+    /// Everything the selector was told for this fixture: the players on the day's fitness and each one's adjustments.
+    /// `LineupSelector.select` gives `lineup` from it, and `LineupSelector.worth` what any player would be worth in a
+    /// slot of it.
+    public let selection: SelectionRequest
 }
 
 public struct Plan: Equatable, Sendable {
@@ -207,11 +211,13 @@ public struct Planner: Sendable {
             }
 
             let projected = anyMatchSoFar || request.asOf < fixture.date
-            let lineup = try selector.select(SelectionRequest(
+            let selection = SelectionRequest(
                 tactic: fixture.tactic, players: onTheDay, ownClub: request.ownClub, importance: fixture.importance,
                 isNextFixture: index == servingBans, overrides: fixture.overrides, rejected: fixture.rejected,
-                adjustments: everySlot, slotAdjustments: bySlot, fitnessIsProjected: projected))
-            planned.append(PlannedFixture(fixture: fixture.id, lineup: lineup, fitness: fitness, fitnessIsProjected: projected))
+                adjustments: everySlot, slotAdjustments: bySlot, fitnessIsProjected: projected)
+            let lineup = try selector.select(selection)
+            planned.append(PlannedFixture(fixture: fixture.id, lineup: lineup, fitness: fitness, fitnessIsProjected: projected,
+                                          selection: selection))
 
             // A fixture id already confirmed is replaced by this lineup.
             history = history.adding(ConfirmedLineup(

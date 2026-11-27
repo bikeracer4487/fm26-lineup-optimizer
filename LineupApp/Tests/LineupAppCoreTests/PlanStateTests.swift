@@ -589,8 +589,9 @@ import Testing
         let cannot = candidates.dropFirst(canPlay.count)
         #expect(!canPlay.isEmpty && !cannot.isEmpty)
         #expect(cannot.allSatisfy { $0.unavailable != nil })
-        #expect(canPlay.map { $0.rating ?? 0 } == canPlay.map { $0.rating ?? 0 }.sorted(by: >))
-        #expect(cannot.map { $0.rating ?? 0 } == cannot.map { $0.rating ?? 0 }.sorted(by: >))
+        #expect(candidates.allSatisfy { $0.value != nil })
+        #expect(canPlay.map { $0.value ?? 0 } == canPlay.map { $0.value ?? 0 }.sorted(by: >))
+        #expect(cannot.map { $0.value ?? 0 } == cannot.map { $0.value ?? 0 }.sorted(by: >))
         // The injured keeper is the best rated in goal, yet comes after everyone who can play.
         #expect(ratings.max() == cannot.first?.rating)
         #expect(Set(candidates.map(\.player)).count == candidates.count)
@@ -614,6 +615,53 @@ import Testing
         #expect(pickedCandidate?.unavailable == nil)
         #expect(pickedCandidate?.canBeChosen == true)
         #expect(pickedCandidate?.rating == picked?.rating.value)
+        #expect(pickedCandidate?.value == picked?.value)
+        #expect(pickedCandidate?.working == picked.map { Array($0.reasons.dropFirst()) })
+    }
+
+    @Test func aCandidateIsWorthWhatHisTokenShowsOnceHeIsChosen() throws {
+        // The owner's report of 26 November 2026: the picker showed a player at 117.2, his rating at full fitness, and
+        // the pitch showed 110.8 once he was chosen. The picker's figure is the one the pitch will show.
+        let t = try TestModel()
+        let model = try squad(fixtures: 3, t)
+        // The second fixture: its fitness is projected and the first one's starters carry a start into it.
+        let id = model.fixtures[1].id
+        let before = try #require(lineup(plan(model, id)))
+        let starters = Set(before.picks.map(\.player))
+        for slot in [SlotID.ST_C, .D_CL, .DM_L] {
+            let candidates = model.candidates(for: slot, in: id)
+            // Every starter is listed at the value his own token shows where he holds the slot.
+            let holder = try #require(before.picks.first { $0.slot == slot })
+            #expect(candidates.first { $0.player == holder.player }?.value == holder.value)
+
+            // Someone outside the eleven whose value is not his rating: chosen, his token shows the picker's figure.
+            let outside = candidates.first { c in
+                c.unavailable == nil && !starters.contains(c.player) && c.value != c.rating
+            }
+            let benched = try #require(outside, "nobody outside the eleven at \(slot) has a value that differs from his rating")
+            #expect(!benched.working.isEmpty)
+            _ = model.choose(benched.player, at: slot, in: id)
+            let chosen = try #require(pick(at: slot, plan(model, id)))
+            #expect(chosen.player == benched.player && chosen.isOverride)
+            #expect(chosen.value == benched.value)
+            #expect(chosen.rating.value == benched.rating)
+            #expect(Array(chosen.reasons.dropFirst()) == benched.working + ["Chosen by you"])
+            // Choosing him changes nobody's figure in the picker.
+            #expect(model.candidates(for: slot, in: id).map(\.value) == candidates.map(\.value))
+            _ = model.clearChoice(at: slot, in: id)
+        }
+    }
+
+    @Test func aPlayerARuleLeavesOutIsListedAtWhatHeWouldShowIfChosen() throws {
+        let t = try TestModel()
+        let model = try squad(fixtures: 2, t)
+        let id = model.fixtures[0].id
+        guard let injured = model.players.first(where: \.isInjured) else { Issue.record("no injured player"); return }
+        let his = model.candidates(for: .GK, in: id).first { $0.player == injured.id }
+        let listed = try #require(his)
+        #expect(listed.unavailable == "injured")
+        _ = model.choose(injured.id, at: .GK, in: id)
+        #expect(pick(at: .GK, plan(model, id))?.value == listed.value)
     }
 
     @Test func anInjuredPlayerTheOwnerChoosesStartsInThatMatchOnly() throws {
@@ -674,13 +722,13 @@ import Testing
         try t.importFirstTeam()
         let players = Array(t.model.players.prefix(4))
         let unrated = players[1].name
-        let candidates = AppModel.ranked(players, rating: { player in
+        let candidates = AppModel.ranked(players, worth: { player in
             if player.name == unrated { throw RatingError.missingAttribute(player: player.name, attribute: .pace) }
-            return Double(player.name.count)
+            return CandidateWorth(rating: Double(player.name.count), value: Double(player.name.count), working: [])
         }, ruledOut: { _ in nil })
         #expect(candidates.count == 4)
         #expect(candidates.last?.name == unrated)
-        #expect(candidates.last?.rating == nil)
+        #expect(candidates.last?.rating == nil && candidates.last?.value == nil)
         #expect(candidates.last?.canBeChosen == false)
         #expect(candidates.last?.unavailable
             == ErrorDescriptions.describe(RatingError.missingAttribute(player: unrated, attribute: .pace)))
@@ -691,12 +739,28 @@ import Testing
         let t = try TestModel()
         try t.importFirstTeam()
         let players = Array(t.model.players.prefix(4))
-        let candidates = AppModel.ranked(players, rating: { player in
+        let candidates = AppModel.ranked(players, worth: { player in
             if player.id == players[3].id { throw RatingError.missingAttribute(player: player.name, attribute: .pace) }
-            return [players[0].id: 50.0, players[1].id: 90, players[2].id: 70][player.id]!
+            let value = [players[0].id: 50.0, players[1].id: 90, players[2].id: 70][player.id]!
+            return CandidateWorth(rating: value, value: value, working: [])
         }, ruledOut: { $0.id == players[1].id ? (reason: "injured", canBeOverruled: true) : nil })
         #expect(candidates.map(\.player) == [players[2].id, players[0].id, players[1].id, players[3].id])
         #expect(candidates.map(\.canBeChosen) == [true, true, true, false])
+    }
+
+    @Test func candidatesAreRankedByMatchDayValueNotByRating() throws {
+        // The better player at full fitness is tired and has started twice running: on the day he is worth less.
+        let t = try TestModel()
+        try t.importFirstTeam()
+        let players = Array(t.model.players.prefix(3))
+        let worths = [players[0].id: CandidateWorth(rating: 117.2, value: 99.4, working: ["Condition 93% (×0.96)"]),
+                      players[1].id: CandidateWorth(rating: 114.9, value: 114.9, working: []),
+                      players[2].id: CandidateWorth(rating: 105.0, value: 104.0, working: ["Sharpness 94% (×0.98)"])]
+        let candidates = AppModel.ranked(players, worth: { worths[$0.id]! }, ruledOut: { _ in nil })
+        #expect(candidates.map(\.player) == [players[1].id, players[2].id, players[0].id])
+        #expect(candidates.map(\.value) == [114.9, 104.0, 99.4])
+        #expect(candidates.map(\.rating) == [114.9, 105.0, 117.2])
+        #expect(candidates.map(\.working) == [[], ["Sharpness 94% (×0.98)"], ["Condition 93% (×0.96)"]])
     }
 
     @Test func aFixtureWithNoPlannedLineupHasNoCandidates() throws {
@@ -1201,7 +1265,7 @@ import Testing
         let rows = model.rememberedCandidateRows(for: .GK, in: ids[0])
         #expect(rows.map(\.player) == candidates.map(\.player))
         #expect(rows.filter(\.isCurrent).map(\.player) == [remembered.starters[.GK]])
-        #expect(rows.allSatisfy { $0.ratingText == nil })
+        #expect(rows.allSatisfy { $0.valueText == nil && $0.workingText == nil })
         let leftBack = try #require(rows.first { $0.player == remembered.starters[.D_L] })
         #expect(leftBack.note == "At left back in this eleven")
     }

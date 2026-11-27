@@ -208,61 +208,59 @@ extension AppModel {
             + byName.filter { inEleven.contains($0.id) }.map(candidate)
     }
 
-    /// Every player not out on loan, with his full-fitness rating in the slot for the fixture's tactic, those who can
-    /// play first, best first (see `ranked`), and why a rule leaves him out of that fixture if one does: the engine's
-    /// rule, judged on the fitness the plan projects for that day, worded as the selector words it. He can still be
-    /// chosen where the engine lets the owner's choice overrule that rule: an injury among them, since FMRTE says that
-    /// he is injured and not whether he can play through it. A player who cannot be rated comes last, with the engine's
-    /// sentence for why. Empty when the fixture has no planned lineup or its tactic has no such slot.
+    /// Every player not out on loan, with what he would be worth in the slot of that fixture: the match-day value his
+    /// token shows once he is chosen for it, which is the engine's (`LineupSelector.worth`, on everything the selector
+    /// was told for the fixture: his fitness as the plan projects it for that day and the planner's adjustments for him
+    /// there), with his full-fitness rating and the engine's lines for what takes the one to the other. Those who can
+    /// play come first, best first by that value (see `ranked`); then those a rule leaves out of that fixture, with the
+    /// engine's rule worded as the selector words it. Such a player can still be chosen where the engine lets the
+    /// owner's choice overrule that rule: an injury among them, since FMRTE says that he is injured and not whether he
+    /// can play through it. A player who cannot be rated comes last, with the engine's sentence for why. Empty when the
+    /// fixture has no planned lineup or its tactic has no such slot.
     public func candidates(for slot: SlotID, in fixture: FixtureID) -> [Candidate] {
-        let planned = fixturePlans.compactMap { plan -> (FixturePlan, [PlayerID: ProjectedFitness])? in
-            if case .planned(_, let fitness) = plan.body { (plan, fitness) } else { nil }
-        }
-        guard let index = planned.firstIndex(where: { $0.0.id == fixture }),
-              let tactic = tactic(for: planned[index].0.fixture)?.tactic else { return [] }
+        guard let plan = fixturePlans.first(where: { $0.id == fixture }), case .planned = plan.body,
+              let selection = plan.selection else { return [] }
         let assignments: [SlotAssignment]
         do {
-            assignments = try tactic.assignments(catalog: catalog)
+            assignments = try selection.tactic.assignments(catalog: catalog)
         } catch {
             return []   // not reached: the fixture was just planned with this tactic
         }
         guard let assignment = assignments.first(where: { $0.slot == slot }) else { return [] }
-        let (plan, fitness) = planned[index]
-        // As the planner: a ban is served in the earliest planned fixture that takes bans.
-        let servingBans = planned.firstIndex { $0.0.fixture.bansApplyHere }
         let parameters = planParameters
-        let projected = plan.fitnessIsProjected
-        let club = ownClub
-        let players = squad.book.allPlayers.filter {
-            if case .loanedOut = LoanStatus.of($0, ownClub: club) { false } else { true }
+        let selector = LineupSelector(catalog: catalog, profile: profile, parameters: parameters)
+        // The players as the selector was handed them: on the day's fitness.
+        var worths: [PlayerID: Result<SlotWorth, any Error>] = [:]
+        var players: [Player] = []
+        for player in selection.players where worths[player.id] == nil {
+            if case .loanedOut = LoanStatus.of(player, ownClub: selection.ownClub) { continue }
+            worths[player.id] = Result { try selector.worth(of: player, in: assignment, selection) }
+            players.append(player)
         }
-        let engine = RatingEngine(profile: profile, parameters: parameters, configuration: .fm27)
-        return Self.ranked(players, rating: { try engine.rating(for: $0, in: assignment).value }) { player in
-            let onTheDay = fitness[player.id].map { Planner.withFitness(player, $0) } ?? player
-            let exclusion = RiskRules.exclusion(
-                for: onTheDay, loan: LoanStatus.of(player, ownClub: club), importance: plan.fixture.importance,
-                isNextFixture: index == servingBans, parameters: parameters)
-                ?? (plan.fixture.rejected.contains(player.id) ? .rejected : nil)
-            return exclusion.map {
-                (reason: ErrorDescriptions.describe($0, parameters: parameters, projected: projected),
-                 canBeOverruled: RiskRules.canBeOverridden($0))
-            }
-        }
+        return Self.ranked(players, worth: { player in
+            let worth = try worths[player.id]!.get()
+            return CandidateWorth(rating: worth.rating.value, value: worth.value, working: worth.working)
+        }, ruledOut: { player in
+            guard case .success(let worth)? = worths[player.id], let exclusion = worth.exclusion else { return nil }
+            return (reason: ErrorDescriptions.describe(exclusion, parameters: parameters, projected: selection.fitnessIsProjected),
+                    canBeOverruled: RiskRules.canBeOverridden(exclusion))
+        })
     }
 
-    /// The players as candidates: those who can play, best first; then those a rule leaves out (`ruledOut`: the reason,
-    /// and whether the owner's choice can overrule it), best first; each group then by name and key. Last, those who
-    /// cannot be rated, by name and key, with the engine's sentence for the failure in place of any other reason; they
-    /// cannot be chosen.
-    static func ranked(_ players: [Player], rating: (Player) throws -> Double,
+    /// The players as candidates: those who can play, best first by match-day value; then those a rule leaves out
+    /// (`ruledOut`: the reason, and whether the owner's choice can overrule it), best first; each group then by name and
+    /// key. Last, those who cannot be rated, by name and key, with the engine's sentence for the failure in place of any
+    /// other reason; they cannot be chosen.
+    static func ranked(_ players: [Player], worth: (Player) throws -> CandidateWorth,
                        ruledOut: (Player) -> (reason: String, canBeOverruled: Bool)?) -> [Candidate] {
         var rated: [Candidate] = []
         var unrated: [Candidate] = []
         for player in players {
             do {
-                let value = try rating(player)
+                let worth = try worth(player)
                 let rule = ruledOut(player)
-                rated.append(Candidate(player: player.id, name: player.name, squad: player.squad, rating: value,
+                rated.append(Candidate(player: player.id, name: player.name, squad: player.squad, rating: worth.rating,
+                                       value: worth.value, working: worth.working,
                                        unavailable: rule?.reason, canBeChosen: rule?.canBeOverruled ?? true))
             } catch {
                 unrated.append(Candidate(player: player.id, name: player.name, squad: player.squad,
@@ -270,7 +268,7 @@ extension AppModel {
             }
         }
         func bestFirst(_ candidates: [Candidate]) -> [Candidate] {
-            candidates.sorted { ($1.rating ?? 0, $0.name, $0.player.key) < ($0.rating ?? 0, $1.name, $1.player.key) }
+            candidates.sorted { ($1.value ?? 0, $0.name, $0.player.key) < ($0.value ?? 0, $1.name, $1.player.key) }
         }
         return bestFirst(rated.filter { $0.unavailable == nil }) + bestFirst(rated.filter { $0.unavailable != nil })
             + unrated.sorted { ($0.name, $0.player.key) < ($1.name, $1.player.key) }
@@ -331,7 +329,7 @@ extension AppModel {
             }
             return FixturePlan(fixture: fixture, tacticName: tacticName, usesPrimaryBecauseItsTacticWasDeleted: tacticGone,
                                body: .planned(item.lineup, fitness: item.fitness), fitnessIsProjected: projected,
-                               ignoredOverrides: ignored)
+                               ignoredOverrides: ignored, selection: item.selection)
         }
         return .ready(result)
     }
@@ -423,7 +421,7 @@ extension AppModel {
             return FixturePlan(fixture: fixture, tacticName: plan.tacticName,
                                usesPrimaryBecauseItsTacticWasDeleted: plan.usesPrimaryBecauseItsTacticWasDeleted,
                                body: plan.body, fitnessIsProjected: plan.fitnessIsProjected,
-                               ignoredOverrides: plan.ignoredOverrides)
+                               ignoredOverrides: plan.ignoredOverrides, selection: plan.selection)
         })
     }
 

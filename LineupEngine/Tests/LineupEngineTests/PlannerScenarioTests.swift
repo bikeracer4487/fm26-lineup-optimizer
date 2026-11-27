@@ -524,10 +524,20 @@ import Testing
                 return copy
             }
         }
+        // The same plan but for the tactics' names, which each fixture's kept selection carries.
+        func expectSame(_ a: Plan, _ b: Plan, sourceLocation: SourceLocation = #_sourceLocation) {
+            #expect(a.fixtures.map(\.fixture) == b.fixtures.map(\.fixture), sourceLocation: sourceLocation)
+            #expect(a.fixtures.map(\.lineup) == b.fixtures.map(\.lineup), sourceLocation: sourceLocation)
+            #expect(a.fixtures.map(\.fitness) == b.fixtures.map(\.fitness), sourceLocation: sourceLocation)
+            #expect(a.fixtures.map(\.fitnessIsProjected) == b.fixtures.map(\.fitnessIsProjected), sourceLocation: sourceLocation)
+            #expect(a.fixtures.map(\.selection.adjustments) == b.fixtures.map(\.selection.adjustments), sourceLocation: sourceLocation)
+            #expect(a.fixtures.map(\.selection.slotAdjustments) == b.fixtures.map(\.selection.slotAdjustments),
+                    sourceLocation: sourceLocation)
+        }
         let settings = PlanSettings(savingPlayers: 0)
         let same = Array(repeating: tactic, count: importances.count)
         let once = try plan(fixtures(same), players, settings: settings)
-        #expect(once == (try plan(fixtures(renamed(same)), players, settings: settings)))
+        expectSame(once, try plan(fixtures(renamed(same)), players, settings: settings))
         #expect(once.fixtures.contains { planned in planned.lineup.picks.contains { $0.adjustments.contains { $0.kind == .successor } } })
         #expect(once.fixtures.contains { planned in planned.lineup.picks.contains { $0.adjustments.contains { $0.kind == .development } } })
 
@@ -541,7 +551,7 @@ import Testing
         #expect(slots == [[.ST_C], [.ST_L]])
         let mixed = [tactic, target, tactic, target, tactic]
         let alternating = try plan(fixtures(mixed), players, settings: settings)
-        #expect(alternating == (try plan(fixtures(renamed(mixed)), players, settings: settings)))
+        expectSame(alternating, try plan(fixtures(renamed(mixed)), players, settings: settings))
         // On the left-striker tactic he is favoured at ST_L, which only that tactic's outlooks hold.
         #expect(alternating.fixtures[1].lineup.picks.contains { pick in
             pick.slot == .ST_L && pick.adjustments.contains { $0.kind == .successor }
