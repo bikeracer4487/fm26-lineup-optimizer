@@ -28,6 +28,8 @@ import Testing
         #expect(AdvisorText.name(GoingReason.markedToSell) == "marked to sell")
         #expect(AdvisorText.name(GoingReason.markedToLoanOut) == "marked to loan out")
         #expect(AdvisorText.name(GoingReason.advisedToLeave) == "advised to leave")
+        #expect(AdvisorText.name(GoingReason.notBeingRenewed) == "not being renewed")
+        #expect(AdvisorText.countedAsGoing([going("Sam Reed", .notBeingRenewed)]) == "Counted as going: Sam Reed (not being renewed).")
         #expect(AdvisorText.name(BetterPlayerKind.nobody) == "Nobody")
         #expect(AdvisorText.name(BetterPlayerKind.weak) == "Weak")
         #expect(AdvisorText.name(BetterPlayerKind.ageing) == "Ageing")

@@ -9,6 +9,7 @@ extension AdvisorText {
         case .markedToSell: "marked to sell"
         case .markedToLoanOut: "marked to loan out"
         case .advisedToLeave: "advised to leave"
+        case .notBeingRenewed: "not being renewed"
         }
     }
 

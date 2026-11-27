@@ -1,7 +1,7 @@
 import Foundation
 
 /// Why a player is left out of the squad scouting is judged on, in the order the reasons are tried.
-public enum GoingReason: String, CaseIterable, Sendable { case onLoanHere, markedToSell, markedToLoanOut, advisedToLeave }
+public enum GoingReason: String, CaseIterable, Sendable { case onLoanHere, markedToSell, markedToLoanOut, advisedToLeave, notBeingRenewed }
 
 /// A player left out of the squad scouting is judged on.
 public struct Going: Equatable, Sendable {
@@ -148,10 +148,11 @@ public enum Scouting {
     /// Every comparison scouting makes allows for binary floating-point error, as `Development` does.
     static let roundingNoise = 1e-9
 
-    /// Players of `players` who are on loan at the club, marked, or in `advisedToLeave`, each once, by key, with the
-    /// first reason in `GoingReason`'s order. Ids that no player has are ignored.
+    /// Players of `players` who are on loan at the club, marked, in `advisedToLeave` or in `notBeingRenewed` (in his
+    /// last year, and the owner is not renewing him), each once, by key, with the first reason in `GoingReason`'s
+    /// order. Ids that no player has are ignored.
     public static func going(players: [Player], ownClub: String?, marks: [PlayerID: SaleMark],
-                             advisedToLeave: Set<PlayerID>) -> [Going] {
+                             advisedToLeave: Set<PlayerID>, notBeingRenewed: Set<PlayerID> = []) -> [Going] {
         var found: [Going] = []
         for player in players.sorted(by: { $0.id.key < $1.id.key }) {
             let reason: GoingReason?
@@ -164,6 +165,8 @@ public enum Scouting {
                 }
             } else if advisedToLeave.contains(player.id) {
                 reason = .advisedToLeave
+            } else if notBeingRenewed.contains(player.id) {
+                reason = .notBeingRenewed
             } else {
                 reason = nil
             }
@@ -179,6 +182,7 @@ public enum Scouting {
         case .markedToSell: 1
         case .markedToLoanOut: 2
         case .advisedToLeave: 3
+        case .notBeingRenewed: 4
         }
     }
 

@@ -58,6 +58,32 @@ import Testing
         #expect(going.first { $0.player == players[3].id }?.reason == .markedToLoanOut)
         #expect(going.map(\.player.key) == going.map(\.player.key).sorted())
     }
+    @Test func aPlayerNotBeingRenewedIsGoingUnderTheLastReason() throws {
+        let players = try squad()
+        let alone = players[0].id, marked = players[1].id, advised = players[2].id
+        let going = Scouting.going(players: players, ownClub: "Oxford City", marks: [marked: .toSell],
+                                   advisedToLeave: [advised], notBeingRenewed: [alone, marked, advised])
+        #expect(going.first { $0.player == alone }?.reason == .notBeingRenewed)
+        #expect(going.first { $0.player == marked }?.reason == .markedToSell)
+        #expect(going.first { $0.player == advised }?.reason == .advisedToLeave)
+        #expect(going.count == 3)
+    }
+    @Test func withNobodyNotBeingRenewedTheGoingAreAsBefore() throws {
+        let players = try squad()
+        let marks: [PlayerID: SaleMark] = [players[1].id: .toSell]
+        let before = Scouting.going(players: players, ownClub: "Oxford City", marks: marks, advisedToLeave: [players[2].id])
+        let after = Scouting.going(players: players, ownClub: "Oxford City", marks: marks, advisedToLeave: [players[2].id],
+                                   notBeingRenewed: [])
+        #expect(before == after && before.count == 2)
+    }
+    @Test func aFirstChoiceNotBeingRenewedMakesHisSlotANeed() throws {
+        let players = try squad(levels: [named(.ST_C, "second"): 10])
+        let first = try #require(players.first { $0.name == named(.ST_C, "first") })
+        let going = Scouting.going(players: players, ownClub: "Oxford City", marks: [:], advisedToLeave: [],
+                                   notBeingRenewed: [first.id])
+        let need = try #require(try needs(players, going: going).betterPlayers.first { $0.slot == .ST_C })
+        #expect(need.goingFirstChoice == Going(player: first.id, name: first.name, reason: .notBeingRenewed))
+    }
     @Test func aMarkOnAPlayerNotHeldIsIgnored() throws {
         let going = Scouting.going(players: try squad(), ownClub: "Oxford City",
                                    marks: [PlayerID(key: "gone"): .toSell], advisedToLeave: [PlayerID(key: "also gone")])
