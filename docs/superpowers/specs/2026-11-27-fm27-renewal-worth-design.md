@@ -1,7 +1,7 @@
 # FM27 Lineup Optimizer: who is worth renewing, and no credit for a shallow position
 
 Date: 27 November 2026
-Status: approved by the owner on 27 November 2026 ("Approved"), after a reviewer read it as a builder would and its four points were folded in.
+Status: approved by the owner on 27 November 2026 ("Approved"), after a reviewer read it as a builder would and its four points were folded in. Built the same day to the plan `docs/superpowers/plans/2026-11-27-fm27-renewal-worth.md`; the passages the build or its whole-branch review changed are marked "revised", and the plan's closing sections say why.
 
 It wins over `2026-11-25-fm27-contracts-and-wage-range-design.md` on who Contracts lists and in what order, and over the advisors' and scouting designs on the credit Player Removal gives for thin cover. The wage range is unchanged.
 
@@ -57,9 +57,9 @@ Decline starts at about 30 and is steep after 31 (an FM24 test of ten seasons, a
 - **His ability over a new contract:**
   - 23 or under (`developingUpToAge`): his reach (`Reach.estimate`), as Player Removal and Scouting estimate it.
   - 24 or over: his ability after the next two seasons (`renewalSeasons`), each season taking the fall for the age he begins it at: nothing under 30, 3 points at 30 or 31, 6 at 32 to 34, 9 from 35. The seasons are the one he is in, at his age now, and the next, a year older. So a player of 28 or under loses nothing, one of 29 loses 3 and one of 30 loses 6: there is no step at a birthday beyond the table's own.
-- **His share** at a slot is his rating there, scaled to that ability through the offset, over the standard's rating. When the ability is a reach above today's, he must clear by ability too, (offset + reach) over the standard's ability, and the lower of the two is his share: a rating scaled up to a potential can otherwise clear a line no first choice is near (the rule of 25 November 2026). At the goalkeeper's slot the share is by ability alone, as Scouting measures a goalkeeper.
+- **His share** at a slot is his rating there, scaled to that ability through the offset, over the standard's rating. When the ability is a reach above today's, he must clear by ability too, (offset + reach) over the standard's ability, and the lower of the two is his share: a rating scaled up to a potential can otherwise clear a line no first choice is near (the rule of 25 November 2026). Revised during the build: his share is never below his share today, since his reach is never below his ability; without that, one more point of potential could lower a young player's worth. One whose reach is not above his ability is measured as he is today. At the goalkeeper's slot the share is by ability alone, as Scouting measures a goalkeeper.
 - His worth is his highest share and its slot (the tactic's order on a tie).
-- **He meets the standard** when his worth is at or above `scoutingWeakShare`, 0.95: within 5% of the average of the first choices, the line Scouting already uses to call a first choice weak.
+- **He meets the standard** when his worth clears `scoutingWeakShare`, 0.95, by Scouting's own rule (`Scouting.clearsWeakLine`): within 5% of the average of the first choices, the line Scouting already uses to call a first choice weak. Revised in the plan: a worth exactly 5% under does not meet it, as a first choice exactly 5% under is weak.
 
 The decline numbers are one new entry, `declineRules` (the steps, each an age it applies from and a size, and the number of seasons), labelled derived, with a source saying the ages are carried over and the sizes are this tool's estimate with no test behind them; `FitnessModel.problems` checks it (ages rising, sizes 0 or more, at least one season).
 
@@ -68,22 +68,25 @@ The decline numbers are one new entry, `declineRules` (the steps, each an age it
 - "Rates 2.9% above the average of your first eleven, at centre-back."
 - "Rates 10.6% under the average of your first eleven, at right defensive midfield."
 - 23 or under: "Ability 79, could reach about 109 (this tool's estimate): that would rate 7.8% above the average of your first eleven, at left attacking midfield."
+- Revised after the whole-branch review: a gap that rounds to 0.0% reads "level with the average of your first eleven"; a gap under the standard that reads as the line's own, "5.0%", is written to two decimals ("4.96% under", "5.04% under"); a young player held at today's share reads "Ability 95, could reach about 98 (this tool's estimate), which by ability would rate lower than he rates today: 3.0% under the average of your first eleven, at left attacking midfield."; and at the goalkeeper's slot each sentence says "the average of your first eleven by ability".
 - With a fall expected: "He is 30. This tool expects him to lose about 6 points of ability over the next two seasons, from 70 to about 64 (its own estimate: no test measures decline): that would rate 10.4% under the average of your first eleven, at right defensive midfield. Rates 6.4% under it today."
 
 ### 2. Contracts (engine `Advisors/Contracts.swift`, app `ContractsState`, `ContractsPresentation`, `ContractsScreen`)
 
 Every player of the club's own in his last year or with no contract (the three parts, as now; a player on loan here never) is in exactly one of three places.
 
+Revised after the whole-branch review: a line under the intro says where the line is, "A player is recommended when he would rate within 5% of the average of your outfield first choices over a new contract: on where his ability could reach at 23 or under, and after the fall expected from 30 (this tool's estimate: no test sets the line or measures the fall)."
+
 **Recommended**, the list: he meets the standard, is not marked to sell, and Player Removal does not advise moving him on. Ordered by worth, highest first, then by the earlier end day, then the order handed in. The part headings go; each row keeps its timing line, drawn as a caution when other clubs can approach him now. Each row gains its worth line above the wage lines. The pill's count is this list.
 
 **Not recommended for renewal**, closed at every launch behind "21 players not recommended for renewal": everyone else, in the same order, each with his name, his facts, his standing and his reasons, every one that applies, in this order:
 
 1. "You have marked him to sell."
-2. Player Removal's advice when it advises moving him on: "Player Removal advises selling him."
-3. His worth line, when he does not meet the standard; or "He can play no slot of this tactic."
+2. Player Removal's advice when it advises moving him on: "Player Removal advises selling him." ("releasing him"; for a termination, "ending his contract by agreement", revised during the build).
+3. His worth line, when he does not meet the standard; or "He can play no slot of this tactic."; or, when the first eleven has no outfield player in position, "Your first eleven has no outfield player in position, so nobody can be measured against it." (added in the plan).
 4. When he is first or second choice at a slot, or counts as cover or as a stand-in where Depth has no more than the line: "He is first choice at right defensive midfield: sign a replacement before he goes."
 
-Each has a button, "Renew anyway". It moves him into the list, where his row says "The tool does not recommend renewing him; he is listed at your choice." with the same reasons under it and a button "Follow the advice" that undoes it. The choice is saved in `contracts.json` (`wanted`, each with its day; absent in older files) and dropped at an import by the rule that drops a dismissal.
+Each has a button, "Renew anyway". It moves him into the list, where his row says "The tool does not recommend renewing him; he is listed at your choice." with the same reasons under it and a button "Follow the advice" that undoes it. Revised after the whole-branch review: the sentence that says to sign a replacement is left off such a row, since he is not going. A choice stays saved while the tool recommends him, and holds again if it stops recommending him. The choice is saved in `contracts.json` (`wanted`, each with its day; absent in older files) and dropped at an import by the rule that drops a dismissal.
 
 **Not renewing**, as now: a recommended player the owner sets aside with "Not renewing", shown again with "Show again".
 
@@ -100,7 +103,7 @@ All three cases lose the points and gain the caution, not only the first choice 
 
 A young player needed for cover is still watched and not loaned for matches: that rule is about this season, not his worth.
 
-**The contract's own points follow his worth.** Player Removal adds points for a contract that is ending (15 at twelve months or fewer, 25 at six) and for no contract (50), which would have it advise moving a player on because he is on Contracts. Today a young player worth developing is spared the first of these and told "renew it". That test becomes his worth, at any age: a player who meets the standard gets "Contract ends in 8 months: renew it", or "No contract: offer him one", at no points; anyone else keeps the words and the points. Player Removal is handed each player's worth, which rests on the elevens and his reach and not on Player Removal, so nothing goes round in a circle. `Removal.isWorthDeveloping` is unchanged everywhere else (the young players' advice, the planner's favour).
+**The contract's own points follow his worth.** Player Removal adds points for a contract that is ending (15 at twelve months or fewer, 25 at six) and for no contract (50), which would have it advise moving a player on because he is on Contracts. Today a young player worth developing is spared the first of these and told "renew it". That test becomes his worth, at any age: a player who meets the standard gets "Contract ends in 8 months: renew it", or "No contract: offer him one", at no points; anyone else keeps the words and the points. Revised after the whole-branch review: when he is advised to go on his other points the line gives no instruction, "Contract ends in 8 months: not counted against him, as he meets the standard of your first eleven". Player Removal is handed each player's worth, which rests on the elevens and his reach and not on Player Removal, so nothing goes round in a circle. `Removal.isWorthDeveloping` is unchanged everywhere else (the young players' advice, the planner's favour).
 
 He is in `advisedToLeave` like anyone advised to go, so Training does not count him as staying cover, Scouting counts him as going, and the planner gives him no favour.
 

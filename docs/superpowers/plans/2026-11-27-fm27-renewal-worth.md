@@ -347,3 +347,71 @@
 - [ ] **Step 2: The full runs.** `cd LineupEngine && swift test`; `tools/test_app.sh`; `cd LineupApp && swift test` in the background (it takes ten minutes or more). All pass with no warnings.
 - [ ] **Step 3: The notes.** In `CLAUDE.md`: a new entry in the list at the top; the Advisors passage on thin cover and on the short contract's "renew it"; the Contracts passages in the engine and app sections (who is listed, the order, the three places, the words, `wanted`); Scouting's reasons a player is going; the test counts and the pictures checked. In this plan: "What the build showed on the captured squads and the owner's", "What changed during the build", "Limits and small faults left".
 - [ ] **Step 4: Commit.**
+
+---
+
+## What the build showed on the captured squads and the owner's
+
+**The captured squad (`first-team` and `u21`, the sample 4-2-3-1).** The sample plan's lineups did not change at any step.
+
+- Without the points for thin cover (Task 3): Jonny Maxted, the only goalkeeper, goes from keep to high and is advised "sell" on 65 points, with "Sign a replacement at goalkeeper before he goes: he is first choice there and cover is thin." Scott Pollock goes from 85 to 115 and carries the sentence for central attacking midfield. Five young players' scores rose by 30 with no change of advice, and one player the command does not name moved from keep to medium.
+- Scouting follows: Maxted now counts as going, so the goalkeeper's slot reads "nobody" in the squad that stays, an outfield player fills in there out of position (Zac McEachran), and that takes him out of the cover at central and right attacking midfield, which moved those needs and two pasted candidates (Max Treml, Brayden Daniel). The rule gives this; it reads oddly, and is a limit below.
+- With the contract's points following the worth (Task 4): Fernando Forestieri, 36 and out of contract, meets the standard after the fall expected and goes from medium to keep, the 50 points for no contract gone. Six others lost 15 points with no change of level. Nobody joined or left those advised to leave.
+
+**The owner's squad**, by a throwaway run of the built rule on a copy of his saved state, dated 25 November 2028 in his game (Task 9; the copy and the test were deleted): 32 players in a part. **12 listed**, Harry McGlinchey first (his reach would rate 22.9% above) and Kieran Petrie last (4.7% under on his reach). **20 not recommended**: Christian N'Guessan (30: 6.4% under today, 10.8% under after two seasons), with "He is first choice at right defensive midfield: sign a replacement before he goes."; Darnell Johnson; Sammy Henia-Kamau; Dejan Tetek, second choice there, with the same caution; and sixteen young players, one of them marked to sell and advised to be released. Josh Lewis is listed and watched, not sold. Against the design's 13 and 20: Aimar Govea and Ayman Benarous are in no part now, their contracts ending on 30 June 2030, renewed in his game since. Nothing differed that the rule does not explain. Nobody in his squad is advised to go while needed, so no row of his carries the replacement sentence on Player Removal today. Scouting counts twenty-one players as going, nineteen of them as not being renewed.
+
+## What changed during the build
+
+1. **The line is exclusive.** A worth exactly 5% under the standard does not meet it: the plan uses Scouting's own rule for the weak line, where the design said "at or above 0.95".
+2. **A young player is never worth less over a contract than today** (Task 2's review). By the design's rule the ability test applied only once the reach was above the ability, so one more point of potential could lower a share. His share is now the higher of today's and the lower of the two tests, and one whose reach is not above his ability is measured as he is today.
+3. **The seasons travel with the decline** (`WorthAhead.decline(to:seasons:)`), so the sentence needs only the worth; and the worth carries the line (`RenewalWorth.line`) for the two-decimal edge.
+4. **A player of 29 loses 3 points**, by the table (the plan's test name said 24 to 29 were measured as today; it covers 24 to 28).
+5. **Player Removal is handed the worths of the club's own at the club and of those on loan here** (Task 4), so that its standard is the same as Contracts'; a player out on loan is left out, so his missing data cannot stop Player Removal. Contracts hands in everyone but the players out on loan who are in no part (Task 5), for the same reason.
+6. **`depthThinBelow` counts in the evidence of Player Removal's advice only where the need is shown**: a replacement to sign first, or a young player watched for cover (Task 3's own call, tested after the whole-branch review).
+7. **"Ending his contract by agreement"** for a termination, where the plan had "terminating his contract".
+8. **With no standard, a mark to sell and Player Removal's advice still come before "Your first eleven has no outfield player in position…"**.
+9. **A change of today's date clears the kept Scouting needs and candidates in `update(_:)`** (Task 7): a date change does not replan, as the dispatch had wrongly said.
+10. **A wanted row shows his worth sentence once**, among his reasons.
+11. **`ContractRow.replaceFirstText`** holds the sentence that says to sign a replacement, apart from `reasonLines`, so the view never reads a sentence's words to draw it as a caution (Task 8); the reason sentences come from the engine's `AdvisorText.contractReasonLines`.
+12. **The samples.** `contractsDismissedName` is Sammy Henia-Kamau, since the rule no longer recommends Dejan Tetek, who is `contractsWantedName`; both samples' pills read "Contracts 14" (17 and 22 before).
+
+## What the whole-branch review found
+
+No wrong advice, no circle among Player Removal, Contracts and Scouting, and nothing stale. Three wording faults the owner would have met first, and a short list of small ones, fixed in one round (commit 9878f95):
+
+- Nothing said where the line is: a sentence under the intro now does (`AdvisorText.contractsRuleLine`).
+- "Renew it" or "offer him one" on a row advised to go: the line now reads "…: not counted against him, as he meets the standard of your first eleven" there.
+- "0.0% under" (Josh Lewis's row on the owner's squad) reads "level with"; a gap that reads as the line's own is written to two decimals.
+- Player Removal's advice said twice on a not-recommended row, and "he can play no slot" said twice for a player out on loan: each now once.
+- The replacement sentence is left off a row the owner chose to renew anyway.
+- A young player held at today's share says so.
+- The tests the rules lacked (the evidence call of point 6 above, the candidates after a change of date, one player both advised to leave and not being renewed); the standard worked out once in `Contracts.report`; the pill's count read from the report's list; the loan block's spoken text; three doc comments that stated a rule that is gone.
+
+## Limits and small faults left
+
+For the owner:
+
+- **The sizes of the fall are this tool's estimate.** No test in any version measures decline. A reading of every player's ability at each import would measure it in his own save (`docs/Research/fm27-age-decline.md`); it is not built.
+- **One line.** A backup of 24 or over who is under the first eleven's standard is not recommended, whatever the second eleven's level.
+- **A goalkeeper is measured by ability** against the outfield first choices', as Scouting measures one, since his rating is on its own scale. A goalkeeper whose ability is well above the outfield's comes out far above the standard and at the top of the list (the sample's first row, at 24.6% above).
+- **A rating at one slot is set against an average across every outfield slot and role.**
+- **Player Removal and Contracts can differ on a young player.** One Player Removal would keep and develop, whose reach is under the standard, is not recommended; one it calls cover at best, whose reach meets the standard, is (Josh Lewis). Each row shows its working.
+- **Scouting's going line can be long.** Every player in his last year who is not recommended is counted as going, most of them young players out on loan.
+- **Contracts is for the primary tactic.** A player who can play no slot of it is not recommended, and Scouting counts him as going under whatever tactic it shows.
+- **On a squad whose only goalkeeper is advised to go**, Scouting judges the squad that stays with an outfield player in goal, which moves needs elsewhere.
+- **A young player needed as a stand-in who is markedly lower** is now advised "sell" with the replacement sentence, where the points for thin cover kept him at medium; "watched and not loaned" holds only below high.
+- **"Renew anyway" stays saved while the tool recommends him**, and holds again if it stops recommending him, until an import finds him renewed or gone.
+- **When the Contracts list cannot be worked out**, Scouting counts nobody as not being renewed and says nothing of it; the Contracts screen shows the failure.
+- **Training, Mentoring and the planner do not count a player not being renewed as going**; only Scouting does.
+- Not checked in a live window: "Renew anyway", "Follow the advice", the closed section's line, and the look of the buttons.
+
+Small faults:
+
+- The evidence on a Player Removal row follows the worth only when the worth spares him the contract's points, not when he keeps them.
+- `Renewal.worths` divides by zero with `ratingAbilityOffset` 0 and an ability of 0 (`Development.scaled` has the same risk; the offset is 70). A decline step under half a point would read "lose about 0 points".
+- The goalkeeper-slot test is spelt in `RenewalWorth.swift` and in `Scouting.swift`, on different types.
+- A fixture that is out of contract with months left above 0 gets two contract lines; no paste can produce it.
+- Tests: the "standard equals needs" test is circular now that `needs` calls the helper; no test of an out-of-position first choice left out of the standard, nor of exactly 5% under at an outfield slot; `aPlayerWithNoWorthKeepsThePointsForAnEndingContract` does not assert the basis; `everyReasonThatAppliesIsGivenInOrder` puts a player with a staying action among those advised to leave by hand; `coverReasons` filters loosely; the app's test of a file from before `wanted` checks only one notice's words (`StoreTests` checks the file itself); `ContractsSample`'s helper copies the production split.
+- The view picks a row's button with `if row.wantedLine == nil`; the ink reason line starts at the caution triangle's left edge, not at its text.
+- The pill can show a count while the sheet fails, which only a wage guide throwing on a report that worked out could cause; bad parameters stop the report first.
+- Two shares within 0.005 of a percentage point either side of the line both read "5.00% under".
