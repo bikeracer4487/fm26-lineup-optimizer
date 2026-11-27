@@ -57,16 +57,20 @@ import Testing
         let favoured = try #require(picks(model).first(where: isFavoured))
         let young = favoured.player
         #expect(report(model)?.removal.advisedToLeave.contains(young) == false)
-        // No contract, Injury Proneness 20, Controversy 20, Important Matches 1 and Temperament 1: Player Removal
-        // advises him to go, and nothing the plan reads about him changes.
+        // No contract, Injury Proneness 20, Controversy 20, Important Matches 1, Temperament 1 and Consistency 1: Player
+        // Removal advises him to go, and nothing the plan reads about him changes. He meets the first eleven's
+        // standard, so his lack of a contract counts nothing against him; the rest does.
         edit(model, young) { player in
             player.monthsLeft = 0
             player.attributes[.injuryProneness] = 20
             player.attributes[.controversy] = 20
             player.attributes[.importantMatches] = 1
             player.attributes[.temperament] = 1
+            player.attributes[.consistency] = 1
         }
         let advice = try #require(report(model)?.removal.advice.first { $0.player == young })
+        #expect(advice.worth?.meetsStandard == true)
+        #expect(advice.reasons.contains(RemovalReason(text: "No contract: offer him one", points: 0)))
         #expect(advice.level == .high || advice.level == .critical)
         #expect(report(model)?.removal.advisedToLeave.contains(young) == true)
         #expect(model.advisedToLeaveForPlan.contains(young))

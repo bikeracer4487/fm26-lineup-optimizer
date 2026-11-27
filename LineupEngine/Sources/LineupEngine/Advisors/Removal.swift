@@ -76,6 +76,9 @@ public struct RemovalAdvice: Equatable, Sendable {
     public let tier: SquadTier?
     /// The first slot, in slot order, where the squad would be short without him; nil when there is none.
     public let neededAt: RemovalNeed?
+    /// His worth against the first eleven's standard (`Renewal.worths`): nil when the squad has no standard or he can
+    /// play no slot of the tactic.
+    public let worth: RenewalWorth?
     /// His reach against the first and second choice at each slot he can play: nil for a player of 24 or over, with
     /// ability 0, or who is not developing at the club.
     public let outlook: Outlook?
@@ -170,7 +173,8 @@ public enum Removal {
     /// Throws `PlanError.badParameters` when `FitnessModel.problems(in:)` finds problems, what
     /// `Elevens.report` throws, and `RatingError.missingAttribute` for an assessed player without Consistency, Important
     /// Matches, Injury Proneness, Professionalism, Ambition, Controversy, Temperament or Determination. Throws what
-    /// `Depth.report`, `Tactic.assignments(catalog:)`, `Development.outlooks` and `Development.matchesHere` throw.
+    /// `Depth.report`, `Tactic.assignments(catalog:)`, `Development.outlooks`, `Development.matchesHere` and
+    /// `Renewal.worths` throw.
     public static func report(tactic: Tactic, players: [Player], ownClub: String?, money: MoneyStyle,
                               history: StartHistory, asOf: Day, retraining: [Retraining],
                               catalog: RoleCatalog, profile: RatingProfile,
@@ -188,8 +192,8 @@ public enum Removal {
 
     /// The same, from `elevens` and `depth` already worked out for the tactic and these players (`Elevens.report`
     /// keeps injured players in), and the tactic's `assignments`. The caller has checked the parameters with
-    /// `FitnessModel.problems(in:)`. Throws `RatingError.missingAttribute` as above, and what `Development.outlooks`
-    /// and `Development.matchesHere` throw.
+    /// `FitnessModel.problems(in:)`. Throws `RatingError.missingAttribute` as above, and what `Development.outlooks`,
+    /// `Development.matchesHere` and `Renewal.worths` throw.
     static func report(players: [Player], ownClub: String?, money: MoneyStyle, history: StartHistory, asOf: Day,
                        retraining: [Retraining], assignments: [SlotAssignment], elevens: ElevensReport,
                        depth depthReport: DepthReport, parameters: EngineParameters) throws -> RemovalReport {
@@ -210,6 +214,10 @@ public enum Removal {
         }
         let outlooks = try Development.outlooks(players: players, ownClub: ownClub, assignments: assignments, tiers: tiers,
                                                 retraining: retraining, parameters: parameters)
+        // Only the players assessed here: one out on loan, who is given no advice, cannot stop the report. Those on loan
+        // here get no worth, but they are handed in so a first choice among them still counts in the standard.
+        let worths = try Renewal.worths(players: own + loanedIn, ownClub: ownClub, elevens: elevens, depth: depthReport,
+                                        parameters: parameters)
 
         let firstTeam = own.filter { $0.squad == .firstTeam }
         let squad = SquadFacts(
@@ -227,7 +235,7 @@ public enum Removal {
                 : try Development.matchesHere(for: player, assignments: assignments, tiers: tiers, history: history,
                                               asOf: asOf, parameters: parameters)
             let one = Self.advice(for: player, traits: traits[player.id]!, outlook: outlook, matchesHere: matchesHere,
-                                  squad: squad, money: money, parameters: parameters)
+                                  worth: worths[player.id], squad: squad, money: money, parameters: parameters)
             if advisesLeaving(one.level, one.action) {
                 leaving.insert(player.id)
                 wagesAtStake += player.wagePerWeek
@@ -266,16 +274,31 @@ public enum Removal {
 
     // MARK: Players of the club's own
 
+    /// A player whose worth meets the first eleven's standard (`worth`, `RenewalWorth.meetsStandard`), at any age, is
+    /// told to renew a contract that is ending, or offered one when he has none, at no points, and his advice rests also
+    /// on his worth's evidence; anyone else, with no worth among them, keeps those lines' words and points.
+    ///
     /// A player with an outlook is scored on one line in place of the elevens, weakest and ability lines: the better of
     /// his place in the elevens and his reach. His Professionalism and Ambition add no line, since his reach already
-    /// counts them, and a short contract on a player worth developing (`isWorthDeveloping`) says to renew it, at no
-    /// points; on one not worth developing it keeps its words and points, in an eleven or not. His advice is the
-    /// young players' (`youngAction`), and rests also on the evidence of the estimate behind his outlook.
+    /// counts them. His advice is the young players' (`youngAction`), and rests also on the evidence of the estimate
+    /// behind his outlook.
     private static func advice(for player: Player, traits: Traits, outlook: Outlook?, matchesHere: MatchesHere?,
-                               squad: SquadFacts, money: MoneyStyle, parameters: EngineParameters) -> RemovalAdvice {
+                               worth: RenewalWorth?, squad: SquadFacts, money: MoneyStyle,
+                               parameters: EngineParameters) -> RemovalAdvice {
         let rules = parameters.removalRules.value
         var reasons = Reasons()
         var evidence = [parameters.removalRules.evidence, parameters.removalLevels.evidence]
+        // He is worth renewing: the contract's own lines give no points.
+        let meetsStandard = worth?.meetsStandard ?? false
+        var renewed = false
+        func noContract(_ text: String) {
+            if meetsStandard {
+                reasons.add(0, "No contract: offer him one")
+                renewed = true
+            } else {
+                reasons.add(rules.notFullTimePoints, text)
+            }
+        }
 
         // Only a player out of contract can go at no cost. A youth contract is read and costed like a full-time one; a
         // type this tool does not read (a part-time contract, say) says nothing about the cost either way. A full-time
@@ -287,12 +310,12 @@ public enum Removal {
         switch player.contractType {
         case .fullTime where player.monthsLeft == 0, .youth where player.monthsLeft == 0:
             (outOfContract, costsKnown) = (true, true)
-            reasons.add(rules.notFullTimePoints, "No contract: 0 months left")
+            noContract("No contract: 0 months left")
         case .fullTime, .youth:
             (outOfContract, costsKnown) = (false, true)
         case .outOfContract:
             (outOfContract, costsKnown) = (true, true)
-            reasons.add(rules.notFullTimePoints, "Not on a full-time contract")
+            noContract("Not on a full-time contract")
         case .other(let type):
             (outOfContract, costsKnown) = (false, false)
             reasons.add(0, "Contract type \(type) is not one this tool reads: no release cost is given")
@@ -344,13 +367,14 @@ public enum Removal {
             let points: Int? = months <= rules.contractEndingSoonUpTo ? rules.contractEndingSoonPoints
                 : months <= rules.contractEndingUpTo ? rules.contractEndingPoints : nil
             let ends = "Contract ends in \(months) \(months == 1 ? "month" : "months")"
-            // A place in an eleven alone does not make a young player worth renewing: his reach must.
-            if points != nil, let outlook, isWorthDeveloping(outlook) {
+            if points != nil, meetsStandard {
                 reasons.add(0, "\(ends): renew it")
+                renewed = true
             } else if let points {
                 reasons.add(points, ends)
             }
         }
+        if renewed, let worth { evidence.append(worth.basis) }
 
         if traits.consistency < rules.consistencyLowBelow {
             reasons.add(rules.consistencyLowPoints, "Consistency \(traits.consistency)")
@@ -470,7 +494,7 @@ public enum Removal {
         }
 
         return RemovalAdvice(player: player.id, name: player.name, level: level, action: action, score: score,
-                             reasons: reasons.list, tier: tier, neededAt: neededAt, outlook: outlook,
+                             reasons: reasons.list, tier: tier, neededAt: neededAt, worth: worth, outlook: outlook,
                              matchesHere: matchesHere,
                              keepReason: keepReason, watchReason: watchReason, loanOnlyToStart: loanOnlyToStart,
                              onYouthContract: onYouthContract, isFalseProspect: isFalseProspect,

@@ -360,11 +360,18 @@ import Testing
         let players = try squad()
         try #require(try depth(players, .D_CL).cover == parameters.depthThinBelow.value + 1)
         try #require(try depth(players, .D_CR).cover == parameters.depthThinBelow.value + 1)
-        for id in [PlannerFixture.id(.D_CL, "first"), PlannerFixture.id(.D_CL, "second"), PlannerFixture.id(.D_CR, "second")] {
+        // Depth's line is behind none of them. The first choice meets the standard, so his 12 months say to renew it and
+        // his advice rests also on his worth, which is derived; the second choices' rest on the removal rules alone.
+        let expected: [(PlayerID, Evidence)] = [(PlannerFixture.id(.D_CL, "first"), .derived),
+                                                (PlannerFixture.id(.D_CL, "second"), .carriedOverFM26),
+                                                (PlannerFixture.id(.D_CR, "second"), .carriedOverFM26)]
+        for (id, basis) in expected {
             let a = try advice(id, in: players)
             #expect(a.neededAt == nil && a.replaceBeforeGoing == nil, "\(id.key)")
-            #expect(a.basis == .carriedOverFM26, "\(id.key)")
+            #expect(a.basis == basis, "\(id.key)")
         }
+        let first = try advice(PlannerFixture.id(.D_CL, "first"), in: players)
+        #expect(first.basis == first.worth?.basis)
     }
 
     @Test func realCoverIsNeededWhenTheOnlyOthersAreTooWeakToCount() throws {
@@ -598,6 +605,169 @@ import Testing
         #expect(reasons(unknown.reasons, "No contract").isEmpty && reasons(unknown.reasons, "Contract").isEmpty)
         #expect(unknown.releaseCost == nil && unknown.mutualCost == nil)
         #expect(unknown.action != .release)
+    }
+
+    // MARK: The contract and his worth
+
+    /// Each player's worth against the first eleven's standard among `players` (`Renewal.worths`).
+    func worths(_ players: [Player]) throws -> [PlayerID: RenewalWorth] {
+        let elevens = try Elevens.report(tactic: tactic, players: players, ownClub: "Oxford City", catalog: catalog,
+                                         profile: profile, parameters: parameters)
+        let depth = try Depth.report(tactic: tactic, players: players, ownClub: "Oxford City", elevens: elevens,
+                                     catalog: catalog, profile: profile, parameters: parameters)
+        return try Renewal.worths(players: players, ownClub: "Oxford City", elevens: elevens, depth: depth,
+                                  parameters: parameters)
+    }
+
+    @Test func aPlayerWhoMeetsTheStandardIsToldToRenewAtNoPoints() throws {
+        let rules = parameters.removalRules.value
+        let id = PlannerFixture.id(.D_L, "first")
+        for months in [8, 6] {
+            let players = try squad(changing: id) { $0.age = 27; $0.monthsLeft = months }
+            let worth = try #require(try worths(players)[id])
+            try #require(worth.meetsStandard && worth.ahead == .today)
+            let a = try advice(id, in: players)
+            #expect(a.worth == worth)
+            #expect(a.reasons == [reason("In the first eleven at left back", rules.firstElevenPoints),
+                                  reason("Contract ends in \(months) months: renew it", 0)], "\(months)")
+            #expect(a.score == rules.firstElevenPoints)
+            // The removal rules are carried over from FM26; the standard's line and the offset are derived.
+            #expect(a.basis == .derived)
+        }
+    }
+
+    @Test func aPlayerUnderTheStandardKeepsThePointsForAnEndingContract() throws {
+        let rules = parameters.removalRules.value
+        let id = PlannerFixture.id(.D_L, "second")
+        for (months, points) in [(8, rules.contractEndingPoints), (6, rules.contractEndingSoonPoints)] {
+            let players = try squad(changing: id) { $0.age = 27; $0.monthsLeft = months }
+            let worth = try #require(try worths(players)[id])
+            try #require(!worth.meetsStandard)
+            let a = try advice(id, in: players)
+            #expect(a.worth == worth)
+            #expect(reasons(a.reasons, "Contract") == [reason("Contract ends in \(months) months", points)], "\(months)")
+            #expect(a.basis == .carriedOverFM26)
+        }
+        #expect(rules.contractEndingPoints == 15 && rules.contractEndingSoonPoints == 25)
+    }
+
+    @Test func aPlayerWithNoWorthKeepsThePointsForAnEndingContract() throws {
+        // He can play no slot of the tactic, so he has no worth: the contract's words and points as before.
+        let a = try advice(target { $0.monthsLeft = 8 })
+        #expect(a.worth == nil)
+        #expect(reasons(a.reasons, "Contract") == [reason("Contract ends in 8 months", 15)])
+    }
+
+    @Test func aYoungPlayerWorthDevelopingButUnderTheStandardKeepsThePoints() throws {
+        // The weak second choice at left back with his reach at the bar: he could make the second eleven, so he is worth
+        // developing, but at about 80% of the first choice he is well under the standard.
+        let rules = parameters.removalRules.value
+        let potential = try weakSecondPotential(reaching: parameters.markedlyLowerShare.value, age: 19)
+        let (players, id) = try weakSecond(age: 19, potential: potential, months: 10)
+        let worth = try #require(try worths(players)[id])
+        try #require(!worth.meetsStandard)
+        let a = try #require(try report(players, history: sixMatches(starting: id, starts: 0)).advice.first { $0.player == id })
+        let outlook = try #require(a.outlook)
+        try #require(outlook.level == .couldMakeSecond && Removal.isWorthDeveloping(outlook))
+        #expect(reasons(a.reasons, "Contract") == [reason("Contract ends in 10 months", rules.contractEndingPoints)])
+        #expect(!a.reasons.contains { $0.text.contains("renew it") })
+    }
+
+    /// The planner's squad with its second-choice left back at ability 200, and a young left back of `age` with every
+    /// attribute 11 (Professionalism 20), ability 80, `months` left and £600 a week, rated below the second choice so he
+    /// is a backup, whose reach at left back rates `share` of the standard. He can pass the second choice's rating but
+    /// not his ability, so his reach is cover at best.
+    func behindAStrongSecond(age: Int, share: Double,
+                             months: Int = 8) throws -> (players: [Player], young: Player, standard: Double) {
+        let secondID = PlannerFixture.id(.D_L, "second")
+        let base = try squad(changing: secondID) { $0.currentAbility = 200; $0.potentialAbility = 200 }
+        let elevens = try Elevens.report(tactic: tactic, players: base, ownClub: "Oxford City", catalog: catalog,
+                                         profile: profile, parameters: parameters)
+        let depth = try Depth.report(tactic: tactic, players: base, ownClub: "Oxford City", elevens: elevens,
+                                     catalog: catalog, profile: profile, parameters: parameters)
+        let standard = try #require(Renewal.standard(elevens: elevens, depth: depth, players: base,
+                                                     parameters: parameters).rating)
+        let probe = youngster(age: age, all: 11, familiarity: 20, potentialAbility: 80)
+        let (his, _, _) = try ratings(of: probe.id, at: .D_L, in: base + [probe])
+        let young = youngster(age: age, all: 11, familiarity: 20,
+                              potentialAbility: potential(reaching: share * standard, his: his)) { p in
+            p.monthsLeft = months; p.wagePerWeek = 600
+        }
+        return (base + [young], young, standard)
+    }
+
+    @Test func aYoungPlayerNotWorthDevelopingWhoMeetsTheStandardIsToldToRenew() throws {
+        let (players, young, _) = try behindAStrongSecond(age: 19, share: 0.97)
+        let worth = try #require(try worths(players)[young.id])
+        try #require(worth.meetsStandard)
+        let a = try advice(young.id, in: players)
+        let outlook = try #require(a.outlook)
+        try #require(a.tier == .backup && outlook.level == .couldBeCover && !Removal.isWorthDeveloping(outlook))
+        #expect(reasons(a.reasons, "Contract") == [reason("Contract ends in 8 months: renew it", 0)])
+    }
+
+    @Test func aPlayerWithNoContractWhoMeetsTheStandardIsToldToOfferOneAtNoPoints() throws {
+        let rules = parameters.removalRules.value
+        let id = PlannerFixture.id(.D_L, "first")
+        let changes: [(inout Player) -> Void] = [{ $0.contractType = .outOfContract; $0.monthsLeft = nil },
+                                                 { $0.monthsLeft = 0 }]
+        for change in changes {
+            let players = try squad(changing: id, change)
+            try #require(try worths(players)[id]?.meetsStandard == true)
+            let a = try advice(id, in: players)
+            #expect(a.reasons == [reason("No contract: offer him one", 0),
+                                  reason("In the first eleven at left back", rules.firstElevenPoints)])
+            #expect(a.score == rules.firstElevenPoints && a.level == .keep)
+            #expect(a.releaseCost == 0 && a.mutualCost == 0)
+            #expect(a.basis == .derived)
+        }
+    }
+
+    @Test func aPlayerWithNoContractUnderTheStandardKeepsTheFifty() throws {
+        let rules = parameters.removalRules.value
+        let id = PlannerFixture.id(.D_L, "second")
+        let cases: [(String, (inout Player) -> Void)] = [
+            ("Not on a full-time contract", { $0.contractType = .outOfContract; $0.monthsLeft = nil }),
+            ("No contract: 0 months left", { $0.monthsLeft = 0 }),
+        ]
+        for (text, change) in cases {
+            let players = try squad(changing: id, change)
+            try #require(try worths(players)[id]?.meetsStandard == false)
+            let a = try advice(id, in: players)
+            #expect(a.reasons.first == reason(text, rules.notFullTimePoints), "\(text)")
+            #expect(!a.reasons.contains { $0.text.contains("offer him one") })
+        }
+        #expect(rules.notFullTimePoints == 50)
+    }
+
+    @Test func theOwnersCase() throws {
+        // A young left back of 22, a backup paid above the median with 8 months left, whose reach is cover at best:
+        // 15 for cover at best, 20 for his wage and 15 for his contract made 50, and he was sold.
+        let rules = parameters.removalRules.value
+        let wageRules = parameters.removalWageRules.value
+        let (players, young, _) = try behindAStrongSecond(age: 22, share: 0.97)
+        let worth = try #require(try worths(players)[young.id])
+        try #require(worth.meetsStandard)
+        let r = try report(players)
+        let a = try #require(r.advice.first { $0.player == young.id })
+        try #require(a.tier == .backup && a.outlook?.level == .couldBeCover)
+        // His reach meets the standard: the contract's 15 go, and at 35 he is watched, not sold.
+        #expect(a.reasons == [reason("Could become cover at left back, no more", rules.neitherElevenPoints),
+                              reason("Paid £600 a week, against a median of £500, and in neither eleven",
+                                     wageRules.abovePoints),
+                              reason("Contract ends in 8 months: renew it", 0)])
+        #expect(a.score == 35 && a.level == .medium && a.action == .monitor)
+        #expect(!r.advisedToLeave.contains(young.id))
+
+        // The same player whose reach is under the standard keeps the 15, and is sold.
+        let (under, lower, _) = try behindAStrongSecond(age: 22, share: 0.9)
+        try #require(try worths(under)[lower.id]?.meetsStandard == false)
+        let u = try report(under)
+        let b = try #require(u.advice.first { $0.player == lower.id })
+        try #require(b.outlook?.level == .couldBeCover)
+        #expect(reasons(b.reasons, "Contract") == [reason("Contract ends in 8 months", rules.contractEndingPoints)])
+        #expect(b.score == 50 && b.level == .high && b.action == .sell)
+        #expect(u.advisedToLeave.contains(lower.id))
     }
 
     // MARK: Hidden and personality attributes
@@ -864,22 +1034,25 @@ import Testing
         #expect(reasons(older.reasons, "Ambition") == [reason("Ambition 5", 25)])
     }
 
-    @Test func aShortContractOnAPlayerWorthKeepingSaysRenewIt() throws {
-        // With no slot he can play, a reach of 120 against a first-team average of 100: −20.
+    @Test func aShortContractOnAYoungPlayerSaysRenewItOnlyWhenHeMeetsTheStandard() throws {
+        // With no slot he can play, a reach of 120 against a first-team average of 100: −20, worth developing. With no
+        // slot he has no worth, so he has not met the standard: the contract's points as for anyone.
         let cases: [(Int?, RemovalReason?)] = [
-            (1, reason("Contract ends in 1 month: renew it", 0)),
-            (5, reason("Contract ends in 5 months: renew it", 0)),
-            (12, reason("Contract ends in 12 months: renew it", 0)),
+            (1, reason("Contract ends in 1 month", 25)),
+            (5, reason("Contract ends in 5 months", 25)),
+            (12, reason("Contract ends in 12 months", 15)),
             (13, nil), (nil, nil),
         ]
         for (months, expected) in cases {
             let a = try advice(target(age: 19) { $0.monthsLeft = months })
             #expect(a.reasons.first == reason("Could reach the level of the first team", -20))
+            #expect(a.worth == nil)
             #expect(reasons(a.reasons, "Contract") == (expected.map { [$0] } ?? []), "\(String(describing: months))")
         }
-        // In the first eleven, the elevens line's −40: renew it too.
+        // In the first eleven, at the standard: renew it.
         let id = PlannerFixture.id(.D_L, "first")
         let first = try advice(id, in: try squad(changing: id) { $0.age = 19; $0.monthsLeft = 5 })
+        try #require(first.worth?.meetsStandard == true)
         #expect(reasons(first.reasons, "Contract") == [reason("Contract ends in 5 months: renew it", 0)])
         // A reach of 90 against an average of about 99: +15, and the contract's points as today.
         let close = try advice(target(age: 19, currentAbility: 80, potentialAbility: 90) { $0.monthsLeft = 5 })
@@ -1178,7 +1351,8 @@ import Testing
                               level: outlook.level, average: outlook.average)
         #expect(!Removal.isWorthDeveloping(nowhere))
         #expect(nowhere.isMarkedlyLower)
-        // So is the same player once a far better left back takes his place: the contract keeps its words and points.
+        // So is the same player once a far better left back takes his place. He still meets the standard, which the
+        // contract's line follows, so he is told to renew it at no points.
         let positions = [assignment(.D_L).ipPosition, assignment(.D_L).oopPosition]
         let star = Player.fixture(name: "D L star", all: 20,
                                   familiarity: Dictionary(positions.map { ($0, 20) }, uniquingKeysWith: { a, _ in a }),
@@ -1187,7 +1361,8 @@ import Testing
         try #require(displaced.tier == .second(.D_L) && displaced.outlook?.level == .markedlyLower)
         try #require(displaced.outlook?.slots.contains(where: \.isFirstChoice) == false)
         #expect(!Removal.isWorthDeveloping(try #require(displaced.outlook)))
-        #expect(reasons(displaced.reasons, "Contract") == [reason("Contract ends in 10 months", rules.contractEndingPoints)])
+        try #require(displaced.worth?.meetsStandard == true)
+        #expect(reasons(displaced.reasons, "Contract") == [reason("Contract ends in 10 months: renew it", 0)])
     }
 
     /// The planner's squad with its second-choice left back aged `age`, at current ability 40 and potential `potential`,
@@ -1312,14 +1487,16 @@ import Testing
                               reason("Contract ends in 10 months", rules.contractEndingPoints)])
         #expect(a.score == rules.secondElevenPoints + rules.contractEndingPoints)
         #expect(a.action == .monitor && a.watchReason == .notWorthDeveloping)
-        // His twin worth developing (his reach at the bar): "renew it" at no points, and kept to develop for that.
+        // His twin worth developing (his reach at the bar) is still under the standard, so he keeps the contract's
+        // points too, and is kept to develop to have it renewed before a loan.
         let worth = try weakSecondPotential(reaching: parameters.markedlyLowerShare.value, age: 19)
         let (twinPlayers, twinID) = try weakSecond(age: 19, potential: worth, months: 10)
         let twin = try #require(try report(twinPlayers, history: sixMatches(starting: twinID, starts: 0)).advice
             .first { $0.player == twinID })
         try #require(twin.outlook?.level == .couldMakeSecond && twin.tier == .second(.D_L))
-        #expect(reasons(twin.reasons, "Contract") == [reason("Contract ends in 10 months: renew it", 0)])
-        #expect(twin.score == rules.secondElevenPoints)
+        try #require(twin.worth?.meetsStandard == false)
+        #expect(reasons(twin.reasons, "Contract") == [reason("Contract ends in 10 months", rules.contractEndingPoints)])
+        #expect(twin.score == rules.secondElevenPoints + rules.contractEndingPoints)
         #expect(twin.action == .develop && twin.keepReason == .shortContract)
     }
 
@@ -1525,13 +1702,13 @@ import Testing
     // MARK: Actions
 
     @Test func aPlayerOutOfContractAtHighIsReleasedAtNoCost() throws {
-        // A centre-back, where cover is above the line, so he is needed nowhere.
-        let id = PlannerFixture.id(.D_CL, "first")
-        // −40 in the first eleven, +50, +15 for 12 months, +25 for Controversy 17.
-        let a = try advice(id, in: try squad(changing: id) { p in
-            p.contractType = .outOfContract; p.attributes[.controversy] = 17
-        })
-        #expect(a.score == 50 && a.level == .high)
+        // A centre-back, where cover is above the line, so he is needed nowhere, and under the standard (the first
+        // choice there meets it, and would be offered a contract at no points).
+        let id = PlannerFixture.id(.D_CL, "second")
+        // −20 in the second eleven, +50, +30 among the weakest, +15 for 12 months.
+        let a = try advice(id, in: try squad(changing: id) { p in p.contractType = .outOfContract })
+        try #require(a.worth?.meetsStandard == false)
+        #expect(a.score == 75 && a.level == .high)
         #expect(a.action == .release)
         #expect(a.releaseCost == 0 && a.mutualCost == 0)
     }

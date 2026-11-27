@@ -164,9 +164,12 @@ import Testing
     }
 
     @Test func trainingNeverRecommendsAPlayerRemovalWouldMoveOn() throws {
-        // The right back is the only candidate for left back, and out of contract with a poor character.
+        // The right back is the only candidate for left back, and out of contract with a poor character. With his
+        // potential at his ability his worth is under the first eleven's standard, so his lack of a contract counts
+        // against him.
         var back = rightBack()
         back.contractType = .outOfContract
+        back.potentialAbility = back.currentAbility
         for (attribute, value) in [(Attribute.controversy, 20), (.ambition, 1), (.temperament, 1), (.consistency, 1)] {
             back.attributes[attribute] = value
         }
@@ -176,6 +179,7 @@ import Testing
         try #require(alone.recommendations.map(\.choice.player) == [back.id])
 
         let r = try report(request(players))
+        try #require(r.removal.advice.first { $0.player == back.id }?.worth?.meetsStandard == false)
         #expect(r.removal.advisedToLeave.contains(back.id))
         #expect(r.training.recommendations.isEmpty)
         // Left back, thin whoever goes, comes first; every other need is thin only because its cover is advised to
