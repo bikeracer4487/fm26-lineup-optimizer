@@ -44,16 +44,8 @@ import LineupEngine
     /// The engine's sentences for an entry's reasons, the one that says to sign a replacement first apart from the
     /// rest.
     static func reasonLines(_ entry: ContractEntry) -> (reasons: [String], replaceFirst: String?) {
-        var reasons: [String] = []
-        var replaceFirst: String?
-        for reason in entry.reasons {
-            if case .replaceFirst = reason {
-                replaceFirst = AdvisorText.contractReasonLine(reason)
-            } else {
-                reasons.append(AdvisorText.contractReasonLine(reason))
-            }
-        }
-        return (reasons, replaceFirst)
+        let lines = AdvisorText.contractReasonLines(entry)
+        return (lines.lines, lines.replaceFirst)
     }
 
     /// The first-team player the sample does not recommend renewing who is first choice at central attacking
@@ -84,6 +76,8 @@ import LineupEngine
         #expect(Set(parts) == Set(ContractPart.allCases))
         #expect(parts != parts.sorted { ContractPart.allCases.firstIndex(of: $0)! < ContractPart.allCases.firstIndex(of: $1)! })
         #expect(sheet.intro == AdvisorText.contractsIntro)
+        #expect(sheet.ruleLine == AdvisorText.contractsRuleLine(model.planParameters))
+        #expect(sheet.ruleLine.hasPrefix("A player is recommended when he would rate within 5% of the average"))
         #expect(sheet.emptyLine == nil)
         #expect(sheet.evidenceNote == AdvisorText.contractsEvidenceNote(model.planParameters.wageRangeRules.value))
     }
@@ -161,7 +155,10 @@ import LineupEngine
         let row = try #require(sheet.rows.first { $0.id == tetek.id })
         #expect(row.wantedLine == AdvisorText.listedAtYourChoice)
         #expect(row.reasonLines == ["Rates 5.3% under the average of your first eleven, at left defensive midfield."])
-        #expect(row.replaceFirstText == "He is second choice at right defensive midfield: sign a replacement before he goes.")
+        // Renewed at the owner's choice he is not going, so no replacement is asked for, though his reasons carry one.
+        #expect(row.replaceFirstText == nil)
+        let entry = try #require(try ContractsSample.report(model).listed.first { $0.player == tetek.id })
+        #expect(entry.reasons.contains(.replaceFirst(slot: .DM_R, why: .secondChoice)))
         // His worth is under the standard, so it is said once, among the reasons.
         #expect(row.worthLine == nil)
         // A full row: his timing, his range and the figure field.
@@ -175,7 +172,10 @@ import LineupEngine
         let back = try ContractsSample.sheet(model)
         #expect(!back.rows.contains { $0.id == tetek.id })
         let notRecommended = try #require(back.notRecommended.first { $0.id == tetek.id })
-        #expect(notRecommended.reasonLines == row.reasonLines && notRecommended.replaceFirstText == row.replaceFirstText)
+        #expect(notRecommended.reasonLines == row.reasonLines)
+        // Not recommended, he keeps the sentence that says to sign a replacement first.
+        #expect(notRecommended.replaceFirstText
+                == "He is second choice at right defensive midfield: sign a replacement before he goes.")
         #expect(notRecommended.wantedLine == nil)
 
         // A player renewed anyway whose worth meets the standard keeps his worth line beside his reason.
@@ -185,7 +185,7 @@ import LineupEngine
         let marked = try #require(try ContractsSample.sheet(model).rows.first { $0.id == humphries.id })
         #expect(marked.wantedLine == AdvisorText.listedAtYourChoice)
         #expect(marked.reasonLines == ["You have marked him to sell."])
-        #expect(marked.replaceFirstText == "He is second choice at left back: sign a replacement before he goes.")
+        #expect(marked.replaceFirstText == nil)
         #expect(marked.worthLine == "Ability 83, could reach about 95 (this tool's estimate): that would rate 6.2% above the average of your first eleven, at left back.")
     }
 
@@ -340,6 +340,20 @@ import LineupEngine
         #expect(model.contractsCount == sheet.rows.count)
         model.followAdvice(marked.id)
         #expect(model.contractsCount == sheet.rows.count - 1)
+    }
+
+    @Test func theCountIsTheSheetsRowsAfterEachAction() throws {
+        let model = try ContractsSample.filled()
+        func rows() throws -> Int { try ContractsSample.sheet(model).rows.count }
+        #expect(model.contractsCount == (try rows()))
+        let notRecommended = try #require(try ContractsSample.sheet(model).notRecommended.first)
+        model.renewAnyway(notRecommended.id)
+        #expect(try ContractsSample.sheet(model).rows.contains { $0.id == notRecommended.id })
+        #expect(model.contractsCount == (try rows()))
+        let listed = try #require(try ContractsSample.sheet(model).rows.first)
+        model.dismissContract(listed.id)
+        #expect(try !ContractsSample.sheet(model).rows.contains { $0.id == listed.id })
+        #expect(model.contractsCount == (try rows()))
     }
 
     @Test func withNobodyListedThePartsAreEmptyTheEnginesLineShowsAndThereIsNoCount() throws {

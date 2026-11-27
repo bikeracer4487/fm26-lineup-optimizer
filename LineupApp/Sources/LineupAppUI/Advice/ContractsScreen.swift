@@ -14,12 +14,12 @@ public struct ContractsStart: Sendable {
     }
 }
 
-/// The players worth renewing whose contracts are running down: the engine's intro; the club's three wage figures, each
-/// typed straight into the model; then the list, a row for each player, the most worth first, with "Not renewing" at the
-/// trailing end of his name's line ("Follow the advice" on one listed at the owner's choice); the players not
-/// recommended for renewal, closed behind a line, each with his reasons and "Renew anyway"; the players not being
-/// renewed, closed behind a line, each with "Show again"; and how far to trust it all. It stands behind the same gate as
-/// Player Removal, and everything under the heading scrolls.
+/// The players worth renewing whose contracts are running down: the engine's intro and, under it, where the line for a
+/// recommendation is; the club's three wage figures, each typed straight into the model; then the list, a row for each
+/// player, the most worth first, with "Not renewing" at the trailing end of his name's line ("Follow the advice" on one
+/// listed at the owner's choice); the players not recommended for renewal, closed behind a line, each with his reasons
+/// and "Renew anyway"; the players not being renewed, closed behind a line, each with "Show again"; and how far to trust
+/// it all. It stands behind the same gate as Player Removal, and everything under the heading scrolls.
 public struct ContractsScreen: View {
     let model: AppModel
     @Bindable var navigation: Navigation
@@ -71,7 +71,7 @@ private struct ContractsBody: View {
             // Lazy, so a long list lays out only what is on screen.
             LazyVStack(alignment: .leading, spacing: Theme.Contracts.partGap) {
                 VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                    MutedLines(lines: [sheet.intro])
+                    MutedLines(lines: [sheet.intro, sheet.ruleLine])
                     WageLimitFields(rows: sheet.limitRows) { field, text in model.setWageLimit(field, text: text) }
                     if let entered = sheet.limitsEnteredText {
                         MutedLines(lines: [entered], size: Theme.TypeSize.small)

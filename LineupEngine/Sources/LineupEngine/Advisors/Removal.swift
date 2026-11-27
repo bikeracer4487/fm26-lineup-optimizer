@@ -276,7 +276,8 @@ public enum Removal {
 
     /// A player whose worth meets the first eleven's standard (`worth`, `RenewalWorth.meetsStandard`), at any age, is
     /// told to renew a contract that is ending, or offered one when he has none, at no points, and his advice rests also
-    /// on his worth's evidence; anyone else, with no worth among them, keeps those lines' words and points.
+    /// on his worth's evidence; when he is advised to go all the same, the line says only that it is not counted against
+    /// him. Anyone else, with no worth among them, keeps those lines' words and points.
     ///
     /// A player with an outlook is scored on one line in place of the elevens, weakest and ability lines: the better of
     /// his place in the elevens and his reach. His Professionalism and Ambition add no line, since his reach already
@@ -290,11 +291,14 @@ public enum Removal {
         var evidence = [parameters.removalRules.evidence, parameters.removalLevels.evidence]
         // He is worth renewing: the contract's own lines give no points.
         let meetsStandard = worth?.meetsStandard ?? false
-        var renewed = false
+        // Where each such line is, and its words without the instruction, should he be advised to go after all.
+        var spared: [(index: Int, text: String)] = []
+        var renewed: Bool { !spared.isEmpty }
+        let notCounted = "not counted against him, as he meets the standard of your first eleven"
         func noContract(_ text: String) {
             if meetsStandard {
+                spared.append((reasons.list.count, "No contract: \(notCounted)"))
                 reasons.add(0, "No contract: offer him one")
-                renewed = true
             } else {
                 reasons.add(rules.notFullTimePoints, text)
             }
@@ -368,8 +372,8 @@ public enum Removal {
                 : months <= rules.contractEndingUpTo ? rules.contractEndingPoints : nil
             let ends = "Contract ends in \(months) \(months == 1 ? "month" : "months")"
             if points != nil, meetsStandard {
+                spared.append((reasons.list.count, "\(ends): \(notCounted)"))
                 reasons.add(0, "\(ends): renew it")
-                renewed = true
             } else if let points {
                 reasons.add(points, ends)
             }
@@ -485,6 +489,12 @@ public enum Removal {
             } else {
                 action = level == .keep ? .keep : .monitor
             }
+        }
+
+        // Advised to go all the same: his worth still spares him the contract's points, but the line gives no
+        // instruction to renew a contract or offer one.
+        if advisesLeaving(level, action) {
+            for line in spared { reasons.list[line.index] = RemovalReason(text: line.text, points: 0) }
         }
 
         // Where he is needed rests on Depth's line only where it shows: a replacement to sign first, or a young

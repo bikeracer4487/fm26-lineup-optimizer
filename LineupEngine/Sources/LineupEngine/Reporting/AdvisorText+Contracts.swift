@@ -17,7 +17,43 @@ extension AdvisorText {
     public static let candidateWageOtherCurrency = "His wage is in another currency than your squads', so it cannot be compared with them."
     public static let wageEvidenceSentence = "A wage range is what your own players are paid now, not what a player will ask: no test in any version says what a player asks (this tool's estimate)."
 
+    /// The line under the intro saying where the line is: within 1 − `scoutingWeakShare` of the standard, on a young
+    /// player's reach up to `developingUpToAge` and after the fall expected from the first step of `declineRules` that
+    /// takes something off; with no such step no fall is spoken of.
+    public static func contractsRuleLine(_ parameters: EngineParameters) -> String {
+        let gap = (1 - parameters.scoutingWeakShare.value) * 100
+        let oneDecimal = (gap * 10).rounded() / 10
+        let within = oneDecimal == oneDecimal.rounded() ? "\(Int(oneDecimal))%" : String(format: "%.1f%%", oneDecimal)
+        let young = "on where his ability could reach at \(parameters.developingUpToAge.value) or under"
+        guard let fallFrom = parameters.declineRules.value.steps.first(where: { $0.points > 0 })?.fromAge else {
+            return "A player is recommended when he would rate within \(within) of the average of your outfield first choices over a new contract: \(young) (this tool's estimate: no test sets the line)."
+        }
+        return "A player is recommended when he would rate within \(within) of the average of your outfield first choices over a new contract: \(young), and after the fall expected from \(fallFrom) (this tool's estimate: no test sets the line or measures the fall)."
+    }
+
     // MARK: The reasons
+
+    /// The sentence for each of his reasons, in order, with the one that says to sign a replacement first apart from
+    /// the rest. "He can play no slot of this tactic." is left out when his standing line already says so (out on loan at
+    /// no slot); his `reasons` are as they were.
+    public static func contractReasonLines(_ entry: ContractEntry) -> (lines: [String], replaceFirst: String?) {
+        let standingSaysNoSlot: Bool
+        switch entry.standing {
+        case .outOnLoan(_, let level, let slot): standingSaysNoSlot = level == nil || slot == nil
+        case .first, .second, .neither: standingSaysNoSlot = false
+        }
+        var lines: [String] = []
+        var replaceFirst: String?
+        for reason in entry.reasons {
+            switch reason {
+            case .replaceFirst: replaceFirst = contractReasonLine(reason)
+            case .noSlot where standingSaysNoSlot: continue
+            case .markedToSell, .advisedToLeave, .underStandard, .noSlot, .noStandard:
+                lines.append(contractReasonLine(reason))
+            }
+        }
+        return (lines, replaceFirst)
+    }
 
     /// One reason the tool does not recommend renewing him: "You have marked him to sell.", "Player Removal advises
     /// selling him.", his worth line (`worthLine`), "He is first choice at right defensive midfield: sign a replacement
@@ -61,12 +97,20 @@ extension AdvisorText {
         }
     }
 
+    /// Where he stands. In neither eleven it names Player Removal's action, unless one of his reasons already says what
+    /// Player Removal advises.
     public static func standingLine(_ entry: ContractEntry) -> String {
         switch entry.standing {
         case .first(let slot): return "First choice at \(PositionText.plain(slot))."
         case .second(let slot): return "Second choice at \(PositionText.plain(slot))."
         case .neither:
-            guard let action = entry.action else { return "In neither eleven." }
+            let reasonSaysIt = entry.reasons.contains { reason in
+                switch reason {
+                case .advisedToLeave: true
+                case .markedToSell, .underStandard, .noSlot, .noStandard, .replaceFirst: false
+                }
+            }
+            guard let action = entry.action, !reasonSaysIt else { return "In neither eleven." }
             return "In neither eleven; Player Removal says \(name(action).lowercased())."
         case .outOnLoan(let club, let level, let slot):
             guard let level, let slot else { return "Out on loan at \(club); he can play no slot of this tactic." }

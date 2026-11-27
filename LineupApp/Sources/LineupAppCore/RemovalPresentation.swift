@@ -250,10 +250,11 @@ public struct LoanBlock: Identifiable, Equatable, Sendable {
     /// early whose player is needed at a slot; nil for any other.
     public let replaceFirstText: String?
 
-    /// The block as said to assistive technology.
+    /// The block as said to assistive technology, the replacement sentence last, as `RemovalRow.spokenText` has it, so
+    /// its full stop ends the text.
     public var spokenText: String {
-        ([stamp.text, name, "\(RemovalPresentation.scoreLabel) \(scoreText)"] + [replaceFirstText].compactMap { $0 }
-         + reasons.map(\.spokenText) + [spokenNote].compactMap { $0 }).joined(separator: ", ")
+        ([stamp.text, name, "\(RemovalPresentation.scoreLabel) \(scoreText)"] + reasons.map(\.spokenText)
+         + [spokenNote, replaceFirstText].compactMap { $0 }).joined(separator: ", ")
     }
 
     private let spokenNote: String?

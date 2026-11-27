@@ -196,6 +196,18 @@ import LineupEngine
         #expect(model.squad.importedOn == imported)
     }
 
+    @Test func movingTheDateJudgesTheCandidatesAgain() throws {
+        let t = try ScoutingSetup.ready()
+        try ScoutingSetup.paste(t)
+        _ = try ScoutingSetup.report(t.model)
+        let judged = t.model.timesCandidatesJudged
+        _ = try ScoutingSetup.report(t.model)
+        #expect(t.model.timesCandidatesJudged == judged, "kept until something changes")
+        t.model.moveToday(by: 1)
+        _ = try ScoutingSetup.report(t.model)
+        #expect(t.model.timesCandidatesJudged == judged + 1)
+    }
+
     // MARK: The paste
 
     @Test func beforeAnyPasteNothingIsPasted() throws {

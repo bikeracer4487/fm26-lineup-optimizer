@@ -303,6 +303,18 @@ import Testing
         #expect(a.going == [sell] && b.going == [sell])
         #expect(a == b && a == one)
     }
+    @Test func aPlayerAdvisedToLeaveAndNotBeingRenewedIsGoingOnceAsAdvisedToLeave() throws {
+        let players = try squad()
+        let p = players[0]
+        let advised = Going(player: p.id, name: p.name, reason: .advisedToLeave)
+        let renewing = Going(player: p.id, name: p.name, reason: .notBeingRenewed)
+        let one = try needs(players, going: [advised])
+        let a = try needs(players, going: [renewing, advised]), b = try needs(players, going: [advised, renewing])
+        #expect(a.going == [advised] && b.going == [advised])
+        #expect(a == b && a == one)
+        // Not being renewed alone, he is going under that reason.
+        #expect(try needs(players, going: [renewing]).going == [renewing])
+    }
     @Test func moreDepthCountsOnlyCoverThatStaysAndNamesWhoIsGoing() throws {
         let players = try squad()
         let second = try #require(players.first { $0.name == named(.D_R, "second") })

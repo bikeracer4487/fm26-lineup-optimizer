@@ -778,7 +778,8 @@ public enum Theme {
 
     // MARK: Contracts
 
-    /// The Contracts screen: the club's three figures, the parts and each player's row.
+    /// The Contracts screen: the club's three figures, the three lists (to renew, not recommended, not being renewed)
+    /// and each player's row.
     public enum Contracts {
         /// The space between the screen's parts: the club's figures, the list, those not recommended for renewal,
         /// those not being renewed and the evidence note.

@@ -127,14 +127,15 @@ public enum Contracts {
         let assignments = try tactic.assignments(catalog: catalog)
 
         // Measured: every player at the club (the standard looks its first choices up among them) and those out on
-        // loan in a part, so one out on loan who is not in his last year cannot stop the list.
+        // loan in a part, so one out on loan who is not in his last year cannot stop the list. The standard and the
+        // worths are both worked out from them, so the two cannot disagree.
         let measured = players.filter { player in
             guard case .loanedOut = LoanStatus.of(player, ownClub: ownClub) else { return true }
             return part(of: player, today: today, parameters: parameters) != nil
         }
         let worths = try Renewal.worths(players: measured, ownClub: ownClub, elevens: elevens, depth: depth,
                                         parameters: parameters)
-        let hasStandard = Renewal.standard(elevens: elevens, depth: depth, players: players,
+        let hasStandard = Renewal.standard(elevens: elevens, depth: depth, players: measured,
                                            parameters: parameters).rating != nil
 
         var evidence = [parameters.wageRangeRules.evidence]

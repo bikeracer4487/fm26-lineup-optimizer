@@ -740,6 +740,52 @@ import Testing
         #expect(rules.notFullTimePoints == 50)
     }
 
+    /// The first-choice left back, who meets the standard, with Consistency 1, Important Matches 1, Injury Proneness 20,
+    /// Controversy 20 and Temperament 1: −40 + 25 + 20 + 25 + 25 + 15 = 70, high, and sold.
+    func advisedToGoAtTheStandard(_ change: @escaping (inout Player) -> Void) throws -> (players: [Player], id: PlayerID) {
+        let id = PlannerFixture.id(.D_L, "first")
+        let players = try squad(changing: id) { p in
+            p.age = 27
+            p.attributes[.consistency] = 1; p.attributes[.importantMatches] = 1; p.attributes[.injuryProneness] = 20
+            p.attributes[.controversy] = 20; p.attributes[.temperament] = 1
+            change(&p)
+        }
+        return (players, id)
+    }
+
+    @Test func aPlayerAtTheStandardWhoIsAdvisedToGoIsNotToldToRenew() throws {
+        let notCounted = "not counted against him, as he meets the standard of your first eleven"
+        let cases: [(String, (inout Player) -> Void)] = [
+            ("Contract ends in 8 months: \(notCounted)", { $0.monthsLeft = 8 }),
+            ("No contract: \(notCounted)", { $0.contractType = .outOfContract; $0.monthsLeft = nil }),
+            ("No contract: \(notCounted)", { $0.monthsLeft = 0 }),
+        ]
+        for (text, change) in cases {
+            let (players, id) = try advisedToGoAtTheStandard(change)
+            try #require(try worths(players)[id]?.meetsStandard == true)
+            let a = try advice(id, in: players)
+            try #require(Removal.advisesLeaving(a.level, a.action), "\(text)")
+            // His worth still spares him the contract's points; only the instruction goes.
+            #expect(a.reasons.contains(reason(text, 0)), "\(text)")
+            #expect(!a.reasons.contains { $0.text.contains("renew it") || $0.text.contains("offer him one") }, "\(text)")
+            #expect(a.basis == .derived, "\(text)")
+        }
+    }
+
+    @Test func aPlayerAtTheStandardWhoIsKeptIsStillToldToRenew() throws {
+        // The same player with one fault, Temperament 1: kept, so the instruction stands.
+        for (text, change) in [("Contract ends in 8 months: renew it", { (p: inout Player) in p.monthsLeft = 8 }),
+                               ("No contract: offer him one", { (p: inout Player) in p.monthsLeft = 0 })] {
+            let id = PlannerFixture.id(.D_L, "first")
+            let players = try squad(changing: id) { p in p.age = 27; p.attributes[.temperament] = 1; change(&p) }
+            try #require(try worths(players)[id]?.meetsStandard == true)
+            let a = try advice(id, in: players)
+            try #require(!Removal.advisesLeaving(a.level, a.action), "\(text)")
+            #expect(a.reasons.contains(reason(text, 0)), "\(text)")
+            #expect(!a.reasons.contains { $0.text.contains("not counted against him") }, "\(text)")
+        }
+    }
+
     @Test func theOwnersCase() throws {
         // A young left back of 22, a backup paid above the median with 8 months left, whose reach is cover at best:
         // 15 for cover at best, 20 for his wage and 15 for his contract made 50, and he was sold.
@@ -1643,7 +1689,40 @@ import Testing
         relabel(&q.matchesHereWindowDays, "matchesHereWindowDays")
         relabel(&q.matchesHereMinimumConfirmed, "matchesHereMinimumConfirmed")
         relabel(&q.depthSolidFamiliarity, "depthSolidFamiliarity")
+        relabel(&q.depthThinBelow, "depthThinBelow")
+        relabel(&q.scoutingWeakShare, "scoutingWeakShare")
+        relabel(&q.declineRules, "declineRules")
+        relabel(&q.removalWageRules, "removalWageRules")
         return q
+    }
+
+    @Test func depthsLineIsBehindTheAdviceOnlyWhereTheNeedIsShown() throws {
+        let thin = labelled(derived: "depthThinBelow")
+        // Two years left, so no contract line brings his worth in. The first-choice left attacking midfielder is
+        // needed, cover there being at the line.
+        let needed = PlannerFixture.id(.AM_L, "first"), notNeeded = PlannerFixture.id(.D_CL, "first")
+        func faulty(_ p: inout Player) {
+            p.monthsLeft = 24
+            p.attributes[.consistency] = 1; p.attributes[.importantMatches] = 1; p.attributes[.injuryProneness] = 20
+            p.attributes[.controversy] = 20; p.attributes[.temperament] = 1
+        }
+        func advice(_ id: PlayerID, _ players: [Player], _ parameters: EngineParameters) throws -> RemovalAdvice {
+            try #require(try report(players, parameters: parameters).advice.first { $0.player == id })
+        }
+        // Advised to go and needed: a replacement is asked for, so the line is behind it.
+        let going = try squad(changing: needed, faulty)
+        let a = try advice(needed, going, thin)
+        try #require(a.neededAt == need(.AM_L, .cover) && a.replaceBeforeGoing != nil)
+        #expect(a.basis == .derived)
+        #expect(try advice(needed, going, labelled(derived: nil)).basis == .carriedOverFM26)
+        // Advised to go and needed nowhere.
+        let away = try advice(notNeeded, try squad(changing: notNeeded, faulty), thin)
+        try #require(Removal.advisesLeaving(away.level, away.action) && away.neededAt == nil)
+        #expect(away.basis == .carriedOverFM26)
+        // Needed and kept: nothing is asked for.
+        let kept = try advice(needed, try squad(changing: needed) { $0.monthsLeft = 24 }, thin)
+        try #require(kept.neededAt == need(.AM_L, .cover) && kept.replaceBeforeGoing == nil)
+        #expect(kept.basis == .carriedOverFM26)
     }
 
     @Test func aYoungPlayersAdviceRestsOnTheEstimate() throws {

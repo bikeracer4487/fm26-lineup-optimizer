@@ -21,10 +21,11 @@ public struct DepthOption: Equatable, Sendable {
     /// however familiar he is. Never the first choice himself, and never at a slot with no first choice.
     public let isBelowCoverShare: Bool
     /// He could step in at the slot, whatever his rating: solid, not injured and not first choice at another slot.
-    /// Player Removal keeps a stand-in the slot would be short without, even one too weak to count as cover.
+    /// Player Removal records where the slot would be short of stand-ins without him, even one too weak to count as
+    /// cover, and, when he is advised to go, says to sign a replacement first.
     public let isStandIn: Bool
-    /// He counts towards the slot's `cover`: a stand-in who is not below the cover share. Player Removal protects real
-    /// cover by the same rule.
+    /// He counts towards the slot's `cover`: a stand-in who is not below the cover share. Player Removal records where
+    /// cover would be thin without him by the same rule and, when he is advised to go, says to sign a replacement first.
     public let countsAsCover: Bool
 }
 

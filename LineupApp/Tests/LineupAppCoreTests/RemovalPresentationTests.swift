@@ -130,9 +130,10 @@ import Testing
         #expect(!spare.spokenText.contains("replacement"))
         let need = RemovalNeed(slot: .D_L, kind: .cover)
         let ending = LoanBlock(loan("e", name: "Loanee", verdict: .endEarly, score: 55, neededAt: need))
-        #expect(ending.spokenText == "End early, Loanee, Score 55, "
-                + "Sign a replacement at left back before he goes: cover there would be thin without him., "
-                + "\u{2212}30 In the first eleven at left back, FM26-era numbers")
+        // Last, as on the row, so its full stop ends the text.
+        #expect(ending.spokenText == "End early, Loanee, Score 55, \u{2212}30 In the first eleven at left back, "
+                + "FM26-era numbers, Sign a replacement at left back before he goes: cover there would be thin without him.")
+        #expect(!ending.spokenText.contains(".,"))
         #expect(!LoanBlock(loan("n", name: "Loanee", verdict: .endEarly)).spokenText.contains("replacement"))
     }
 

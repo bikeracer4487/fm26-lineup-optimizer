@@ -63,11 +63,13 @@ public struct RenewalWorth: Equatable, Sendable {
     public let share: Double
     /// `share` clears the weak line (`Scouting.clearsWeakLine`), so a share exactly 5% under does not.
     public let meetsStandard: Bool
+    /// The share the line lies at (`scoutingWeakShare`, 0.95), so a sentence can tell the two sides of it apart.
+    public let line: Double
     /// The weakest evidence among the parameters behind it.
     public let basis: Evidence
 
     public init(player: PlayerID, slot: SlotID, isGoalkeeperSlot: Bool, age: Int, ability: Int, ahead: WorthAhead,
-                shareToday: Double, share: Double, meetsStandard: Bool, basis: Evidence) {
+                shareToday: Double, share: Double, meetsStandard: Bool, line: Double, basis: Evidence) {
         self.player = player
         self.slot = slot
         self.isGoalkeeperSlot = isGoalkeeperSlot
@@ -77,6 +79,7 @@ public struct RenewalWorth: Equatable, Sendable {
         self.shareToday = shareToday
         self.share = share
         self.meetsStandard = meetsStandard
+        self.line = line
         self.basis = basis
     }
 }
@@ -207,7 +210,7 @@ public enum Renewal {
                     player: id, slot: slot.slot, isGoalkeeperSlot: isGoalkeeperSlot(slot), age: player.age,
                     ability: player.currentAbility, ahead: ahead, shareToday: share(slot, rating: rating, at: ability),
                     share: over, meetsStandard: Scouting.clearsWeakLine(over, average: 1, parameters: parameters),
-                    basis: Evidence.weakest(evidence)!)
+                    line: parameters.scoutingWeakShare.value, basis: Evidence.weakest(evidence)!)
             }
             worths[id] = best
         }

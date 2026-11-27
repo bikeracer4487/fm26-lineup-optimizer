@@ -40,11 +40,12 @@ extension AppModel {
         }
     }
 
-    /// The count on the Contracts pill: the players in the list, those renewed anyway among them; nil while the list is
-    /// not ready or cannot be worked out, and at 0.
+    /// The count on the Contracts pill: the players in the list, those renewed anyway among them (the report's
+    /// `listed`, which are the sheet's rows, counted without building the sheet, since the top row reads it on every
+    /// screen); nil while the list is not ready or cannot be worked out, and at 0.
     public var contractsCount: Int? {
-        guard case .ready(let sheet) = contractsSheet else { return nil }
-        return sheet.rows.isEmpty ? nil : sheet.rows.count
+        guard let listed = try? contractsReport()?.report.get().listed, !listed.isEmpty else { return nil }
+        return listed.count
     }
 
     /// The players the Contracts list for the primary tactic says are not being renewed: those it does not recommend

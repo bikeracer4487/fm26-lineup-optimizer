@@ -29,8 +29,9 @@ extension AppModel {
 
     /// The held players judged against the needs for the tactic the Scouting screen shows: as the needs say while
     /// they are not ready or failed, then nothing pasted while no players are held. Judged when first read after a
-    /// paste, a "Clear" or a replan (an import, a tactic change, a mark), and kept until the next; so a player since
-    /// signed and imported is left out the next time they are read. A hide or a show-again empties what is kept, too.
+    /// paste, a "Clear" or a replan (an import, a tactic change, a mark, a change of today's date), and kept until the
+    /// next; so a player since signed and imported is left out the next time they are read. A hide or a show-again
+    /// empties what is kept, too, and so does a Contracts action that changes who is not being renewed.
     public func candidates(for chosen: UUID?) -> CandidatesState {
         // Both read first, before anything kept is returned, so whatever shows this is told of a new paste and of a
         // player hidden or shown again. The kept judgement is not observed, and `scoutingAction` fills it again before

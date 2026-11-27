@@ -17,10 +17,10 @@ import Testing
     var paid: PaidRange { PaidRange(lowerQuartile: week(2786), highest: week(3905), count: 6) }
 
     func entry(part: ContractPart = .lastYear, standing: ContractStanding, action: RemovalAction? = nil,
-               approachableFrom: Day? = nil) -> ContractEntry {
+               approachableFrom: Day? = nil, reasons: [ContractReason] = []) -> ContractEntry {
         ContractEntry(player: PlayerID(key: "a"), name: "A", part: part, ends: nil, approachableFrom: approachableFrom,
                       standing: standing, action: action, tier: .neither, slot: nil, presentWagePerWeek: 0, worth: nil,
-                      reasons: [], isWanted: false)
+                      reasons: reasons, isWanted: false)
     }
 
     @Test func fixedLines() {
@@ -48,6 +48,58 @@ import Testing
                 == "Out on loan at Wallingford; he can play no slot of this tactic.")
     }
 
+    @Test func theStandingLeavesPlayerRemovalOutWhenAReasonSaysIt() {
+        // Advised to go: the reason says what Player Removal advises, so the standing does not.
+        #expect(AdvisorText.standingLine(entry(standing: .neither, action: .terminate,
+                                               reasons: [.advisedToLeave(.terminate), .noSlot]))
+                == "In neither eleven.")
+        // Not advised to go, with other reasons: the standing says what Player Removal says.
+        #expect(AdvisorText.standingLine(entry(standing: .neither, action: .monitor, reasons: [.markedToSell]))
+                == "In neither eleven; Player Removal says monitor.")
+        #expect(AdvisorText.standingLine(entry(standing: .neither, action: .terminate))
+                == "In neither eleven; Player Removal says terminate.")
+    }
+
+    @Test func aRowsReasonsLeaveOutWhatTheStandingSays() {
+        // Out on loan at no slot: the standing says he can play no slot, so the reasons do not.
+        let away = entry(standing: .outOnLoan(to: "Wallingford", level: nil, slot: nil), reasons: [.markedToSell, .noSlot])
+        #expect(AdvisorText.contractReasonLines(away).lines == ["You have marked him to sell."])
+        #expect(AdvisorText.contractReasonLines(away).replaceFirst == nil)
+        #expect(away.reasons == [.markedToSell, .noSlot])
+        // Here at the club, or out on loan at a slot he can play, the sentence stands.
+        let here = entry(standing: .neither, reasons: [.noSlot])
+        #expect(AdvisorText.contractReasonLines(here).lines == ["He can play no slot of this tactic."])
+        let atSlot = entry(standing: .outOnLoan(to: "Wallingford", level: .belowCover, slot: .D_L), reasons: [.noSlot])
+        #expect(AdvisorText.contractReasonLines(atSlot).lines == ["He can play no slot of this tactic."])
+        // The one that says to sign a replacement first stands apart, the rest in order.
+        let first = entry(standing: .first(.D_L), reasons: [.markedToSell, .advisedToLeave(.sell),
+                                                            .replaceFirst(slot: .D_L, why: .firstChoice)])
+        #expect(AdvisorText.contractReasonLines(first).lines
+                == ["You have marked him to sell.", "Player Removal advises selling him."])
+        #expect(AdvisorText.contractReasonLines(first).replaceFirst
+                == "He is first choice at left back: sign a replacement before he goes.")
+    }
+
+    @Test func theRuleLineSaysWhereTheLineIs() {
+        #expect(AdvisorText.contractsRuleLine(.fm27)
+                == "A player is recommended when he would rate within 5% of the average of your outfield first choices over a new contract: on where his ability could reach at 23 or under, and after the fall expected from 30 (this tool's estimate: no test sets the line or measures the fall).")
+        var changed = EngineParameters.fm27
+        changed.scoutingWeakShare = Parameter(0.925, .derived, source: "test")
+        changed.developingUpToAge = Parameter(21, .derived, source: "test")
+        changed.declineRules = Parameter(DeclineRules(steps: [DeclineStep(fromAge: 28, points: 0),
+                                                              DeclineStep(fromAge: 31, points: 4)], seasons: 2),
+                                         .derived, source: "test")
+        #expect(AdvisorText.contractsRuleLine(changed)
+                == "A player is recommended when he would rate within 7.5% of the average of your outfield first choices over a new contract: on where his ability could reach at 21 or under, and after the fall expected from 31 (this tool's estimate: no test sets the line or measures the fall).")
+        changed.scoutingWeakShare = Parameter(0.9, .derived, source: "test")
+        #expect(AdvisorText.contractsRuleLine(changed).contains("within 10% of"))
+        // With no step that takes anything off, no fall is spoken of.
+        changed.declineRules = Parameter(DeclineRules(steps: [DeclineStep(fromAge: 30, points: 0)], seasons: 2),
+                                         .derived, source: "test")
+        #expect(AdvisorText.contractsRuleLine(changed)
+                == "A player is recommended when he would rate within 10% of the average of your outfield first choices over a new contract: on where his ability could reach at 21 or under (this tool's estimate: no test sets the line).")
+    }
+
     @Test func theReasons() {
         #expect(AdvisorText.contractReasonLine(.markedToSell) == "You have marked him to sell.")
         #expect(AdvisorText.contractReasonLine(.advisedToLeave(.sell)) == "Player Removal advises selling him.")
@@ -58,7 +110,8 @@ import Testing
             #expect(AdvisorText.contractReasonLine(.advisedToLeave(action)) == "Player Removal advises moving him on.")
         }
         let worth = RenewalWorth(player: PlayerID(key: "a"), slot: .DM_R, isGoalkeeperSlot: false, age: 26, ability: 76,
-                                 ahead: .today, shareToday: 0.894, share: 0.894, meetsStandard: false, basis: .derived)
+                                 ahead: .today, shareToday: 0.894, share: 0.894, meetsStandard: false, line: 0.95,
+                                 basis: .derived)
         #expect(AdvisorText.contractReasonLine(.underStandard(worth)) == AdvisorText.worthLine(worth))
         #expect(AdvisorText.contractReasonLine(.underStandard(worth))
                 == "Rates 10.6% under the average of your first eleven, at right defensive midfield.")
