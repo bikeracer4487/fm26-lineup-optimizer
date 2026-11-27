@@ -218,20 +218,9 @@ public enum Scouting {
         let prospects = try prospects(staying: staying, ownClub: ownClub, assignments: assignments, tiers: elevens.tiers,
                                       retraining: retraining, profile: profile, parameters: parameters)
 
-        // The averages the first choices are measured by: outfield slots whose first choice is in position, summed in
-        // the tactic's slot order.
-        let offset = parameters.ratingAbilityOffset.value
-        var ratings: [Double] = []
-        var abilities: [Double] = []
-        for assignment in assignments where !isGoalkeeperSlot(assignment) {
-            guard let place = elevens.first.first(where: { $0.slot == assignment.slot }), !place.isOutOfPosition,
-                  let player = byID[place.player] else { continue }
-            ratings.append(place.rating.value)
-            abilities.append(offset + Double(player.currentAbility))
-        }
-        let averageRating: Double? = ratings.isEmpty ? nil : ratings.reduce(0, +) / Double(ratings.count)
-        let averageAbility: Double? = abilities.isEmpty ? nil : abilities.reduce(0, +) / Double(abilities.count)
-        let averages = WeakLineAverages(rating: averageRating, ability: averageAbility)
+        // The averages the first choices are measured by (`Renewal.standard`).
+        let standard = Renewal.standard(elevens: elevens, depth: depth, players: players, parameters: parameters)
+        let averages = WeakLineAverages(standard)
 
         let outlookEvidence: [Evidence] = prospects.isEmpty ? [] : [
             parameters.growthPerSeason.evidence, parameters.growthProfessionalismRates.evidence,
@@ -350,7 +339,7 @@ public enum Scouting {
                         parameters.ratingAbilityOffset.evidence, depth.basis] + outlookEvidence
         return ScoutingNeeds(going: goingByID.values.sorted { $0.player.key < $1.player.key }, betterPlayers: needs.map(\.need),
                              moreDepth: moreDepth, fine: fine, elevens: elevens, depth: depth,
-                             outfieldAverageRating: averageRating, outfieldAverageAbility: averageAbility,
+                             outfieldAverageRating: standard.rating, outfieldAverageAbility: standard.ability,
                              basis: Evidence.weakest(evidence)!)
     }
 
@@ -453,6 +442,10 @@ struct WeakLineAverages {
     init(rating: Double?, ability: Double?) {
         self.rating = rating
         self.ability = ability
+    }
+
+    init(_ standard: SquadStandard) {
+        self.init(rating: standard.rating, ability: standard.ability)
     }
 
     init(_ needs: ScoutingNeeds) {

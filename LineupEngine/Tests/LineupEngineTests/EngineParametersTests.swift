@@ -994,3 +994,12 @@ import Testing
         #expect(offerProblems { $0.noInterestBidHigh = .infinity }.count == 1)
     }
 }
+
+@Suite struct DeclineRulesParameterTests {
+    @Test func theDeclineRulesAreDerivedAndTheSetStaysSmall() {
+        let entry = EngineParameters.fm27.all.first { $0.name == "declineRules" }
+        #expect(entry?.evidence == .derived)
+        #expect(entry?.source.isEmpty == false)
+        #expect(MemoryLayout<EngineParameters>.size <= 1024)
+    }
+}

@@ -737,6 +737,8 @@ public struct EngineParameters: Sendable {
     public var offerRules: Parameter<OfferRules>
     /// The numbers behind the wage range shown for a player's contract.
     public var wageRangeRules: Parameter<WageRangeRules>
+    /// How many points of ability a player is expected to lose in a season, by the age he begins it.
+    public var declineRules: Parameter<DeclineRules>
     /// Multiplies each day's condition recovery, by the player's jadedness (x is a jadedness).
     public var conditionRecoveryByJadedness: Parameter<[CurvePoint]>
     /// Jadedness does not rise above this.
@@ -1262,6 +1264,13 @@ public struct EngineParameters: Sendable {
                     + "and backupShare are one author's rule of thumb on Sports Interactive's site for FM23 (30% of the "
                     + "wage budget to each of 4 key players, 7 starters and 11 backups). lastYearMonths and fewestWages "
                     + "are the design's choice of 25 November 2026"),
+            declineRules: Parameter(
+                DeclineRules(steps: [DeclineStep(fromAge: 30, points: 3), DeclineStep(fromAge: 32, points: 6),
+                                     DeclineStep(fromAge: 35, points: 9)], seasons: 2),
+                .derived,
+                source: "docs/Research/fm27-age-decline.md: decline from about 30, steep after 31 (an FM24 test of ten "
+                    + "seasons and the FM26 notes, carried over); the sizes and the two seasons are this tool's "
+                    + "estimate, with no test in any version behind them"),
             conditionRecoveryByJadedness: Parameter(
                 [CurvePoint(x: -500, factor: 1), CurvePoint(x: 0, factor: 1), CurvePoint(x: 500, factor: 0.832),
                  CurvePoint(x: 1_000, factor: 0.574)],

@@ -410,6 +410,7 @@ public enum FitnessModel {
         found += League.problems(in: parameters.leagueStandingRules.value)
         found += Offers.problems(in: parameters.offerRules.value)
         found += WageRange.problems(in: parameters.wageRangeRules.value)
+        found += Renewal.problems(in: parameters.declineRules.value)
         found += jadednessProblems(in: parameters)
         return found
     }
