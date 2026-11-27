@@ -9,17 +9,42 @@ public enum WageFigure: Sendable { case agents, presentWage }
 extension AdvisorText {
     // MARK: Fixed lines
 
-    public static let contractsIntro = "Players you are keeping whose contracts are running down, with what your own squad is paid as a guide to a reasonable wage."
-    public static let nobodyInLastYear = "Nobody you are keeping is in the last year of his contract."
+    public static let contractsIntro = "Players worth renewing whose contracts are running down, most important first, with what your own squad is paid as a guide to a reasonable wage."
+    public static let nobodyInLastYear = "Nobody worth renewing is in the last year of his contract."
+    /// On the row of a player the owner chose to renew anyway, above his reasons.
+    public static let listedAtYourChoice = "The tool does not recommend renewing him; he is listed at your choice."
     public static let candidateAskNotKnown = "What he would ask of you is not known; check the agent's figure before you bid."
     public static let candidateWageOtherCurrency = "His wage is in another currency than your squads', so it cannot be compared with them."
     public static let wageEvidenceSentence = "A wage range is what your own players are paid now, not what a player will ask: no test in any version says what a player asks (this tool's estimate)."
 
-    public static func contractPartHeading(_ part: ContractPart) -> String {
-        switch part {
-        case .approachable: "Other clubs can approach them now"
-        case .lastYear: "In their last year"
-        case .noContract: "No contract"
+    // MARK: The reasons
+
+    /// One reason the tool does not recommend renewing him: "You have marked him to sell.", "Player Removal advises
+    /// selling him.", his worth line (`worthLine`), "He is first choice at right defensive midfield: sign a replacement
+    /// before he goes." and the rest.
+    public static func contractReasonLine(_ reason: ContractReason) -> String {
+        switch reason {
+        case .markedToSell: return "You have marked him to sell."
+        case .advisedToLeave(let action):
+            switch action {
+            case .sell: return "Player Removal advises selling him."
+            case .release: return "Player Removal advises releasing him."
+            case .terminate: return "Player Removal advises ending his contract by agreement."
+            // Not actions that move a player on; said plainly should one ever be handed in.
+            case .monitor, .develop, .play, .loanForMatches, .keep: return "Player Removal advises moving him on."
+            }
+        case .underStandard(let worth): return worthLine(worth)
+        case .noSlot: return "He can play no slot of this tactic."
+        case .noStandard: return "Your first eleven has no outfield player in position, so nobody can be measured against it."
+        case .replaceFirst(let slot, let why):
+            let place = PositionText.plain(slot)
+            let then = "sign a replacement before he goes."
+            switch why {
+            case .firstChoice: return "He is first choice at \(place): \(then)"
+            case .secondChoice: return "He is second choice at \(place): \(then)"
+            case .cover: return "He counts as cover at \(place): \(then)"
+            case .standIn: return "Too few players can step in at \(place) without him: \(then)"
+            }
         }
     }
 
@@ -203,9 +228,9 @@ extension AdvisorText {
 
     // MARK: Counts and evidence
 
-    public static func leftOutAsGoingLine(_ count: Int) -> String {
-        count == 1 ? "1 other player in his last year is marked or advised to go."
-                   : "\(count) other players in their last year are marked or advised to go."
+    /// The closed line over the players not recommended: "1 player not recommended for renewal".
+    public static func notRecommendedLine(_ count: Int) -> String {
+        count == 1 ? "1 player not recommended for renewal" : "\(count) players not recommended for renewal"
     }
 
     public static func notRenewingLine(_ count: Int) -> String {

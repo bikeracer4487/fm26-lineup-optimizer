@@ -13,6 +13,7 @@ import Testing
     func day(_ iso: String) -> Day { Day(iso: iso)! }
 
     /// The planner's squad with three years left on every contract, so nobody is in his last year until a test says so.
+    /// Every first choice meets the first eleven's standard and every outfield second choice is under it.
     func squad(_ extra: [Player] = []) throws -> [Player] {
         try PlannerFixture.squad().map { p in var p = p; p.monthsLeft = 36; return p } + extra
     }
@@ -21,6 +22,14 @@ import Testing
         try squad().map { p in
             var p = p
             if p.id == id { change(&p) }
+            return p
+        }
+    }
+
+    func squad(changing changes: [PlayerID: (inout Player) -> Void], _ extra: [Player] = []) throws -> [Player] {
+        try squad(extra).map { p in
+            var p = p
+            changes[p.id]?(&p)
             return p
         }
     }
@@ -56,19 +65,58 @@ import Testing
                            parameters: parameters)
     }
 
-    /// The report on `players`. Player Removal's advice is worked out on them; with `keepingAll` nobody is advised to
-    /// leave, so the other rules can be seen alone. `leaving` is added to those advised to leave.
+    func depth(_ players: [Player]) throws -> DepthReport {
+        try Depth.report(tactic: tactic, players: players, ownClub: ownClub, elevens: try elevens(players),
+                         catalog: catalog, profile: profile, parameters: parameters)
+    }
+
+    func worth(_ id: PlayerID, in players: [Player]) throws -> RenewalWorth? {
+        try Renewal.worths(players: players, ownClub: ownClub, elevens: try elevens(players), depth: try depth(players),
+                           parameters: parameters)[id]
+    }
+
+    /// The report on `players` made `today`. Player Removal's advice is worked out on them, unless `removal` is
+    /// handed in; with `keepingAll` nobody is advised to leave, so the other rules can be seen alone. `leaving` is
+    /// added to those advised to leave.
     func report(_ players: [Player], marks: [PlayerID: SaleMark] = [:], dismissed: Set<PlayerID> = [],
-                keepingAll: Bool = true, leaving: Set<PlayerID> = []) throws -> ContractsReport {
-        var r = try removal(players)
+                wanted: Set<PlayerID> = [], keepingAll: Bool = true, leaving: Set<PlayerID> = [],
+                removal given: RemovalReport? = nil, today: Day? = nil,
+                parameters: EngineParameters? = nil) throws -> ContractsReport {
+        var r = try given ?? removal(players)
         if keepingAll { r.advisedToLeave = [] }
         r.advisedToLeave.formUnion(leaving)
         return try Contracts.report(players: players, ownClub: ownClub, marks: marks, removal: r,
-                                    elevens: try elevens(players), tactic: tactic, dismissed: dismissed, today: today,
-                                    catalog: catalog, profile: profile, parameters: parameters)
+                                    elevens: try elevens(players), depth: try depth(players), tactic: tactic,
+                                    dismissed: dismissed, wanted: wanted, today: today ?? self.today,
+                                    catalog: catalog, profile: profile, parameters: parameters ?? self.parameters)
+    }
+
+    /// Player Removal's report with `id`'s advice needed at `need` in place of its own.
+    func removal(_ players: [Player], needing need: RemovalNeed?, for id: PlayerID) throws -> RemovalReport {
+        let r = try removal(players)
+        let advice = r.advice.map { a in
+            a.player != id ? a : RemovalAdvice(
+                player: a.player, name: a.name, level: a.level, action: a.action, score: a.score, reasons: a.reasons,
+                tier: a.tier, neededAt: need, worth: a.worth, outlook: a.outlook, matchesHere: a.matchesHere,
+                keepReason: a.keepReason, watchReason: a.watchReason, loanOnlyToStart: a.loanOnlyToStart,
+                onYouthContract: a.onYouthContract, isFalseProspect: a.isFalseProspect, isMentor: a.isMentor,
+                releaseCost: a.releaseCost, mutualCost: a.mutualCost, basis: a.basis)
+        }
+        return RemovalReport(advice: advice, loans: r.loans, weeklyWagesAtStake: r.weeklyWagesAtStake,
+                             squadAverageAbility: r.squadAverageAbility, money: r.money,
+                             advisedToLeave: r.advisedToLeave)
     }
 
     func entry(_ id: PlayerID, in report: ContractsReport) -> ContractEntry? { report.listed.first { $0.player == id } }
+
+    func notRecommended(_ id: PlayerID, in report: ContractsReport) -> ContractEntry? {
+        report.notRecommended.first { $0.player == id }
+    }
+
+    /// Every list's players, so a test can see that a player is in exactly one.
+    func everyone(_ report: ContractsReport) -> [PlayerID] {
+        (report.listed + report.notRecommended + report.dismissed).map(\.player)
+    }
 
     // MARK: The part
 
@@ -120,10 +168,7 @@ import Testing
         // The day named on a report made on 27 Feb 2027 is the day he moves.
         let target = id(.D_L, "first")
         let players = try squad(changing: target) { $0.contractEnds = day("2027-08-31"); $0.monthsLeft = 6 }
-        let r = try Contracts.report(players: players, ownClub: ownClub, marks: [:], removal: try removal(players),
-                                     elevens: try elevens(players), tactic: tactic, dismissed: [],
-                                     today: day("2027-02-27"), catalog: catalog, profile: profile,
-                                     parameters: parameters)
+        let r = try report(players, keepingAll: false, today: day("2027-02-27"))
         let e = try #require(entry(target, in: r))
         #expect(e.part == .lastYear && e.approachableFrom == day("2027-02-28"))
     }
@@ -142,148 +187,324 @@ import Testing
         #expect(m.part == .lastYear && m.ends == nil && m.approachableFrom == nil)
     }
 
-    // MARK: Who is listed
+    // MARK: Recommended or not
 
-    @Test func aFirstChoiceInHisLastYearIsListed() throws {
-        let target = id(.D_L, "first")
-        let players = try squad(changing: target) { $0.monthsLeft = 10 }
+    @Test func aPlayerWhoMeetsTheStandardIsListedAndOneUnderItIsNotRecommended() throws {
+        let first = id(.D_L, "first"), second = id(.D_L, "second")
+        let players = try squad(changing: [first: { $0.monthsLeft = 10 }, second: { $0.monthsLeft = 4 }])
+        let firstWorth = try #require(try worth(first, in: players))
+        let secondWorth = try #require(try worth(second, in: players))
+        try #require(firstWorth.meetsStandard && !secondWorth.meetsStandard)
+
         let r = try report(players)
-        #expect(r.listed.map(\.player) == [target])
-        let e = try #require(entry(target, in: r))
+        #expect(r.listed.map(\.player) == [first])
+        let e = try #require(entry(first, in: r))
         #expect(e.standing == .first(.D_L) && e.tier == .firstEleven && e.slot == .D_L)
         #expect(e.name == "D_L first" && e.presentWagePerWeek == 500)
-        let advice = try #require(try removal(players).advice.first { $0.player == target })
+        #expect(e.worth == firstWorth && e.reasons.isEmpty && !e.isWanted)
+        let advice = try #require(try removal(players).advice.first { $0.player == first })
         #expect(e.action == advice.action)
-        #expect(r.dismissed.isEmpty && r.leftOutAsGoing == 0)
+
+        #expect(r.notRecommended.map(\.player) == [second])
+        let n = try #require(notRecommended(second, in: r))
+        #expect(n.part == .approachable && n.standing == .second(.D_L) && n.tier == .secondEleven && n.slot == .D_L)
+        #expect(n.worth == secondWorth && !n.isWanted)
+        #expect(n.reasons == [.underStandard(secondWorth), .replaceFirst(slot: .D_L, why: .secondChoice)])
+        #expect(r.dismissed.isEmpty)
         #expect(r.basis == .derived)
-        // Nobody in his last year: nobody listed.
+
+        // Nobody in his last year: nobody in any list.
         let none = try report(try squad())
-        #expect(none.listed.isEmpty && none.dismissed.isEmpty && none.leftOutAsGoing == 0)
+        #expect(everyone(none).isEmpty)
     }
 
-    @Test func aSecondChoiceIsListedAtHisSlot() throws {
-        let target = id(.ST_C, "second")
-        let e = try #require(entry(target, in: try report(try squad(changing: target) { $0.monthsLeft = 4 })))
-        #expect(e.part == .approachable && e.standing == .second(.ST_C) && e.tier == .secondEleven && e.slot == .ST_C)
+    @Test func theListsAreOrderedByWorthThenEndDay() throws {
+        let players0 = try squad()
+        func share(_ id: PlayerID) throws -> Double { try #require(try worth(id, in: players0)).share }
+        // The shares the order rests on: the attacking midfielder and the striker highest, then the goalkeeper, the
+        // two defensive midfielders level, the full backs level and the centre-backs level.
+        try #require(try share(id(.AM_C, "first")) > share(id(.ST_C, "first")))
+        try #require(try share(id(.ST_C, "first")) > share(id(.GK, "first")))
+        try #require(try share(id(.GK, "first")) > share(id(.DM_L, "first")))
+        try #require(try share(id(.DM_L, "first")) == share(id(.DM_R, "first")))
+        try #require(try share(id(.DM_R, "first")) > share(id(.D_L, "first")))
+        try #require(try share(id(.D_L, "first")) == share(id(.D_R, "first")))
+        try #require(try share(id(.D_R, "first")) > share(id(.D_CL, "first")))
+        try #require(try share(id(.D_CL, "first")) == share(id(.D_CR, "first")))
+        try #require(try share(id(.AM_C, "second")) > share(id(.D_L, "second")))
+
+        let nowhere = player("Nowhere")
+        let ends: [PlayerID: (inout Player) -> Void] = [
+            // The striker's end day is the sooner, and his worth still puts him second.
+            id(.AM_C, "first"): { $0.monthsLeft = 10 },
+            id(.ST_C, "first"): { $0.contractEnds = self.day("2027-03-31"); $0.monthsLeft = 4 },
+            id(.GK, "first"): { $0.monthsLeft = 11 },
+            // Level in worth and in months: the order handed in.
+            id(.DM_L, "first"): { $0.monthsLeft = 7 },
+            id(.DM_R, "first"): { $0.monthsLeft = 7 },
+            // Level in worth: an end day before none.
+            id(.D_L, "first"): { $0.monthsLeft = 5 },
+            id(.D_R, "first"): { $0.contractEnds = self.day("2027-04-30"); $0.monthsLeft = 5 },
+            // Level in worth, neither with an end day: fewer months first.
+            id(.D_CL, "first"): { $0.monthsLeft = 8 },
+            id(.D_CR, "first"): { $0.monthsLeft = 4 },
+            // Not recommended, in the same order, and one with no worth last.
+            id(.AM_C, "second"): { $0.monthsLeft = 12 },
+            id(.D_L, "second"): { $0.contractEnds = self.day("2027-01-31"); $0.monthsLeft = 2 },
+        ]
+        let players = try squad(changing: ends, [nowhere])
+        let tied = [id(.DM_L, "first"), id(.DM_R, "first")]
+        func expected(_ tie: [PlayerID]) -> [PlayerID] {
+            [id(.AM_C, "first"), id(.ST_C, "first"), id(.GK, "first")] + tie
+                + [id(.D_R, "first"), id(.D_L, "first"), id(.D_CR, "first"), id(.D_CL, "first")]
+        }
+        let order = players.map(\.id).filter(tied.contains)
+        let r = try report(players)
+        #expect(r.listed.map(\.player) == expected(order))
+        #expect(r.notRecommended.map(\.player) == [id(.AM_C, "second"), id(.D_L, "second"), nowhere.id])
+        // Reversing the players changes only the tie.
+        let reversed = try report(players.reversed())
+        #expect(reversed.listed.map(\.player) == expected(order.reversed()))
+        #expect(reversed.notRecommended.map(\.player) == r.notRecommended.map(\.player))
+        // The players set aside keep the same order.
+        let aside = try report(players, dismissed: Set(r.listed.map(\.player)))
+        #expect(aside.listed.isEmpty && aside.dismissed.map(\.player) == expected(order))
     }
 
-    @Test func aPlayerMarkedOrAdvisedToLeaveIsCountedAndNotListed() throws {
+    @Test func aPlayerMarkedToSellIsNotRecommendedAndOneMarkedToLoanOutIsJudgedLikeAnyone() throws {
         let target = id(.D_L, "first")
         let players = try squad(changing: target) { $0.monthsLeft = 10 }
-        for mark in SaleMark.allCases {
-            let r = try report(players, marks: [target: mark])
-            #expect(r.listed.isEmpty && r.dismissed.isEmpty && r.leftOutAsGoing == 1)
-        }
-        let leaving = try report(players, leaving: [target])
-        #expect(leaving.listed.isEmpty && leaving.dismissed.isEmpty && leaving.leftOutAsGoing == 1)
-        // Going and dismissed: counted as going, in neither list.
+        let sold = try report(players, marks: [target: .toSell])
+        #expect(sold.listed.isEmpty && sold.dismissed.isEmpty)
+        let e = try #require(notRecommended(target, in: sold))
+        #expect(e.reasons == [.markedToSell, .replaceFirst(slot: .D_L, why: .firstChoice)])
+        // Marked to sell and set aside: not recommended all the same.
         let both = try report(players, marks: [target: .toSell], dismissed: [target])
-        #expect(both.listed.isEmpty && both.dismissed.isEmpty && both.leftOutAsGoing == 1)
+        #expect(both.notRecommended.map(\.player) == [target] && both.dismissed.isEmpty)
+
+        let loaned = try report(players, marks: [target: .toLoanOut])
+        #expect(loaned.listed.map(\.player) == [target] && loaned.notRecommended.isEmpty)
+        #expect(try #require(entry(target, in: loaned)).reasons.isEmpty)
+        // Under the standard, a mark to loan out adds nothing.
+        let second = id(.D_L, "second")
+        let under = try report(try squad(changing: second) { $0.monthsLeft = 10 }, marks: [second: .toLoanOut])
+        #expect(try #require(notRecommended(second, in: under)).reasons.first.map {
+            if case .underStandard = $0 { true } else { false }
+        } == true)
     }
 
-    @Test func aPlayerOnLoanHereIsInNoListAndNotCounted() throws {
+    /// The left back's second choice out of contract with a poor character, his potential at his ability: under the
+    /// standard, and advised to go.
+    func poorCharacter(_ p: inout Player) {
+        p.contractType = .outOfContract
+        p.monthsLeft = nil
+        p.potentialAbility = p.currentAbility
+        for (attribute, value) in [(Attribute.controversy, 20), (.ambition, 1), (.temperament, 1), (.consistency, 1)] {
+            p.attributes[attribute] = value
+        }
+    }
+
+    @Test func aPlayerAdvisedToLeaveIsNotRecommendedWithTheAction() throws {
+        let target = id(.D_L, "second")
+        let players = try squad(changing: target, poorCharacter)
+        let advised = try removal(players)
+        try #require(advised.advisedToLeave.contains(target))
+        let advice = try #require(advised.advice.first { $0.player == target })
+        let w = try #require(try worth(target, in: players))
+        let r = try report(players, keepingAll: false)
+        let e = try #require(notRecommended(target, in: r))
+        #expect(e.part == .noContract)
+        #expect(e.reasons == [.advisedToLeave(advice.action), .underStandard(w),
+                              .replaceFirst(slot: .D_L, why: .secondChoice)])
+        // Not advised to go: the same player keeps the other reasons alone.
+        let kept = try report(players)
+        #expect(try #require(notRecommended(target, in: kept)).reasons
+                == [.underStandard(w), .replaceFirst(slot: .D_L, why: .secondChoice)])
+        // A player who meets the standard and is advised to go is not recommended either.
+        let first = id(.D_L, "first")
+        let leaving = try report(try squad(changing: first) { $0.monthsLeft = 10 }, leaving: [first])
+        let f = try #require(notRecommended(first, in: leaving))
+        let action = try #require(try removal(try squad(changing: first) { $0.monthsLeft = 10 }).advice
+            .first { $0.player == first }?.action)
+        #expect(f.reasons == [.advisedToLeave(action), .replaceFirst(slot: .D_L, why: .firstChoice)])
+    }
+
+    @Test func everyReasonThatAppliesIsGivenInOrder() throws {
+        // A first choice at left back who is under the standard: the left backs weakened.
+        let first = id(.D_L, "first"), second = id(.D_L, "second")
+        let players = try squad(changing: [
+            first: { p in p.monthsLeft = 10; for a in Attribute.allCases { p.attributes[a] = 12 } },
+            second: { p in for a in Attribute.allCases { p.attributes[a] = 10 } },
+        ])
+        let w = try #require(try worth(first, in: players))
+        try #require(!w.meetsStandard && w.slot == .D_L)
+        let r = try report(players, marks: [first: .toSell], leaving: [first])
+        let e = try #require(notRecommended(first, in: r))
+        try #require(e.standing == .first(.D_L))
+        let action = try #require(try removal(players).advice.first { $0.player == first }?.action)
+        #expect(e.reasons == [.markedToSell, .advisedToLeave(action), .underStandard(w),
+                              .replaceFirst(slot: .D_L, why: .firstChoice)])
+    }
+
+    @Test func aFirstChoiceNotRecommendedIsToReplaceFirstAndOneInNeitherElevenIsNot() throws {
+        let first = id(.D_L, "first")
+        let backup = player("Backup", all: 10, familiarity: 20)
+        let players = try squad(changing: first, { $0.monthsLeft = 10 }) + [backup]
+        let backupAdvice = try #require(try removal(players).advice.first { $0.player == backup.id })
+        try #require(backupAdvice.tier == .backup && backupAdvice.neededAt == nil)
+        let r = try report(players, marks: [first: .toSell])
+        #expect(try #require(notRecommended(first, in: r)).reasons.last == .replaceFirst(slot: .D_L, why: .firstChoice))
+        let b = try #require(notRecommended(backup.id, in: r))
+        #expect(b.standing == .neither)
+        #expect(b.reasons.count == 1 && b.reasons.allSatisfy { if case .underStandard = $0 { true } else { false } })
+
+        // In neither eleven and needed as cover or as a stand-in: Player Removal's need says so.
+        for (kind, why) in [(RemovalNeedKind.cover, ReplaceWhy.cover), (.standIn, .standIn)] {
+            let needed = try removal(players, needing: RemovalNeed(slot: .D_L, kind: kind), for: backup.id)
+            let n = try #require(notRecommended(backup.id, in: try report(players, removal: needed)))
+            #expect(n.reasons.last == .replaceFirst(slot: .D_L, why: why))
+            #expect(n.reasons.count == 2)
+        }
+        // A player the tool recommends gets no replacement reason, however he is needed.
+        let needed = try removal(players, needing: RemovalNeed(slot: .D_L, kind: .cover), for: first)
+        #expect(try #require(entry(first, in: try report(players, removal: needed))).reasons.isEmpty)
+    }
+
+    @Test func aPlayerOutOnLoanUnderTheStandardHasNoReplacementReason() throws {
+        let away = loanedOut(all: 11)
+        let players = try squad([away])
+        let w = try #require(try worth(away.id, in: players))
+        try #require(!w.meetsStandard)
+        let e = try #require(notRecommended(away.id, in: try report(players)))
+        #expect(e.standing == .outOnLoan(to: "Wallingford", level: .wouldCountAsCover, slot: .D_L))
+        #expect(e.reasons == [.underStandard(w)] && e.action == nil)
+    }
+
+    @Test func aYouthContractPlayerIsJudgedOnHisWorthAlone() throws {
+        // A seventeen-year-old left back in neither eleven whose reach meets the standard.
+        let young = player("Young", age: 17, all: 12, familiarity: 14, currentAbility: 80, potentialAbility: 200) { p in
+            p.attributes[.professionalism] = 20
+            p.contractType = .youth
+        }
+        let players = try squad([young])
+        let advice = try #require(try removal(players).advice.first { $0.player == young.id })
+        try #require(advice.tier == .backup)
+        let w = try #require(try worth(young.id, in: players))
+        try #require(w.meetsStandard)
+        let e = try #require(entry(young.id, in: try report(players)))
+        #expect(e.standing == .neither && e.tier == .neither && e.worth == w && e.reasons.isEmpty)
+
+        // The second choice at left back on a youth contract, under the standard: not recommended, his place in the
+        // second eleven notwithstanding.
+        let second = id(.D_L, "second")
+        let youth = try squad(changing: second) { $0.contractType = .youth; $0.monthsLeft = 0 }
+        let n = try #require(notRecommended(second, in: try report(youth)))
+        #expect(n.part == .approachable && n.standing == .second(.D_L))
+        // With no contract and under the standard, the same.
+        let lapsed = try squad(changing: second) { $0.contractType = .outOfContract; $0.monthsLeft = nil }
+        #expect(notRecommended(second, in: try report(lapsed))?.part == .noContract)
+    }
+
+    @Test func aPlayerWhoCanPlayNoSlotIsNotRecommendedAndSaysSo() throws {
+        let nowhere = player("Nowhere")
+        let r = try report(try squad([nowhere]))
+        let e = try #require(notRecommended(nowhere.id, in: r))
+        #expect(e.worth == nil && e.reasons == [.noSlot] && e.standing == .neither)
+    }
+
+    @Test func aPlayerOnLoanHereIsInNoList() throws {
         let target = id(.D_L, "first")
         let players = try squad(changing: target) { $0.monthsLeft = 10; $0.club = "Other FC"; $0.loanedTo = "Oxford City" }
-        let r = try report(players, marks: [target: .toSell])
-        #expect(r.listed.isEmpty && r.dismissed.isEmpty && r.leftOutAsGoing == 0)
+        #expect(everyone(try report(players, marks: [target: .toSell])).isEmpty)
+        #expect(everyone(try report(players, wanted: [target])).isEmpty)
     }
+
+    // MARK: The owner's choices
 
     @Test func aDismissedPlayerIsInDismissedAndNotListed() throws {
         let target = id(.D_L, "first")
         let r = try report(try squad(changing: target) { $0.monthsLeft = 10 }, dismissed: [target])
-        #expect(r.listed.isEmpty)
+        #expect(r.listed.isEmpty && r.notRecommended.isEmpty)
         #expect(r.dismissed.map(\.player) == [target])
-        #expect(r.leftOutAsGoing == 0)
+        #expect(r.dismissed.first?.reasons == [] && r.dismissed.first?.isWanted == false)
     }
 
-    /// A young left back on a youth contract with 10 months left, a backup, whose reach at left back is just short of
-    /// the second choice's rating there (`making` − 1) or reaches it (`making`).
-    func youngster(potentialAbility: Int) -> Player {
-        player("Young", age: 17, all: 10, familiarity: 12, currentAbility: 80, potentialAbility: potentialAbility) { p in
-            p.attributes[.professionalism] = 20
-            p.contractType = .youth
+    @Test func renewAnywayListsHimAsWantedWithHisReasons() throws {
+        let second = id(.D_L, "second")
+        let players = try squad(changing: second) { $0.monthsLeft = 10 }
+        let w = try #require(try worth(second, in: players))
+        let r = try report(players, wanted: [second])
+        #expect(r.notRecommended.isEmpty && r.dismissed.isEmpty)
+        let e = try #require(entry(second, in: r))
+        #expect(e.isWanted)
+        #expect(e.reasons == [.underStandard(w), .replaceFirst(slot: .D_L, why: .secondChoice)])
+        // Wanted and then set aside: with the players set aside, still wanted.
+        let aside = try report(players, dismissed: [second], wanted: [second])
+        #expect(aside.listed.isEmpty && aside.notRecommended.isEmpty)
+        #expect(aside.dismissed.map(\.player) == [second] && aside.dismissed.first?.isWanted == true)
+    }
+
+    @Test func aWantedPlayerTheToolNowRecommendsIsAnOrdinaryRow() throws {
+        let first = id(.D_L, "first")
+        let r = try report(try squad(changing: first) { $0.monthsLeft = 10 }, wanted: [first])
+        let e = try #require(entry(first, in: r))
+        #expect(!e.isWanted && e.reasons.isEmpty)
+        #expect(r.listed.count == 1 && r.notRecommended.isEmpty && r.dismissed.isEmpty)
+    }
+
+    @Test func aDismissedPlayerTheToolNoLongerRecommendsIsUnderNotRecommended() throws {
+        let second = id(.D_L, "second")
+        let r = try report(try squad(changing: second) { $0.monthsLeft = 10 }, dismissed: [second])
+        #expect(r.listed.isEmpty && r.dismissed.isEmpty)
+        #expect(r.notRecommended.map(\.player) == [second])
+    }
+
+    @Test func notBeingRenewedIsTheNotRecommendedAndTheDismissed() throws {
+        let players = try squad(changing: [
+            id(.D_L, "first"): { $0.monthsLeft = 10 },
+            id(.D_R, "first"): { $0.monthsLeft = 10 },
+            id(.D_L, "second"): { $0.monthsLeft = 10 },
+            id(.D_R, "second"): { $0.monthsLeft = 10 },
+        ])
+        let r = try report(players, dismissed: [id(.D_L, "first")], wanted: [id(.D_R, "second")])
+        #expect(r.listed.map(\.player).sorted { $0.key < $1.key } == [id(.D_R, "first"), id(.D_R, "second")])
+        #expect(r.notBeingRenewed == [id(.D_L, "first"), id(.D_L, "second")])
+    }
+
+    // MARK: No standard, and errors
+
+    @Test func withNoStandardEveryoneIsNotRecommendedAndSaysWhy() throws {
+        // A goalkeeper and a player who can play no slot: the first eleven has no outfield player in position.
+        var keeper = try #require(try PlannerFixture.squad().first { $0.id == id(.GK, "first") })
+        keeper.monthsLeft = 10
+        let nowhere = player("Nowhere")
+        let players = [keeper, nowhere]
+        let standard = Renewal.standard(elevens: try elevens(players), depth: try depth(players), players: players,
+                                        parameters: parameters)
+        try #require(standard.rating == nil)
+        let r = try report(players, marks: [nowhere.id: .toSell])
+        #expect(r.listed.isEmpty && r.dismissed.isEmpty)
+        #expect(Set(r.notRecommended.map(\.player)) == [keeper.id, nowhere.id])
+        let k = try #require(notRecommended(keeper.id, in: r))
+        #expect(k.worth == nil && k.reasons == [.noStandard, .replaceFirst(slot: .GK, why: .firstChoice)])
+        let n = try #require(notRecommended(nowhere.id, in: r))
+        #expect(n.reasons.prefix(2) == [.markedToSell, .noStandard])
+        // Wanted all the same: listed at the owner's choice.
+        let wanted = try report(players, wanted: [keeper.id])
+        #expect(wanted.listed.map(\.player) == [keeper.id] && wanted.listed.first?.isWanted == true)
+    }
+
+    @Test func aYoungPlayerOutOnLoanMissingAnAttributeStopsTheListNamingHim() throws {
+        let away = loanedOut(all: 14) { p in p.age = 20; p.attributes[.professionalism] = nil }
+        let players = try squad([away])
+        // Player Removal does not review a player out on loan, so its report on the others is the one handed in.
+        let others = try removal(try squad())
+        #expect(throws: RatingError.missingAttribute(player: "Away", attribute: .professionalism)) {
+            try report(players, removal: others)
         }
-    }
-
-    /// The least potential that takes the youngster's reach at left back to the second choice's rating there.
-    func makingPotential() throws -> Int {
-        let probe = youngster(potentialAbility: 80)
-        let players = try squad([probe])
-        let tiers = try elevens(players).tiers
-        let his = try #require(tiers.ratings[probe.id]?[.D_L])
-        let second = try #require(tiers.ratings[id(.D_L, "second")]?[.D_L])
-        let offset = parameters.ratingAbilityOffset.value
-        return Int(((offset + 80) * second / his - offset).rounded(.up))
-    }
-
-    @Test func aYoungPlayerOnAYouthContractIsListedOnlyWhenWorthDeveloping() throws {
-        let making = try makingPotential()
-        let cover = youngster(potentialAbility: making - 1)
-        let coverPlayers = try squad([cover])
-        let coverAdvice = try #require(try removal(coverPlayers).advice.first { $0.player == cover.id })
-        try #require(coverAdvice.tier == .backup && coverAdvice.outlook?.level == .couldBeCover)
-        let notListed = try report(coverPlayers, keepingAll: false)
-        #expect(entry(cover.id, in: notListed) == nil && notListed.dismissed.isEmpty && notListed.leftOutAsGoing == 0)
-
-        let second = youngster(potentialAbility: making)
-        let secondPlayers = try squad([second])
-        let secondAdvice = try #require(try removal(secondPlayers).advice.first { $0.player == second.id })
-        try #require(secondAdvice.tier == .backup && secondAdvice.outlook?.level == .couldMakeSecond)
-        let e = try #require(entry(second.id, in: try report(secondPlayers)))
-        #expect(e.standing == .neither && e.tier == .neither && e.slot == nil && e.action == secondAdvice.action)
-    }
-
-    /// FMRTE rounds months down, so a youth contract in its last month reads 0 months left; the gate still holds.
-    @Test func aYouthContractAtNoMonthsLeftPassesTheGateOnlyInAnEleven() throws {
-        let making = try makingPotential()
-        var last = youngster(potentialAbility: making - 1)
-        last.monthsLeft = 0
-        let players = try squad([last])
-        let advice = try #require(try removal(players).advice.first { $0.player == last.id })
-        try #require(advice.tier == .backup && advice.outlook.map(Removal.isWorthDeveloping) != true)
-        for keepingAll in [true, false] {
-            let r = try report(players, keepingAll: keepingAll)
-            #expect(entry(last.id, in: r) == nil && r.dismissed.isEmpty && r.leftOutAsGoing == 0)
-        }
-        // In the second eleven at 0 months left: listed.
-        let target = id(.D_L, "second")
-        let second = try #require(entry(target, in: try report(try squad(changing: target) {
-            $0.contractType = .youth; $0.monthsLeft = 0
-        })))
-        #expect(second.part == .approachable && second.standing == .second(.D_L))
-    }
-
-    @Test func aPlayerTheGateLeavesOutIsNotCountedAsGoing() throws {
-        func outOfContract(_ p: inout Player) { p.contractType = .outOfContract; p.monthsLeft = nil; p.wagePerWeek = 0 }
-        let backup = player("Backup", change: outOfContract)
-        let players = try squad([backup])
-        for mark in SaleMark.allCases {
-            let r = try report(players, marks: [backup.id: mark])
-            #expect(entry(backup.id, in: r) == nil && r.leftOutAsGoing == 0)
-        }
-        #expect(try report(players, leaving: [backup.id]).leftOutAsGoing == 0)
-    }
-
-    @Test func aFullTimeBackupIsListedWhateverHisStanding() throws {
-        let backup = player("Backup")
-        let players = try squad([backup])
-        try #require(try removal(players).advice.first { $0.player == backup.id }?.outlook == nil)
-        let e = try #require(entry(backup.id, in: try report(players)))
-        #expect(e.standing == .neither && e.tier == .neither && e.part == .lastYear)
-    }
-
-    @Test func aPlayerWithNoContractIsListedOnlyInAnEleven() throws {
-        func outOfContract(_ p: inout Player) { p.contractType = .outOfContract; p.monthsLeft = nil; p.wagePerWeek = 0 }
-        let backup = player("Backup", change: outOfContract)
-        let r = try report(try squad([backup]))
-        #expect(entry(backup.id, in: r) == nil && r.leftOutAsGoing == 0)
-        let target = id(.D_L, "second")
-        let second = try #require(entry(target, in: try report(try squad(changing: target, outOfContract))))
-        #expect(second.part == .noContract && second.standing == .second(.D_L) && second.ends == nil)
-        #expect(second.presentWagePerWeek == 0)
-        // Months left below zero is no contract too.
-        let lapsed = try #require(entry(target, in: try report(try squad(changing: target) { $0.monthsLeft = -1 })))
-        #expect(lapsed.part == .noContract)
+        // Not in his last year: not measured, so the list stands.
+        let later = loanedOut(all: 14) { p in p.age = 20; p.attributes[.professionalism] = nil; p.monthsLeft = 30 }
+        #expect(everyone(try report(try squad([later]), removal: others)).isEmpty)
     }
 
     // MARK: A player out on loan
@@ -298,86 +519,22 @@ import Testing
         let e = try #require(entry(away.id, in: try report(try squad([away]))))
         #expect(e.standing == .outOnLoan(to: "Wallingford", level: .wouldStart, slot: .D_L))
         #expect(e.tier == .firstEleven && e.slot == .D_L && e.action == nil && e.part == .lastYear)
+        #expect(e.worth?.meetsStandard == true)
     }
 
     @Test func aPlayerOutOnLoanWhoCanPlayNoSlotStandsNowhere() throws {
         let away = player("Away") { p in p.loanedTo = "Wallingford" }
-        let e = try #require(entry(away.id, in: try report(try squad([away]))))
+        let e = try #require(notRecommended(away.id, in: try report(try squad([away]))))
         #expect(e.standing == .outOnLoan(to: "Wallingford", level: nil, slot: nil))
-        #expect(e.tier == .neither && e.slot == nil && e.action == nil)
+        #expect(e.tier == .neither && e.slot == nil && e.action == nil && e.reasons == [.noSlot])
     }
 
-    @Test func aPlayerOutOnLoanOnAYouthContractIsListedOnlyInAnEleven() throws {
-        let full = loanedOut(all: 11)
-        let e = try #require(entry(full.id, in: try report(try squad([full]))))
-        try #require(e.standing == .outOnLoan(to: "Wallingford", level: .wouldCountAsCover, slot: .D_L))
-        #expect(e.tier == .neither)
-        let youth = loanedOut(all: 11) { $0.contractType = .youth }
-        let r = try report(try squad([youth]))
-        #expect(entry(youth.id, in: r) == nil && r.leftOutAsGoing == 0)
-        // On a youth contract at a level that would start: listed.
-        let starter = loanedOut(all: 18) { $0.contractType = .youth }
-        #expect(entry(starter.id, in: try report(try squad([starter])))?.tier == .firstEleven)
-    }
-
-    @Test func aPlayerOutOnLoanWithNoContractIsListedOnlyInAnEleven() throws {
-        func outOfContract(_ p: inout Player) { p.contractType = .outOfContract; p.monthsLeft = nil; p.wagePerWeek = 0 }
-        let cover = loanedOut(all: 11, change: outOfContract)
-        let players = try squad([cover])
-        let r = try report(players)
-        #expect(entry(cover.id, in: r) == nil && r.dismissed.isEmpty && r.leftOutAsGoing == 0)
-        // At a level that would start: listed, in the part with no contract.
-        let starter = loanedOut(all: 18, change: outOfContract)
-        let e = try #require(entry(starter.id, in: try report(try squad([starter]))))
+    @Test func aPlayerOutOnLoanOnAYouthContractOrWithNoneIsJudgedOnHisWorth() throws {
+        let youth = loanedOut(all: 18) { $0.contractType = .youth }
+        #expect(entry(youth.id, in: try report(try squad([youth])))?.tier == .firstEleven)
+        let lapsed = loanedOut(all: 18) { p in p.contractType = .outOfContract; p.monthsLeft = nil; p.wagePerWeek = 0 }
+        let e = try #require(entry(lapsed.id, in: try report(try squad([lapsed]))))
         #expect(e.part == .noContract && e.tier == .firstEleven)
-    }
-
-    // MARK: Order
-
-    @Test func thePartsComeInOrderAndTheSoonerEndFirst() throws {
-        // Approachable up to 25 May 2027, the last year up to 25 Nov 2027.
-        let ends: [PlayerID: (Day?, Int?)] = [
-            id(.GK, "second"): (nil, 8),
-            id(.D_L, "second"): (day("2027-04-30"), 5),
-            id(.D_R, "second"): (day("2027-03-31"), 4),
-            id(.D_CL, "second"): (nil, -1),
-            id(.D_CR, "second"): (day("2027-04-30"), 5),
-            id(.DM_L, "second"): (day("2027-06-30"), 7),
-            id(.AM_L, "second"): (nil, 7),
-            id(.AM_C, "second"): (nil, 4),
-            id(.ST_C, "second"): (day("2027-05-31"), 6),
-        ]
-        let players = try squad().map { p in
-            var p = p
-            if let (end, months) = ends[p.id] { p.contractEnds = end; p.monthsLeft = months }
-            return p
-        }
-        let tied = [id(.D_L, "second"), id(.D_CR, "second")]
-        func expected(_ tie: [PlayerID]) -> [PlayerID] {
-            [id(.D_R, "second")] + tie + [id(.AM_C, "second"), id(.ST_C, "second"), id(.DM_L, "second"),
-                                          id(.AM_L, "second"), id(.GK, "second"), id(.D_CL, "second")]
-        }
-        // D_L and D_CR end on one day and keep the order of `players`.
-        let order = players.map(\.id).filter(tied.contains)
-        let r = try report(players)
-        #expect(r.listed.map(\.player) == expected(order))
-        #expect(r.listed.map(\.part) == [.approachable, .approachable, .approachable, .approachable,
-                                         .lastYear, .lastYear, .lastYear, .lastYear, .noContract])
-        // Reversing the players changes only the tie.
-        let reversed = try report(players.reversed())
-        #expect(reversed.listed.map(\.player) == expected(order.reversed()))
-    }
-
-    @Test func dismissedPlayersAreOrderedAsTheListIs() throws {
-        let a = id(.D_L, "second"), b = id(.D_R, "second")
-        let players = try squad().map { p in
-            var p = p
-            if p.id == a { p.monthsLeft = 11 }
-            if p.id == b { p.monthsLeft = 3 }
-            return p
-        }
-        let r = try report(players, dismissed: [a, b])
-        #expect(r.listed.isEmpty && r.dismissed.map(\.player) == [b, a])
     }
 
     @Test func badParametersAreRefused() throws {
@@ -387,9 +544,7 @@ import Testing
                                        .derived, source: "test")
         let players = try squad()
         #expect(throws: PlanError.self) {
-            try Contracts.report(players: players, ownClub: ownClub, marks: [:], removal: try removal(players),
-                                 elevens: try elevens(players), tactic: tactic, dismissed: [], today: today,
-                                 catalog: catalog, profile: profile, parameters: bad)
+            try report(players, parameters: bad)
         }
     }
 }

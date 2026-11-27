@@ -19,14 +19,14 @@ import Testing
     func entry(part: ContractPart = .lastYear, standing: ContractStanding, action: RemovalAction? = nil,
                approachableFrom: Day? = nil) -> ContractEntry {
         ContractEntry(player: PlayerID(key: "a"), name: "A", part: part, ends: nil, approachableFrom: approachableFrom,
-                      standing: standing, action: action, tier: .neither, slot: nil, presentWagePerWeek: 0)
+                      standing: standing, action: action, tier: .neither, slot: nil, presentWagePerWeek: 0, worth: nil,
+                      reasons: [], isWanted: false)
     }
 
     @Test func fixedLines() {
-        #expect(AdvisorText.contractsIntro == "Players you are keeping whose contracts are running down, with what your own squad is paid as a guide to a reasonable wage.")
-        #expect(AdvisorText.nobodyInLastYear == "Nobody you are keeping is in the last year of his contract.")
-        #expect(ContractPart.allCases.map { AdvisorText.contractPartHeading($0) }
-                == ["Other clubs can approach them now", "In their last year", "No contract"])
+        #expect(AdvisorText.contractsIntro == "Players worth renewing whose contracts are running down, most important first, with what your own squad is paid as a guide to a reasonable wage.")
+        #expect(AdvisorText.nobodyInLastYear == "Nobody worth renewing is in the last year of his contract.")
+        #expect(AdvisorText.listedAtYourChoice == "The tool does not recommend renewing him; he is listed at your choice.")
         #expect(AdvisorText.candidateAskNotKnown == "What he would ask of you is not known; check the agent's figure before you bid.")
         #expect(AdvisorText.candidateWageOtherCurrency == "His wage is in another currency than your squads', so it cannot be compared with them.")
         #expect(AdvisorText.wageEvidenceSentence == "A wage range is what your own players are paid now, not what a player will ask: no test in any version says what a player asks (this tool's estimate).")
@@ -46,6 +46,33 @@ import Testing
         }
         #expect(AdvisorText.standingLine(entry(standing: .outOnLoan(to: "Wallingford", level: nil, slot: nil)))
                 == "Out on loan at Wallingford; he can play no slot of this tactic.")
+    }
+
+    @Test func theReasons() {
+        #expect(AdvisorText.contractReasonLine(.markedToSell) == "You have marked him to sell.")
+        #expect(AdvisorText.contractReasonLine(.advisedToLeave(.sell)) == "Player Removal advises selling him.")
+        #expect(AdvisorText.contractReasonLine(.advisedToLeave(.release)) == "Player Removal advises releasing him.")
+        #expect(AdvisorText.contractReasonLine(.advisedToLeave(.terminate))
+                == "Player Removal advises ending his contract by agreement.")
+        for action in [RemovalAction.monitor, .develop, .play, .loanForMatches, .keep] {
+            #expect(AdvisorText.contractReasonLine(.advisedToLeave(action)) == "Player Removal advises moving him on.")
+        }
+        let worth = RenewalWorth(player: PlayerID(key: "a"), slot: .DM_R, isGoalkeeperSlot: false, age: 26, ability: 76,
+                                 ahead: .today, shareToday: 0.894, share: 0.894, meetsStandard: false, basis: .derived)
+        #expect(AdvisorText.contractReasonLine(.underStandard(worth)) == AdvisorText.worthLine(worth))
+        #expect(AdvisorText.contractReasonLine(.underStandard(worth))
+                == "Rates 10.6% under the average of your first eleven, at right defensive midfield.")
+        #expect(AdvisorText.contractReasonLine(.noSlot) == "He can play no slot of this tactic.")
+        #expect(AdvisorText.contractReasonLine(.noStandard)
+                == "Your first eleven has no outfield player in position, so nobody can be measured against it.")
+        #expect(AdvisorText.contractReasonLine(.replaceFirst(slot: .DM_R, why: .firstChoice))
+                == "He is first choice at right defensive midfield: sign a replacement before he goes.")
+        #expect(AdvisorText.contractReasonLine(.replaceFirst(slot: .ST_C, why: .secondChoice))
+                == "He is second choice at striker: sign a replacement before he goes.")
+        #expect(AdvisorText.contractReasonLine(.replaceFirst(slot: .D_L, why: .cover))
+                == "He counts as cover at left back: sign a replacement before he goes.")
+        #expect(AdvisorText.contractReasonLine(.replaceFirst(slot: .D_L, why: .standIn))
+                == "Too few players can step in at left back without him: sign a replacement before he goes.")
     }
 
     @Test func timing() {
@@ -157,8 +184,8 @@ import Testing
     }
 
     @Test func countsAndEvidence() {
-        #expect(AdvisorText.leftOutAsGoingLine(1) == "1 other player in his last year is marked or advised to go.")
-        #expect(AdvisorText.leftOutAsGoingLine(3) == "3 other players in their last year are marked or advised to go.")
+        #expect(AdvisorText.notRecommendedLine(1) == "1 player not recommended for renewal")
+        #expect(AdvisorText.notRecommendedLine(21) == "21 players not recommended for renewal")
         #expect(AdvisorText.notRenewingLine(1) == "1 player you are not renewing")
         #expect(AdvisorText.notRenewingLine(3) == "3 players you are not renewing")
         let rules = EngineParameters.fm27.wageRangeRules.value
