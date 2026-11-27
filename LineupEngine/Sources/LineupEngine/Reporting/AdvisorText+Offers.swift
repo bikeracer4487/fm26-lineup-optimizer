@@ -48,7 +48,8 @@ extension AdvisorText {
 
     // MARK: Small helpers
 
-    private static func numberWord(_ n: Int) -> String {
+    /// A count in words up to ten, "none" for 0, and in digits above.
+    static func numberWord(_ n: Int) -> String {
         let words = ["none", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
         return n >= 0 && n < words.count ? words[n] : "\(n)"
     }
