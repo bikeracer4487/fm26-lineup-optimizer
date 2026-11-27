@@ -575,7 +575,10 @@ public enum Theme {
         public static let startsCellWidth: CGFloat = 96
         public static let startsCountWidth: CGFloat = 56
         /// The candidate picker, as a popover or drawn on its own.
-        public static let pickerSize = CGSize(width: 460, height: 540)
+        public static let pickerSize = CGSize(width: 500, height: 540)
+        /// Each of the picker's two columns of figures, under a heading that wraps to two lines.
+        public static let pickerFigureColumn: CGFloat = 84
+        public static let pickerHeadingLines = 2
     }
 
     // MARK: Elevens

@@ -270,7 +270,7 @@ import LineupEngine
 
     // MARK: Candidates
 
-    @Test func aCandidateRowShowsHisMatchDayValueOrADashAndWhetherHeCanBeChosen() {
+    @Test func aCandidateRowShowsHisTwoRatingsOrADashAndWhetherHeCanBeChosen() {
         let rows = CandidateRow.rows([
             Candidate(player: PlayerID(key: "a"), name: "Able", squad: .firstTeam, rating: 106.94, unavailable: nil),
             Candidate(player: PlayerID(key: "b"), name: "Baker", squad: .u21, rating: 117.15, value: 99.43,
@@ -282,11 +282,12 @@ import LineupEngine
             Candidate(player: PlayerID(key: "d"), name: "Dale", squad: .u18, rating: 80, unavailable: "on loan at Banbury United",
                       canBeChosen: false),
         ], current: PlayerID(key: "b"))
-        // The figure is what his token would show; his rating is in the working, and only when the two differ.
+        // His rating at full fitness, then his current one, what his token would show; the working only when they differ.
+        #expect(rows.map(\.ratingText) == ["106.9", "117.2", "—", "80.0"])
         #expect(rows.map(\.valueText) == ["106.9", "99.4", "—", "80.0"])
         #expect(rows.map(\.workingText) == [
             nil,
-            "Rating 117.2 · Condition 93% (×0.96) · Sharpness 94% (×0.98) · Has started the last 2 matches in quick succession (×0.90)",
+            "Condition 93% (×0.96) · Sharpness 94% (×0.98) · Has started the last 2 matches in quick succession (×0.90)",
             nil, nil,
         ])
         #expect(rows.map(\.squadText) == ["First team", "U21s", "U18s", "U18s"])
@@ -352,12 +353,14 @@ import LineupEngine
         #expect(MatchPresentation.pickerTitle(.D_L) == "Choose who plays at left back")
         #expect(MatchPresentation.pickerTitle(.ST_C) == "Choose who plays at striker")
         #expect(PickerText.planned(.ST_C).title == "Choose who plays at striker")
-        #expect(PickerText.planned(.ST_C).valueHeading == "Match-day value")
+        #expect(PickerText.planned(.ST_C).ratingHeading == "Rating at full fitness")
+        #expect(PickerText.planned(.ST_C).valueHeading == "Current rating")
         #expect(PickerText.planned(.ST_C).explanation
-                == "Those who can play, best first by match-day value: what each would show here if chosen. "
-                + "Then those a rule leaves out, with the reason. Choosing a player fixes him here for this match, over the rule.")
+                == "Those who can play, best first at full fitness; then those a rule leaves out, with the reason. "
+                + "The current rating is what he would show here if chosen. Choosing a player fixes him here for this "
+                + "match, over the rule.")
         #expect(PickerText.remembered(.D_L).title == "Who started at left back?")
-        #expect(PickerText.remembered(.D_L).valueHeading == nil)
+        #expect(PickerText.remembered(.D_L).ratingHeading == nil && PickerText.remembered(.D_L).valueHeading == nil)
         #expect(MatchPresentation.confirmButton(for: missed(fixture("m", "2026-11-10", "M"))).title
             == "Confirm this eleven as played")
         #expect(MatchPresentation.confirmButton(for: planned(fixture("p", "2026-11-14", "P"))).title == "Confirm this lineup")

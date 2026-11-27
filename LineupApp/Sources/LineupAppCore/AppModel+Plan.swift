@@ -212,8 +212,8 @@ extension AppModel {
     /// token shows once he is chosen for it, which is the engine's (`LineupSelector.worth`, on everything the selector
     /// was told for the fixture: his fitness as the plan projects it for that day and the planner's adjustments for him
     /// there), with his full-fitness rating and the engine's lines for what takes the one to the other. Those who can
-    /// play come first, best first by that value (see `ranked`); then those a rule leaves out of that fixture, with the
-    /// engine's rule worded as the selector words it. Such a player can still be chosen where the engine lets the
+    /// play come first, best first at full fitness (see `ranked`); then those a rule leaves out of that fixture, with
+    /// the engine's rule worded as the selector words it. Such a player can still be chosen where the engine lets the
     /// owner's choice overrule that rule: an injury among them, since FMRTE says that he is injured and not whether he
     /// can play through it. A player who cannot be rated comes last, with the engine's sentence for why. Empty when the
     /// fixture has no planned lineup or its tactic has no such slot.
@@ -247,7 +247,7 @@ extension AppModel {
         })
     }
 
-    /// The players as candidates: those who can play, best first by match-day value; then those a rule leaves out
+    /// The players as candidates: those who can play, best first by full-fitness rating; then those a rule leaves out
     /// (`ruledOut`: the reason, and whether the owner's choice can overrule it), best first; each group then by name and
     /// key. Last, those who cannot be rated, by name and key, with the engine's sentence for the failure in place of any
     /// other reason; they cannot be chosen.
@@ -268,7 +268,7 @@ extension AppModel {
             }
         }
         func bestFirst(_ candidates: [Candidate]) -> [Candidate] {
-            candidates.sorted { ($1.value ?? 0, $0.name, $0.player.key) < ($0.value ?? 0, $1.name, $1.player.key) }
+            candidates.sorted { ($1.rating ?? 0, $0.name, $0.player.key) < ($0.rating ?? 0, $1.name, $1.player.key) }
         }
         return bestFirst(rated.filter { $0.unavailable == nil }) + bestFirst(rated.filter { $0.unavailable != nil })
             + unrated.sorted { ($0.name, $0.player.key) < ($1.name, $1.player.key) }

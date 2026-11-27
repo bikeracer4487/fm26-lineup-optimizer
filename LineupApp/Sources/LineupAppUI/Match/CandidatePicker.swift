@@ -2,10 +2,10 @@ import LineupAppCore
 import LineupEngine
 import SwiftUI
 
-/// Everyone who could be chosen for a slot: for a planned lineup with the match-day value he would show there, and under
-/// his name how it comes from his rating; those who can play best first, then those a rule leaves out, with the engine's
-/// reason; for a missed fixture's remembered eleven, the squad by name with the eleven last. Choosing one puts him in
-/// the slot.
+/// Everyone who could be chosen for a slot: for a planned lineup with his full-fitness rating and, to its right, his
+/// current rating, the value he would show there, with what separates the two under his name; those who can play best
+/// first, then those a rule leaves out, with the engine's reason; for a missed fixture's remembered eleven, the squad
+/// by name with the eleven last. Choosing one puts him in the slot.
 public struct CandidatePicker: View {
     let text: PickerText
     let rows: [CandidateRow]
@@ -25,11 +25,16 @@ public struct CandidatePicker: View {
                     .foregroundStyle(Theme.Colour.mutedInk)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let heading = text.valueHeading, !rows.isEmpty {
-                HStack {
+            if !rows.isEmpty, text.ratingHeading != nil || text.valueHeading != nil {
+                HStack(alignment: .lastTextBaseline, spacing: Theme.Spacing.m) {
                     Spacer()
-                    Text(heading)
-                        .font(Theme.Typeface.text(Theme.TypeSize.caption, weight: .extraBold))
+                    ForEach([text.ratingHeading, text.valueHeading].compactMap { $0 }, id: \.self) { heading in
+                        Text(heading)
+                            .font(Theme.Typeface.text(Theme.TypeSize.caption, weight: .extraBold))
+                            .multilineTextAlignment(.trailing)
+                            .lineLimit(Theme.Match.pickerHeadingLines)
+                            .frame(width: Theme.Match.pickerFigureColumn, alignment: .trailing)
+                    }
                 }
             }
             if rows.isEmpty {
@@ -74,42 +79,49 @@ struct CandidateRowView: View {
     let row: CandidateRow
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+        // The figures stand beside his name, under their headings; the lines about him run the row's whole width.
+        VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
                     Text(row.name)
                         .font(Theme.Typeface.display(Theme.TypeSize.noteHeading, weight: .bold))
                     Text(row.squadText)
                         .foregroundStyle(Theme.Colour.mutedInk)
-                    if row.isCurrent {
-                        Text("In the eleven here now")
-                            .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
-                            .foregroundStyle(Theme.Colour.markerBlue)
-                    }
                 }
-                if let note = row.note {
-                    Text(note)
-                        .foregroundStyle(Theme.Colour.mutedInk)
-                }
-                if let reason = row.unavailable {
-                    Text(reason)
-                        .foregroundStyle(Theme.Colour.redText)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let working = row.workingText {
-                    Text(working)
-                        .foregroundStyle(Theme.Colour.mutedInk)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Spacer(minLength: Theme.Spacing.m)
+                if let rating = row.ratingText { figure(rating) }
+                if let value = row.valueText { figure(value) }
             }
-            Spacer(minLength: Theme.Spacing.m)
-            if let value = row.valueText {
-                Text(value)
-                    .font(Theme.Typeface.text(Theme.TypeSize.button, weight: .extraBold))
+            if row.isCurrent {
+                Text("In the eleven here now")
+                    .font(Theme.Typeface.text(Theme.TypeSize.body, weight: .bold))
+                    .foregroundStyle(Theme.Colour.markerBlue)
+            }
+            if let note = row.note {
+                Text(note)
+                    .foregroundStyle(Theme.Colour.mutedInk)
+            }
+            if let reason = row.unavailable {
+                Text(reason)
+                    .foregroundStyle(Theme.Colour.redText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let working = row.workingText {
+                Text(working)
+                    .foregroundStyle(Theme.Colour.mutedInk)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Theme.Spacing.s)
         .opacity(row.canChoose ? 1 : Theme.Button.pressedOpacity)
         .contentShape(Rectangle())
+    }
+
+    /// One figure in its column, under its heading.
+    private func figure(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.Typeface.text(Theme.TypeSize.button, weight: .extraBold))
+            .frame(width: Theme.Match.pickerFigureColumn, alignment: .trailing)
     }
 }

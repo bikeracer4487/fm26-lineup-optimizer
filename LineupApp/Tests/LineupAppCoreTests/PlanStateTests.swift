@@ -590,8 +590,8 @@ import Testing
         #expect(!canPlay.isEmpty && !cannot.isEmpty)
         #expect(cannot.allSatisfy { $0.unavailable != nil })
         #expect(candidates.allSatisfy { $0.value != nil })
-        #expect(canPlay.map { $0.value ?? 0 } == canPlay.map { $0.value ?? 0 }.sorted(by: >))
-        #expect(cannot.map { $0.value ?? 0 } == cannot.map { $0.value ?? 0 }.sorted(by: >))
+        #expect(canPlay.map { $0.rating ?? 0 } == canPlay.map { $0.rating ?? 0 }.sorted(by: >))
+        #expect(cannot.map { $0.rating ?? 0 } == cannot.map { $0.rating ?? 0 }.sorted(by: >))
         // The injured keeper is the best rated in goal, yet comes after everyone who can play.
         #expect(ratings.max() == cannot.first?.rating)
         #expect(Set(candidates.map(\.player)).count == candidates.count)
@@ -621,7 +621,7 @@ import Testing
 
     @Test func aCandidateIsWorthWhatHisTokenShowsOnceHeIsChosen() throws {
         // The owner's report of 26 November 2026: the picker showed a player at 117.2, his rating at full fitness, and
-        // the pitch showed 110.8 once he was chosen. The picker's figure is the one the pitch will show.
+        // the pitch showed 110.8 once he was chosen. The picker's current rating is the figure the pitch will show.
         let t = try TestModel()
         let model = try squad(fixtures: 3, t)
         // The second fixture: its fitness is projected and the first one's starters carry a start into it.
@@ -748,8 +748,9 @@ import Testing
         #expect(candidates.map(\.canBeChosen) == [true, true, true, false])
     }
 
-    @Test func candidatesAreRankedByMatchDayValueNotByRating() throws {
-        // The better player at full fitness is tired and has started twice running: on the day he is worth less.
+    @Test func candidatesAreRankedByFullFitnessRatingAndCarryTheirCurrentOne() throws {
+        // The better player at full fitness is tired and has started twice running: he stays first, and his current
+        // rating beside it shows he is worth less on the day (the owner's choice of 26 November 2026: both columns).
         let t = try TestModel()
         try t.importFirstTeam()
         let players = Array(t.model.players.prefix(3))
@@ -757,10 +758,10 @@ import Testing
                       players[1].id: CandidateWorth(rating: 114.9, value: 114.9, working: []),
                       players[2].id: CandidateWorth(rating: 105.0, value: 104.0, working: ["Sharpness 94% (×0.98)"])]
         let candidates = AppModel.ranked(players, worth: { worths[$0.id]! }, ruledOut: { _ in nil })
-        #expect(candidates.map(\.player) == [players[1].id, players[2].id, players[0].id])
-        #expect(candidates.map(\.value) == [114.9, 104.0, 99.4])
-        #expect(candidates.map(\.rating) == [114.9, 105.0, 117.2])
-        #expect(candidates.map(\.working) == [[], ["Sharpness 94% (×0.98)"], ["Condition 93% (×0.96)"]])
+        #expect(candidates.map(\.player) == [players[0].id, players[1].id, players[2].id])
+        #expect(candidates.map(\.rating) == [117.2, 114.9, 105.0])
+        #expect(candidates.map(\.value) == [99.4, 114.9, 104.0])
+        #expect(candidates.map(\.working) == [["Condition 93% (×0.96)"], [], ["Sharpness 94% (×0.98)"]])
     }
 
     @Test func aFixtureWithNoPlannedLineupHasNoCandidates() throws {
@@ -1265,7 +1266,7 @@ import Testing
         let rows = model.rememberedCandidateRows(for: .GK, in: ids[0])
         #expect(rows.map(\.player) == candidates.map(\.player))
         #expect(rows.filter(\.isCurrent).map(\.player) == [remembered.starters[.GK]])
-        #expect(rows.allSatisfy { $0.valueText == nil && $0.workingText == nil })
+        #expect(rows.allSatisfy { $0.ratingText == nil && $0.valueText == nil && $0.workingText == nil })
         let leftBack = try #require(rows.first { $0.player == remembered.starters[.D_L] })
         #expect(leftBack.note == "At left back in this eleven")
     }
