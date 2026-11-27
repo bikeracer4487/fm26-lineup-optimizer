@@ -105,7 +105,7 @@ import Testing
                  keepReason: KeepReason? = nil, watchReason: WatchReason? = nil, loanOnlyToStart: Bool = false,
                  onYouthContract: Bool = false) -> RemovalAdvice {
         RemovalAdvice(player: PlayerID(key: "p"), name: "P", level: .high, action: action, score: 10, reasons: [],
-                      tier: nil, outlook: nil, matchesHere: matchesHere, keepReason: keepReason, watchReason: watchReason,
+                      tier: nil, neededAt: nil, outlook: nil, matchesHere: matchesHere, keepReason: keepReason, watchReason: watchReason,
                       loanOnlyToStart: loanOnlyToStart, onYouthContract: onYouthContract, isFalseProspect: false,
                       isMentor: false, releaseCost: release, mutualCost: mutual, basis: .derived)
     }
@@ -218,7 +218,7 @@ import Testing
     func whyWatched(_ reason: WatchReason, _ level: ReachLevel?, at slot: SlotID? = .D_L) -> String {
         let watched = RemovalAdvice(
             player: PlayerID(key: "young"), name: "Young", level: .keep, action: .monitor, score: 0, reasons: [],
-            tier: nil, outlook: outlook(level, at: slot), matchesHere: MatchesHere(starts: 0, matches: 6, basis: .startedTooFew),
+            tier: nil, neededAt: nil, outlook: outlook(level, at: slot), matchesHere: MatchesHere(starts: 0, matches: 6, basis: .startedTooFew),
             keepReason: nil, watchReason: reason, loanOnlyToStart: false, onYouthContract: false,
             isFalseProspect: false, isMentor: false, releaseCost: nil, mutualCost: nil, basis: .derived)
         return AdvisorText.why(.monitor, for: watched)
@@ -228,7 +228,7 @@ import Testing
         func why(_ basis: MatchesHereBasis, _ level: ReachLevel?) -> String {
             let playing = RemovalAdvice(
                 player: PlayerID(key: "young"), name: "Young", level: .keep, action: .play, score: 0, reasons: [],
-                tier: nil, outlook: outlook(level), matchesHere: MatchesHere(starts: 3, matches: 6, basis: basis),
+                tier: nil, neededAt: nil, outlook: outlook(level), matchesHere: MatchesHere(starts: 3, matches: 6, basis: basis),
                 keepReason: nil, watchReason: nil, loanOnlyToStart: false, onYouthContract: false,
                 isFalseProspect: false, isMentor: false, releaseCost: nil, mutualCost: nil, basis: .derived)
             return AdvisorText.why(.play, for: playing)
@@ -567,7 +567,7 @@ import Testing
                smith rival: Rival? = Rival(player: PlayerID(key: "smith"), name: "Smith", age: 28, rating: 70,
                                            compared: 70, ability: 70, comparedAbility: 70, isAgeNamed: false)) -> RemovalAdvice {
         RemovalAdvice(player: PlayerID(key: "young"), name: "Young", level: .keep, action: action, score: 0, reasons: [],
-                      tier: nil, outlook: standingOutlook(smith: rival),
+                      tier: nil, neededAt: nil, outlook: standingOutlook(smith: rival),
                       matchesHere: basis.map { MatchesHere(starts: 1, matches: 9, basis: $0) }, keepReason: keepReason,
                       watchReason: nil, loanOnlyToStart: false, onYouthContract: false, isFalseProspect: false,
                       isMentor: false, releaseCost: nil, mutualCost: nil, basis: .derived)

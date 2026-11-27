@@ -10,7 +10,7 @@ import Testing
                         score: Int = 60, reasons: [RemovalReason] = [RemovalReason(text: "In neither eleven", points: 25)],
                         release: Int? = 26_000, mutual: Int? = 14_300, basis: Evidence = .derived) -> RemovalAdvice {
         RemovalAdvice(player: PlayerID(key: key), name: name, level: level, action: action, score: score, reasons: reasons,
-                      tier: nil, outlook: nil, matchesHere: nil, keepReason: nil, watchReason: nil,
+                      tier: nil, neededAt: nil, outlook: nil, matchesHere: nil, keepReason: nil, watchReason: nil,
                       loanOnlyToStart: false, onYouthContract: false,
                       isFalseProspect: false, isMentor: false, releaseCost: release, mutualCost: mutual, basis: basis)
     }
@@ -18,7 +18,7 @@ import Testing
     private func loan(_ key: String, name: String, verdict: LoanVerdict = .keepToEnd, score: Int = 10,
                       reasons: [RemovalReason] = [RemovalReason(text: "In the first eleven at left back", points: -30)],
                       basis: Evidence = .carriedOverFM26) -> LoanReview {
-        LoanReview(player: PlayerID(key: key), name: name, verdict: verdict, score: score, reasons: reasons, basis: basis)
+        LoanReview(player: PlayerID(key: key), name: name, verdict: verdict, score: score, reasons: reasons, neededAt: nil, basis: basis)
     }
 
     private func report(_ advice: [RemovalAdvice], loans: [LoanReview] = [], wages: Double = 600,
@@ -490,7 +490,7 @@ import Testing
         let outlook = Outlook(player: PlayerID(key: key), estimate: estimate, slots: home + (best.map { [$0] } ?? []),
                               best: best, level: .couldPassFirst, average: slot == nil ? 70 : nil)
         return RemovalAdvice(player: PlayerID(key: key), name: name, level: level, action: action, score: score,
-                             reasons: [], tier: tier, outlook: outlook,
+                             reasons: [], tier: tier, neededAt: nil, outlook: outlook,
                              matchesHere: MatchesHere(starts: 1, matches: 9, basis: basis), keepReason: keepReason,
                              watchReason: nil, loanOnlyToStart: false, onYouthContract: onYouthContract,
                              isFalseProspect: false, isMentor: false, releaseCost: nil, mutualCost: nil, basis: .derived)

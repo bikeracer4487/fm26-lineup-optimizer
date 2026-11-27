@@ -357,10 +357,14 @@ import Testing
             #expect(!advice.reasons.isEmpty, "\(advice.name)")
             #expect(advice.score == advice.reasons.map(\.points).reduce(0, +), "\(advice.name)")
         }
-        // The first-choice goalkeeper, with nobody behind him, is not told to go.
+        // The first-choice goalkeeper, with nobody behind him, earns nothing for it: on the other rules (−40 + 10 + 15
+        // + 15 + 20 + 25 + 15 + 5 = 65) he is sold, and the advice says to sign a replacement in goal first.
         let goalkeeper = try #require(elevens.tiers.first[.GK])
         let keeperAdvice = try #require(removal.advice.first { $0.player == goalkeeper })
-        #expect(keeperAdvice.level == .keep || keeperAdvice.level == .medium, "\(keeperAdvice.name): \(keeperAdvice.level)")
+        #expect(keeperAdvice.name == "Jonny Maxted")
+        #expect(keeperAdvice.score == 65 && keeperAdvice.level == .high && keeperAdvice.action == .sell)
+        #expect(removal.advisedToLeave.contains(goalkeeper))
+        #expect(keeperAdvice.replaceBeforeGoing == RemovalNeed(slot: .GK, kind: .firstChoiceWhereThin))
 
         // The importance suggestion: every fixture gets one, with reasons.
         let entries = try JSONDecoder().decode([FixtureEntry].self,
@@ -385,7 +389,29 @@ import Testing
     }
 
     @Test func theCapturedSquadsHaveScoutingNeeds() throws {
-        let needs = try checkScoutingNeeds(keeperAbility: nil)
+        // Jonny Maxted (32), the only goalkeeper at the club, is advised to leave now that thin cover earns no points,
+        // so the squad that stays has nobody in goal: Zac McEachran would fill in there out of position.
+        let needs = try checkScoutingNeeds(keeperAbility: nil, keepingKeeper: false)
+        let nobody = try #require(needs.betterPlayers.first)
+        #expect(nobody.slot == .GK && nobody.kind == .nobody && nobody.firstChoice?.name == "Zac McEachran")
+        #expect(nobody.goingFirstChoice?.name == "Jonny Maxted" && nobody.goingFirstChoice?.reason == .advisedToLeave)
+        // Nobody can step in in goal, injured or not.
+        let inGoal = try #require(needs.moreDepth.first)
+        #expect(inGoal.depth.slot == .GK && inGoal.injured.isEmpty && !inGoal.lastsOnlyWhileInjured)
+        #expect(inGoal.firstChoice?.name == "Zac McEachran" && inGoal.nextBestShareUnder == nil)
+        // With Zac McEachran first choice in goal he is cover nowhere, so central attacking midfield's need stays when
+        // the injured Fernando Forestieri is back.
+        let behind = try #require(needs.moreDepth.first { $0.depth.slot == .AM_C })
+        #expect(behind.injured.map(\.name) == ["Fernando Forestieri"] && !behind.lastsOnlyWhileInjured)
+        #expect(behind.going.map(\.name) == ["Scott Pollock"])
+        #expect(needs.moreDepth.allSatisfy { !$0.lastsOnlyWhileInjured })
+        #expect(needs.moreDepth.compactMap(\.nextBestShareUnder).map { Display.onePercentDecimal($0) }
+                == ["24.1%", "37.9%", "36.5%"])
+    }
+
+    @Test func theCapturedSquadsHaveScoutingNeedsWithTheGoalkeeperKept() throws {
+        // Kept in the squad scouting judges, as he was while thin cover earned points.
+        let needs = try checkScoutingNeeds(keeperAbility: nil, keepingKeeper: true)
         // Max Treml, a goalkeeper of 18 out on loan, has a potential of 53, below Jonny Maxted's ability of 63, so he
         // is no successor to Maxted (32), whatever the ratings say: the slot has an ageing need.
         let ageing = try #require(needs.betterPlayers.first { $0.slot == .GK })
@@ -411,18 +437,20 @@ import Testing
     }
 
     /// The captured goalkeeper is ageing, so his need has no measure; at a current ability of 30 he is weak, measured
-    /// by ability. Player Removal would then advise him to leave, which takes him out of the squad scouting judges, so
-    /// he is kept in it here.
+    /// by ability. Player Removal advises him to leave, which takes him out of the squad scouting judges, so he is kept
+    /// in it here.
     @Test func aWeakCapturedGoalkeeperIsMeasuredByAbility() throws {
-        let needs = try checkScoutingNeeds(keeperAbility: 30)
+        let needs = try checkScoutingNeeds(keeperAbility: 30, keepingKeeper: true)
         let keeper = try #require(needs.betterPlayers.first { $0.slot == .GK })
         #expect(keeper.kind == .weak && keeper.firstChoice?.name == "Jonny Maxted")
         guard case .ability(let his, _)? = keeper.measure else { Issue.record("the goalkeeper is measured by ability"); return }
         #expect(his == 30)
     }
 
+    /// Scouting's needs on the captured squads, with Jonny Maxted's ability set to `keeperAbility` when given, and,
+    /// when `keepingKeeper`, with him left out of those Player Removal advises to leave.
     @discardableResult
-    func checkScoutingNeeds(keeperAbility: Int?) throws -> ScoutingNeeds {
+    func checkScoutingNeeds(keeperAbility: Int?, keepingKeeper: Bool) throws -> ScoutingNeeds {
         let book = try realBook()
         var players = book.allPlayers
         if let keeperAbility {
@@ -440,7 +468,7 @@ import Testing
                                          history: StartHistory(history), asOf: asOf, retraining: [],
                                          catalog: catalog, profile: profile, parameters: parameters)
         let going = Scouting.going(players: players, ownClub: ownClub, marks: [:],
-                                   advisedToLeave: removal.advisedToLeave.filter { keeperAbility == nil || $0.key != "jonny maxted" })
+                                   advisedToLeave: removal.advisedToLeave.filter { !keepingKeeper || $0.key != "jonny maxted" })
         let needs = try Scouting.needs(tactic: tactic, players: players, ownClub: ownClub, going: going, retraining: [],
                                        catalog: catalog, profile: profile, parameters: parameters)
 
@@ -498,19 +526,23 @@ import Testing
         }
         let strangers = try report(elsewhere)
         #expect(!paste.players.isEmpty && strangers.leftOut.isEmpty && strangers.candidates.count == paste.players.count)
-        // As the run gives them after the whole-branch review's round of fixes.
+        // As the run gives them now that thin cover earns no points: Jonny Maxted, the only goalkeeper at the club, is
+        // advised to leave, so the squad that stays has nobody in goal and Zac McEachran fills in there out of position.
         let expectedParts: [String: (part: CandidatePart, headline: SlotID, answer: NeedAnswer?)] = [
-            "Max Treml": (.answersToday, .GK, .moreDepth),
+            // He would start where the squad that stays has nobody.
+            "Max Treml": (.answersToday, .GK, .betterPlayerToday),
             "Kauan Bitencourt de Oliveira": (.answersToday, .AM_L, .moreDepth),
             // His reach would rate past Alfie Potter (ability 58) at right attacking midfield, but Ewan Clark, whose
-            // own reach is 85, is expected to pass Potter first, and Daniel's potential of 70 is below that.
-            "Brayden Daniel": (.rest, .AM_R, nil),
+            // own reach is 85, is expected to pass Potter first, and Daniel's potential of 70 is below that. With Zac
+            // McEachran in goal, first choice there, he no longer counts as cover at right attacking midfield, which
+            // has a depth need that Daniel would count towards today.
+            "Brayden Daniel": (.answersToday, .AM_R, .moreDepth),
             "Tyrae Njogu": (.rest, .DM_L, nil),
             "Caleb Moir": (.rest, .D_CR, nil),
             "Aydin Ulas": (.rest, .D_CR, nil),
         ]
         #expect(Set(strangers.candidates.map(\.player.name)) == Set(expectedParts.keys))
-        #expect(strangers.groups(orderedBy: .today).map(\.part) == [.answersToday, .answersToday, .rest])
+        #expect(strangers.groups(orderedBy: .today).map(\.part) == [.answersToday, .answersToday, .answersToday, .rest])
         let words = SlotID.allCases.map(\.rawValue).filter { $0.contains("_") }
         for candidate in strangers.candidates {
             let name = candidate.player.name

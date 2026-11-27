@@ -315,6 +315,17 @@ public enum AdvisorText {
         }
     }
 
+    /// What to do before a player who is needed at a slot goes, and why he is needed: "Sign a replacement at goalkeeper
+    /// before he goes: he is first choice there and cover is thin."
+    public static func replaceFirst(_ need: RemovalNeed) -> String {
+        let why = switch need.kind {
+        case .firstChoiceWhereThin: "he is first choice there and cover is thin"
+        case .cover: "cover there would be thin without him"
+        case .standIn: "too few players can step in there without him"
+        }
+        return "Sign a replacement at \(PositionText.plain(need.slot.position)) before he goes: \(why)."
+    }
+
     /// "Nobody counts as cover; 2 needed", "1 player counts as cover; 2 needed", "2 players count as cover".
     public static func cover(_ slot: SlotDepth, parameters: EngineParameters) -> String {
         let line = parameters.depthThinBelow.value

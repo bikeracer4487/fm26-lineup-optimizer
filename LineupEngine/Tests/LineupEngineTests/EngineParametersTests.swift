@@ -520,8 +520,9 @@ import Testing
             ("mutualTerminationShare", .carriedOverFM26, "docs/Research/player-management-and-sales.md"),
             ("contractMonthsAllowance", .fm27Observation, "five release quotes in FM27 on 14 November 2026"),
             ("removalLevels", .carriedOverFM26, "ui/api/api_player_removal.py"),
-            ("removalThinCoverPoints", .derived, "Player Removal told the only goalkeeper to leave"),
         ]
+        // Thin cover earns no points: what it protected is kept on the advice as where he is needed.
+        #expect(listed["removalThinCoverPoints"] == nil)
         for (name, evidence, cited) in expected {
             #expect(listed[name]?.evidence == evidence, "\(name)")
             #expect(listed[name]?.source.contains(cited) == true, "\(name) does not cite \(cited)")
@@ -562,7 +563,6 @@ import Testing
         #expect(p.contractMonthsAllowance.value == 0.5)
         let levels = p.removalLevels.value
         #expect(levels.critical == 80 && levels.high == 50 && levels.medium == 30)
-        #expect(p.removalThinCoverPoints.value == -30)
     }
 
     @Test func removalParameterProblemsAreReported() {

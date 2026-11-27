@@ -35,6 +35,23 @@ public enum KeepReason: String, CaseIterable, Sendable {
     case shortContract
 }
 
+/// How a player is needed at a slot, the first that holds: he is first choice where cover is thin, he counts as cover
+/// where the slot's cover is at most `depthThinBelow`, or he is a stand-in too far below the first choice to count as
+/// cover where the slot's stand-ins are at most the line.
+public enum RemovalNeedKind: String, CaseIterable, Sendable { case firstChoiceWhereThin, cover, standIn }
+
+/// Where a player is needed, so that the squad would be short there without him. It earns him no points: a shallow
+/// position is not merit. When he is advised to go, the row says to sign a replacement there first.
+public struct RemovalNeed: Equatable, Sendable {
+    public let slot: SlotID
+    public let kind: RemovalNeedKind
+
+    public init(slot: SlotID, kind: RemovalNeedKind) {
+        self.slot = slot
+        self.kind = kind
+    }
+}
+
 /// One rule that applied, and the points it gave; points may be negative.
 public struct RemovalReason: Equatable, Sendable {
     public let text: String
@@ -57,6 +74,8 @@ public struct RemovalAdvice: Equatable, Sendable {
     /// In the order of the rules.
     public let reasons: [RemovalReason]
     public let tier: SquadTier?
+    /// The first slot, in slot order, where the squad would be short without him; nil when there is none.
+    public let neededAt: RemovalNeed?
     /// His reach against the first and second choice at each slot he can play: nil for a player of 24 or over, with
     /// ability 0, or who is not developing at the club.
     public let outlook: Outlook?
@@ -81,6 +100,12 @@ public struct RemovalAdvice: Equatable, Sendable {
     public let mutualCost: Int?
     /// The weakest evidence among the parameters behind this advice.
     public let basis: Evidence
+
+    /// `neededAt` when he is advised to go (critical or high, to be released, terminated or sold), else nil: what the
+    /// row shows, as a replacement to sign first.
+    public var replaceBeforeGoing: RemovalNeed? {
+        Removal.advisesLeaving(level, action) ? neededAt : nil
+    }
 }
 
 /// What to do about a loan to the club.
@@ -93,7 +118,14 @@ public struct LoanReview: Equatable, Sendable {
     public let verdict: LoanVerdict
     public let score: Int
     public let reasons: [RemovalReason]
+    /// The first slot, in slot order, where the squad would be short without him; nil when there is none.
+    public let neededAt: RemovalNeed?
     public let basis: Evidence
+
+    /// `neededAt` when the loan is to end early, else nil: what the row shows, as a replacement to sign first.
+    public var replaceBeforeGoing: RemovalNeed? {
+        Removal.endsEarly(verdict) ? neededAt : nil
+    }
 }
 
 public struct RemovalReport: Equatable, Sendable {
@@ -196,15 +228,9 @@ public enum Removal {
                                               asOf: asOf, parameters: parameters)
             let one = Self.advice(for: player, traits: traits[player.id]!, outlook: outlook, matchesHere: matchesHere,
                                   squad: squad, money: money, parameters: parameters)
-            switch (one.level, one.action) {
-            case (.critical, .release), (.critical, .terminate), (.critical, .sell),
-                 (.high, .release), (.high, .terminate), (.high, .sell):
+            if advisesLeaving(one.level, one.action) {
                 leaving.insert(player.id)
                 wagesAtStake += player.wagePerWeek
-            case (.critical, .monitor), (.critical, .develop), (.critical, .play), (.critical, .loanForMatches),
-                 (.critical, .keep), (.high, .monitor), (.high, .develop), (.high, .play), (.high, .loanForMatches),
-                 (.high, .keep), (.medium, _), (.keep, _):
-                break
             }
             advice.append(one)
         }
@@ -215,6 +241,27 @@ public enum Removal {
             loans: loans.sorted { $0.score != $1.score ? $0.score > $1.score : $0.player.key < $1.player.key },
             weeklyWagesAtStake: wagesAtStake, squadAverageAbility: squad.averageAbility, money: money,
             advisedToLeave: leaving)
+    }
+
+    /// Whether advice at `level` with `action` moves him on: critical or high, to be released, terminated or sold.
+    static func advisesLeaving(_ level: RemovalLevel, _ action: RemovalAction) -> Bool {
+        switch (level, action) {
+        case (.critical, .release), (.critical, .terminate), (.critical, .sell),
+             (.high, .release), (.high, .terminate), (.high, .sell):
+            true
+        case (.critical, .monitor), (.critical, .develop), (.critical, .play), (.critical, .loanForMatches),
+             (.critical, .keep), (.high, .monitor), (.high, .develop), (.high, .play), (.high, .loanForMatches),
+             (.high, .keep), (.medium, _), (.keep, _):
+            false
+        }
+    }
+
+    /// Whether a loan with `verdict` is to end early, the one verdict that moves him on.
+    static func endsEarly(_ verdict: LoanVerdict) -> Bool {
+        switch verdict {
+        case .endEarly: true
+        case .doNotExtend, .keepToEnd, .makePermanent: false
+        }
     }
 
     // MARK: Players of the club's own
@@ -274,11 +321,7 @@ public enum Removal {
                 evidence.append(parameters.markedlyLowerShareYoungest.evidence)
             }
         }
-        let thinCover = reasons.addThinCover(player.id, tier: tier, squad: squad,
-                                             points: parameters.removalThinCoverPoints.value)
-        if thinCover {
-            evidence.append(parameters.removalThinCoverPoints.evidence)
-        }
+        let neededAt = squad.need(of: player.id, tier: tier)
         if outlook == nil {
             if squad.weakest.contains(player.id) { reasons.add(rules.weakestPoints, weakestReason(rules)) }
             reasons.addAbility(player, squad: squad, share: rules.farBelowAverageShare,
@@ -410,7 +453,8 @@ public enum Removal {
         case .medium, .keep:
             if let outlook, let matchesHere {
                 let young = youngAction(player, outlook: outlook, matchesHere: matchesHere, inEither: inEither,
-                                        thinCover: thinCover, onYouthContract: onYouthContract, parameters: parameters)
+                                        thinCover: neededAt != nil, onYouthContract: onYouthContract,
+                                        parameters: parameters)
                 (action, keepReason, watchReason, loanOnlyToStart)
                     = (young.action, young.keepReason, young.watchReason, young.loanOnlyToStart)
                 evidence += young.evidence
@@ -419,8 +463,15 @@ public enum Removal {
             }
         }
 
+        // Where he is needed rests on Depth's line only where it shows: a replacement to sign first, or a young
+        // player watched as needed for cover.
+        if neededAt != nil, advisesLeaving(level, action) || watchReason == .neededForCover {
+            evidence.append(parameters.depthThinBelow.evidence)
+        }
+
         return RemovalAdvice(player: player.id, name: player.name, level: level, action: action, score: score,
-                             reasons: reasons.list, tier: tier, outlook: outlook, matchesHere: matchesHere,
+                             reasons: reasons.list, tier: tier, neededAt: neededAt, outlook: outlook,
+                             matchesHere: matchesHere,
                              keepReason: keepReason, watchReason: watchReason, loanOnlyToStart: loanOnlyToStart,
                              onYouthContract: onYouthContract, isFalseProspect: isFalseProspect,
                              isMentor: isMentor, releaseCost: releaseCost, mutualCost: mutualCost,
@@ -477,9 +528,7 @@ public enum Removal {
         reasons.list.append(place.reason)
         let inEither = place.inEither
         var evidence = [parameters.removalRules.evidence]
-        if reasons.addThinCover(player.id, tier: tier, squad: squad, points: parameters.removalThinCoverPoints.value) {
-            evidence.append(parameters.removalThinCoverPoints.evidence)
-        }
+        let neededAt = squad.need(of: player.id, tier: tier)
         reasons.addAbility(player, squad: squad, share: rules.farBelowAverageShare,
                            farBelow: loan.farBelowAveragePoints, below: loan.belowAveragePoints)
         if traits.consistency < rules.consistencyLowBelow {
@@ -497,8 +546,12 @@ public enum Removal {
         let verdict: LoanVerdict = score >= loan.endEarlyFrom ? .endEarly
             : score >= loan.doNotExtendFrom ? .doNotExtend
             : atLeastAverage && inEither ? .makePermanent : .keepToEnd
+        // Where he is needed rests on Depth's line only where it shows: a replacement to sign first.
+        if neededAt != nil, endsEarly(verdict) {
+            evidence.append(parameters.depthThinBelow.evidence)
+        }
         return LoanReview(player: player.id, name: player.name, verdict: verdict, score: score, reasons: reasons.list,
-                          basis: Evidence.weakest(evidence)!)
+                          neededAt: neededAt, basis: Evidence.weakest(evidence)!)
     }
 
     // MARK: Shared
@@ -575,6 +628,26 @@ public enum Removal {
         let depth: [SlotDepth]
         /// `depthThinBelow`: a slot whose cover is at most this would be thin without one of its cover.
         let thinBelow: Int
+
+        /// Where the squad would be short without him, at the first slot in slot order: where he is first choice and
+        /// cover is thin (injured or not), where he counts as cover by Depth's rule and the slot's cover is at most the
+        /// line, or where he is a stand-in too far below the first choice to count as cover and the slot's stand-ins are
+        /// at most the line. They are checked in that order at each slot.
+        func need(of player: PlayerID, tier: SquadTier?) -> RemovalNeed? {
+            for slot in depth {
+                if case .first(let home)? = tier, home == slot.slot, slot.isThin {
+                    return RemovalNeed(slot: slot.slot, kind: .firstChoiceWhereThin)
+                }
+                guard let option = slot.options.first(where: { $0.player == player }) else { continue }
+                if option.countsAsCover, slot.cover <= thinBelow {
+                    return RemovalNeed(slot: slot.slot, kind: .cover)
+                }
+                if option.isStandIn, !option.countsAsCover, slot.standIns <= thinBelow {
+                    return RemovalNeed(slot: slot.slot, kind: .standIn)
+                }
+            }
+            return nil
+        }
     }
 
     private struct Reasons {
@@ -582,32 +655,6 @@ public enum Removal {
         var score: Int { list.map(\.points).reduce(0, +) }
 
         mutating func add(_ points: Int, _ text: String) { list.append(RemovalReason(text: text, points: points)) }
-
-        /// Adds the points for protecting real cover, once, at the first slot in slot order where he is first choice
-        /// and cover is thin (injured or not), where he counts as cover by Depth's rule and the slot's cover is at
-        /// most the line, or where he is a stand-in too far below the first choice to count as cover and the slot's
-        /// stand-ins are at most the line: he stays until the squad has someone better there. They are checked in that
-        /// order at each slot. Says whether it added them.
-        mutating func addThinCover(_ player: PlayerID, tier: SquadTier?, squad: SquadFacts, points: Int) -> Bool {
-            for slot in squad.depth {
-                let position = PositionText.plain(slot.slot.position)
-                if case .first(let home)? = tier, home == slot.slot, slot.isThin {
-                    add(points, "First choice at \(position), where cover is thin")
-                    return true
-                }
-                guard let option = slot.options.first(where: { $0.player == player }) else { continue }
-                if option.countsAsCover, slot.cover <= squad.thinBelow {
-                    add(points, slot.isThin ? "Counts as cover at \(position), where cover is thin"
-                                            : "Cover at \(position) would be thin without him")
-                    return true
-                }
-                if option.isStandIn, !option.countsAsCover, slot.standIns <= squad.thinBelow {
-                    add(points, "Too few players can step in at \(position) without him")
-                    return true
-                }
-            }
-            return false
-        }
 
         /// Of the two ability lines only the stronger applies; neither does without a squad average.
         mutating func addAbility(_ player: Player, squad: SquadFacts, share: Double, farBelow: Int, below: Int) {

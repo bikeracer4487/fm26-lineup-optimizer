@@ -295,79 +295,81 @@ import Testing
         #expect(ownFlagged + loanFlagged == 7)
     }
 
-    // MARK: Thin cover
+    // MARK: Where he is needed
 
-    /// His reasons from the thin-cover rule.
-    func thinReasons(_ a: RemovalAdvice) -> [RemovalReason] {
-        a.reasons.filter { $0.text.hasSuffix("where cover is thin") || $0.text.hasSuffix("without him") }
+    /// Reasons that speak of cover: none should, since a shallow position earns no points.
+    func coverReasons(_ reasons: [RemovalReason]) -> [RemovalReason] {
+        reasons.filter { $0.text.contains("cover") || $0.text.hasSuffix("without him") }
     }
+
+    func need(_ slot: SlotID, _ kind: RemovalNeedKind) -> RemovalNeed { RemovalNeed(slot: slot, kind: kind) }
 
     func depth(_ players: [Player], _ slot: SlotID) throws -> SlotDepth {
         try #require(try Depth.report(tactic: tactic, players: players, ownClub: "Oxford City", catalog: catalog,
                                       profile: profile, parameters: parameters).slots.first { $0.slot == slot })
     }
 
-    @Test func aFirstChoiceAtAThinSlotTakesThirtyOff() throws {
+    @Test func theFirstChoiceOfAThinSlotGetsNoPointsAndIsNeededThere() throws {
         // Without a second goalkeeper, cover in goal is thin.
         let players = try PlannerFixture.squad().filter { $0.name != named(.GK, "second") }
+        try #require(try depth(players, .GK).isThin)
         let a = try advice(PlannerFixture.id(.GK, "first"), in: players)
-        #expect(a.reasons.prefix(2) == [reason("In the first eleven at goalkeeper", -40),
-                                         reason("First choice at goalkeeper, where cover is thin", -30)])
-        #expect(thinReasons(a).count == 1)
-        #expect(a.basis == .derived)
+        #expect(a.neededAt == need(.GK, .firstChoiceWhereThin))
+        #expect(a.reasons.first == reason("In the first eleven at goalkeeper", -40))
+        #expect(coverReasons(a.reasons).isEmpty)
+        // He scores what a first choice nobody needs scores: the first-choice left centre-back, whose slot has cover
+        // above the line and whose attributes, wage and contract are the same.
+        let centre = try advice(PlannerFixture.id(.D_CL, "first"), in: players)
+        try #require(centre.neededAt == nil)
+        #expect(a.score == centre.score)
         #expect(a.score == a.reasons.map(\.points).reduce(0, +))
+        #expect(a.basis == centre.basis)
     }
 
-    @Test func anInjuredFirstChoiceAtAThinSlotIsProtected() throws {
+    @Test func anInjuredFirstChoiceAtAThinSlotIsStillNeededThere() throws {
         // The first-choice left back is injured, so he is not cover: only the second choice counts, and left back is thin.
         let first = PlannerFixture.id(.D_L, "first"), second = PlannerFixture.id(.D_L, "second")
         let players = try squad(changing: first) { $0.isInjured = true }
         try #require(try depth(players, .D_L).cover == 1)
         let a = try advice(first, in: players)
-        #expect(a.reasons.prefix(2) == [reason("In the first eleven at left back", -40),
-                                         reason("First choice at left back, where cover is thin", -30)])
-        #expect(a.basis == .derived)
+        #expect(a.neededAt == need(.D_L, .firstChoiceWhereThin))
+        #expect(a.reasons.first == reason("In the first eleven at left back", -40))
+        #expect(coverReasons(a.reasons).isEmpty)
         // The second choice is the one player who counts as cover there.
         let b = try advice(second, in: players)
-        #expect(b.reasons.prefix(2) == [reason("In the second eleven at left back", -20),
-                                         reason("Counts as cover at left back, where cover is thin", -30)])
-        #expect(b.basis == .derived)
-        // The rule comes straight after the elevens row, after the contract row.
-        let contract = try advice(first, in: players.map { p -> Player in
-            var p = p; if p.id == first { p.contractType = .outOfContract }; return p
-        })
-        #expect(contract.reasons.prefix(3) == [reason("Not on a full-time contract", 50),
-                                               reason("In the first eleven at left back", -40),
-                                               reason("First choice at left back, where cover is thin", -30)])
+        #expect(b.neededAt == need(.D_L, .cover))
+        #expect(b.reasons.first == reason("In the second eleven at left back", -20))
+        #expect(coverReasons(b.reasons).isEmpty)
     }
 
-    @Test func coverAtTheLineIsProtected() throws {
+    @Test func coverAtTheLineIsNeededThere() throws {
         // AM_L has two solid players, exactly the line: without either it would be thin.
         let players = try squad()
         try #require(try depth(players, .AM_L).cover == parameters.depthThinBelow.value)
         for (id, row) in [(PlannerFixture.id(.AM_L, "first"), reason("In the first eleven at left attacking midfield", -40)),
                           (PlannerFixture.id(.AM_L, "second"), reason("In the second eleven at left attacking midfield", -20))] {
             let a = try advice(id, in: players)
-            #expect(a.reasons.prefix(2) == [row, reason("Cover at left attacking midfield would be thin without him", -30)], "\(id.key)")
-            #expect(a.basis == .derived)
+            #expect(a.neededAt == need(.AM_L, .cover), "\(id.key)")
+            #expect(a.reasons.first == row, "\(id.key)")
+            #expect(coverReasons(a.reasons).isEmpty, "\(id.key)")
         }
     }
 
-    @Test func coverOneAboveTheLineGivesNothing() throws {
+    @Test func aPlayerNotNeededHasNoNeed() throws {
         // The second-choice right centre-back counts at both centre-back slots, so each has cover 3.
         let players = try squad()
         try #require(try depth(players, .D_CL).cover == parameters.depthThinBelow.value + 1)
         try #require(try depth(players, .D_CR).cover == parameters.depthThinBelow.value + 1)
         for id in [PlannerFixture.id(.D_CL, "first"), PlannerFixture.id(.D_CL, "second"), PlannerFixture.id(.D_CR, "second")] {
             let a = try advice(id, in: players)
-            #expect(thinReasons(a).isEmpty, "\(id.key)")
+            #expect(a.neededAt == nil && a.replaceBeforeGoing == nil, "\(id.key)")
             #expect(a.basis == .carriedOverFM26, "\(id.key)")
         }
     }
 
-    @Test func realCoverIsProtectedWhenTheOnlyOthersAreTooWeakToCount() throws {
+    @Test func realCoverIsNeededWhenTheOnlyOthersAreTooWeakToCount() throws {
         // Three can step in at left back: the first choice, the second and a third far below them. Only two count as
-        // cover, the line, so each of the two is protected and the third is not.
+        // cover, the line, so each of the two is needed there and the third is not.
         let weak = Player.fixture(name: "Weak left back", all: 5,
                                   familiarity: Dictionary([assignment(.D_L).ipPosition, assignment(.D_L).oopPosition]
                                       .map { ($0, 20) }, uniquingKeysWith: { a, _ in a }))
@@ -376,22 +378,21 @@ import Testing
         try #require(left.standIns == 3 && left.cover == parameters.depthThinBelow.value)
         try #require(left.options.first { $0.player == weak.id }?.isBelowCoverShare == true)
         for id in [PlannerFixture.id(.D_L, "first"), PlannerFixture.id(.D_L, "second")] {
-            #expect(thinReasons(try advice(id, in: players)) == [reason("Cover at left back would be thin without him", -30)],
-                    "\(id.key)")
+            #expect(try advice(id, in: players).neededAt == need(.D_L, .cover), "\(id.key)")
         }
-        #expect(thinReasons(try advice(weak.id, in: players)).isEmpty)
+        #expect(try advice(weak.id, in: players).neededAt == nil)
     }
 
-    @Test func theRuleAppliesOnceAtTheFirstSlotInOrder() throws {
+    @Test func theNeedIsAtTheFirstSlotInOrder() throws {
         // Without the second-choice left centre-back, the right one counts as cover at both centre-back slots, each at
-        // the line. He is protected once, for D_CL, which comes first.
+        // the line. He is needed at D_CL, which comes first.
         let players = try PlannerFixture.squad().filter { $0.name != named(.D_CL, "second") }
         try #require(try depth(players, .D_CL).cover == 2 && depth(players, .D_CR).cover == 2)
         let a = try advice(PlannerFixture.id(.D_CR, "second"), in: players)
-        #expect(thinReasons(a) == [reason("Cover at centre-back would be thin without him", -30)])
+        #expect(a.neededAt == need(.D_CL, .cover))
     }
 
-    @Test func aSecondElevenFillInWhoIsNotSolidGetsNothing() throws {
+    @Test func aSecondElevenFillInWhoIsNotSolidIsNotNeeded() throws {
         // Without a second goalkeeper, or a second left back, the second eleven puts a spare player who is familiar
         // nowhere there. He is second choice at a thin slot but not cover.
         for slot in [SlotID.GK, .D_L] {
@@ -399,11 +400,51 @@ import Testing
             let a = try advice(target("Spare"), in: players)
             try #require(a.tier == .second(slot))
             try #require(try depth(players, slot).isThin)
-            #expect(thinReasons(a).isEmpty, "\(slot.rawValue)")
+            #expect(a.neededAt == nil, "\(slot.rawValue)")
         }
     }
 
-    @Test func aLoaneeWhoIsFirstChoiceAtAThinSlotTakesThirtyOff() throws {
+    @Test func aPlayerNeededWhoIsKeptHasNothingToShow() throws {
+        // The only goalkeeper of the planner's squad is kept, so the replacement is not asked for.
+        let players = try PlannerFixture.squad().filter { $0.name != named(.GK, "second") }
+        let a = try advice(PlannerFixture.id(.GK, "first"), in: players)
+        try #require(a.level == .keep)
+        #expect(a.neededAt == need(.GK, .firstChoiceWhereThin))
+        #expect(a.replaceBeforeGoing == nil)
+        #expect(!(try report(players)).advisedToLeave.contains(a.player))
+    }
+
+    @Test func aPlayerAdvisedToGoWhoIsNeededIsStillAdvisedToGo() throws {
+        // The captured squad: Jonny Maxted is its only goalkeeper at the club, injured, with Max Treml out on loan. The
+        // points for thin cover kept him; without them he is judged on the other rules, and they say to move him on.
+        var book = SquadBook()
+        book.apply(try Importer.importPlayers(clipboard: Fixtures.text("captures/first-team.tsv"),
+                                              fmrteConfig: Fixtures.data("captures/first-team.grids.json"),
+                                              squad: .firstTeam), to: .firstTeam)
+        book.apply(try Importer.importPlayers(clipboard: Fixtures.text("captures/u21.tsv"),
+                                              fmrteConfig: Fixtures.data("captures/u21.grids.json"), squad: .u21), to: .u21)
+        let tactic = try JSONDecoder().decode(Tactic.self, from: Fixtures.data("tactics/sample-4231.json"))
+        let history = try JSONDecoder().decode([ConfirmedLineup].self, from: Fixtures.data("plans/sample-history.json"))
+        let r = try Removal.report(tactic: tactic, players: book.allPlayers, ownClub: book.ownClub(override: "Oxford City"),
+                                   money: book.moneyStyle, history: StartHistory(history),
+                                   asOf: try #require(Day(iso: "2026-11-13")), retraining: [], catalog: catalog,
+                                   profile: profile, parameters: parameters)
+        let keeper = try #require(r.advice.first { $0.name == "Jonny Maxted" })
+        try #require(keeper.tier == .first(.GK))
+        #expect(keeper.neededAt == need(.GK, .firstChoiceWhereThin))
+        #expect(keeper.replaceBeforeGoing == need(.GK, .firstChoiceWhereThin))
+        #expect(r.advisedToLeave.contains(keeper.player))
+        #expect(coverReasons(keeper.reasons).isEmpty)
+    }
+
+    @Test func aPlayerAdvisedToGoWhoIsNotNeededHasNothingToReplace() throws {
+        // A weak player in neither eleven with Controversy 17: critical, terminated, and needed nowhere.
+        let a = try advice(target(attributes: [.controversy: 17]))
+        try #require(a.level == .critical && a.action == .terminate)
+        #expect(a.neededAt == nil && a.replaceBeforeGoing == nil)
+    }
+
+    @Test func aLoanNeededForCoverGetsNoPointsAndIsNeededThere() throws {
         let first = PlannerFixture.id(.D_L, "first"), second = PlannerFixture.id(.D_L, "second")
         let players = try PlannerFixture.squad().map { p -> Player in
             var p = p
@@ -412,17 +453,48 @@ import Testing
             return p
         }
         let review = try #require(try report(players).loans.first { $0.player == first })
-        #expect(review.reasons == [reason("In the first eleven at left back", -30),
-                                   reason("First choice at left back, where cover is thin", -30)])
-        #expect(review.score == -60)
-        #expect(review.basis == .derived)
-        // Where cover is above the line, nothing is added and the basis is the removal rules'.
+        #expect(review.reasons == [reason("In the first eleven at left back", -30)])
+        #expect(review.score == -30)
+        #expect(review.neededAt == need(.D_L, .firstChoiceWhereThin))
+        #expect(review.verdict != .endEarly && review.replaceBeforeGoing == nil)
+        #expect(review.basis == .carriedOverFM26)
+        // Where cover is above the line, he is needed nowhere.
         let centre = PlannerFixture.id(.D_CL, "first")
         let plain = try #require(try report(try squad(changing: centre) { p in
             p.club = "Other FC"; p.loanedTo = "Oxford City"
         }).loans.first)
         #expect(plain.reasons == [reason("In the first eleven at centre-back", -30)])
+        #expect(plain.neededAt == nil && plain.replaceBeforeGoing == nil)
         #expect(plain.basis == .carriedOverFM26)
+    }
+
+    @Test func aLoanToEndEarlyWhoIsNeededAsksForAReplacement() throws {
+        // The same loanee, far below the squad's ability and with Consistency 1, Important Matches 1 and Injury
+        // Proneness 20: −30 + 25 + 20 + 15 + 25 = 55, so the loan is ended early, and left back needs someone first.
+        let first = PlannerFixture.id(.D_L, "first"), second = PlannerFixture.id(.D_L, "second")
+        let players = try PlannerFixture.squad().map { p -> Player in
+            var p = p
+            if p.id == first {
+                p.club = "Other FC"; p.loanedTo = "Oxford City"; p.currentAbility = 50
+                p.attributes[.consistency] = 1; p.attributes[.importantMatches] = 1; p.attributes[.injuryProneness] = 20
+            }
+            if p.id == second { p.isInjured = true }
+            return p
+        }
+        let review = try #require(try report(players).loans.first { $0.player == first })
+        try #require(review.reasons.first == reason("In the first eleven at left back", -30))
+        #expect(review.score == 55 && review.verdict == .endEarly)
+        #expect(review.neededAt == need(.D_L, .firstChoiceWhereThin))
+        #expect(review.replaceBeforeGoing == need(.D_L, .firstChoiceWhereThin))
+    }
+
+    @Test func theReplacementSentenceSaysWhyHeIsNeeded() {
+        #expect(AdvisorText.replaceFirst(RemovalNeed(slot: .GK, kind: .firstChoiceWhereThin))
+                == "Sign a replacement at goalkeeper before he goes: he is first choice there and cover is thin.")
+        #expect(AdvisorText.replaceFirst(RemovalNeed(slot: .D_L, kind: .cover))
+                == "Sign a replacement at left back before he goes: cover there would be thin without him.")
+        #expect(AdvisorText.replaceFirst(RemovalNeed(slot: .D_L, kind: .standIn))
+                == "Sign a replacement at left back before he goes: too few players can step in there without him.")
     }
 
     // MARK: Ability
@@ -837,22 +909,22 @@ import Testing
         return (players, young)
     }
 
-    @Test func aMarkedlyLowerPlayerNeededForDepthIsWatched() throws {
+    @Test func aMarkedlyLowerPlayerNeededForDepthIsSoldOnceReplaced() throws {
         let (players, young) = try needed(14)
         // He is too far below the first choice to count as cover, but only he and the first choice can step in there.
         let left = try depth(players, .D_L)
         try #require(left.standIns == parameters.depthThinBelow.value && left.cover == 1)
         try #require(left.options.first { $0.player == young.id }?.isBelowCoverShare == true)
-        let a = try advice(young.id, in: players)
+        let r = try report(players)
+        let a = try #require(r.advice.first { $0.player == young.id })
         try #require(a.tier == .backup)
         #expect(a.outlook?.level == .markedlyLower)
-        #expect(a.reasons == [reason("Not expected to reach the level of the squad at any position", 70),
-                              reason("Too few players can step in at left back without him", -30)])
-        #expect(a.score == 40 && a.level == .medium && a.action == .monitor)
-        // Not worth developing, and needed for cover: watched for that, with no word of a loan.
-        #expect(a.watchReason == .neededForCover)
-        #expect(AdvisorText.why(a.action, for: a)
-                == "He is needed as cover here: he stays until the squad has someone better there.")
+        // Judged on merit he scores as one not needed does, and is sold; the row asks for a replacement first.
+        #expect(a.reasons == [reason("Not expected to reach the level of the squad at any position", 70)])
+        #expect(a.score == 70 && a.level == .high && a.action == .sell)
+        #expect(a.watchReason == nil)
+        #expect(r.advisedToLeave.contains(young.id))
+        #expect(a.neededAt == need(.D_L, .standIn) && a.replaceBeforeGoing == need(.D_L, .standIn))
     }
 
     @Test func oneNotNeededScoresSeventy() throws {
@@ -864,6 +936,7 @@ import Testing
         #expect(a.reasons == [reason("Not expected to reach the level of the squad at any position", 70)])
         #expect(a.score == 70 && a.level == .high && a.action == .sell)
         #expect(r.advisedToLeave.contains(young.id))
+        #expect(a.neededAt == nil && a.replaceBeforeGoing == nil)
     }
 
     @Test func aPlayerWithAbilityZeroIsScoredAsAnOlderPlayer() throws {
@@ -958,7 +1031,7 @@ import Testing
         #expect(benched.action == .loanForMatches)
     }
 
-    @Test func oneNeededForDepthIsWatchedNotLoaned() throws {
+    @Test func aYoungPlayerNeededForCoverIsStillWatchedAndNotLoaned() throws {
         // A solid young left back of 19 with 24 months left, kept out of both elevens, whose reach makes the second
         // eleven there, whether the second choice is solid or not.
         let probe = try needed(20, age: 19, all: 9)
@@ -968,15 +1041,17 @@ import Testing
         let (players, young) = try needed(14, age: 19, all: 9, potentialAbility: reaching, months: 24)
         let a = try advice(young.id, in: players)
         try #require(a.tier == .backup && a.outlook?.level.map(worthDeveloping.contains) == true)
-        #expect(a.reasons.contains(reason("Too few players can step in at left back without him", -30)))
-        #expect(a.action == .monitor && a.keepReason == nil)
+        #expect(a.neededAt == need(.D_L, .standIn))
+        #expect(coverReasons(a.reasons).isEmpty)
+        #expect(a.level == .keep && a.action == .monitor && a.keepReason == nil)
+        #expect(a.replaceBeforeGoing == nil)
         #expect(a.watchReason == .neededForCover)
         #expect(AdvisorText.why(a.action, for: a) == "He is needed as cover here, so a loan would leave the squad short.")
         // With a solid second choice he is not needed: a loan for matches.
         let (spare, other) = try needed(20, age: 19, all: 9, potentialAbility: reaching, months: 24)
         let b = try advice(other.id, in: spare)
         try #require(b.tier == .backup && b.outlook?.level.map(worthDeveloping.contains) == true)
-        #expect(thinReasons(b).isEmpty)
+        #expect(b.neededAt == nil)
         #expect(b.action == .loanForMatches && b.watchReason == nil)
     }
 
@@ -1088,12 +1163,12 @@ import Testing
         let outlook = try #require(a.outlook)
         #expect(Removal.isWorthDeveloping(outlook))
         #expect(!outlook.isMarkedlyLower)
-        // His place line wins over his reach, as before; the contract says to renew it, at no points.
-        let thin = parameters.removalThinCoverPoints.value
+        // His place line wins over his reach, as before; the contract says to renew it, at no points. He is needed as
+        // cover at left back, which adds nothing.
         #expect(a.reasons == [reason("In the first eleven at left back", rules.firstElevenPoints),
-                              reason("Cover at left back would be thin without him", thin),
                               reason("Contract ends in 10 months: renew it", 0)])
-        #expect(a.score == rules.firstElevenPoints + thin)
+        #expect(a.score == rules.firstElevenPoints)
+        #expect(a.neededAt == need(.D_L, .cover))
         #expect(a.action == .play && a.watchReason == nil && a.keepReason == nil)
         #expect(AdvisorText.why(a.action, for: a) == "He is first choice here.")
 
@@ -1158,7 +1233,7 @@ import Testing
             let a = try #require(try report(players, history: sixMatches(starting: id, starts: 0)).advice
                 .first { $0.player == id })
             try #require(a.tier == .second(.D_L) && a.matchesHere?.basis == .startedTooFew)
-            try #require(thinReasons(a).isEmpty)
+            try #require(a.neededAt == nil)
             #expect(a.outlook?.level == .markedlyLower, "\(age)")
             #expect(a.outlook?.best?.secondChoice == nil, "\(age)")
             #expect(a.level == .keep || a.level == .medium, "\(age)")
@@ -1215,7 +1290,9 @@ import Testing
                 .first { $0.player == id })
             try #require(a.outlook?.level == .markedlyLower && a.tier == .second(.D_L))
             try #require(a.matchesHere?.isEnough == false)
-            #expect(thinReasons(a) == [reason("Too few players can step in at left back without him", -30)], "\(age)")
+            #expect(a.neededAt == need(.D_L, .standIn), "\(age)")
+            #expect(a.reasons == [reason("In the second eleven at left back", parameters.removalRules.value.secondElevenPoints)],
+                    "\(age)")
             #expect(a.action == .monitor && a.watchReason == .neededForCover, "\(age)")
             #expect(AdvisorText.why(a.action, for: a)
                     == "He is needed as cover here: he stays until the squad has someone better there.")
@@ -1393,7 +1470,7 @@ import Testing
     }
 
     @Test func aYoungPlayersAdviceRestsOnTheEstimate() throws {
-        // Kept to develop at 17, months unknown, the median wage and no thin cover: before the estimate's evidence was
+        // Kept to develop at 17, months unknown, the median wage and needed nowhere: before the estimate's evidence was
         // taken in, only the removal rules' (carried over from FM26) were behind it.
         let seventeen = try prospect(age: 17, months: nil)
         #expect(try advice(seventeen).basis == .derived)
@@ -1448,7 +1525,7 @@ import Testing
     // MARK: Actions
 
     @Test func aPlayerOutOfContractAtHighIsReleasedAtNoCost() throws {
-        // A centre-back, where cover is above the line, so the thin-cover rule does not apply.
+        // A centre-back, where cover is above the line, so he is needed nowhere.
         let id = PlannerFixture.id(.D_CL, "first")
         // −40 in the first eleven, +50, +15 for 12 months, +25 for Controversy 17.
         let a = try advice(id, in: try squad(changing: id) { p in
@@ -1654,7 +1731,7 @@ import Testing
         let plain = try review(loanee())
         #expect(plain.reasons == [reason(weakest, 30), reason("In neither eleven", 20)])
         #expect(plain.score == 50)
-        // Centre-backs, where cover is above the line, so the thin-cover rule does not apply.
+        // Centre-backs, where cover is above the line, so he is needed nowhere.
         let first = PlannerFixture.id(.D_CL, "first")
         let firstReview = try #require(try report(try squad(changing: first) { p in
             p.club = "Other FC"; p.loanedTo = "Oxford City"
@@ -1716,7 +1793,7 @@ import Testing
                 p.club = "Other FC"; p.loanedTo = "Oxford City"; p.currentAbility = ability
             }).loans.first)
         }
-        // Centre-backs, where cover is above the line, so the thin-cover rule does not apply.
+        // Centre-backs, where cover is above the line, so he is needed nowhere.
         #expect(try onLoan(PlannerFixture.id(.D_CL, "first"), ability: 100).verdict == .makePermanent)
         #expect(try onLoan(PlannerFixture.id(.D_CL, "second"), ability: 100).verdict == .makePermanent)
         // Below the average he is kept to the end.

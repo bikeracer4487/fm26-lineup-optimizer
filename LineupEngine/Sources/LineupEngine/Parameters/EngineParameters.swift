@@ -648,9 +648,6 @@ public struct EngineParameters: Sendable {
     public var contractMonthsAllowance: Parameter<Double>
     /// The scores that make a removal advice critical, high or medium.
     public var removalLevels: Parameter<RemovalLevels>
-    /// The points Player Removal and the loan review give, once per player, to the first choice of a slot where Depth
-    /// finds cover thin, or to a player who counts as cover at a slot whose cover is at most `depthThinBelow`.
-    public var removalThinCoverPoints: Parameter<Int>
     // The numbers behind the estimate of where a young player's ability could reach (`Reach.estimate`).
     /// The oldest age still counted as developing, a band that needs matches to grow.
     public var developingUpToAge: Parameter<Int>
@@ -1078,9 +1075,6 @@ public struct EngineParameters: Sendable {
                     + "the average"),
             removalLevels: Parameter(
                 RemovalLevels(critical: 80, high: 50, medium: 30), .carriedOverFM26, source: removalSource),
-            removalThinCoverPoints: Parameter(
-                -30, .derived,
-                source: "this design's choice after the advisors were run on the real squad: Player Removal told the only goalkeeper to leave"),
             developingUpToAge: Parameter(
                 23, .carriedOverFM26,
                 source: "18 to 23 as one band that needs matches (docs/Research/player-rotation-guide.md)"),

@@ -311,6 +311,7 @@ enum Report {
             out.append("  \(pad(AdvisorText.name(one.level).uppercased(), 8)) \(pad(AdvisorText.name(one.action).lowercased(), 9)) \(pad(one.name, 22)) "
                        + "score \(one.score); \(cost)\(mark(one.basis))")
             for reason in one.reasons { out.append("        \(points(reason.points)) \(reason.text)") }
+            if let need = one.replaceBeforeGoing { out.append("        ! \(AdvisorText.replaceFirst(need))") }
         }
         out.append("Medium: \(count(medium))   Keep: \(count(keep))")
         out.append("Young players")
@@ -329,6 +330,7 @@ enum Report {
         for loan in report.loans {
             out.append("  \(pad(AdvisorText.name(loan.verdict).lowercased(), 16)) \(pad(loan.name, 22)) score \(loan.score)\(mark(loan.basis))")
             for reason in loan.reasons { out.append("        \(points(reason.points)) \(reason.text)") }
+            if let need = loan.replaceBeforeGoing { out.append("        ! \(AdvisorText.replaceFirst(need))") }
         }
         return out
     }
