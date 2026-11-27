@@ -135,7 +135,8 @@ import Testing
         func young(_ name: String, current: Int, potential: Int) -> Player {
             player(name, age: 20, currentAbility: current, potentialAbility: potential)
         }
-        // Scaled up to his reach his rating clears the line, but his reach as ability is well under the first choices'.
+        // Scaled up to his reach his rating clears the line, but his reach as ability is well under the first choices',
+        // and he is under the line today, so the floor at today's share does not lift him over it.
         let short = young("Short", current: 40, potential: 70)
         // Both clear.
         let clear = young("Clear", current: 90, potential: 140)
@@ -150,14 +151,41 @@ import Testing
             let a = Double(p.currentAbility)
             let byRating = rating * (offset + reach) / (offset + a) / standard.rating!
             let byAbility = (offset + reach) / standard.ability!
-            #expect(abs(worth.share - min(byRating, byAbility)) < 1e-12)
             #expect(abs(worth.shareToday - rating / standard.rating!) < 1e-12)
+            #expect(abs(worth.share - max(worth.shareToday, min(byRating, byAbility))) < 1e-12)
             #expect(worth.meetsStandard == meets, "\(p.name)")
             if !meets {
                 #expect(Scouting.clearsWeakLine(byRating, average: 1, parameters: parameters))
                 #expect(!Scouting.clearsWeakLine(byAbility, average: 1, parameters: parameters))
+                #expect(!Scouting.clearsWeakLine(worth.shareToday, average: 1, parameters: parameters))
             }
         }
+    }
+
+    @Test func aYoungPlayerIsNeverWorthLessThanHeIsToday() throws {
+        // The outfield first choices at ability 130 put the standard by ability far above a player of 95.
+        let players = try PlannerFixture.squad().map { p in
+            var p = p
+            if p.name.hasSuffix("first"), p.id != PlannerFixture.id(.GK, "first") { p.currentAbility = 130 }
+            return p
+        }
+        let level = player("Level", age: 22, all: 15, currentAbility: 95, potentialAbility: 95)
+        let rising = player("Rising", age: 22, all: 15, currentAbility: 95, potentialAbility: 98)
+        let m = try measure(players + [level, rising])
+        let same = try #require(m.worths[level.id])
+        #expect(same.ahead == .today)
+        #expect(same.share == same.shareToday)
+        #expect(same.meetsStandard)
+        let worth = try #require(m.worths[rising.id])
+        let reach = try Reach.estimate(for: rising, parameters: parameters).reach
+        #expect(reach == 98)
+        #expect(worth.ahead == .reach(98))
+        // By ability alone his reach would be under the line, but his share stays at today's.
+        #expect(!Scouting.clearsWeakLine((offset + reach) / m.standard.ability!, average: 1, parameters: parameters))
+        #expect(worth.shareToday == same.shareToday)
+        #expect(worth.share >= worth.shareToday)
+        #expect(worth.share == worth.shareToday)
+        #expect(worth.meetsStandard)
     }
 
     @Test func anOlderPlayerIsMeasuredAfterTheFallExpected() throws {
@@ -279,8 +307,9 @@ import Testing
         #expect(none.ahead == .today)
         #expect(none.share == none.shareToday)
         #expect(none.share.isFinite && none.share > 0)
+        // A reach that is not above his ability changes nothing: he is measured as he is today.
         let young = try #require(m.worths[capped.id])
-        #expect(young.ahead == .reach(100))
+        #expect(young.ahead == .today)
         #expect(young.share == young.shareToday)
     }
 

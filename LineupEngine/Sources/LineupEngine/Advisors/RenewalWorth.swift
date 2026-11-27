@@ -39,9 +39,10 @@ public struct SquadStandard: Equatable, Sendable {
 
 /// The ability a player is measured at over a new contract.
 public enum WorthAhead: Equatable, Sendable {
-    /// He is over `developingUpToAge` and no fall is expected: his ability today.
+    /// No rise or fall is expected: his ability today. A player of `developingUpToAge` or under whose reach is not
+    /// above his ability is measured so too.
     case today
-    /// He is `developingUpToAge` or under: his reach (`Reach.estimate`), this tool's estimate.
+    /// He is `developingUpToAge` or under and his reach (`Reach.estimate`) is above his ability: this tool's estimate.
     case reach(Double)
     /// A fall is expected: his ability after `seasons` seasons of decline (`declineRules`), this tool's estimate.
     case decline(to: Double, seasons: Int)
@@ -58,7 +59,7 @@ public struct RenewalWorth: Equatable, Sendable {
     public let ahead: WorthAhead
     /// His share of the standard today, at `slot`: 0.936 for 6.4% under.
     public let shareToday: Double
-    /// His share over a new contract: what he is ordered and judged by.
+    /// His share over a new contract: what he is ordered and judged by. A young player's is never below `shareToday`.
     public let share: Double
     /// `share` clears the weak line (`Scouting.clearsWeakLine`), so a share exactly 5% under does not.
     public let meetsStandard: Bool
@@ -138,9 +139,10 @@ public enum Renewal {
     ///
     /// His ability over a new contract is his reach at `developingUpToAge` or under, else his ability after the decline
     /// expected (`abilityAfterDecline`). At an outfield slot his rating is taken to grow or fall with it from the offset
-    /// (`ratingAbilityOffset`) and set against the standard's rating; when it rises past today's he is also measured by
-    /// ability, (offset + reach) against the standard's, and the share is the lower of the two. The goalkeeper's slot
-    /// is measured by ability alone. Throws `RatingError.missingAttribute` for a young player without what his reach
+    /// (`ratingAbilityOffset`) and set against the standard's rating; when his reach rises past today's ability he is
+    /// also measured by ability, (offset + reach) against the standard's, and the share is the lower of the two, but
+    /// never below his share today (the controller's ruling of 27 November 2026: one more point of potential must not
+    /// lower his worth). The goalkeeper's slot is measured by ability alone. Throws `RatingError.missingAttribute` for a young player without what his reach
     /// needs.
     public static func worths(players: [Player], ownClub: String?, elevens: ElevensReport, depth: DepthReport,
                               parameters: EngineParameters) throws -> [PlayerID: RenewalWorth] {
@@ -165,10 +167,15 @@ public enum Renewal {
             let abilityAhead: Double
             var evidence = common
             if player.age <= parameters.developingUpToAge.value {
+                // A reach is never below today's ability; one that is not above it changes nothing.
                 let reach = try Reach.estimate(for: player, parameters: parameters).reach
-                ahead = .reach(reach)
+                if reach > ability {
+                    ahead = .reach(reach)
+                    evidence += [parameters.growthPerSeason.evidence, parameters.growthProfessionalismRates.evidence]
+                } else {
+                    ahead = .today
+                }
                 abilityAhead = reach
-                evidence += [parameters.growthPerSeason.evidence, parameters.growthProfessionalismRates.evidence]
             } else {
                 let rules = parameters.declineRules.value
                 let after = abilityAfterDecline(player.currentAbility, age: player.age, rules: rules)
@@ -187,7 +194,9 @@ public enum Renewal {
                 if isGoalkeeperSlot(slot) { return byAbility }
                 // The ratio first, so a share at today's ability is his rating over the standard exactly.
                 let byRating = rating * ((offset + x) / (offset + ability)) / standardRating
-                return x > ability ? min(byRating, byAbility) : byRating
+                guard x > ability else { return byRating }
+                // Measured by ability too as he rises, but never below what he is worth today.
+                return max(rating / standardRating, min(byRating, byAbility))
             }
 
             var best: RenewalWorth?
